@@ -30,5 +30,7 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `level1_cell_m` | m | 27830.0 | The level-1 cell edge along a meridian, in metres; the example's quarter degree. The user's lever for how coarse the open Gulf is, and nothing refuses one. |
 | `deep_bed` | - | optional | The coarse surface under the fine bed, over the whole grid: a raster or a layer name on the run's vertical frame; unstated, ETOPO 2022 is fetched over the grid. |
 | `event_time` | - | optional | The moment the scenario is read at - an ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like 'during last Tuesday's storm'. Each source keeps its own retention, and a request deeper than one refuses typed |
+| `module` | - | optional | The GeoClaw module the run solves: 'geoclaw' (shallow water) or 'geoclaw_bouss' (the Boussinesq SGN / Madsen-Sorensen equations, the same keywords plus Clawpack's BOUSS_ ones); unstated, the template's own. |
+| `cores` | - | optional | The MPI process count the Boussinesq executable runs under (PETSc's linear solves use them); a whole number from 1 to this box's cores, unstated 1. Shallow-water runs take none. |
 | `vertical_frame` | - | NAVD88 | Vertical datum the bed's elevations are counted from, and with them the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
 

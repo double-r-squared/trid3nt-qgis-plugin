@@ -1,8 +1,9 @@
 """The GeoClaw worker: one staged run directory of .data files in, one solved run directory out.
 
 The launcher bind-mounts the run directory at ``/data`` with ``manifest.json``
-and every staged input beside it; this runs the prebuilt ``xgeoclaw`` once -
-never compiling, never authoring - and writes ``geoclaw_metrics.json`` back.
+and every staged input beside it; this runs the prebuilt executable the staged module names
+(``xgeoclaw``, or ``xgeoclaw_bouss`` under ``mpiexec``) once - never compiling,
+never authoring - and writes ``geoclaw_metrics.json`` back.
 No network, no object-store I/O: a refusal is read from GeoClaw's own sentences,
 because its plain-Fortran ``stop`` exits with code 0.
 """
@@ -37,7 +38,7 @@ METRICS_FILENAME = "geoclaw_metrics.json"
 #: Bump on a manifest-contract change. The stamp is named in the strict-gate
 #: refusal, so a stale image surfaces as a drifted version rather than as a knob
 #: that silently did nothing.
-_PARSER_VERSION = "geoclaw-case-1"
+_PARSER_VERSION = "geoclaw-case-2"
 
 #: Wall-clock bound on ONE run. A wedged xgeoclaw holds the run directory
 #: forever and the supervisor sees a container that never exits; the bound turns
@@ -49,12 +50,21 @@ _SOLVE_TIMEOUT_DEFAULT_S = 86400.0
 
 #: The keys a ``case`` section carries. tfinal is NOT one: it is the staged
 #: claw.data's own number, read there, so the manifest cannot restate a time
-#: that disagrees with the run.
-_CASE_FIELDS = frozenset(("results",))
+#: that disagrees with the run. ``cores`` is the MPI process count of the
+#: Boussinesq executable.
+_CASE_FIELDS = frozenset(("module", "cores", "results"))
+
+#: The module word a case names -> the prebuilt executable it runs. The
+#: Boussinesq one is the only MPI program: PETSc's linear solves use its ranks.
+_EXECUTABLES = {"geoclaw": "xgeoclaw", "geoclaw_bouss": "xgeoclaw_bouss"}
 
 #: GeoClaw's mass line, printed once at t0 in E-format or fixed Fortran
 #: notation - both parse to the same float.
 _MASS_RE = re.compile(r"Total mass at initial time:\s*([-0-9.E+]+)")
+
+#: The Boussinesq executable's counterpart: its conck.f90 prints the sum of the surface elevation over the wet
+#: cells (zeta, which a flat sea at the sea level makes zero) where the shallow-water one prints the mass.
+_ZETA_RE = re.compile(r"Total zeta at initial time:\s*([-0-9.E+]+)")
 
 #: GeoClaw's closing line, printed only when the integrate loop actually
 #: completed to its stop time.
@@ -146,10 +156,12 @@ def _staged_restart(claw_data: Path) -> bool:
     return False
 
 
-def _parse_stdout(stdout: str) -> dict[str, str | float | None]:
+def _parse_stdout(stdout: str, module: str = "geoclaw") -> dict[str, str | float | None]:
     """The three facts GeoClaw prints itself: its refusal (if any), the mass at
-    t0 and the time it reports having integrated to - read off stdout because a
-    plain-Fortran ``stop`` writes no listing file and still exits 0."""
+    t0 (the Boussinesq executable's zeta at t0) and the time it reports having
+    integrated to - read off stdout because a plain-Fortran ``stop`` writes no
+    listing file and still exits 0."""
+    initial = _ZETA_RE if module == "geoclaw_bouss" else _MASS_RE
     refusal: str | None = None
     mass: float | None = None
     done: float | None = None
@@ -159,7 +171,7 @@ def _parse_stdout(stdout: str) -> dict[str, str | float | None]:
                                 or stripped.startswith("STOP")):
             refusal = stripped
         if mass is None:
-            hit = _MASS_RE.search(line)
+            hit = initial.search(line)
             if hit:
                 mass = float(hit.group(1))
         if done is None:
@@ -170,17 +182,21 @@ def _parse_stdout(stdout: str) -> dict[str, str | float | None]:
 
 
 def _verdict(stdout: str, tfinal: float, missing: list[str],
-             exit_code: int, restart: bool = False) -> dict[str, Any]:
+             exit_code: int, restart: bool = False, module: str = "geoclaw") -> dict[str, Any]:
     """What the run actually did, in one dict: success means GeoClaw's own
-    refusal lines are absent, it reported the initial mass (a restart prints none), it reached the
+    refusal lines are absent, it reported its initial mass - the Boussinesq
+    executable its initial zeta, which a flat sea makes zero and so says nothing of
+    water - (a restart prints none), it reached the
     staged tfinal and every declared result exists - an exit code alone proves
     nothing, because GeoClaw's ``stop`` exits 0 too."""
-    parsed = _parse_stdout(stdout)
+    parsed = _parse_stdout(stdout, module)
     mass = parsed["initial_mass"]
     done = parsed["final_time"]
+    line = "Total zeta at initial time:" if module == "geoclaw_bouss" else "Total mass at initial time:"
+    key = "initial_zeta" if module == "geoclaw_bouss" else "initial_mass"
     metrics: dict[str, Any] = {"correct_end": False}
     if mass is not None:
-        metrics["initial_mass"] = mass
+        metrics[key] = mass
     if done is not None:
         metrics["final_time"] = done
     refusal = parsed["refusal"]
@@ -191,9 +207,9 @@ def _verdict(stdout: str, tfinal: float, missing: list[str],
         metrics["error_code"] = "GEOCLAW_SOLVE_FAILED"
         metrics["error"] = f"xgeoclaw exited with code {exit_code}"
     elif mass is None and not restart:
-        metrics["error_code"] = "GEOCLAW_MASS_LINE_MISSING"
-        metrics["error"] = ("xgeoclaw exited cleanly but stdout never printed "
-                            "'Total mass at initial time:'")
+        metrics["error_code"] = ("GEOCLAW_ZETA_LINE_MISSING" if module == "geoclaw_bouss"
+                                 else "GEOCLAW_MASS_LINE_MISSING")
+        metrics["error"] = f"{_EXECUTABLES[module]} exited cleanly but stdout never printed '{line}'"
     elif done is None:
         metrics["error_code"] = "GEOCLAW_DONE_LINE_MISSING"
         metrics["error"] = ("xgeoclaw exited cleanly but stdout never printed "
@@ -228,13 +244,32 @@ def _solve_timeout_s() -> float:
         return _SOLVE_TIMEOUT_DEFAULT_S
 
 
-def _run_xgeoclaw(data_dir: Path) -> tuple[int, str]:
-    """Run the prebuilt xgeoclaw in the run directory; return its exit code and
+def _engine_argv(module: str, cores: int) -> list[str]:
+    """The command that runs a module's prebuilt executable: the shallow-water one
+    directly, the Boussinesq one under ``mpiexec -n <cores>``. A module with no
+    executable, or a process count the module's executable cannot take, refuses."""
+    if module not in _EXECUTABLES:
+        raise CaseError(
+            "GEOCLAW_CASE_MODULE_UNKNOWN",
+            f"case module {module!r} has no executable in this image; the "
+            f"modules are {sorted(_EXECUTABLES)}.")
+    if module != "geoclaw_bouss":
+        if cores != 1:
+            raise CaseError(
+                "GEOCLAW_CASE_CORES_UNUSED",
+                f"case states cores {cores} for {module!r}, whose executable "
+                "runs one process.")
+        return [_EXECUTABLES[module]]
+    return ["mpiexec", "-n", str(cores), _EXECUTABLES[module]]
+
+
+def _run_engine(data_dir: Path, argv: list[str]) -> tuple[int, str]:
+    """Run the prebuilt executable in the run directory; return its exit code and
     everything it said (stdout merged with stderr, so a runtime refusal on
     either stream is read). The child is bounded; an expiry KILLS it, because a
     wedged solve otherwise holds the container open with no report written."""
     bound = _solve_timeout_s()
-    child = subprocess.Popen(["xgeoclaw"], cwd=str(data_dir), text=True,
+    child = subprocess.Popen(argv, cwd=str(data_dir), text=True,
                              bufsize=1, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
     lines: list[str] = []
@@ -254,7 +289,7 @@ def _run_xgeoclaw(data_dir: Path) -> tuple[int, str]:
     if expired:
         raise CaseError(
             "GEOCLAW_SOLVE_TIMEOUT",
-            f"xgeoclaw was killed after {bound:g} s without finishing; the "
+            f"{argv[-1]} was killed after {bound:g} s without finishing; the "
             f"bound is {_SOLVE_TIMEOUT_ENV}.")
     return code, "".join(lines)
 
@@ -265,15 +300,23 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
     staged tfinal, with every declared result on disk."""
     case = _strict_section("case", body, _CASE_FIELDS)
     results = [str(r) for r in (case.get("results") or [])]
+    module = case.get("module")
+    if not module:
+        raise CaseError(
+            "GEOCLAW_CASE_MODULE_UNSTATED",
+            f"case names no module; the modules are {sorted(_EXECUTABLES)}.")
+    cores = int(case.get("cores") or 1)
+    argv = _engine_argv(str(module), cores)
     tfinal = _staged_tfinal(data_dir / "claw.data")
-    LOG.info("geoclaw case tfinal=%s results=%s", tfinal, results)
-    code, stdout = _run_xgeoclaw(data_dir)
+    LOG.info("geoclaw case module=%s cores=%d tfinal=%s results=%s", module, cores, tfinal, results)
+    code, stdout = _run_engine(data_dir, argv)
     missing = [r for r in results if not (data_dir / r).exists()]
     metrics = _verdict(stdout, tfinal, missing, code,
-                       _staged_restart(data_dir / "claw.data"))
+                       _staged_restart(data_dir / "claw.data"), str(module))
     # The raw engine code rides verbatim: the verdict never rests on it alone
     # (a plain-Fortran stop exits 0), so a reader can see both facts together.
     metrics["engine_exit_code"] = code
+    metrics["module"] = str(module)
     metrics["tfinal"] = tfinal
     metrics["frames"] = _frame_count(data_dir)
     return metrics

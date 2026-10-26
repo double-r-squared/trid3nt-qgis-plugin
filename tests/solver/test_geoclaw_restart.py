@@ -122,12 +122,12 @@ def test_a_stated_checkpoint_uri_becomes_the_engines_restart_pair_and_a_stated_r
     _run(monkeypatch)
     me = SimpleNamespace(steering=template.STEERING)
     keywords = {"CLAW_RESTART_FILE": "s3://runs/run1/fort.chk00007", "CLAW_TFINAL": 600.0}
-    previous = workflow.GeoclawWorkflow._restarted(me, keywords)
+    previous = workflow.GeoclawWorkflow._restarted(me, keywords, template.STEERING)
     assert keywords == {"CLAW_TFINAL": 600.0, "CLAW_RESTART": True, "CLAW_RESTART_FILE": "fort.chk00007"}
     assert previous.name == "fort.chk00007"
-    assert workflow.GeoclawWorkflow._restarted(me, {"CLAW_TFINAL": 1.0}) is None
+    assert workflow.GeoclawWorkflow._restarted(me, {"CLAW_TFINAL": 1.0}, template.STEERING) is None
     with pytest.raises(GeoclawError) as caught:
-        workflow.GeoclawWorkflow._restarted(me, {"CLAW_RESTART": True})
+        workflow.GeoclawWorkflow._restarted(me, {"CLAW_RESTART": True}, template.STEERING)
     assert caught.value.error_code == "GEOCLAW_RESTART_STATED"
 
 

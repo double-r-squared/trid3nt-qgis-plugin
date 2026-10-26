@@ -50,6 +50,7 @@ def parse_geoclaw(art: RunArtifacts, status: str) -> EngineDiagnostics:
     correct_end = _completion_or_metrics(art, "correct_end", metrics)
     wall_s = _completion_or_metrics(art, "wall_s", metrics)
     initial_mass = _completion_or_metrics(art, "initial_mass", metrics)
+    initial_zeta = _completion_or_metrics(art, "initial_zeta", metrics)
     final_time = _completion_or_metrics(art, "final_time", metrics)
     tfinal = _completion_or_metrics(art, "tfinal", metrics)
     frames = _completion_or_metrics(art, "frames", metrics)
@@ -82,6 +83,7 @@ def parse_geoclaw(art: RunArtifacts, status: str) -> EngineDiagnostics:
         engine_specific={
             "correct_end": correct_end,
             "initial_mass": initial_mass,
+            "initial_zeta": initial_zeta,
             "final_time": final_time,
             "tfinal": tfinal,
             "frames": frames,

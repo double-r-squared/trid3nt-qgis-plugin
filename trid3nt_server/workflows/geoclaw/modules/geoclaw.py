@@ -9,7 +9,7 @@ from ...runtime.module import Output
 from .module import GeoclawModule, fault, finite_fault, fixed_grids, initial_surface, moment_tensor_fault, sift_fault, slab_fault, storm, topography
 from .outputs import PRIMITIVES
 
-__all__ = ["GEO", "MODULE_OUTPUT"]
+__all__ = ["GEO", "GEOB", "MODULE_OUTPUT"]
 
 # A depth reads from zero up and a speed likewise; a surface above or below the sea level diverges about it.
 _DEPTH = {"kind": "continuous", "ramp": "ylgnbu", "floor": 0}
@@ -33,16 +33,21 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "GAUGE_DEPTH": Output("water depth", "m", style=_DEPTH),
 })
 
+# The shallow-water body and the Boussinesq one: the same rundata, composites, outputs and reads, the second adding
+# Clawpack's BoussData keywords and naming the second prebuilt executable.
 GEO = GeoclawModule("geoclaw")
-GEO.composites(reads={"Topography": ("surface", "offset"), "SiftFault": ("unit_sources",),
-                      "FiniteFault": ("finite_fault",), "SlabFault": ("slab",), "MomentTensorFault": ("moment_tensor", "slab"),
-                      "FixedGrids": ("extent",), "InitialSurface": ("surface",), "Storm": ("storm_tracks", "storm_name", "season")},
-               Topography=topography, Fault=fault, SiftFault=sift_fault, FiniteFault=finite_fault, SlabFault=slab_fault, MomentTensorFault=moment_tensor_fault, FixedGrids=fixed_grids,
-               InitialSurface=initial_surface, Storm=storm)
-GEO.MODULE_OUTPUT = MODULE_OUTPUT
-GEO.reads(**PRIMITIVES)
-# A stated point is the one gauge the run reads, over the whole run: the sea off the coast the question is about. The sea level is the
-# offset the workflow measured, on the run's frame.
-GEO.FILLED_BY = MappingProxyType({
-    "seed": {"GAUGE_GAUGES": lambda point: [[1, point.lon, point.lat, -1.0e10, 1.0e10]]},
-    "sea_level": {"GEO_SEA_LEVEL": lambda metres: float(metres)}})
+GEOB = GeoclawModule("geoclaw_bouss")
+for wrapper in (GEO, GEOB):
+    wrapper.composites(reads={"Topography": ("surface", "offset"), "SiftFault": ("unit_sources",),
+                              "FiniteFault": ("finite_fault",), "SlabFault": ("slab",), "MomentTensorFault": ("moment_tensor", "slab"),
+                              "FixedGrids": ("extent",), "InitialSurface": ("surface",), "Storm": ("storm_tracks", "storm_name", "season")},
+                       Topography=topography, Fault=fault, SiftFault=sift_fault, FiniteFault=finite_fault, SlabFault=slab_fault, MomentTensorFault=moment_tensor_fault, FixedGrids=fixed_grids,
+                       InitialSurface=initial_surface, Storm=storm)
+    wrapper.MODULE_OUTPUT = MODULE_OUTPUT
+    wrapper.reads(**PRIMITIVES)
+    # A stated point is the one gauge the run reads, over the whole run: the sea off the coast the question is about. The sea level is the
+    # offset the workflow measured, on the run's frame.
+    wrapper.FILLED_BY = MappingProxyType({
+        "seed": {"GAUGE_GAUGES": lambda point: [[1, point.lon, point.lat, -1.0e10, 1.0e10]]},
+        "sea_level": {"GEO_SEA_LEVEL": lambda metres: float(metres)}})
+del wrapper

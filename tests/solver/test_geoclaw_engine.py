@@ -153,7 +153,7 @@ def test_the_strict_gate_refuses_an_unknown_case_field():
 def test_a_case_without_claw_data_refuses(tmp_path):
     entry = _entrypoint()
     with pytest.raises(entry.CaseError) as excinfo:
-        entry._solve_case(tmp_path, {"results": []}, None)
+        entry._solve_case(tmp_path, {"module": "geoclaw", "results": []}, None)
     assert excinfo.value.error_code == "GEOCLAW_CASE_CLAWDATA_MISSING"
 
 
@@ -161,7 +161,7 @@ def test_a_claw_data_with_no_readable_tfinal_refuses(tmp_path):
     entry = _entrypoint()
     (tmp_path / "claw.data").write_text("0.0                  =: t0\n")
     with pytest.raises(entry.CaseError) as excinfo:
-        entry._solve_case(tmp_path, {"results": []}, None)
+        entry._solve_case(tmp_path, {"module": "geoclaw", "results": []}, None)
     assert excinfo.value.error_code == "GEOCLAW_CASE_TFINAL_UNREAD"
 
 
@@ -233,10 +233,10 @@ def test_a_finished_solve_reports_correct_end_frames_and_the_engine_code(
     (tmp_path / "fort.q0018").write_text("q")
     (tmp_path / "gauge32412.txt").write_text("g")
     (tmp_path / "fort.debug").write_text("not a frame")
-    monkeypatch.setattr(entry, "_run_xgeoclaw",
-                        lambda data_dir: (0, _CHILE_STDOUT))
+    monkeypatch.setattr(entry, "_run_engine",
+                        lambda data_dir, argv: (0, _CHILE_STDOUT))
     metrics = entry._solve_case(
-        tmp_path, {"results": ["fort.q0018", "gauge32412.txt"]}, None)
+        tmp_path, {"module": "geoclaw", "results": ["fort.q0018", "gauge32412.txt"]}, None)
     assert metrics["correct_end"] is True
     assert metrics["engine_exit_code"] == 0
     assert metrics["frames"] == 2
@@ -248,9 +248,9 @@ def test_a_clean_exit_missing_its_declared_results_is_a_typed_error(
         tmp_path, monkeypatch):
     entry = _entrypoint()
     (tmp_path / "claw.data").write_text("0.0 =: t0\n32400.0 =: tfinal\n")
-    monkeypatch.setattr(entry, "_run_xgeoclaw",
-                        lambda data_dir: (0, _CHILE_STDOUT))
-    metrics = entry._solve_case(tmp_path, {"results": ["fort.q0099"]}, None)
+    monkeypatch.setattr(entry, "_run_engine",
+                        lambda data_dir, argv: (0, _CHILE_STDOUT))
+    metrics = entry._solve_case(tmp_path, {"module": "geoclaw", "results": ["fort.q0099"]}, None)
     assert metrics["correct_end"] is False
     assert metrics["error_code"] == "GEOCLAW_RESULTS_MISSING"
     assert "fort.q0099" in metrics["error"]
@@ -288,7 +288,7 @@ def test_main_runs_a_shimmed_xgeoclaw_and_writes_ok_metrics(tmp_path,
         "32400.0              =: tfinal\n")
     (data / "manifest.json").write_text(json.dumps({
         "run_id": "rid1",
-        "case": {"results": ["fort.q0000"]}}))
+        "case": {"module": "geoclaw", "results": ["fort.q0000"]}}))
     entry = _entrypoint()
     code = entry.main(["--data-dir", str(data)])
     assert code == 0
@@ -318,7 +318,7 @@ def test_main_maps_an_exit_zero_refusal_to_a_failed_run(tmp_path,
     data.mkdir()
     (data / "claw.data").write_text("0.0 =: t0\n10.0 =: tfinal\n")
     (data / "manifest.json").write_text(json.dumps({
-        "run_id": "rid-nc", "case": {"results": []}}))
+        "run_id": "rid-nc", "case": {"module": "geoclaw", "results": []}}))
     entry = _entrypoint()
     code = entry.main(["--data-dir", str(data)])
     assert code == 1

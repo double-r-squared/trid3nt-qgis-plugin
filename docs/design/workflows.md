@@ -681,3 +681,18 @@ workflow fetches the track (`storm_name` and `season` over the level-1 box) and,
 from the storm's last landfall fix (`USA_RECORD` L). The run opens three days before landfall, so FixedGrids and the overland
 mask start at CLAW_T0, and the seed gauge listens over the whole run. Friction is the example's domain-wide Manning law as
 `GEO_MANNING_*`; the sea stands at the MHW offset NOAA VDatum measures at the seed. Outputs are the fixed grids and gauges.
+
+### The GeoClaw Boussinesq module: `geoclaw_bouss`
+
+GeoClaw has two modules. `geoclaw` is the shallow-water body; `geoclaw_bouss` is the same rundata plus Clawpack's `BoussData` group
+(`bouss.data`: `BOUSS_BOUSS_EQUATIONS` 0 SWE, 1 Madsen-Sorensen, 2 SGN; `_MIN_LEVEL`, `_MAX_LEVEL`, `_MIN_DEPTH`, `_SOLVER` 1 GMRES,
+2 Pardiso, 3 PETSc; `_TSTART`), its dictionary extracted by the same extractor, its composites, outputs and reads the shallow-water
+body's. The worker image carries a second executable beside `xgeoclaw`: `xgeoclaw_bouss`, compiled once at build from
+`examples/bouss/radial_flat`'s own Makefile against PETSc (built from its release tarball, 3.23 or later is what Clawpack 5.14
+needs) and MPICH, with GeoClaw's standard `qinit.f90` where radial_flat carries its own Gaussian hump. A run states
+`module: geoclaw_bouss` on any GeoClaw template's values (the template's STEERING body is rebased onto the module's wrapper, same
+assertions) and `cores`, the MPI process count (unstated 1, at most this box's cores; shallow-water runs take none); the staged
+case names the module and the worker runs `xgeoclaw`, or `mpiexec -n <cores> xgeoclaw_bouss` with Clawpack's own
+`petscMPIoptions`. A module the worker has no executable for refuses by name (`GEOCLAW_CASE_MODULE_UNKNOWN`), as does a BOUSS_
+keyword on a shallow-water run. The template's shallow-water numerics (`CLAW_NUM_EQN` 3 and the aux layout) are the template's;
+a Boussinesq run states the five-equation numerics Clawpack's own setrun states.

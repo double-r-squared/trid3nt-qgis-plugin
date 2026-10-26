@@ -18,7 +18,7 @@ from ..errors import GeoclawError
 
 logger = logging.getLogger("trid3nt_server.workflows.geoclaw.authoring.rundata")
 
-__all__ = ["serialize"]
+__all__ = ["new_rundata", "serialize"]
 
 #: The STRUCT rows whose writers iterate tool objects instead of plain lists: each
 #: record's fields are set on this class, by the names the dictionary's shape declares.
@@ -84,6 +84,18 @@ def out_file(obj: Any) -> str:
     return inspect.signature(obj.write).parameters["out_file"].default
 
 
+def new_rundata(module: str) -> Any:
+    """The ClawRunData a module's .data set is written from: the 2D geoclaw rundata, plus the BoussData group on the Boussinesq module."""
+    from clawpack.clawutil.data import ClawRunData
+
+    rundata = ClawRunData("geoclaw", 2)
+    if module == "geoclaw_bouss":
+        from clawpack.geoclaw.data import BoussData
+
+        rundata.add_data(BoussData(), "bouss_data")
+    return rundata
+
+
 def _groups(sheet: Any) -> tuple[dict[str, tuple[str, Any]], Any]:
     """Every prefix a filled keyword derives from -> the ClawRunData group it lands on.
 
@@ -91,9 +103,7 @@ def _groups(sheet: Any) -> tuple[dict[str, tuple[str, Any]], Any]:
     the file its group's writer writes, so a release moving a keyword refuses by name
     instead of writing it into another group's file.
     """
-    from clawpack.clawutil.data import ClawRunData
-
-    rundata = ClawRunData("geoclaw", 2)
+    rundata = new_rundata(sheet.body.MODULE)
     groups = {_prefix_of(name): (name, obj)
               for name, obj in vars(rundata).items() if hasattr(obj, "write")}
     for identifier, row in sheet.filled.items():

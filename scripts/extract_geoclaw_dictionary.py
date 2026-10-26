@@ -34,8 +34,10 @@ except ImportError:  # pragma: no cover - the refusal path on a non-spike interp
 #: The Clawpack release the worker image carries (``workers/geoclaw/Dockerfile``).
 CLAWPACK_VERSION = "5.14.0"
 
-#: The one module word this dictionary answers under; Boussinesq is a later second.
+#: The module words this extractor answers under: the shallow-water body, and the Boussinesq body, which is the same
+#: rundata plus Clawpack's BoussData group (the worker runs its own prebuilt executable).
 MODULE = "geoclaw"
+BOUSS_MODULE = "geoclaw_bouss"
 
 #: The rundata groups of a 2D geoclaw run, in ``ClawRunData``'s own order, each
 #: its keyword prefix. A release adding or dropping a group refuses below rather
@@ -48,6 +50,9 @@ _GROUPS: tuple[tuple[str, str], ...] = (
     ("fgout_data", "FGOUT"), ("fgmax_data", "FGMAX"), ("qinit_data", "QINIT"),
     ("surge_data", "SURGE"), ("friction_data", "FRICTION"),
     ("multilayer_data", "MULTILAYER"))
+
+#: The group the Boussinesq module adds, as setrun adds it: ``rundata.add_data(BoussData(), 'bouss_data')``.
+_BOUSS_GROUP = ("bouss_data", "BOUSS")
 
 #: A list-of-records keyword and its record's fields, as the writer spells them
 #: (data.py's own parse of each record, or the fgmax/fgout tools' headers).
@@ -129,6 +134,9 @@ _CHOICES: Mapping[str, tuple[str, ...]] = {
         "-1", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"),
     # FGmaxData.write: num_fgmax_val not in [1, 2, 5] raises.
     "FGMAX_NUM_FGMAX_VAL": ("1", "2", "5"),
+    # BoussData.write's own descriptions: 0=SWE, 1=MS, 2=SGN and 1=GMRES, 2=Pardiso, 3=PETSc.
+    "BOUSS_BOUSS_EQUATIONS": ("0", "1", "2"),
+    "BOUSS_BOUSS_SOLVER": ("1", "2", "3"),
 }
 
 
@@ -241,10 +249,18 @@ def _group_rows(name: str, group: str, obj: ClawData,
     return rows
 
 
-def rows() -> list[dict[str, Any]]:
-    """Every dictionary row of the one geoclaw module, in the rundata's order."""
+def rows(module: str = MODULE) -> list[dict[str, Any]]:
+    """Every dictionary row of one geoclaw module, in the rundata's order."""
     run = ClawRunData("geoclaw", 2)
-    groups = dict(_GROUPS)
+    all_groups = _GROUPS
+    if module == BOUSS_MODULE:
+        from clawpack.geoclaw.data import BoussData
+
+        run.add_data(BoussData(), _BOUSS_GROUP[0])
+        all_groups = (*_GROUPS, _BOUSS_GROUP)
+    elif module != MODULE:
+        raise ValueError(f"no rundata for the module {module!r}; the modules are {MODULE} and {BOUSS_MODULE}.")
+    groups = dict(all_groups)
     carried = {attribute for attribute in run.attributes()
                if isinstance(getattr(run, attribute), ClawData)}
     if carried != set(groups):
@@ -253,7 +269,7 @@ def rows() -> list[dict[str, Any]]:
             f"adjudicated groups {sorted(groups)}; re-read write() and update "
             "_GROUPS, _RECORD_FIELDS and _OPEN_TYPES before extracting.")
     helps = _descriptions()
-    found = [row for name, group in _GROUPS
+    found = [row for name, group in all_groups
              for row in _group_rows(name, group, getattr(run, name), helps)]
     identifiers = [row["identifier"] for row in found]
     if len(set(identifiers)) != len(identifiers):
@@ -272,7 +288,7 @@ def extract(dest: Path, module: str = MODULE) -> dict[str, int]:
     The fresh rows take the ``module`` and ``keywords`` keys of the committed
     file they replace; every other key it carries stays, in its own order, so
     an authored section survives regeneration."""
-    found = rows()
+    found = rows(module)
     dest.mkdir(parents=True, exist_ok=True)
     committed = dest / f"{module}.json"
     doc = json.loads(committed.read_text()) if committed.is_file() else {}
@@ -282,7 +298,7 @@ def extract(dest: Path, module: str = MODULE) -> dict[str, int]:
 
 
 def main() -> int:
-    counts = extract(module_input_dir())
+    counts = {**extract(module_input_dir()), **extract(module_input_dir(), BOUSS_MODULE)}
     print(json.dumps(counts, indent=2))
     print("total keywords:", sum(counts.values()))
     return 0

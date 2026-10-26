@@ -108,7 +108,7 @@ def _data(monkeypatch, run, own=None):
     monkeypatch.setattr("trid3nt_server.inputs.geometry.read_geometry_doc", lambda source: source)
     standin = SimpleNamespace(steering=template.STEERING, template=template)
     standin._storm = lambda env, statement: gw.GeoclawWorkflow._storm(standin, env, statement)
-    asyncio.run(gw.GeoclawWorkflow._data(standin, SimpleNamespace(run=run), {"GEO_SEA_LEVEL": 0.0, **(own or {})}))
+    asyncio.run(gw.GeoclawWorkflow._data(standin, SimpleNamespace(run=run), {"GEO_SEA_LEVEL": 0.0, **(own or {})}, template.STEERING))
     return asked
 
 

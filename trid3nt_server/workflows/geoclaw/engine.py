@@ -33,8 +33,8 @@ __all__ = ["GEOCLAW_SOLVER_NAME", "classify_exit", "read_run_metrics",
            "register_geoclaw_solver", "solve_case"]
 
 #: The solver identifier IS the engine name: one registration per engine, keyed
-#: in ``LOCAL_SOLVER_SPEC_REGISTRY``. GeoClaw runs one executable over the
-#: staged ``.data`` directory - no module word exists for it.
+#: in ``LOCAL_SOLVER_SPEC_REGISTRY``. The module word the staged case names
+#: (``geoclaw`` or ``geoclaw_bouss``) picks the executable inside the worker.
 GEOCLAW_SOLVER_NAME: str = "geoclaw"
 
 #: Default worker image (override via env TRID3NT_GEOCLAW_IMAGE).
@@ -154,7 +154,7 @@ async def solve_case(*, run: dict[str, Any], cores: int) -> dict[str, Any]:
     product is its ``.data``-driven output set, so no mesh fact rides back."""
     run_result, batch_run_id = await dispatch_and_wait(
         solver=GEOCLAW_SOLVER_NAME, manifest_uri=run["manifest_uri"],
-        cores=cores, module=GEOCLAW_SOLVER_NAME,
+        cores=cores, module=str(run["case"]["module"]),
         label=str(run["name"]), timeout_s=_WAIT_CEILING_S)
     if run_result is None or run_result.status != "complete":
         raise GeoclawError(

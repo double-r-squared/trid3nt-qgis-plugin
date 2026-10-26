@@ -12,6 +12,15 @@
 #     against the clawpack meta-repo at tag v5.14.0 - the same sources pip
 #     installs (clawpack==5.14.0). Nothing compiles at run; the toolchain and
 #     the source tree live only in the builder stage below.
+#   * xgeoclaw_bouss, the Boussinesq (SGN / Madsen-Sorensen) executable, is
+#     compiled ONCE beside it from examples/bouss/radial_flat's own Makefile
+#     against PETSc 3.23.7 (Clawpack 5.14 requires 3.23 or later; bookworm
+#     ships 3.18, so PETSc is built from its release tarball) and MPICH. The
+#     Makefile runs as written in a copy of the directory whose one custom
+#     source, radial_flat's own qinit.f90 (a Gaussian hump at the origin that
+#     would raise a 5 m hump in every run), is replaced by a link to GeoClaw's
+#     standard qinit.f90. The worker runs the executable under mpiexec with
+#     Clawpack's own petscMPIoptions.
 #   * No netcdf anywhere: GeoClaw's own refusal stays readable by name
 #     (``ERROR:  NetCDF library was not included in this build``) and the
 #     product stages ascii topotypes only - topotype 4 is refused, never
@@ -27,8 +36,28 @@
 FROM python:3.12-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        gfortran make git ca-certificates \
+        gfortran gcc make git ca-certificates curl pkg-config mpich libmpich-dev \
+        liblapack-dev libblas-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# PETSc, once: shared, optimised, MPI through MPICH's wrappers, no C++, no
+# downloads. Installed under /opt/petsc, so PETSC_ARCH stays empty.
+ARG PETSC_VERSION=3.23.7
+ARG PETSC_SHA256=f4fb2bad8c80319e723987868e87d8384f2ae2162e07917d4c41d6e467b1d254
+RUN curl -fsSL -o /tmp/petsc.tar.gz \
+        https://web.cels.anl.gov/projects/petsc/download/release-snapshots/petsc-${PETSC_VERSION}.tar.gz \
+    && echo "${PETSC_SHA256}  /tmp/petsc.tar.gz" | sha256sum -c - \
+    && mkdir /tmp/petsc-src && tar -xzf /tmp/petsc.tar.gz -C /tmp/petsc-src --strip-components=1 \
+    && rm /tmp/petsc.tar.gz
+WORKDIR /tmp/petsc-src
+RUN ./configure --prefix=/opt/petsc --with-debugging=0 --with-shared-libraries=1 \
+        --with-cc=mpicc --with-fc=mpifort --with-cxx=0 \
+        --COPTFLAGS=-O2 --FOPTFLAGS=-O2 --with-x=0 \
+        --with-blaslapack-lib="-llapack -lblas"
+RUN make -j"$(nproc)" PETSC_DIR=/tmp/petsc-src PETSC_ARCH=arch-linux-c-opt all \
+    && make PETSC_DIR=/tmp/petsc-src PETSC_ARCH=arch-linux-c-opt install \
+    && rm -rf /tmp/petsc-src
+WORKDIR /
 
 RUN pip install --no-cache-dir "clawpack==5.14.0" numpy
 
@@ -44,6 +73,18 @@ RUN make .exe
 
 RUN cp xgeoclaw /usr/local/bin/xgeoclaw
 
+# The Boussinesq executable. The environment is the Makefile's own demand (see
+# examples/bouss/setenv.sh); the compile happens here and never at run.
+ENV PETSC_DIR=/opt/petsc \
+    PETSC_ARCH= \
+    PETSC_OPTIONS="-options_file /opt/claw/geoclaw/examples/bouss/petscMPIoptions" \
+    CLAW_MPIEXEC=mpiexec \
+    CLAW_MPIFC=mpif90
+WORKDIR /opt/claw/geoclaw/examples/bouss
+RUN cp -r radial_flat bouss_build && cd bouss_build \
+    && ln -sf /opt/claw/geoclaw/src/2d/shallow/qinit.f90 qinit.f90 \
+    && make new && cp xgeoclaw /usr/local/bin/xgeoclaw_bouss
+
 # The daemon authors .data with Clawpack's own writers, so the wheel is a repo
 # artifact: wheels/ carries it and pyproject pins clawpack to this release,
 # installed by `uv pip install --find-links wheels`. Built in THIS stage - the
@@ -58,6 +99,16 @@ RUN cp xgeoclaw /usr/local/bin/xgeoclaw
 RUN pip wheel --no-cache-dir --no-deps -w /wheelhouse "clawpack==5.14.0"
 
 
+# Never part of the shipped image: radial_flat's Makefile as written, its own
+# qinit.f90 compiled in, so Clawpack's setrun and the sheet can be solved
+# through the executable that setrun was written for.
+#   docker build --target radial-flat -f $REPO/workers/geoclaw/Dockerfile \
+#       -t trid3nt-local/geoclaw-radial-flat $REPO/workers/geoclaw
+FROM builder AS radial-flat
+RUN cd /opt/claw/geoclaw/examples/bouss/radial_flat && make new \
+    && cp xgeoclaw /usr/local/bin/xgeoclaw_radial_flat
+
+
 FROM python:3.12-slim-bookworm
 
 LABEL org.opencontainers.image.title="trid3nt-geoclaw-worker" \
@@ -67,10 +118,16 @@ LABEL org.opencontainers.image.title="trid3nt-geoclaw-worker" \
 # and no netcdf ever land in this stage: the exe needs the first's shared
 # library only, and refusing netcdf keeps type-4 refusals legible.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgfortran5 \
+    && apt-get install -y --no-install-recommends libgfortran5 libgomp1 mpich \
+        libmpich12 liblapack3 libblas3 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local/bin/xgeoclaw /usr/local/bin/xgeoclaw
+COPY --from=builder /usr/local/bin/xgeoclaw_bouss /usr/local/bin/xgeoclaw_bouss
+COPY --from=builder /opt/petsc/lib/libpetsc.so* /opt/petsc/lib/
+COPY --from=builder /opt/claw/geoclaw/examples/bouss/petscMPIoptions /opt/petsc/petscMPIoptions
+ENV LD_LIBRARY_PATH=/opt/petsc/lib \
+    PETSC_OPTIONS="-options_file /opt/petsc/petscMPIoptions"
 
 # --- the worker package ------------------------------------------------------
 # The entrypoint is stdlib-only python; it lives beside nothing else.
@@ -87,6 +144,11 @@ RUN ldd /usr/local/bin/xgeoclaw > /tmp/ldd.txt 2>&1 \
     && ! grep -q "not found" /tmp/ldd.txt \
     && rm /tmp/ldd.txt \
     && echo "xgeoclaw loader OK: no unresolved shared object"
+RUN ldd /usr/local/bin/xgeoclaw_bouss > /tmp/ldd.txt 2>&1 \
+    && ! grep -q "not found" /tmp/ldd.txt \
+    && rm /tmp/ldd.txt \
+    && command -v mpiexec \
+    && echo "xgeoclaw_bouss loader OK: no unresolved shared object"
 
 # Build-time smoke: the entrypoint imports, its parser version and dispatch are
 # the ones this image was built against, and the verdict sees both a solved run
@@ -96,7 +158,7 @@ RUN python -c "\
 import sys;\
 sys.path.insert(0, '/opt/trid3nt/workers/geoclaw');\
 import entrypoint as E;\
-assert E._PARSER_VERSION == 'geoclaw-case-1', E._PARSER_VERSION;\
+assert E._PARSER_VERSION == 'geoclaw-case-2', E._PARSER_VERSION;\
 assert sorted(E._DISPATCH) == ['case'];\
 ok = E._verdict(' Total mass at initial time:    1.0575487000653194E+017\n Done integrating to time    32400.000000000000\n', 32400.0, [], 0);\
 assert ok['correct_end'] and ok['initial_mass'] == 1.0575487000653194e17, ok;\

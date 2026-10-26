@@ -243,7 +243,7 @@ def test_the_staged_case_is_the_one_section_the_worker_reads(tmp_path):
     finally:
         staging.stage_run = original
 
-    assert captured["case"] == {"results": results} and staged["name"] == "x"
+    assert captured["case"] == {"module": "geoclaw", "results": results} and staged["name"] == "x"
     assert json.dumps(captured["case"])
 
 
@@ -271,7 +271,7 @@ def _data_fetches(monkeypatch, own, run):
 
     monkeypatch.setattr(gw, "_fetch", _fetch)
     standin = SimpleNamespace(steering=template.STEERING, template=template)
-    asyncio.run(gw.GeoclawWorkflow._data(standin, SimpleNamespace(run=run), own))
+    asyncio.run(gw.GeoclawWorkflow._data(standin, SimpleNamespace(run=run), own, template.STEERING))
     return asked
 
 
@@ -419,9 +419,9 @@ def test_the_templates_rise_shape_fills_a_kinematic_statement_that_names_none_an
 
     standin = SimpleNamespace(steering=template.STEERING, _states=lambda name, default: getattr(template, name, default))
     kinematic = {"finite_fault": "finite_fault", "rupture_type": "kinematic", "times": 30.0}
-    filled = gw.GeoclawWorkflow._rise_shaped(standin, {"FiniteFault": kinematic, "CLAW_TFINAL": 60.0})
-    kept = gw.GeoclawWorkflow._rise_shaped(standin, {"FiniteFault": {**kinematic, "rise_shape": "linear"}})
-    static = gw.GeoclawWorkflow._rise_shaped(standin, {"FiniteFault": {"finite_fault": "finite_fault"}})
+    filled = gw.GeoclawWorkflow._rise_shaped(standin, {"FiniteFault": kinematic, "CLAW_TFINAL": 60.0}, template.STEERING)
+    kept = gw.GeoclawWorkflow._rise_shaped(standin, {"FiniteFault": {**kinematic, "rise_shape": "linear"}}, template.STEERING)
+    static = gw.GeoclawWorkflow._rise_shaped(standin, {"FiniteFault": {"finite_fault": "finite_fault"}}, template.STEERING)
 
     assert filled["FiniteFault"]["rise_shape"] == "quadratic" and filled["CLAW_TFINAL"] == 60.0
     assert kept["FiniteFault"]["rise_shape"] == "linear"

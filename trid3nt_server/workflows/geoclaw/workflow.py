@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from functools import partial
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
@@ -33,7 +34,7 @@ from trid3nt_server.workflows.solver.staging import discard_run
 from .authoring import check_staged_run, grid_keywords, serialize
 from .authoring.restart import Previous, check_matches, checkpoint_outputs, previous_run
 from .errors import GeoclawError
-from .modules import GEO
+from .modules import GEO, SlotRefused, body_on
 from .modules.module import rupture_end
 from .modules.outputs import Solved
 
@@ -58,6 +59,15 @@ _PRODUCED = ("deep_bed_offset", "finite_fault", "sift_unit_sources", "storm_trac
 
 _FRAME, = BED.states
 
+#: Which GeoClaw body the run solves, and over how many MPI processes: the template's values run on the module a run names, and the
+#: Boussinesq executable runs under mpiexec at the count a run states. Unstated, the template's own module and one process.
+_MODULE = Input(name="module", type=str, desc=(
+    "The GeoClaw module the run solves: 'geoclaw' (shallow water) or 'geoclaw_bouss' (the Boussinesq SGN / Madsen-Sorensen "
+    "equations, the same keywords plus Clawpack's BOUSS_ ones); unstated, the template's own.")).stated()
+_CORES = Input(name="cores", type=int, desc=(
+    "The MPI process count the Boussinesq executable runs under (PETSc's linear solves use them); a whole number from 1 "
+    "to this box's cores, unstated 1. Shallow-water runs take none.")).stated()
+
 
 def _floor(steering: type, keywords: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     """The raw keyword floor -> the values by identifier and each coupled module's, none here."""
@@ -79,9 +89,10 @@ def _results(sheet: Sheet) -> list[str]:
 
 
 async def stage_sheet(*, sheet: Sheet, run_tag: str, prefix: str, name: str,
-                      previous: Previous | None = None) -> dict[str, Any]:
+                      previous: Previous | None = None, cores: int = 1) -> dict[str, Any]:
     """A filled sheet written as the run directory, checked against itself and staged -> the staged run.
-    The worker reads only a case's results, so the case section is just those. A run restarting from a checkpoint
+    The case section names the module whose executable the worker runs, the process count where it is more than one, and the
+    results the worker must find. A run restarting from a checkpoint
     is held to the set that checkpoint was cut on, and the checkpoint and the records it appends to are staged with it."""
     from ..solver.staging import new_rundir, stage_run
 
@@ -95,10 +106,11 @@ async def stage_sheet(*, sheet: Sheet, run_tag: str, prefix: str, name: str,
         return check_staged_run(directory, sheet=sheet, written=written["written"])
 
     staged = await stage_run(
-        rundir, run_tag, module="geoclaw", steering="claw.data", results=results,
+        rundir, run_tag, module=sheet.module, steering="claw.data", results=results,
         outputs=[*_OUTPUTS, *checkpoint_outputs(sheet.stated())],
         mesh_inputs=list(previous.inputs) if previous else [], prefix=prefix, sheet=sheet.state(), server_facts={"name": name},
-        result_basename=results[0], check=check, case={"results": results})
+        result_basename=results[0], check=check,
+        case={"module": sheet.module, **({"cores": int(cores)} if int(cores) > 1 else {}), "results": results})
     return {**staged, "name": name}
 
 
@@ -201,7 +213,7 @@ class GeoclawWorkflow(Workflow):
         from trid3nt_server.tools.mesh import recipe as asks
 
         named = set(asks.input_names(self.template.MESH))
-        return (tuple(row for row in asks.INPUTS if row.name in named) + (EVENT_TIME,) + super().seated())
+        return (tuple(row for row in asks.INPUTS if row.name in named) + (EVENT_TIME, _MODULE, _CORES) + super().seated())
 
     def input(self, name: str) -> Any:
         """The template's own inputs first, then the keyword a name spells on the module."""
@@ -210,7 +222,8 @@ class GeoclawWorkflow(Workflow):
             return declared
         if name in self._fetches():
             return Input(Producer(runner=self._fetches()[name], row=name), name=name)
-        body, identifier = identify_on([self.steering], name)
+        # A name is held to the widest body (the Boussinesq one has every keyword the shallow-water one has); the run's own module refuses what it does not spell, at launch.
+        body, identifier = identify_on([body_on(self.steering, "geoclaw_bouss")], name)
         return Keyword(body, identifier, True)
 
     def _fetches(self) -> Mapping[str, str]:
@@ -249,27 +262,45 @@ class GeoclawWorkflow(Workflow):
                                for key, value in entry["kwargs"].items()}
         return asked
 
-    def _restarted(self, keywords: dict[str, Any]) -> Previous | None:
+    def _steered(self, run: Mapping[str, Any]) -> type:
+        """The body the run solves: the template's, rebased onto the module the run names, whose cores are checked here.
+        A module nothing exposes, or a process count the module's executable cannot take, refuses by name."""
+        module = str(run.get(_MODULE.name) or self.steering.MODULE)
+        try:
+            steering = body_on(self.steering, module)
+        except SlotRefused as refused:
+            raise GeoclawError(f"{_MODULE.name} {module!r} is no GeoClaw module: {refused}", error_code="GEOCLAW_MODULE_UNKNOWN") from refused
+        stated = run.get(_CORES.name)
+        if stated is not None:
+            if module != "geoclaw_bouss":
+                raise GeoclawError(f"{_CORES.name} is stated for the module {module}, whose executable runs one process: only "
+                                   "geoclaw_bouss runs under mpiexec.", error_code="GEOCLAW_CORES_UNUSED")
+            if not 1 <= int(stated) <= (os.cpu_count() or 1):
+                raise GeoclawError(f"{_CORES.name} {stated!r} is outside 1 to this box's {os.cpu_count()} cores.",
+                                   error_code="GEOCLAW_CORES_OUT_OF_RANGE")
+        return steering
+
+    def _restarted(self, keywords: dict[str, Any], steering: type) -> Previous | None:
         """The checkpoint the run names, taken off the keywords and replaced by the engine's own pair: CLAW_RESTART true and
         CLAW_RESTART_FILE the staged file's bare name. A run that states CLAW_RESTART itself is refused: naming the file is the restart."""
         for raw in list(keywords):
-            body, identifier = identify_on([self.steering], raw)
-            if body is self.steering and identifier == "CLAW_RESTART":
+            body, identifier = identify_on([steering], raw)
+            if body is steering and identifier == "CLAW_RESTART":
                 raise GeoclawError(f"{raw} is stated: name the checkpoint with {_RESTART} (the URI of its file in the runs "
                                    "bucket) and the run restarts from it.", error_code="GEOCLAW_RESTART_STATED")
         for raw in list(keywords):
-            body, identifier = identify_on([self.steering], raw)
-            if body is self.steering and identifier == _RESTART:
+            body, identifier = identify_on([steering], raw)
+            if body is steering and identifier == _RESTART:
                 previous = previous_run(str(keywords.pop(raw)))
                 keywords.update({"CLAW_RESTART": True, _RESTART: previous.name})
                 return previous
         return None
 
-    def _rise_shaped(self, keywords: dict[str, Any]) -> dict[str, Any]:
+    def _rise_shaped(self, keywords: dict[str, Any], steering: type) -> dict[str, Any]:
         """The run's keywords, a kinematic Fault or FiniteFault that states no rise_shape taking the template's RISE_SHAPE."""
         shape = self._states("RISE_SHAPE", None)
         for raw, value in keywords.items():
-            _, identifier = identify_on([self.steering], raw)
+            _, identifier = identify_on([steering], raw)
             if shape and identifier in ("Fault", "FiniteFault") and isinstance(value, Mapping) \
                     and value.get("rupture_type") == "kinematic" and value.get("rise_shape") is None:
                 keywords[raw] = {**value, "rise_shape": shape}
@@ -285,9 +316,10 @@ class GeoclawWorkflow(Workflow):
         run = env.run
         slots = self._slots()
         domain = slots[DOMAIN]
-        keywords = self._rise_shaped(dict(state.keywords))
-        previous = await asyncio.to_thread(self._restarted, keywords)
-        own, _ = _floor(self.steering, keywords)
+        steering = self._steered(run)
+        keywords = self._rise_shaped(dict(state.keywords), steering)
+        previous = await asyncio.to_thread(self._restarted, keywords, steering)
+        own, _ = _floor(steering, keywords)
         emitter = current_emitter()
         begin_substeps(emitter, 4 + ("mesh" not in run))
 
@@ -309,10 +341,10 @@ class GeoclawWorkflow(Workflow):
         art = run["mesh"]["artifact"]
         name = str(getattr(await read(env, domain), "name", None) or "domain")
         async with substep(emitter, "data"):
-            await self._data(env, own)
-        ends = [rupture_end(composite, own[composite] if composite in own else self.steering.ASSERTED.get(composite), run)
+            await self._data(env, own, steering)
+        ends = [rupture_end(composite, own[composite] if composite in own else steering.ASSERTED.get(composite), run)
                 for composite in ("Fault", "SiftFault", "FiniteFault", "SlabFault", "MomentTensorFault")]
-        grid = grid_keywords(art, set(own) | set(self.steering.ASSERTED), max((end for end in ends if end is not None), default=None))
+        grid = grid_keywords(art, set(own) | set(steering.ASSERTED), max((end for end in ends if end is not None), default=None))
         declared = {row.name for row in self.inputs if not row.is_row}
         staged: dict[str, Any] = {}
         run_tag = new_ulid()
@@ -321,10 +353,11 @@ class GeoclawWorkflow(Workflow):
         async def write(sheet: Sheet) -> None:
             # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
             staged.clear()
-            staged.update(await stage_sheet(sheet=sheet, run_tag=run_tag, prefix=prefix, name=name, previous=previous))
+            staged.update(await stage_sheet(sheet=sheet, run_tag=run_tag, prefix=prefix, name=name, previous=previous,
+                                            cores=int(run.get(_CORES.name) or 1)))
 
         try:
-            await stage("sheet", fill_sheet, steering=self.steering,
+            await stage("sheet", fill_sheet, steering=steering,
                         produced={**run, **{slot.name: run[held] for slot, held in slots.items() if held in run}},
                         params={key: run[key] for key in declared}, workflow=self.name,
                         title=self._states("REVIEW_TITLE", ""), keywords={**keywords, **grid},
@@ -339,9 +372,12 @@ class GeoclawWorkflow(Workflow):
         await keep_mesh(run["mesh"], solved.get("run_id"))
         from trid3nt_server.inputs.run_notes import journal_note
 
-        mass = (solved.get("metrics") or {}).get("initial_mass")
+        metrics = solved.get("metrics") or {}
+        mass, zeta = metrics.get("initial_mass"), metrics.get("initial_zeta")
         if previous is not None:
             journal_note(f"restarted from {previous.uri} at t={previous.time:g} s; the engine prints no initial mass on a restart")
+        elif zeta is not None:
+            journal_note(f"Total zeta at initial time {zeta}")
         else:
             journal_note(f"Total mass at initial time {mass}" if mass is not None else
                          "the engine printed no Total mass at initial time")
@@ -353,7 +389,7 @@ class GeoclawWorkflow(Workflow):
                             params={key: run[key] for key in declared})
         return RunResult(value=value, results=dict(run))
 
-    async def _data(self, env: Any, own: Mapping[str, Any]) -> None:
+    async def _data(self, env: Any, own: Mapping[str, Any], steering: type) -> None:
         """The data the template's statements ask the world for, each a declared fetch row the run reads and journals.
 
         The deep rung of the bed (the coarse surface under the fine one, over the whole grid) unless the run
@@ -377,7 +413,7 @@ class GeoclawWorkflow(Workflow):
             ask = await asyncio.to_thread(offset_ask, layer, frame, at=seed)
             run["deep_bed"] = layer
             run["deep_bed_offset"] = await _fetch(env, "deep_bed_offset", OFFSET_FETCH, **ask) if ask else None
-        if "GEO_SEA_LEVEL" not in own and self.steering.ASSERTED.get("GEO_SEA_LEVEL") is None:
+        if "GEO_SEA_LEVEL" not in own and steering.ASSERTED.get("GEO_SEA_LEVEL") is None:
             if seed is None:
                 raise GeoclawError(
                     f"GEO_SEA_LEVEL is stated by nothing, and {self.template.SEA_LEVEL_DATUM} on {frame} is measured at the "
@@ -386,14 +422,14 @@ class GeoclawWorkflow(Workflow):
             record = await _fetch(env, "sea_level_offset", OFFSET_FETCH, point=list(seed),
                                   from_frame=self.template.SEA_LEVEL_DATUM, to_frame=frame)
             run["sea_level"] = record["offset_m"]
-        rupture = own["SiftFault"] if "SiftFault" in own else self.steering.ASSERTED.get("SiftFault")
+        rupture = own["SiftFault"] if "SiftFault" in own else steering.ASSERTED.get("SiftFault")
         if rupture is not None and rupture["slips"] and run.get("sift_unit_sources") is None:
             run["sift_unit_sources"] = await _fetch(env, "sift_unit_sources_fetch", "fetch_sift_unit_sources",
                                                     names=list(rupture["slips"]))
-        track = own["Storm"] if "Storm" in own else self.steering.ASSERTED.get("Storm")
+        track = own["Storm"] if "Storm" in own else steering.ASSERTED.get("Storm")
         if isinstance(track, Mapping) and isinstance(track.get("storm_tracks"), str) and run.get(track["storm_tracks"]) is None:
             await self._storm(env, track)
-        finite = own["FiniteFault"] if "FiniteFault" in own else self.steering.ASSERTED.get("FiniteFault")
+        finite = own["FiniteFault"] if "FiniteFault" in own else steering.ASSERTED.get("FiniteFault")
         if isinstance(finite, Mapping) and finite.get("event_id") and isinstance(finite.get("finite_fault"), str) \
                 and run.get(finite["finite_fault"]) is None:
             run[finite["finite_fault"]] = await _fetch(env, "finite_fault_fetch", "fetch_finite_fault",

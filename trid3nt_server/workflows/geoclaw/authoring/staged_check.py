@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from ..errors import GeoclawError
-from .rundata import _fields, _prefix_of, attribute_of
+from .rundata import _fields, _prefix_of, attribute_of, new_rundata
 
 logger = logging.getLogger(
     "trid3nt_server.workflows.geoclaw.authoring.staged_check")
@@ -41,9 +41,7 @@ def check_staged_run(rundir: Path | str, *, sheet: Any,
             _refuse("FILE_MISSING",
                     f"the write recorded {name!r} and the run directory holds "
                     f"{_holding(work)}")
-    from clawpack.clawutil.data import ClawRunData
-
-    rundata = ClawRunData("geoclaw", 2)
+    rundata = new_rundata(sheet.body.MODULE)
     checked: list[str] = []
     for identifier, row in sorted(sheet.filled.items()):
         path = work / row.slot.rubrique[0]

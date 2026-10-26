@@ -29,3 +29,4 @@ the wrapper's slots.
 | file | keywords | what it is |
 | --- | --- | --- |
 | `geoclaw.json` | 159 | The whole rundata surface of a 2D run: claw, geoclaw, gauges, topo, dtopo, amr, adjoint, region, flagregion, refinement, fgout, fgmax, qinit, surge, friction and multilayer. |
+| `geoclaw_bouss.json` | 165 | The same rows plus Clawpack's `BoussData` group (`bouss.data`, prefix `BOUSS`): the Boussinesq body the worker's second executable solves. |
