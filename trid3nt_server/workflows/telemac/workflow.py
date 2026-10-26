@@ -486,8 +486,8 @@ class TelemacWorkflow(Workflow):
         from trid3nt_server.render.pipeline_emitter import (begin_substeps,
                                                             current_emitter,
                                                             substep)
-        from trid3nt_server.workflows.runtime.fill import (_load, _taken, call,
-                                                           production, read)
+        from trid3nt_server.workflows.runtime.fill import (
+            _load, _taken, anchors_of, call, given, production, read)
         from .authoring.mesh_files import telemac_mesh_files
         from .authoring.opening import open_channel, open_water
         from .authoring.release_point import settle_release
@@ -505,9 +505,6 @@ class TelemacWorkflow(Workflow):
         emitter = current_emitter()
         begin_substeps(emitter, 5 + ("mesh" not in run) + len(asks) + len(placed)
                        + bool(inflow))
-
-        async def given(value: Any) -> Any:
-            return await read(env, value) if isinstance(value, str) else value
 
         async def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
             async with substep(emitter, label):
@@ -555,7 +552,7 @@ class TelemacWorkflow(Workflow):
                         friction_coefficient=self._asserted(
                             run, "FRICTION_COEFFICIENT"))
         for mark in placed:
-            held = await given(mark.point)
+            held = await given(env, mark.point)
             if held is None:
                 run[mark.name] = None
                 untaken.add(mark.name)
@@ -628,8 +625,7 @@ class TelemacWorkflow(Workflow):
         outputs = [p for p in outputs
                    if not (_names_untaken(p.along, untaken) or _names_untaken(p.at, untaken))]
         # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
-        anchors = [{"at": await given(p.at), "along": await given(p.along),
-                    "within": await given(p.within)} for p in outputs]
+        anchors = await anchors_of(env, outputs)
         value = await stage(
             "outputs", publish_outputs, run=run["solve"],
             outputs=[unanchored(p) for p in outputs], captions=captions,

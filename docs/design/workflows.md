@@ -634,6 +634,8 @@ grid of a kind has no one grid to read and refuses. A template's own `OUTPUTS` a
 the module table through the same `publish_outputs` shape as MODFLOW's: a placed read is a
 `series` at a gauge, a `field` over the fgout grid or a `max_over_time` over the fgmax grid.
 
+A primitive's `at`, `along` and `within` name run inputs; the runtime's one `anchors_of` reads them off the run for every engine's launch, and each rejoins its primitive at publish.
+
 ### The GeoClaw template: `geoclaw_tsunami_inundation`
 
 The first GeoClaw template (`workflows/geoclaw/templates/tsunami_inundation/`) takes R. J. LeVeque's Copalis Beach tutorial

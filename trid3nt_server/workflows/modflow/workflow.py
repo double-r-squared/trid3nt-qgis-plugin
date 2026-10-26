@@ -402,7 +402,7 @@ class ModflowWorkflow(Workflow):
                                                             current_emitter,
                                                             substep)
         from trid3nt_server.tools.mesh.step import build_declared_mesh, keep_mesh
-        from trid3nt_server.workflows.runtime.fill import call, production, read
+        from trid3nt_server.workflows.runtime.fill import anchors_of, call, production, read
 
         env = production(state)
         run = env.run
@@ -411,9 +411,6 @@ class ModflowWorkflow(Workflow):
         keywords = dict(state.keywords)
         emitter = current_emitter()
         begin_substeps(emitter, 3 + ("mesh" not in run))
-
-        async def given(value: Any) -> Any:
-            return await read(env, value) if isinstance(value, str) else value
 
         async def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
             async with substep(emitter, label):
@@ -478,8 +475,7 @@ class ModflowWorkflow(Workflow):
         await keep_mesh(run["mesh"], solved.get("run_id"))
         outputs, captions = self._outputs()
         # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
-        anchors = [{"at": await given(p.at), "along": await given(p.along),
-                    "within": await given(p.within)} for p in outputs]
+        anchors = await anchors_of(env, outputs)
         value = await stage(
             "outputs", publish_outputs, run=solved, sheet=run["sheet"],
             outputs=[unanchored(p) for p in outputs], captions=captions,

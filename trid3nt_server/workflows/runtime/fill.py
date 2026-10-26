@@ -57,6 +57,17 @@ async def read(env: "_Env", name: str) -> Any:
     return await _taken(env, env.data[name])
 
 
+async def given(env: "_Env", value: Any) -> Any:
+    """A string names an input of the run and is read; any other value passes through."""
+    return await read(env, value) if isinstance(value, str) else value
+
+
+async def anchors_of(env: "_Env", outputs: Sequence[Any]) -> list[dict[str, Any]]:
+    """Each output's at, along and within read off the run, in output order, to rejoin the primitive at publish."""
+    return [{"at": await given(env, p.at), "along": await given(env, p.along),
+             "within": await given(env, p.within)} for p in outputs]
+
+
 async def _taken(env: "_Env", row: Input) -> Any:
     """Produce one row into the run's mapping and stamp where it came from:
     the caller's own where one was supplied, else the source or producer that answered."""
