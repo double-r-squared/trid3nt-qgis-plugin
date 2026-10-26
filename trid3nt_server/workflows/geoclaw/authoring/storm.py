@@ -2,8 +2,8 @@
 
 ``storm_track`` turns the fixes ``fetch_storm_tracks`` returns for ONE storm into the SI
 rows the engine reads, counted in seconds from the run's reference instant; ``write_stormfiles``
-writes them in GeoClaw's storm format. Every fix in the run's window states every value the wind
-models read, or the track refuses naming the fix and the field.
+writes them in GeoClaw's storm format through Clawpack's writer, which omits a fix with no radius of
+maximum wind and gives a missing outer radius its 500 km default. A track with too few fixes left to span the run refuses.
 """
 
 from __future__ import annotations
@@ -73,8 +73,8 @@ def storm_track(doc: Any, *, offset: str | None, t0: float, tfinal: float) -> di
 
     ``offset`` is the run's reference instant (the stated event_time; unstated, the storm's last landfall fix).
     The fixes kept run from the last at or before ``t0`` to the first at or after ``tfinal`` (the engine stops when
-    the track begins after the run and would carry the last fix on unchanged past the track's end), each stating
-    wind, radius of maximum wind, central pressure and outer radius or the track refuses naming it."""
+    the track begins after the run and would carry the last fix on unchanged past the track's end); the track
+    also names the kept fixes the writer omits (no radius of maximum wind) and those it gives the default outer radius."""
     import clawpack.geoclaw.units as units
 
     rows = _fixes(doc)
@@ -82,29 +82,30 @@ def storm_track(doc: Any, *, offset: str | None, t0: float, tfinal: float) -> di
     seconds = [(_utc(row["iso_time"]) - reference).total_seconds() for row in rows]
     # A fix with no wind or pressure is the interpolated track between reports, not an observation of the storm's strength.
     strength = [i for i, row in enumerate(rows) if row.get("wind_kt") is not None and row.get("pres_mb") is not None]
-    if not strength or seconds[strength[0]] > t0:
-        began = f"at {rows[strength[0]]['iso_time']}" if strength else "never"
-        _refuse("STORM_STARTS_LATE", f"the storm's strength is first reported {began}, after the run opens at "
+    # Clawpack's writer omits a fix with no radius of maximum wind, so only a fix with one can span the run.
+    usable = [i for i in strength if rows[i].get("rmw_nmi") is not None]
+    if not usable or seconds[usable[0]] > t0:
+        began = f"at {rows[usable[0]]['iso_time']}" if usable else "never"
+        _refuse("STORM_STARTS_LATE", f"the storm's strength and radius of maximum wind are first reported {began}, after the run opens at "
                 f"{t0:g} s from {reference.isoformat()}: the engine stops when the track begins after the run.")
-    if seconds[strength[-1]] < tfinal:
-        _refuse("STORM_ENDS_EARLY", f"the storm's strength is last reported at {rows[strength[-1]]['iso_time']}, "
+    if seconds[usable[-1]] < tfinal:
+        _refuse("STORM_ENDS_EARLY", f"the storm's strength and radius of maximum wind are last reported at {rows[usable[-1]]['iso_time']}, "
                 f"before the run ends at {tfinal:g} s from {reference.isoformat()}: the engine would carry the last "
                 "fix on unchanged, so shorten CLAW_TFINAL.")
-    first = max(i for i in strength if seconds[i] <= t0)
-    last = min(i for i in strength if seconds[i] >= tfinal)
+    first = max(i for i in usable if seconds[i] <= t0)
+    last = min(i for i in usable if seconds[i] >= tfinal)
     kept = [i for i in strength if first <= i <= last]
-    track = []
-    for i in kept:
-        row = rows[i]
-        missing = [name for name in ("rmw_nmi", "roci_nmi") if row.get(name) is None]
-        if missing:
-            _refuse("STORM_FIX_INCOMPLETE", f"the fix at {row['iso_time']} states no {' and no '.join(missing)} "
-                    "(IBTrACS USA_RMW, USA_ROCI): the wind models read the radius of maximum wind and the outer radius "
-                    "and the engine has no value for either.")
-        track.append({"t": seconds[i], "longitude": float(row["longitude"]), "latitude": float(row["latitude"]),
-                      **{attribute: float(units.convert(float(row[name]), have, want))
-                         for name, (attribute, have, want) in _FIELDS.items()}})
-    return {"time_offset": reference.isoformat(timespec="seconds"), "fixes": track}
+    if sum(rows[i].get("rmw_nmi") is not None for i in kept) < 2:
+        _refuse("STORM_TOO_FEW_FIXES", f"only {sum(rows[i].get('rmw_nmi') is not None for i in kept)} fix spans the run once the fixes with no "
+                "radius of maximum wind (IBTrACS USA_RMW) are omitted: the engine takes the storm's velocity from two.")
+    # A value the fix lacks stays NaN: the writer omits a fix with no radius of maximum wind and fills a missing outer radius with 500 km.
+    nan = float("nan")
+    track = [{"t": seconds[i], "longitude": float(rows[i]["longitude"]), "latitude": float(rows[i]["latitude"]),
+              **{attribute: float(units.convert(float(rows[i][name]), have, want)) if rows[i].get(name) is not None else nan
+                 for name, (attribute, have, want) in _FIELDS.items()}} for i in kept]
+    return {"time_offset": reference.isoformat(timespec="seconds"), "fixes": track,
+            "omitted": [rows[i]["iso_time"] for i in kept if rows[i].get("rmw_nmi") is None],
+            "default_radius": [rows[i]["iso_time"] for i in kept if rows[i].get("rmw_nmi") is not None and rows[i].get("roci_nmi") is None]}
 
 
 def write_stormfiles(sheet: Any, work: Path) -> list[str]:
@@ -130,5 +131,9 @@ def _written(spec: Mapping[str, Any], path: Path) -> None:
     storm.eye_location = np.array([[fix["longitude"], fix["latitude"]] for fix in fixes])
     for attribute in (a for a, _, _ in _FIELDS.values()):
         setattr(storm, attribute, np.array([fix[attribute] for fix in fixes]))
-    # Every value is a number by construction, so the writer's own fill of a missing outer radius never applies.
     storm.write(path, file_format="geoclaw")
+    written = int(path.read_text().split()[0])
+    expected = sum(not np.isnan(fix["max_wind_radius"]) for fix in fixes)
+    if written != expected:
+        raise GeoclawError(f"the storm file {path.name} holds {written} fixes where {expected} carry a radius of maximum wind.",
+                           error_code="GEOCLAW_STORM_WRITE_MISMATCH")

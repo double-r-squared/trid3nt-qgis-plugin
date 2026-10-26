@@ -68,7 +68,6 @@ class INPUTS:
 
 class STEERING(GEO):
     # the shallow-water numerics of the tutorial's setrun
-    CLAW_NUM_EQN = 3
     CLAW_NUM_AUX = 3
     CLAW_CAPA_INDEX = 2
     CLAW_NUM_WAVES = 3

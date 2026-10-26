@@ -198,6 +198,15 @@ def _fgmax(path: Path, work: Path, _rundata: Any) -> Any:
     return grids
 
 
+def _friction_regions(path: Path, _work: Path, _rundata: Any) -> Any:
+    """Each region's four value lines (lower, upper, depths, coefficients) after the count line; Clawpack's own reader keeps the trailing name."""
+    lines = [line for line in path.read_text().splitlines() if line.strip() and not line.startswith("#")]
+    start = next(i for i, line in enumerate(lines) if "=: num_friction_regions" in line) + 1
+    count = int(lines[start - 1].split("=:")[0])
+    return [[[float(item) for item in line.split("=:")[0].split()] for line in lines[start + 4 * n:start + 4 * n + 4]]
+            for n in range(count)]
+
+
 def _qinitfiles(path: Path, _work: Path, _rundata: Any) -> Any:
     """The quoted file line qinit.data carries, one record per file."""
     return [[line.strip().strip("'")] for line in path.read_text(encoding="utf-8").splitlines()
@@ -224,6 +233,7 @@ _READERS: dict[str, Any] = {
     "FGMAX_FGMAX_GRIDS": _fgmax,
     "FGOUT_FGOUT_GRIDS": _fgout,
     "FLAGREGION_FLAGREGIONS": _flagregions,
+    "FRICTION_FRICTION_REGIONS": _friction_regions,
     "GAUGE_GAUGES": _gauges,
     "QINIT_QINITFILES": _qinitfiles,
 }

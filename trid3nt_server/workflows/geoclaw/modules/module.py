@@ -19,7 +19,7 @@ from trid3nt_contracts.common import Origin
 from trid3nt_contracts.payload_warning import ParamSheetRow
 
 from ...runtime.module import Module
-from ...runtime.sheet import Sheet
+from ...runtime.sheet import Filled, Provenance, Sheet
 from ..errors import GeoclawError
 
 __all__ = ["GeoclawModule", "fault", "finite_fault", "fixed_grids", "initial_surface", "module_input_dir", "rupture_end", "sift_fault",
@@ -381,8 +381,8 @@ def storm(value: Any, *, run: Mapping[str, Any]
 
     ``storm_tracks`` is the points document ``fetch_storm_tracks`` returns for one storm; ``storm_name`` and ``season``
     name that storm for the workflow's fetch. The fixes spanning CLAW_T0 to CLAW_TFINAL are written in GeoClaw's storm
-    format in SI units, counted from the run's event_time (unstated, the storm's last landfall); a fix lacking a
-    value the wind models read refuses. The wind model is SURGE_STORM_SPECIFICATION_TYPE's, by its name."""
+    format in SI units, counted from the run's event_time (unstated, the storm's last landfall); Clawpack's writer omits
+    a fix with no radius of maximum wind and gives one with no outer radius 500 km, both said on the review card. The wind model is SURGE_STORM_SPECIFICATION_TYPE's, by its name."""
     if not isinstance(value, Mapping):
         _refuse("STORM_UNSTATED", f"Storm takes a mapping {{{', '.join(_STORM)}}}.")
     extra = sorted(set(value) - set(_STORM))
@@ -520,26 +520,72 @@ def _triple(axis_value: Any, axis: str) -> tuple[float, float, int]:
     return float(axis_value[0]), float(axis_value[1]), int(axis_value[2])
 
 
+#: The equation count each executable is compiled for: shallow water carries three, the Boussinesq one five.
+_NUM_EQN = {"geoclaw": 3, "geoclaw_bouss": 5}
+
+
+def _fixed(wrapper: type, filled: dict[str, Any]) -> None:
+    """Add the keywords the module's executable fixes to ``filled``; a stated value other than that one refuses."""
+    fixed = _NUM_EQN[wrapper.MODULE]
+    stated = filled.get("CLAW_NUM_EQN")
+    if stated is not None and stated.value != fixed:
+        _refuse("NUM_EQN_FIXED", f"CLAW_NUM_EQN {stated.value!r} is stated for the module {wrapper.MODULE}, whose executable runs "
+                f"{fixed} equations: remove it, or state the module that runs {stated.value!r}.")
+    if stated is None:
+        filled["CLAW_NUM_EQN"] = Filled(slot=wrapper.MODULE_INPUT["CLAW_NUM_EQN"], value=fixed,
+                                        provenance=Provenance(Origin.DERIVED, f"the {wrapper.MODULE} executable"))
+
+
+def _friction(wrapper: type, filled: dict[str, Any]) -> None:
+    """Refuse variable friction beside a Manning law a run states (the engine reads the aux slot and ignores the law) or beside too few aux slots for its friction_index (Clawpack counts it from zero and writes it one higher)."""
+    variable = filled.get("FRICTION_VARIABLE_FRICTION")
+    if variable is None or not variable.value:
+        if filled.get("FRICTION_FRICTION_REGIONS") is not None and filled["FRICTION_FRICTION_REGIONS"].value:
+            _refuse("FRICTION_REGIONS_UNUSED", "FRICTION_FRICTION_REGIONS is stated and FRICTION_VARIABLE_FRICTION is not true, so the "
+                    "engine reads no region: state FRICTION_VARIABLE_FRICTION true or remove the regions.")
+        return
+    law = sorted(name for name in ("GEO_MANNING_COEFFICIENT", "GEO_MANNING_BREAK")
+                 if name in filled and filled[name].provenance.origin is Origin.USER)
+    if law:
+        _refuse("FRICTION_LAW_UNUSED", f"{', '.join(law)} is stated beside FRICTION_VARIABLE_FRICTION, which makes the engine read its "
+                "Manning coefficient from the friction regions and ignore the depth law: state one of them.")
+    index = filled.get("FRICTION_FRICTION_INDEX") or wrapper.MODULE_INPUT["FRICTION_FRICTION_INDEX"].engine_default
+    slot = (index.value if isinstance(index, Filled) else index) + 1
+    aux = filled["CLAW_NUM_AUX"].value if "CLAW_NUM_AUX" in filled else None
+    if aux is None or aux < slot:
+        _refuse("FRICTION_AUX", f"FRICTION_VARIABLE_FRICTION keeps its coefficient in aux slot {slot} (FRICTION_FRICTION_INDEX counted from "
+                f"zero), and CLAW_NUM_AUX is {aux if aux is not None else 'unstated'}: state a CLAW_NUM_AUX of at least {slot}.")
+
+
 @dataclass(frozen=True, slots=True)
 class GeoclawSheet(Sheet):
     """A filled GeoClaw deck: the sheet, plus the card row stating the run's wall time."""
 
     def engine_rows(self) -> tuple[list[ParamSheetRow], set[str]]:
-        """The card's engine section: the wall-time estimate of the whole run, from the accepted grid's rate and the stated CLAW_TFINAL.
+        """The card's engine section: the wall-time estimate of the whole run, from the accepted grid's rate and the stated CLAW_TFINAL, and what the storm file leaves out or defaults.
 
-        States nothing while the run holds no grid facts or CLAW_TFINAL is unstated."""
+        The wall row is stated only when the run holds grid facts and CLAW_TFINAL; the storm row only when the writer omits or defaults a fix."""
         from trid3nt_server.tools.mesh.meshers.claw_grid import PROBE_KEY, WALL_BASIS
 
+        rows: list[ParamSheetRow] = []
         mesh = self.run.get("mesh")
         facts = (getattr(mesh.get("artifact"), "probes", None) or {}).get(PROBE_KEY) if isinstance(mesh, Mapping) else None
         tfinal = self.stated().get("CLAW_TFINAL")
-        if not facts or tfinal is None:
-            return [], set()
-        minutes = facts["wall_s_per_sim_s"] * float(tfinal) / 60.0
-        return [ParamSheetRow(
-            name="wall_estimate", value=f"about {minutes:.0f} min of wall for CLAW_TFINAL {float(tfinal):g} s",
-            desc="The run's wall time: the grid's wall seconds per simulated second times CLAW_TFINAL. Read-only, not enforced.",
-            origin=Origin.DERIVED, editable=False, source_badge=WALL_BASIS, group="Grid")], set()
+        if facts and tfinal is not None:
+            minutes = facts["wall_s_per_sim_s"] * float(tfinal) / 60.0
+            rows.append(ParamSheetRow(
+                name="wall_estimate", value=f"about {minutes:.0f} min of wall for CLAW_TFINAL {float(tfinal):g} s",
+                desc="The run's wall time: the grid's wall seconds per simulated second times CLAW_TFINAL. Read-only, not enforced.",
+                origin=Origin.DERIVED, editable=False, source_badge=WALL_BASIS, group="Grid"))
+        for content in self.files.values():
+            track = content.get("storm") if isinstance(content, Mapping) else None
+            if track and (track["omitted"] or track["default_radius"]):
+                rows.append(ParamSheetRow(
+                    name="storm_fixes", value=f"{len(track['omitted'])} fixes omitted, {len(track['default_radius'])} given the 500 km outer radius",
+                    desc="Clawpack's storm writer omits a fix with no radius of maximum wind and gives a fix with no outer radius 500 km. Read-only.",
+                    note="omitted: " + (", ".join(track["omitted"]) or "none") + "; 500 km outer radius: " + (", ".join(track["default_radius"]) or "none"),
+                    origin=Origin.DERIVED, editable=False, source_badge="Clawpack Storm.write", group="Storm"))
+        return rows, set()
 
 
 class GeoclawModule(Module):
@@ -558,10 +604,11 @@ class GeoclawModule(Module):
     @classmethod
     def sheet(cls, filled: dict[str, Any], files: dict[str, Any],
               run: Mapping[str, Any]) -> Any:
-        """The filled sheet a body's slots make: the generic sheet, held immutable.
+        """The filled sheet a body's slots make, the keywords its executable fixes stated and a stated value they contradict refused.
 
-        Nothing is armed or written into files here - the authoring that turns
-        slots into setrun values and Clawpack's .data files is a later leg's."""
+        Variable friction reads its coefficient from an aux slot, so a stated Manning law beside it, or too few aux slots, refuse."""
+        _fixed(cls, filled)
+        _friction(cls, filled)
         return GeoclawSheet(body=cls, filled=MappingProxyType(filled),
                      files=MappingProxyType(files),
                      run=MappingProxyType(run))

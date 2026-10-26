@@ -2,8 +2,9 @@
 
 Offline. The fixes are rows of the IBTrACS v04r01 North Atlantic table for Hurricane Ike (2008) as fetch_storm_tracks
 returns them. Pinned: the file reads back through Clawpack's own ``Storm.read`` equal to the fixes in SI units; the run's
-seconds count from the stated event_time, else from the last landfall fix; a fix lacking the radius of maximum wind or
-the outer radius, two storms in one record, a track that begins after the run opens or ends before it closes, and a
+seconds count from the stated event_time, else from the last landfall fix; a fix lacking the radius of maximum wind is
+omitted and one lacking the outer radius takes Clawpack's 500 km (both named on the track), a track left with fewer than
+two usable fixes, two storms in one record, a track that begins after the run opens or ends before it closes, and a
 record with no landfall and no stated event_time each refuse by name; FixedGrids frames start at CLAW_T0.
 """
 
@@ -78,12 +79,41 @@ def test_the_window_keeps_the_fixes_bracketing_the_run_and_nothing_beyond():
     assert [fix["t"] for fix in track["fixes"]] == [-3600.0, 0.0, 7200.0]
 
 
-@pytest.mark.parametrize("field, name", [("rmw_nmi", "USA_RMW"), ("roci_nmi", "USA_ROCI")])
-def test_a_fix_in_the_window_without_a_radius_refuses_naming_the_fix_and_the_field(field, name):
-    message = _refused("STORM_FIX_INCOMPLETE", _doc(**{"2008-09-13 09:00:00": {field: None}}),
-                       offset=_LANDFALL, t0=-3600.0, tfinal=7200.0)
+def _read(track, tmp_path):
+    from clawpack.geoclaw.surge.storm import Storm
 
-    assert "2008-09-13 09:00:00" in message and name in message
+    write_stormfiles(type("S", (), {"files": {"ike.storm": {"storm": track}}})(), tmp_path)
+    return Storm(str(tmp_path / "ike.storm"), file_format="geoclaw")
+
+
+def test_a_fix_without_the_outer_radius_takes_clawpacks_500_km_and_is_named(tmp_path):
+    track = storm_track(_doc(**{"2008-09-13 09:00:00": {"roci_nmi": None}}), offset=_LANDFALL, t0=-3600.0, tfinal=7200.0)
+    read = _read(track, tmp_path)
+
+    assert track["default_radius"] == ["2008-09-13 09:00:00"] and track["omitted"] == []
+    assert list(read.t) == [-3600.0, 0.0, 7200.0] and read.storm_radius[2] == 500e3
+    assert read.storm_radius[0] == pytest.approx(325 * 1852.0, rel=1e-6)
+
+
+def test_a_fix_without_the_radius_of_maximum_wind_is_omitted_by_the_writer_and_named(tmp_path):
+    track = storm_track(_doc(**{"2008-09-13 06:00:00": {"rmw_nmi": None}}), offset=_LANDFALL, t0=-3600.0, tfinal=7200.0)
+    read = _read(track, tmp_path)
+
+    assert track["omitted"] == ["2008-09-13 06:00:00"] and len(track["fixes"]) == 4
+    assert list(read.t) == [-14400.0, 0.0, 7200.0]
+
+
+def test_a_track_spans_the_run_by_the_fixes_the_writer_keeps():
+    gaps = {"2008-09-13 03:00:00": {"rmw_nmi": None}, "2008-09-13 06:00:00": {"rmw_nmi": None}}
+
+    assert "2008-09-13 07:00:00" in _refused("STORM_STARTS_LATE", _doc(**gaps), offset=_LANDFALL, t0=-14400.0, tfinal=0.0)
+
+
+def test_fewer_than_two_usable_fixes_refuse():
+    gaps = {t: {"rmw_nmi": None} for t in ("2008-09-13 03:00:00", "2008-09-13 06:00:00", "2008-09-13 09:00:00", "2008-09-13 12:00:00")}
+    message = _refused("STORM_TOO_FEW_FIXES", _doc(**gaps), offset=_LANDFALL, t0=0.0, tfinal=0.0)
+
+    assert "USA_RMW" in message
 
 
 def test_a_fix_outside_the_window_without_a_radius_is_not_read():
@@ -171,3 +201,14 @@ def test_fixed_grids_frames_start_at_the_runs_first_instant():
     fgout = expanded["FGOUT_FGOUT_GRIDS"][0]
 
     assert fgout[2:5] == [33, -259200.0, 86400.0]
+
+
+def test_the_review_card_says_how_many_fixes_were_omitted_and_which_took_the_default_radius():
+    gaps = {"2008-09-13 06:00:00": {"rmw_nmi": None}, "2008-09-13 09:00:00": {"roci_nmi": None}}
+    _, files = GEO.COMPOSITES["Storm"].apply(_stated(storm_tracks=_doc(**gaps)), _RUN)
+    rows, _ = GEO.sheet({}, files, {}).engine_rows()
+
+    assert [row.name for row in rows] == ["storm_fixes"] and rows[0].editable is False
+    assert rows[0].value == "1 fixes omitted, 1 given the 500 km outer radius"
+    assert "2008-09-13 06:00:00" in rows[0].note and "2008-09-13 09:00:00" in rows[0].note
+    assert GEO.sheet({}, {"storm_01.storm": {"storm": storm_track(_doc(), offset=_LANDFALL, t0=0.0, tfinal=3600.0)}}, {}).engine_rows()[0] == []

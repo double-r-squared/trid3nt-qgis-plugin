@@ -60,7 +60,6 @@ class INPUTS:
 
 class STEERING(GEO):
     # the shallow-water numerics of the example's setrun (the limiter 'mc', source splitting 'godunov', extrapolating edges)
-    CLAW_NUM_EQN = 3
     CLAW_NUM_AUX = 7  # 3 shallow, 1 friction, 3 storm fields
     CLAW_CAPA_INDEX = 2
     CLAW_NUM_WAVES = 3

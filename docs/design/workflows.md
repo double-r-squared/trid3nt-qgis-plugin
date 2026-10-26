@@ -675,12 +675,17 @@ values and a real storm for its forcing. `Storm` is a composite beside the fault
 returns for ONE storm (several refuse naming them) and writes the fixes spanning CLAW_T0 to CLAW_TFINAL as GeoClaw's storm
 file through Clawpack's `Storm` writer, in SI units (`workflows/geoclaw/authoring/storm.py`), setting `SURGE_STORM_FILE`. The
 wind model, drag law and refinement are the body's own keywords (`SURGE_STORM_SPECIFICATION_TYPE` takes any model the engine
-reads a track for, by its integer); a kept fix without the radius of maximum wind or the outer radius refuses naming the fix
-and the IBTrACS field, a track that begins after the run or ends before it refuses, and Clawpack's fill never fires. The
+reads a track for, by its integer); Clawpack's writer omits a kept fix without the radius of maximum wind and gives one without the outer radius its 500 km
+default, the review card saying how many fixes were omitted and which took the default; a track that begins after the run or ends
+before it, or that has fewer than two fixes with a radius of maximum wind spanning the run, refuses. The
 workflow fetches the track (`storm_name` and `season` over the level-1 box) and, with no stated `event_time`, counts the run
 from the storm's last landfall fix (`USA_RECORD` L). The run opens three days before landfall, so FixedGrids and the overland
 mask start at CLAW_T0, and the seed gauge listens over the whole run. Friction is the example's domain-wide Manning law as
-`GEO_MANNING_*`; the sea stands at the MHW offset NOAA VDatum measures at the seed. Outputs are the fixed grids and gauges.
+`GEO_MANNING_*`, or a run's own `FRICTION_VARIABLE_FRICTION` with `FRICTION_FRICTION_REGIONS` (the example's two regions write the
+same `friction.data` as its setrun); the engine then reads the coefficient from aux slot `FRICTION_FRICTION_INDEX` (counted from zero,
+written one higher) and ignores the depth law, so a run states `CLAW_NUM_AUX` of at least that slot plus one and a matching
+`AMR_AUX_TYPE`, and a Manning law the run states beside variable friction, regions without the switch, or too few aux slots refuse;
+a template's Manning law yields. Friction files stay unsupported. the sea stands at the MHW offset NOAA VDatum measures at the seed. Outputs are the fixed grids and gauges.
 
 ### The GeoClaw Boussinesq module: `geoclaw_bouss`
 
@@ -694,5 +699,6 @@ needs) and MPICH, with GeoClaw's standard `qinit.f90` where radial_flat carries 
 assertions) `cores`, the MPI process count (unstated 1, at most this box's cores; shallow-water runs take none) and `threads`, the OpenMP thread count of each process (exported as `OMP_NUM_THREADS`; unstated the variable is left unset so OpenMP uses every core per process; only `xgeoclaw_bouss` is compiled with OpenMP, so shallow-water runs take none); the staged
 case names the module and the worker runs `xgeoclaw`, or `mpiexec -n <cores> xgeoclaw_bouss` with Clawpack's own
 `petscMPIoptions`. A module the worker has no executable for refuses by name (`GEOCLAW_CASE_MODULE_UNKNOWN`), as does a BOUSS_
-keyword on a shallow-water run. The template's shallow-water numerics (`CLAW_NUM_EQN` 3 and the aux layout) are the template's;
-a Boussinesq run states the five-equation numerics Clawpack's own setrun states.
+keyword on a shallow-water run. `CLAW_NUM_EQN` is the module's, never a template's or a run's: 3 on `geoclaw`, 5 on
+`geoclaw_bouss` (the equation count each executable is compiled for), and a stated value the module cannot run refuses
+(`GEOCLAW_NUM_EQN_FIXED`). The aux layout stays the template's.
