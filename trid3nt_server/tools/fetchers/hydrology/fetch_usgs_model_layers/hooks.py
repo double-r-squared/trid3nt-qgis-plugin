@@ -51,6 +51,7 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
             layer_id=f"model-layers-{covering}-{stem}-{q_bbox[0]:.3f}-{q_bbox[1]:.3f}",
             bbox=q_bbox,  # type: ignore[arg-type]
             fetch_context={"archive": covering, "surface": surface},
+            model_layer=surface,
         ))
     logger.info("usgs_model_layers: bbox %s -> %s frames=%d",
                 list(q_bbox), arch["label"], len(plans))

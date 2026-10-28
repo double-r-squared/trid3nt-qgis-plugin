@@ -56,6 +56,8 @@ class FramePlan:
     #: The ISO-8601 UTC window this frame is valid for, stamped as the layer's fixed temporal range.
     valid_from: str | None = None
     valid_to: str | None = None
+    #: The model layer stamped onto the emitted LayerURI: a K frame its layer from 1, a surface frame its index (0 the top of layer 1, n the bottom of layer n); None stamps none.
+    model_layer: int | None = None
     #: OPTIONAL fetch inputs the frame_bytes hook needs that must NOT enter the read_through key.
     fetch_context: dict[str, Any] = field(default_factory=dict)
     #: OPTIONAL per-frame style row override; None falls back to the row's own.

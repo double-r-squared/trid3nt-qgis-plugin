@@ -113,6 +113,8 @@ class LayerURI(ContractModel):
     quantity: str | None = None
     #: Which tracer, counted from 1 in the deck's order; a tracer's name is the run's own, so position is the stable key.
     tracer: int | None = None
+    #: The model layer the frame is of: a K frame its layer from 1, a surface frame its index (0 the top of layer 1, n the bottom of layer n); None on any other frame.
+    model_layer: int | None = None
     role: Literal["primary", "context", "input"] = "primary"
     #: Where the layer came from, read by a person; ``user`` is a file the user pushed in. Nothing branches on it.
     origin: Literal["user"] | None = None

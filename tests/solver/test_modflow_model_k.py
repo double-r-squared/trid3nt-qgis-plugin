@@ -1,4 +1,4 @@
-"""The published USGS model K in the MODFLOW templates: frames paired by layer id, and the K pair or transmissivity.
+"""The published USGS model K in the MODFLOW templates: frames paired by the model layer each states, and the K pair or transmissivity.
 
 Offline: the frame ids are the ones the two fetch rows state; the Des Moines frames are the fetchers' own over the ring excerpt.
 """
@@ -6,7 +6,6 @@ Offline: the frame ids are the ones the two fetch rows state; the Des Moines fra
 from __future__ import annotations
 
 import math
-import re
 from pathlib import Path
 
 import pytest
@@ -22,15 +21,15 @@ _DM_PROBE = (-93.655, 41.676)
 
 
 def _k(n):
-    return {"layer_id": f"model-k-des_moines-l{n}--93.673-41.663", "name": f"k{n}"}
+    return {"layer_id": f"model-k-des_moines-l{n}--93.673-41.663", "name": f"k{n}", "model_layer": n}
 
 
 def _surface(n):
     stem = "top-l1" if n == 0 else f"bot-l{n}"
-    return {"layer_id": f"model-layers-des_moines-{stem}--93.673-41.663", "name": f"s{n}"}
+    return {"layer_id": f"model-layers-des_moines-{stem}--93.673-41.663", "name": f"s{n}", "model_layer": n}
 
 
-def test_frames_pair_by_layer_id_never_by_position():
+def test_frames_pair_by_stated_layer_never_by_position():
     got = _paired([_k(4), _k(1), _k(2)], [_surface(n) for n in (3, 0, 4, 1, 2)], names=("k", "s"))
     assert [k["name"] if isinstance(k, dict) else k for k in got["layers"][:2]] == ["k1", "k2"]
     assert math.isnan(got["layers"][2]) and got["layers"][3]["name"] == "k4"
@@ -149,7 +148,7 @@ def _ring_frames(monkeypatch):
             TOOL_REGISTRY["fetch_usgs_model_layers"].fn(bbox=_DM_BBOX), held)
 
 
-def test_des_moines_pairs_by_id_across_its_gap_and_places_the_layers_around_it(monkeypatch, tmp_path):
+def test_des_moines_pairs_by_stated_layer_across_its_gap_and_places_the_layers_around_it(monkeypatch, tmp_path):
     """Whatever layers the frames drop at the probe, each K lands on its own layer and surfaces; layers 1 and 2 place the published values."""
     import rasterio
     from pyproj import Transformer
@@ -163,9 +162,9 @@ def test_des_moines_pairs_by_id_across_its_gap_and_places_the_layers_around_it(m
         path = tmp_path / f"{frame.layer_id}.tif"
         path.write_bytes(held[frame.uri])
         return {"uri": str(path), "name": frame.name, "units": units, "vertical_datum": frame.vertical_datum,
-                "layer_id": frame.layer_id}
+                "layer_id": frame.layer_id, "model_layer": frame.model_layer}
 
-    k_by = {int(re.search(r"-l(\d+)-", f.layer_id).group(1)): staged(f, "m/day") for f in k_frames}
+    k_by = {f.model_layer: staged(f, "m/day") for f in k_frames}
     run = {"kf": [staged_ for staged_ in k_by.values()],
            "sf": [staged(f, "m") for f in surface_frames], "vertical_frame": "NAVD88"}
     top, botm = 245.0, [243.0, 234.0]
@@ -179,8 +178,7 @@ def test_des_moines_pairs_by_id_across_its_gap_and_places_the_layers_around_it(m
     for number, item in enumerate(paired["layers"], start=1):
         assert (item is k_by[number]) if number in k_by else math.isnan(item)
     for number, item in enumerate(paired["surfaces"]):
-        stem = "-top-l1-" if number == 0 else f"-bot-l{number}-"
-        assert math.isnan(item) if isinstance(item, float) else stem in item["layer_id"]
+        assert math.isnan(item) if isinstance(item, float) else item["model_layer"] == number
 
     with rasterio.open(Path(k_by[1]["uri"])) as ds:
         lon, lat = ds.xy(*ds.index(*_DM_PROBE))

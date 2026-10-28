@@ -95,7 +95,7 @@ either surface weighing zero; a part of the layer outside the source is ignored,
 no measured source layer at some cell refuses naming the layer and how many cells lie above the source's
 top, below its bottom or over unmeasured cells - the nearest layer is never extended. Where `layers` and
 `surfaces` each name an input holding a whole list of fetched frames (the two published-model rows), the
-frames are paired by the layer each frame's id states, never by position: layers run 1 to the deepest K
+frames are paired by the model layer each frame states (`model_layer` on the layer), never by position: layers run 1 to the deepest K
 frame, a layer or a surface with no frame is unmeasured and weighs zero. A by-depth statement whose names
 the run holds nothing for is no conductivity, so `transmissivity` states the aquifer; both stated still
 refuses. The two templates declare the K pair optional and standing in for `transmissivity`

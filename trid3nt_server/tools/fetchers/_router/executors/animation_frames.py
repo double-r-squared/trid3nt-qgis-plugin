@@ -74,6 +74,7 @@ def execute(
                 # The frame's own validity window becomes the layer's fixed temporal range.
                 valid_from=frame.valid_from,
                 valid_to=frame.valid_to,
+                model_layer=frame.model_layer,
             )
         )
 

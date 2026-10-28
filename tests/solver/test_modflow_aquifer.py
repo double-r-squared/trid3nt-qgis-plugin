@@ -646,7 +646,6 @@ def _ring_frames(monkeypatch):
 
 
 def test_a_fetched_layered_model_is_read_by_depth_at_a_cell(monkeypatch, tmp_path):
-    import re
     import zipfile
 
     import numpy as np
@@ -665,9 +664,8 @@ def test_a_fetched_layered_model_is_read_by_depth_at_a_cell(monkeypatch, tmp_pat
         path.write_bytes(held[layer.uri])
         return {"uri": str(path), "name": number, "units": units, "vertical_datum": datum}
 
-    k_by = {int(re.search(r"-l(\d+)-", l.layer_id).group(1)): l for l in k_layers}
-    s_by = {0 if "-top-l1-" in l.layer_id else int(re.search(r"-bot-l(\d+)-", l.layer_id).group(1)): l
-            for l in surface_layers}
+    k_by = {l.model_layer: l for l in k_layers}
+    s_by = {l.model_layer: l for l in surface_layers}
     inputs = {f"k{n}": artifact(k_by[n], f"k{n}", "m/d") for n in (1, 2)}
     inputs |= {f"s{n}": artifact(s_by[n], f"s{n}", "m") for n in (0, 1, 2)}
 
@@ -728,7 +726,6 @@ def test_a_gap_layer_of_the_fetched_ring_is_unmeasured_and_the_layers_around_it_
     """Des Moines layers 3 and 4 carry no active cell at the probe and layer 5 does: a surface is kept wherever a layer
     it bounds is active, so the bottom of layer 4 stays and layer 5 places; K of layers 3 is not emitted, nor are its
     surfaces used (K of layers 1, 2, 4, 5, 6 over the top and the bottoms of 1, 2, 4, 5, 6)."""
-    import re
     import zipfile
 
     import numpy as np
@@ -738,7 +735,7 @@ def test_a_gap_layer_of_the_fetched_ring_is_unmeasured_and_the_layers_around_it_
     from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
 
     k_layers, surface_layers, held = _ring_frames(monkeypatch)
-    assert sorted(int(re.search(r"-l(\d+)-", l.layer_id).group(1)) for l in k_layers) == [1, 2, 4, 5, 6]
+    assert sorted(l.model_layer for l in k_layers) == [1, 2, 4, 5, 6]
     assert {l.vertical_datum for l in surface_layers} == {"NAVD88"}
 
     def artifact(layer, name, units):
@@ -746,11 +743,8 @@ def test_a_gap_layer_of_the_fetched_ring_is_unmeasured_and_the_layers_around_it_
         path.write_bytes(held[layer.uri])
         return {"uri": str(path), "name": name, "units": units, "vertical_datum": layer.vertical_datum}
 
-    def number(layer):
-        return 0 if "-top-l1-" in layer.layer_id else int(re.search(r"-bot-l(\d+)-", layer.layer_id).group(1))
-
-    k_ordered = sorted(k_layers, key=lambda l: int(re.search(r"-l(\d+)-", l.layer_id).group(1)))
-    s_ordered = sorted((l for l in surface_layers if number(l) != 3), key=number)
+    k_ordered = sorted(k_layers, key=lambda l: l.model_layer)
+    s_ordered = sorted((l for l in surface_layers if l.model_layer != 3), key=lambda l: l.model_layer)
     inputs = {f"k{i}": artifact(l, f"k{i}", "m/d") for i, l in enumerate(k_ordered)}
     inputs |= {f"s{i}": artifact(l, f"s{i}", "m") for i, l in enumerate(s_ordered)}
 

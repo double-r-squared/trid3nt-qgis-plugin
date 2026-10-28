@@ -41,8 +41,8 @@ _CC_PROBE = (-70.56, 41.635)
 _DM_PROBE = (-93.655, 41.676)
 
 
-def _layer_no(layer_id: str) -> int:
-    return int(re.search(r"-l(\d+)-", layer_id).group(1))
+def _layer_no(frame) -> int:
+    return int(frame.model_layer)
 
 
 class _R:
@@ -153,7 +153,7 @@ def test_coverage_rings_are_the_native_grid_corners():
 def test_cape_cod_fans_into_one_frame_per_model_layer():
     plans = MK.frames_plan(_SPEC, {"bbox": _CC_BBOX})
     assert len(plans) == MK._ARCHIVES["jbcc"]["layers"] == 32
-    assert [_layer_no(p.layer_id) for p in plans] == list(range(1, 33))
+    assert [_layer_no(p) for p in plans] == list(range(1, 33))
     first = plans[0]
     assert first.cache_params == {
         "bbox": _CC_BBOX,
@@ -204,7 +204,7 @@ def test_cape_cod_call_returns_the_canary_median_and_downloads_once(monkeypatch)
     layers = TOOL_REGISTRY["fetch_usgs_model_k"].fn(bbox=_CC_BBOX)
     # The REAL archive's ib32 has no active cell over the canary ring (331
     # active cells grid-wide, none here), so its frame degrades honestly.
-    assert {_layer_no(l.layer_id) for l in layers} == set(range(1, 32))
+    assert {_layer_no(l) for l in layers} == set(range(1, 32))
     assert len(layers) == 31
     assert seen["gets"] == 1, "the whole multi-frame call shares ONE download"
     assert layers[0].layer_type == "raster" and layers[0].role == "primary"
@@ -219,15 +219,15 @@ def test_des_moines_call_returns_layer_medians_with_layer3_degraded(monkeypatch)
     seen = _wire_fixtures(monkeypatch)
     layers = TOOL_REGISTRY["fetch_usgs_model_k"].fn(bbox=_DM_BBOX)
     # idomain has no active cell over the ring in layer 3; the rest emit.
-    assert {_layer_no(l.layer_id) for l in layers} == {1, 2, 4, 5, 6}
+    assert {_layer_no(l) for l in layers} == {1, 2, 4, 5, 6}
     assert seen["gets"] == 1
     meds = {}
     for layer in layers:
         med, hit = _band_stats(
             seen["uris"][layer.uri],
-            probe=_DM_PROBE if _layer_no(layer.layer_id) == 1 else None,
+            probe=_DM_PROBE if _layer_no(layer) == 1 else None,
         )
-        meds[_layer_no(layer.layer_id)] = (med, hit)
+        meds[_layer_no(layer)] = (med, hit)
     assert meds[1][0] == pytest.approx(25.037, abs=0.01)
     assert meds[1][1] == pytest.approx(28.973, abs=0.01)
     assert meds[2][0] == pytest.approx(10.028, abs=0.01)

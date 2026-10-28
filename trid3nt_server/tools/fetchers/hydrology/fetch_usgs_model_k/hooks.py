@@ -48,6 +48,7 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
             ),
             bbox=q_bbox,  # type: ignore[arg-type]
             fetch_context={"archive": covering, "layer": n},
+            model_layer=n,
         )
         for n in range(1, int(arch["layers"]) + 1)
     ]

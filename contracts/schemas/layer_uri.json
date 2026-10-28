@@ -292,6 +292,18 @@
       ],
       "default": null
     },
+    "model_layer": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Layer"
+    },
     "name": {
       "title": "Name",
       "type": "string"

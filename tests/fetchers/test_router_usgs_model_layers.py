@@ -9,7 +9,6 @@ NAVD88 and its refusal, and the outside-grid refusal."""
 from __future__ import annotations
 
 import io
-import re
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -60,15 +59,13 @@ def _grids(proj_grids):
     proj_grids("capecod")
 
 
-def _surface_no(layer_id: str) -> int:
+def _surface_no(frame) -> int:
     """0 for the top of layer 1, n for the bottom of layer n."""
-    if "-top-l1-" in layer_id:
-        return 0
-    return int(re.search(r"-bot-l(\d+)-", layer_id).group(1))
+    return int(frame.model_layer)
 
 
-def _k_layer_no(layer_id: str) -> int:
-    return int(re.search(r"-l(\d+)-", layer_id).group(1))
+def _k_layer_no(frame) -> int:
+    return int(frame.model_layer)
 
 
 class _R:
@@ -136,7 +133,7 @@ def _nearest(arr, tf, probe):
 
 
 def _frames(seen, layers):
-    return {_surface_no(l.layer_id): _read(seen["uris"][l.uri]) for l in layers}
+    return {_surface_no(l): _read(seen["uris"][l.uri]) for l in layers}
 
 
 def _raw(zip_name: str, member: str, shape, row: int, col: int) -> float:
@@ -192,7 +189,7 @@ def test_archive_constants_state_each_models_datum_and_unit():
 def test_cape_cod_plans_the_top_then_each_bottom():
     plans = ML.frames_plan(_SPEC, {"bbox": _CC_BBOX})
     assert len(plans) == 33
-    assert [_surface_no(p.layer_id) for p in plans] == list(range(33))
+    assert [_surface_no(p) for p in plans] == list(range(33))
     assert plans[0].name == "Cape Cod JBCC MODFLOW top of layer 1"
     assert plans[1].name == "Cape Cod JBCC MODFLOW bottom of layer 1"
     assert plans[32].name == "Cape Cod JBCC MODFLOW bottom of layer 32"
@@ -229,7 +226,7 @@ def test_cape_cod_is_n_plus_one_frames_in_metres_on_navd88(monkeypatch):
     seen = _wire(monkeypatch)
     layers = TOOL_REGISTRY["fetch_usgs_model_layers"].fn(bbox=_CC_BBOX)
     # ib32 has no active cell over the ring, so the bottom of layer 32 degrades.
-    assert [_surface_no(l.layer_id) for l in layers] == list(range(32))
+    assert [_surface_no(l) for l in layers] == list(range(32))
     assert seen["gets"] == 1
     assert all(l.units == "m" and l.layer_type == "raster" for l in layers)
     frames = _frames(seen, layers)
@@ -328,7 +325,7 @@ def test_the_frames_are_the_k_rows_cells(monkeypatch):
     assert set(seen["metas"]) == {"usgs_model_k"}, (
         "both rows cache the archive under the K row's identity")
     s_frames = _frames(seen, surf)
-    k_frames = {_k_layer_no(l.layer_id): _read(seen["uris"][l.uri]) for l in k}
+    k_frames = {_k_layer_no(l): _read(seen["uris"][l.uri]) for l in k}
     assert sorted(k_frames) == list(range(1, 32))
     for layer, (karr, ktf) in k_frames.items():
         sarr, stf = s_frames[layer]
@@ -352,7 +349,7 @@ def test_des_moines_is_seven_planned_and_emitted_and_read_as_published(monkeypat
     seen = _wire(monkeypatch)
     layers = TOOL_REGISTRY["fetch_usgs_model_layers"].fn(bbox=_DM_BBOX)
     # Layer 3 has no active cell over the ring but layer 4 does, so layer 3's bottom (4's top) is kept.
-    assert sorted(_surface_no(l.layer_id) for l in layers) == [0, 1, 2, 3, 4, 5, 6]
+    assert sorted(_surface_no(l) for l in layers) == [0, 1, 2, 3, 4, 5, 6]
     assert seen["gets"] == 1
     frames = _frames(seen, layers)
     arr, tf = frames[0]
