@@ -162,6 +162,7 @@ _register_router_specs()
 
 from .derive.charts.generate_chart import generate_chart  # noqa: E402,F401
 from .derive.fill_nodata import fill_nodata  # noqa: E402,F401
+from .derive.mark_lake_outlets import mark_lake_outlets  # noqa: E402,F401
 from .derive.merge_rasters import merge_rasters  # noqa: E402,F401
 from .derive.probe_point import probe_point  # noqa: E402,F401
 from .derive.restyle_layer import restyle_layer  # noqa: E402,F401

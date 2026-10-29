@@ -13,7 +13,7 @@ rest and make up the sixth slice.
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 23 | 274 |
 | `contracts/` | the typed wire and registry contracts, the schema mirror and its drift | 16 | 351 |
 | `credentials/` | credential resolution, the access-token gate and the connect handshake | 4 | 50 |
-| `derive/` | the derive tools, the two session tools | 3 | 51 |
+| `derive/` | the derive tools, the two session tools | 4 | 58 |
 | `render/` | the emitter, the uri registry, publication, the format set, charts | 35 | 431 |
 | `fetchers/` | the fetch router, its executors, hooks and fallbacks | 83 | 2321 |
 | `gates/` | the gates, a declined card at each of them, the code-exec approval gate, the context budget, the circuit breaker | 20 | 303 |
@@ -23,7 +23,7 @@ rest and make up the sixth slice.
 | `plugin/` | the QGIS dock: the client, the Qt bridge, the cards, the render seams; the Qt-wiring subset runs in a subprocess harness | 39 | 403 |
 | `runtime/` | the template runtime, its engine-neutral slots and dictionary marks, the run journal, the optional need | 19 | 241 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 12 | 178 |
-| `search/` | dataset and tool retrieval, the OGC adapter, the keyword dictionary read | 13 | 231 |
+| `search/` | dataset and tool retrieval, the OGC adapter, the keyword dictionary read | 13 | 233 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence | 29 | 261 |
 | `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, the GeoClaw engine, its module wrapper, its .data authoring, its grid recipe, its topofiles, its Fault dtopo and its fgmax, fgout and gauge outputs, the plume template, its body wrappers, the SFR keywords and Streams composite, the LAK keywords and Lakes composite, the MAW keywords and MultiAquiferWells composite, and the UZF keywords and UnsaturatedZone composite, and their period settings, the WaterMover and Diversions composites with the cross-section and lake tables, the values Streams, Lakes and the boundary composites read off a feature and the movers paired by a property, the Interbeds and TimeSeries composites with the boundary givers and the compaction reads, the Observations composite with the OBS files and charts, and the Storm composite and the storm-surge template, and the GeoClaw template's pieces (the SIFT row, the SiftFault, FiniteFault (static or kinematic, with the event-id fetch and the rupture-following flagregion window), SlabFault (a stated rectangle laid on the Slab2 interface), MomentTensorFault (a tensor sized by a named published scaling relation, Wells and Coppersmith or Thingbaijam), FixedGrids and InitialSurface composites, the staged case, the model exchanges: the LocalGridRefinement child, its exchange and transport, WaterMover across models and the sheet-stated DISU, and particle tracking: the ParticleTracking body, the Release composite and the pathline reads, and the GeoClaw restart from a checkpoint, and the Boussinesq module, and the module-fixed equation count with the friction regions) | 48 | 1134 |
 | `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 61 | 1001 |
@@ -45,8 +45,8 @@ instance fixtures, and nothing else has one.
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                              2321
-    make test-spatial         # tests/derive tests/render tests/mesh                                         762
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      2622
+    make test-spatial         # tests/derive tests/render tests/mesh                                         769
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      2624
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1140
     make test-model-surface   # tests/adapters tests/tools                                                                   613
     make test-packages        # tests/contracts tests/plugin                                                                  754

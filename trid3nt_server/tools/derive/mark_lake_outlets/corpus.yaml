@@ -1,0 +1,8 @@
+mark_lake_outlets:
+- which stream does each lake drain into
+- mark the flowlines that leave a lake
+- link the lakes to the stream lines their outlets feed
+- tell me which flowline receives water from which waterbody
+- tag every stream line that starts at a lake outlet with the lake's id
+- connect NHD lakes to their downstream flowlines
+- find the outflow stream of each reservoir in this layer

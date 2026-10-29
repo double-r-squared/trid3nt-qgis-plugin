@@ -188,6 +188,10 @@ _RECALL_FIXTURE = [
      "measured", "merge_rasters"),
     ("fill the holes in the lake bathymetry out to the shoreline",
      "fill_nodata"),
+    ("which stream does each lake drain into",
+     "mark_lake_outlets"),
+    ("tag the flowlines that start at a lake outlet with the lake they receive from",
+     "mark_lake_outlets"),
 ]
 
 

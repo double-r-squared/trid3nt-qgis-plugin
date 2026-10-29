@@ -231,6 +231,12 @@ difference 0.0) with the reach table the composite places; reaches 10 and 11 of 
 and the composite places one reach per line piece per cell, so the published SFR table itself is proven by keywords,
 bitwise.
 
+`mark_lake_outlets(flowlines, waterbodies)` (a derive) publishes the key a lake-to-stream `WaterMover` pairs on: the
+NHDPlus flowlines with `receives_from_waterbody` on the line below each lake's last in-lake path (an in-lake artificial
+path names its lake in `wbarea_permanent_identifier`, its `dnhydroseq` names the line below), holding the lake's
+`permanent_identifier`. A line two lakes run into refuses. The mover's `from_key` is the waterbody layer's
+`permanent_identifier` and its `to_key` is `receives_from_waterbody`.
+
 ### Period settings of the placement composites
 
 `Streams`, `Lakes`, `MultiAquiferWells` and `UnsaturatedZone` each take every period setting
