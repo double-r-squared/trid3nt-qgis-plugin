@@ -528,6 +528,31 @@ def test_no_level_or_discharge_source_can_be_reached_without_a_moment():
     assert [name for name, row in rows if not row.window.series] == []
 
 
+def test_every_series_row_of_the_registry_is_unasked_without_a_moment():
+    """The sweep the two tests above cannot reach: every row the registry
+    states a SERIES window on is dropped with NO_MOMENT when the run states no
+    moment - even a loosened window does not lift it - and no stated moment
+    drops one for it, so a new time-grained class is pinned the day it lands."""
+    from trid3nt_server.tools.search.match import (
+        NO_MOMENT, sources_with_coverage)
+
+    rows = [(name, row) for name, row in sources_with_coverage()
+            if row.window.series]
+    assert rows
+    for name, row in rows:
+        for need in (Need(slot="probe", data_class=row.data_class),
+                     Need(slot="probe", data_class=row.data_class,
+                          loosen=LOOSEN_WINDOW)):
+            choice = match(need, [(name, row)])
+            reason = " ".join(r.excluded or "" for r in choice.rows)
+            assert not choice.picked, (name, row.data_class, reason)
+            assert NO_MOMENT in reason, (name, row.data_class, reason)
+        stated = match(Need(slot="probe", data_class=row.data_class,
+                            opens=DURING, until=UNTIL), [(name, row)])
+        assert NO_MOMENT not in " ".join(r.excluded or "" for r in stated.rows), \
+            (name, row.data_class)
+
+
 def _asked_over(monkeypatch, cadence, params, name):
     """The window a row stating ``cadence`` is asked over for a six-hour run."""
     from types import SimpleNamespace
