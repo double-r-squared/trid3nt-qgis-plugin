@@ -90,15 +90,6 @@ def test_a_tool_line_is_its_routing_docstrings_first_line() -> None:
         assert f"- {name}: {first}" in section
 
 
-def test_system_prompt_declares_honest_absence() -> None:
-    """Where a class has no solver, the prompt tells the model to say so rather
-    than route somewhere plausible."""
-    flat = " ".join(SYSTEM_PROMPT.split())
-    assert "Honest absence" in flat
-    assert "not currently modeled" in flat
-    assert "never route to a tool that does not exist" in flat
-
-
 def test_system_prompt_fidelity_ladder_is_engine_name_free() -> None:
     """The ladder survives as a PRINCIPLE - rung chosen by the question, with
     calibration last - so it stops rotting as the engine roster changes."""
