@@ -14,6 +14,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping
 
+from ..authoring.griddata import field_name
 from ..errors import ModflowError
 from ...runtime.module import MOMENT, Module, SlotRefused
 from trid3nt_server.inputs.temporal import Series
@@ -191,7 +192,9 @@ def _streams(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
         raise ModflowError(f"Streams layer is {layer!r}; it is an integer from 1.",
                            error_code="MODFLOW_STRESS_UNSTATED")
     manning = value["manning"]
-    if isinstance(manning, bool) or not isinstance(manning, (int, float, Mapping)):
+    if field_name(manning, label="Streams manning"):
+        manning = None
+    elif isinstance(manning, bool) or not isinstance(manning, (int, float, Mapping)):
         raise ModflowError(
             "Streams manning is a number in the units the SFR conversions state, or keyed by period; "
             "a raster carries no unit this frame converts.", error_code="MODFLOW_STRESS_UNSTATED")
@@ -220,6 +223,8 @@ _streams.__doc__ = (
     "    period setting: a number from period 1 or {period from 1: value}, written to every reach of the\n"
     "    line, inflow to the line's upstream reach; status is ACTIVE, INACTIVE or SIMPLE, manning keyed\n"
     "    by period names period 1 as the reach's own, auxiliary is {name: value} of the SFR_AUXILIARY names.\n"
+    "    width, slope, bed_top, bed_thickness, bed_conductivity and manning each take {\"field\": NAME}: the number the\n"
+    "    property NAME of the line's own feature holds, in the model's units (a feature without it refuses).\n"
     "    name is what WaterMover and Diversions call the line's reaches; cross_section is the rows (xfraction, height\n"
     "    [, manfraction]) of the reach cross-section table every reach of the line reads.")
 
@@ -296,13 +301,15 @@ def _lakes(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
                 "so state it from a measurement or a named source.",
                 error_code="MODFLOW_STRESS_UNSTATED")
     leakance = value["leakance"]
-    if isinstance(leakance, bool) or not isinstance(leakance, (int, float)):
+    if not field_name(leakance, label="Lakes leakance") and (
+            isinstance(leakance, bool) or not isinstance(leakance, (int, float))):
         raise ModflowError(
             f"Lakes leakance is one number for the lake; got {leakance!r}.",
             error_code="MODFLOW_STRESS_UNSTATED")
     settings = _settings(value, "Lakes", numbers=(*_LAKE_FLUXES, *_LAKE_NUMBERS), words=_LAKE_WORDS)
-    stage = _timed(value["stage"], composite="Lakes", argument="stage")
-    if isinstance(stage, dict) and 0 not in stage:
+    read = field_name(value["stage"], label="Lakes stage")
+    stage = value["stage"] if read else _timed(value["stage"], composite="Lakes", argument="stage")
+    if not read and isinstance(stage, dict) and 0 not in stage:
         raise ModflowError("Lakes stage keyed by period states period 1, the lake's starting stage.",
                            error_code="MODFLOW_STRESS_UNSTATED")
     return {"LAK_PACKAGEDATA": {"lakes": [{
@@ -319,7 +326,8 @@ _lakes.__doc__ = (
     "    Each polygon is one lake holding the cells whose centres it contains, in every solved layer whose top\n"
     "    lies above the lake's bottom (a number or a raster); those cells are not solved, and the lake connects\n"
     "    to the solved cells beside and below them over lakebed leakance. The stage is the lake's starting stage;\n"
-    "    a setting not stated is not in the package. A setting is mf6's own LAK period setting: a number from\n"
+    "    stage, bottom and leakance each take {\"field\": NAME}: the number the property NAME of the lake's own\n"
+    "    feature holds, in the model's units. A setting not stated is not in the package. A setting is mf6's own LAK period setting: a number from\n"
     "    period 1 or {period from 1: value}; status is ACTIVE, INACTIVE or CONSTANT, a stage keyed by period names\n"
     "    period 1 as the starting stage and is the stage a CONSTANT lake holds, auxiliary is {name: value} of the\n"
     "    LAK_AUXILIARY names. outlets is a list of {to, couttype, rate | invert, width, rough, slope} leaving\n"
@@ -355,6 +363,17 @@ def _movement(value: Any, *, composite: str, slot: str, key: str, types: tuple[s
         if value.get(end) is not None and (not isinstance(value[end], str) or not value[end].strip()):
             raise ModflowError(f"{composite} {end} is the name of a feature; got {value[end]!r}.",
                                error_code="MODFLOW_STRESS_UNSTATED")
+    keys = (value.get("from_key"), value.get("to_key"))
+    if any(key is not None for key in keys):
+        if any(not isinstance(key, str) or not key.strip() for key in keys):
+            raise ModflowError(
+                f"{composite} from_key and to_key are each the name of a feature property, stated together; got "
+                f"{value.get('from_key')!r} and {value.get('to_key')!r}.", error_code="MODFLOW_STRESS_UNSTATED")
+        if value.get("from") is None or value.get("to") is None or value.get("from_at") is not None \
+                or value.get("to_at") is not None:
+            raise ModflowError(
+                f"{composite} pairs features by key between the features that from and to name; state both names "
+                "and no from_at or to_at.", error_code="MODFLOW_STRESS_UNSTATED")
     kind = str(value.get("type") or "").strip().upper()
     if kind not in types:
         raise ModflowError(f"{composite} type is {value.get('type')!r}; it is one of {', '.join(types)}.",
@@ -377,12 +396,13 @@ def _movement(value: Any, *, composite: str, slot: str, key: str, types: tuple[s
         raise ModflowError(f"{composite} from_outlet is an outlet number from 1; got {outlet!r}.",
                            error_code="MODFLOW_STRESS_UNSTATED")
     return {slot: {key: [{"composite": composite, **{end: value.get(end) for end in _ENDS}, "type": kind,
-                          "value": held, "from_outlet": outlet}]}}, {}
+                          "value": held, "from_outlet": outlet,
+                          "keys": None if keys[0] is None else (keys[0].strip(), keys[1].strip())}]}}, {}
 
 
 def _movers(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     return _movement(value, composite="WaterMover", slot="MVR_PERIODDATA", key="movers", types=_MOVER_TYPES,
-                     takes=("from_outlet",))
+                     takes=("from_outlet", "from_key", "to_key"))
 
 
 _movers.__doc__ = (
@@ -391,7 +411,10 @@ _movers.__doc__ = (
     "    from and to are the name a Streams, Lakes, MultiAquiferWells or UnsaturatedZone statement gave its features,\n"
     "    and from also the name a Wells, Drains, GeneralHead or Rivers statement gave its cell rows (they give water only);\n"
     "    from_at and to_at a point, read as the cell it lies in, to tell apart features sharing a name or to name a\n"
-    "    feature by where it is; each end resolves to exactly one feature. A lake gives water through one of its\n"
+    "    feature by where it is; each end resolves to exactly one feature. from_key and to_key, stated together with\n"
+    "    both names, pair instead every feature from names with the feature to names whose property to_key equals its\n"
+    "    property from_key, one mover each (a stream gives at its line's last reach and takes at its first; a property a\n"
+    "    feature lacks refuses, a null one pairs nothing, a feature matching several receivers refuses). A lake gives water through one of its\n"
     "    outlets (from_outlet from 1, optional when it has one); a stream through its reach, a well, an\n"
     "    UnsaturatedZone column through its land cell's rejected infiltration. type is FACTOR (a fraction of the\n"
     "    provider's water, 0 to 1), EXCESS, THRESHOLD or UPTO (a rate); value is a number from period 1 or\n"

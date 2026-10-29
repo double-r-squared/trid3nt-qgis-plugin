@@ -42,39 +42,85 @@ def resolved_moves(statements: list[Mapping[str, Any]], models: Mapping[str, Map
     for rank, item in enumerate(statements, start=1):
         pools = {name: [f for f in held["features"] if f["package"] in (*_MOVING, *GIVERS)]
                  for name, held in models.items()}
-        model, source = _end(item.get("from"), item.get("from_at"), pools, models, home=home,
-                             role=f"WaterMover {rank} from")
-        named = item.get("to")
-        boundary = next((f["package"] for held in models.values() for f in held["features"]
-                         if f["package"] in GIVERS and f["name"] == named), None)
         receivers = {name: [f for f in held["features"] if f["package"] in _MOVING] for name, held in models.items()}
-        if boundary and not any(f["name"] == named for pool in receivers.values() for f in pool):
-            raise ModflowError(
-                f"WaterMover {rank} to names {named!r}, a {boundary} boundary: mf6 moves water to SFR, LAK, MAW "
-                "and UZF features only.", error_code="MODFLOW_STRESS_UNSTATED")
-        target_model, target = _end(named, item.get("to_at"), receivers, models, home=home,
-                                    role=f"WaterMover {rank} to")
-        outlet = item.get("from_outlet")
-        if source["package"] == "LAK":
-            outlets = source["outlets"]
-            if outlet is None and len(outlets) != 1:
-                raise ModflowError(
-                    f"WaterMover {rank}: lake {source['number'] + 1} has {len(outlets)} outlet(s); a lake gives water to "
-                    "the mover through an outlet, so state the lake's outlets and from_outlet "
-                    "(from 1) when it has more than one.", error_code="MODFLOW_STRESS_UNSTATED")
-            if outlet is not None and not 1 <= outlet <= len(outlets):
-                raise ModflowError(
-                    f"WaterMover {rank}: from_outlet {outlet} but lake {source['number'] + 1} has {len(outlets)} outlet(s).",
-                    error_code="MODFLOW_STRESS_UNSTATED")
-            provider = outlets[(outlet or 1) - 1]
-        elif outlet is not None:
-            raise ModflowError(f"WaterMover {rank}: from_outlet names a lake's outlet and the provider is "
-                               f"{source['package']}.", error_code="MODFLOW_STRESS_UNSTATED")
+        if item.get("keys"):
+            ends = _paired(item, pools, receivers, rank=rank)
         else:
-            provider = source["number"]
-        rows.append({"from": (model, source["package"], provider), "to": (target_model, target["package"], target["number"]),
-                     "type": item["type"], "value": item["value"]})
+            model, source = _end(item.get("from"), item.get("from_at"), pools, models, home=home,
+                                 role=f"WaterMover {rank} from")
+            named = item.get("to")
+            boundary = next((f["package"] for held in models.values() for f in held["features"]
+                             if f["package"] in GIVERS and f["name"] == named), None)
+            if boundary and not any(f["name"] == named for pool in receivers.values() for f in pool):
+                raise ModflowError(
+                    f"WaterMover {rank} to names {named!r}, a {boundary} boundary: mf6 moves water to SFR, LAK, MAW "
+                    "and UZF features only.", error_code="MODFLOW_STRESS_UNSTATED")
+            ends = [((model, source), _end(named, item.get("to_at"), receivers, models, home=home,
+                                           role=f"WaterMover {rank} to"))]
+        for (model, source), (target_model, target) in ends:
+            rows.append({"from": (model, source["package"], _provider(source, item.get("from_outlet"), rank=rank)),
+                         "to": (target_model, target["package"], target["number"]),
+                         "type": item["type"], "value": item["value"]})
     return rows
+
+
+def _provider(source: Mapping[str, Any], outlet: Any, *, rank: int) -> int:
+    """The number mf6 reads for the feature that gives: a lake's outlet, else the feature's own number."""
+    if source["package"] == "LAK":
+        outlets = source["outlets"]
+        if outlet is None and len(outlets) != 1:
+            raise ModflowError(
+                f"WaterMover {rank}: lake {source['number'] + 1} has {len(outlets)} outlet(s); a lake gives water to "
+                "the mover through an outlet, so state the lake's outlets and from_outlet "
+                "(from 1) when it has more than one.", error_code="MODFLOW_STRESS_UNSTATED")
+        if outlet is not None and not 1 <= outlet <= len(outlets):
+            raise ModflowError(
+                f"WaterMover {rank}: from_outlet {outlet} but lake {source['number'] + 1} has {len(outlets)} outlet(s).",
+                error_code="MODFLOW_STRESS_UNSTATED")
+        return outlets[(outlet or 1) - 1]
+    if outlet is not None:
+        raise ModflowError(f"WaterMover {rank}: from_outlet names a lake's outlet and the provider is "
+                           f"{source['package']}.", error_code="MODFLOW_STRESS_UNSTATED")
+    return source["number"]
+
+
+def _paired(item: Mapping[str, Any], pools: Mapping[str, list[Mapping[str, Any]]],
+            receivers: Mapping[str, list[Mapping[str, Any]]], *, rank: int
+            ) -> list[tuple[tuple[str, Mapping[str, Any]], tuple[str, Mapping[str, Any]]]]:
+    """Every feature ``from`` names paired with the one ``to`` names whose ``to_key`` property equals its ``from_key`` property.
+
+    A stream gives from its line's downstream reach and takes at its upstream one; a null or empty property pairs nothing."""
+    from_key, to_key = item["keys"]
+    gives = [(model, f) for model, pool in pools.items() for f in pool
+             if f["name"] == item["from"] and (f["package"] != "SFR" or f["last"])]
+    takes = [(model, f) for model, pool in receivers.items() for f in pool
+             if f["name"] == item["to"] and (f["package"] != "SFR" or f["first"])]
+    for side, key, found, name in (("from", from_key, gives, item["from"]), ("to", to_key, takes, item["to"])):
+        if not found:
+            raise ModflowError(f"WaterMover {rank} {side} names {name!r}, and no placed feature carries that name.",
+                               error_code="MODFLOW_STRESS_UNSTATED")
+        for model, feature in found:
+            if key not in (feature.get("properties") or {}):
+                raise ModflowError(
+                    f"WaterMover {rank} pairs by the property {key!r}, and {feature['package']} {feature['number'] + 1} "
+                    f"of {name!r} carries no such property.", error_code="MODFLOW_STRESS_UNSTATED")
+    pairs = []
+    for model, source in gives:
+        held = source["properties"][from_key]
+        if held is None or held == "":
+            continue
+        matched = [(other_model, target) for other_model, target in takes if target["properties"][to_key] == held]
+        if len(matched) > 1:
+            raise ModflowError(
+                f"WaterMover {rank}: {source['package']} {source['number'] + 1} of {item['from']!r} holds "
+                f"{from_key}={held!r}, which {len(matched)} features of {item['to']!r} hold as {to_key}; a mover "
+                "gives its water to one.", error_code="MODFLOW_STRESS_UNSTATED")
+        pairs += [((model, source), match) for match in matched]
+    if not pairs:
+        raise ModflowError(
+            f"WaterMover {rank} pairs no feature of {item['from']!r} ({from_key}) with one of {item['to']!r} "
+            f"({to_key}); no value of the first equals a value of the second.", error_code="MODFLOW_STRESS_UNSTATED")
+    return pairs
 
 
 def _end(name: Any, at: Any, pools: Mapping[str, list[Mapping[str, Any]]], models: Mapping[str, Mapping[str, Any]], *,

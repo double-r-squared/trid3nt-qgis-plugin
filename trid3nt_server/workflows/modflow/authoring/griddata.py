@@ -18,7 +18,7 @@ from trid3nt_server.workflows.runtime.module import Slot
 
 from ..errors import ModflowError
 
-__all__ = ["METRES", "SECONDS", "frame_of", "needs_botm", "needs_top", "place", "sample"]
+__all__ = ["METRES", "SECONDS", "field_name", "field_value", "frame_of", "needs_botm", "needs_top", "place", "sample"]
 
 # mf6 reads a year as 365.25 days.
 SECONDS = {"seconds": 1.0, "minutes": 60.0, "hours": 3600.0, "days": 86400.0,
@@ -164,6 +164,30 @@ def _dimension(slot: Slot) -> str:
             "stated for it; the keywords a raster fills are "
             f"{', '.join(sorted(_KEYWORD_DIMENSION))}.",
             error_code="MODFLOW_UNITS_UNSTATED") from None
+
+
+def field_name(value: Any, *, label: str) -> str | None:
+    """The property a value ``{"field": NAME}`` reads off its feature, or None when the value is no such form."""
+    if not (isinstance(value, Mapping) and "field" in value):
+        return None
+    if set(value) != {"field"} or not isinstance(value["field"], str) or not value["field"].strip():
+        raise ModflowError(f"{label} reads a feature's property as {{\"field\": NAME}}; got {value!r}.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    return value["field"].strip()
+
+
+def field_value(field: str, properties: Mapping[str, Any] | None, *, label: str, where: str) -> float:
+    """The finite number a feature's property holds, in the model's units; a property the feature lacks or a non-number refuses by name."""
+    if not properties or field not in properties:
+        raise ModflowError(
+            f"{label} reads the field {field!r}, and {where} carries no such property"
+            + (f" (it has: {', '.join(map(str, properties))})" if properties else " (it has no properties)") + ".",
+            error_code="MODFLOW_STRESS_UNSTATED")
+    held = properties[field]
+    if isinstance(held, bool) or not isinstance(held, (int, float)) or held != held or held in (float("inf"), float("-inf")):
+        raise ModflowError(f"{label} reads the field {field!r}, and {where} holds {held!r}, not a finite number.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    return held
 
 
 def sample(artifact: Any, *, label: str, name: str, scratch: str, points: Any,

@@ -11,10 +11,11 @@ from __future__ import annotations
 import tempfile
 from typing import Any, Mapping
 
+from trid3nt_server.inputs.geometry import flatten_features
 from trid3nt_server.inputs.point import Point, require_viable
 
 from ..errors import ModflowError
-from .griddata import METRES, sample
+from .griddata import METRES, field_name, field_value, sample
 
 __all__ = ["GIVERS", "at_cell", "cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "maw_statements",
            "pick", "place", "place_interbeds", "place_lakes", "place_maw", "place_streams", "place_uzf", "point_cell", "uzf_statements"]
@@ -46,11 +47,13 @@ def place(statement: Mapping[str, Any], *, points: Any, cells: Any,
         placed = cells_of(geometry, name=name, points=points, cells=cells,
                           utm_epsg=int(utm_epsg), active=None if active is None else active[layers[0]])
     rows: list[tuple] = []
+    owners = (_owners(geometry, placed, name=name, points=points, cells=cells, utm_epsg=int(utm_epsg))
+              if any(field_name(value, label=f"{name} {key}") for key, value in statement["values"].items()) else None)
     columns = {key: (_start(value, name=name, start=start, placed=placed, layers=layers)
                      if isinstance(value, Mapping) and value.get("cells") == "start"
                      else {layers[0]: _column(value, key, name=name, placed=placed, points=points,
                                               cells=cells, utm_epsg=int(utm_epsg), frame=frame,
-                                              dimension=statement["dimensions"][key])})
+                                              dimension=statement["dimensions"][key], owners=owners)})
                for key, value in statement["values"].items()}
     for layer in layers:
         for rank, icell in enumerate(placed):
@@ -59,6 +62,21 @@ def place(statement: Mapping[str, Any], *, points: Any, cells: Any,
             rows.append(((layer, icell), *(column.get(layer, column[layers[0]])[rank]
                                            for column in columns.values())))
     return rows
+
+
+def _owners(geometry: Any, placed: list[int], *, name: str, points: Any, cells: Any,
+            utm_epsg: int) -> list[list[tuple[str, Mapping[str, Any]]]]:
+    """For each placed cell the ``(where, properties)`` of every feature of the geometry that places it."""
+    from trid3nt_server.inputs.shape import shape
+
+    if isinstance(geometry, Mapping) and geometry.get("cells"):
+        raise ModflowError(f"{name} reads a feature's field, and the geometry {geometry!r} is no feature collection.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    held: dict[int, list[tuple[str, Mapping[str, Any]]]] = {cell: [] for cell in placed}
+    for number, (part, properties) in enumerate(flatten_features(shape(geometry, label=name).features), start=1):
+        for cell in cells_of(part, name=name, points=points, cells=cells, utm_epsg=utm_epsg):
+            held[cell].append((f"feature {number} of the geometry", properties))
+    return [held[cell] for cell in placed]
 
 
 def _layers(layer: Any, *, name: str, nlay: int) -> list[int]:
@@ -197,13 +215,13 @@ def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: An
     period settings are written to each of its reaches, its inflow to each line's upstream reach; ``auxiliary``
     names the SFR_AUXILIARY columns. A diversion statement moves water from one reach to another: the target
     becomes a downstream connection of the source (numbered after it), receives only the diverted water (USTRF 0.0),
-    and the source counts it in NDV. ``features`` is each reach as ``{package, name, number, cells, table}``."""
+    and the source counts it in NDV. ``features`` is each reach as ``{package, name, number, cells, table, properties, first, last}``, its
+    properties those of its line's feature and first and last whether it is its line's upstream or downstream reach."""
     import shapely
     from pyproj import Transformer
     from shapely.geometry import shape as geo
     from shapely.ops import transform
 
-    from trid3nt_server.inputs.geometry import flatten_geometries
     from trid3nt_server.inputs.shape import shape
 
     if points is None or cells is None or not utm_epsg:
@@ -219,14 +237,18 @@ def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: An
     lines = 0
     for statement in statements:
         first = len(reaches)
-        for part in flatten_geometries(shape(statement["geometry"], label="Streams").features):
+        for number, (part, properties) in enumerate(
+                flatten_features(shape(statement["geometry"], label="Streams").features), start=1):
             line = transform(to_utm, geo(part))
             if line.geom_type not in ("LineString", "MultiLineString"):
                 raise ModflowError(f"Streams places lines; got a {line.geom_type}.",
                                    error_code="MODFLOW_STRESS_UNSTATED")
             for one in (line.geoms if line.geom_type == "MultiLineString" else [line]):
-                reaches += _cut(one, tree, polygons, cells, line_id=lines, metres=metres,
-                                layer=statement.get("layer"), nlay=nlay, active=active)
+                cut = _cut(one, tree, polygons, cells, line_id=lines, metres=metres,
+                           layer=statement.get("layer"), nlay=nlay, active=active)
+                for reach in cut:
+                    reach["owner"] = (f"feature {number} of the geometry", properties)
+                reaches += cut
                 lines += 1
         placed = [reach["cell"] for reach in reaches[first:]]
         for reach in reaches[first:]:
@@ -236,7 +258,8 @@ def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: An
         for key, value in statement["values"].items():
             column = _column(value, key, name="Streams", placed=placed, points=points,
                              cells=cells, utm_epsg=int(utm_epsg), frame=frame,
-                             dimension=statement["dimensions"][key])
+                             dimension=statement["dimensions"][key],
+                             owners=[[reach["owner"]] for reach in reaches[first:]])
             for reach, item in zip(reaches[first:], column):
                 reach[key] = item
     if not reaches:
@@ -360,7 +383,8 @@ def _rows(reaches: list[dict[str, Any]], auxiliary: tuple, diversions: list[tupl
             found += [(period, [number[rank], "diversion", idv, value])
                       for period, value in sorted(_timed(item["value"]).items())]
         features.append({"package": "SFR", "name": reach.get("name"), "number": number[rank],
-                         "cells": {reach["cell"]}, "table": reach.get("table")})
+                         "cells": {reach["cell"]}, "table": reach.get("table"), "properties": reach["owner"][1],
+                         "first": reach["first"], "last": reach["last"]})
     return packagedata, connectiondata, _by_period(found), divisions, features
 
 
@@ -416,7 +440,7 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
     values the columns its type reads and mf6's unread value elsewhere.
     ``active`` is one row per layer of the cells the run solves, ``top`` the grid's top and ``botm`` its bottoms;
     ``auxiliary`` names the LAK_AUXILIARY columns. ``features`` is each lake as ``{package, name, number, cells,
-    outlets, table}``, its outlets the numbers they were given."""
+    outlets, table, properties}``, its outlets the numbers they were given."""
     import numpy as np
     import shapely
 
@@ -468,7 +492,7 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
     features = []
     for number, lake in enumerate(lakes):
         features.append({"package": "LAK", "name": lake["given"], "number": number,
-                         "cells": {cell for _, cell in lake["held"]}, "table": lake["table"],
+                         "cells": {cell for _, cell in lake["held"]}, "table": lake["table"], "properties": lake["properties"],
                          "outlets": list(range(len(outlets), len(outlets) + len(lake["outlets"])))})
         for outlet in lake["outlets"]:
             outletno = len(outlets)
@@ -737,7 +761,6 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
     from shapely.geometry import shape as geo
     from shapely.ops import transform
 
-    from trid3nt_server.inputs.geometry import flatten_geometries
     from trid3nt_server.inputs.shape import shape
 
     if points is None or cells is None or not utm_epsg:
@@ -752,9 +775,12 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
     lakes: list[dict[str, Any]] = []
     owner: dict[tuple[int, int], str] = {}
     for statement in statements:
-        values = statement["values"]
         first = len(lakes)
-        for part in flatten_geometries(shape(statement["geometry"], label="Lakes").features):
+        for number, (part, properties) in enumerate(
+                flatten_features(shape(statement["geometry"], label="Lakes").features), start=1):
+            values = {key: (field_value(field, properties, label=f"Lakes {key}", where=f"feature {number} of the geometry")
+                            if (field := field_name(held, label=f"Lakes {key}")) else held)
+                      for key, held in statement["values"].items()}
             area = transform(to_utm, geo(part))
             if area.geom_type not in ("Polygon", "MultiPolygon"):
                 raise ModflowError(f"Lakes places polygons; got a {area.geom_type}.",
@@ -783,7 +809,7 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
                             f"{item[0] + 1}; a cell belongs to one lake.",
                             error_code="MODFLOW_STRESS_OUTSIDE")
                     owner[item] = name
-                lakes.append({"name": name, "held": sorted(held), "stage": values["stage"],
+                lakes.append({"name": name, "held": sorted(held), "stage": values["stage"], "properties": properties,
                               "leakance": values["leakance"], "values": values, "given": statement.get("name"),
                               "outlets": statement.get("outlets") or [], "table": statement.get("table")})
         for stated in ("outlets", "table"):
@@ -808,7 +834,22 @@ def _metres(frame: Any, what: str) -> float:
 
 def _column(value: Any, key: str, *, name: str, placed: list[int], points: Any,
             cells: Any, utm_epsg: int, frame: Any,
-            dimension: str) -> list[float]:
+            dimension: str, owners: Any = None) -> list[float]:
+    """A value at each placed cell; ``owners`` is each placed cell's ``(where, properties)`` list, which a ``{"field": NAME}`` value reads."""
+    field = field_name(value, label=f"{name} {key}")
+    if field is not None:
+        if owners is None:
+            raise ModflowError(f"{name} {key} reads the field {field!r}, and its geometry places no feature.",
+                               error_code="MODFLOW_STRESS_UNSTATED")
+        column = []
+        for held in owners:
+            found = {field_value(field, properties, label=f"{name} {key}", where=where) for where, properties in held}
+            if len(found) != 1:
+                raise ModflowError(
+                    f"{name} {key} reads the field {field!r}, and a placed cell lies under {len(held)} features "
+                    f"holding {sorted(found)}; a cell takes one value.", error_code="MODFLOW_STRESS_UNSTATED")
+            column.append(found.pop())
+        return column
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return [value] * len(placed)
     if isinstance(value, Mapping) and set(value) == {"series"}:

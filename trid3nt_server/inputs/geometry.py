@@ -13,7 +13,7 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 __all__ = ["GeometryReadError", "artifact_class", "covered_fraction",
-           "flatten_geometries", "read_geometry_doc", "source_uri", "utm_epsg_for"]
+           "flatten_features", "flatten_geometries", "read_geometry_doc", "source_uri", "utm_epsg_for"]
 
 
 class GeometryReadError(RuntimeError):
@@ -72,29 +72,36 @@ def read_geometry_doc(source: Any) -> dict[str, Any]:
         return json.loads(gpd.read_file(path).to_crs(4326).to_json())
 
 
-def flatten_geometries(doc: Any) -> list[dict[str, Any]]:
-    """A GeoJSON document -> its geometries, collections walked through.
-    Features LOSE their properties: a document mixing two sources would otherwise
-    carry two attribute schemas under one set of column names."""
-    out: list[dict[str, Any]] = []
+def flatten_features(doc: Any) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """A GeoJSON document -> ``(geometry, properties)`` for each geometry, collections walked through.
+    A geometry bare of a Feature, or inside a GeometryCollection, carries its enclosing Feature's properties (none: an empty mapping)."""
+    out: list[tuple[dict[str, Any], dict[str, Any]]] = []
 
-    def walk(geometry: Any) -> None:
+    def walk(geometry: Any, properties: Mapping[str, Any]) -> None:
         if not isinstance(geometry, Mapping):
             return
         kind = str(geometry.get("type") or "")
         if kind == "GeometryCollection":
             for part in geometry.get("geometries") or ():
-                walk(part)
+                walk(part, properties)
         elif kind == "Feature":
-            walk(geometry.get("geometry"))
+            held = geometry.get("properties")
+            walk(geometry.get("geometry"), held if isinstance(held, Mapping) else {})
         elif kind == "FeatureCollection":
             for feature in geometry.get("features") or ():
-                walk(feature)
+                walk(feature, properties)
         elif kind:
-            out.append(dict(geometry))
+            out.append((dict(geometry), dict(properties)))
 
-    walk(doc if isinstance(doc, Mapping) else None)
+    walk(doc if isinstance(doc, Mapping) else None, {})
     return out
+
+
+def flatten_geometries(doc: Any) -> list[dict[str, Any]]:
+    """A GeoJSON document -> its geometries, collections walked through.
+    Features LOSE their properties: a document mixing two sources would otherwise
+    carry two attribute schemas under one set of column names."""
+    return [geometry for geometry, _ in flatten_features(doc)]
 
 
 #: The TIN suffixes a built mesh's display face arrives under. Anything else is

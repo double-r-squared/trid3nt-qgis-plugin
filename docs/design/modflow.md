@@ -201,6 +201,31 @@ a column in two statements refuses. `UZF_NUZFCELLS` and `UZF_PERIODDATA` stated 
 same infiltration counted twice. `UZF_NTRAILWAVES` and `UZF_NWAVESETS` are mf6's resolution
 dimensions and stay keywords.
 
+### Values read off the feature
+
+A value of `Streams` (`width`, `slope`, `bed_top`, `bed_thickness`, `bed_conductivity`, `manning`), of `Lakes`
+(`stage`, `bottom`, `leakance`) and of every `Wells`, `Drains`, `GeneralHead`, `Rivers` and `Recharge` column
+may be `{"field": NAME}`: the number the property NAME of the feature the reach, lake or cell belongs to holds,
+in the model's units (a property carries no unit table, as a stated number carries none). A reach reads its
+line's feature, a lake its polygon's, a boundary cell the feature that places it; a cell under two features holding
+different values refuses. A feature lacking the property, or holding anything but a finite number, refuses naming the
+field and the feature. A field is one number per feature: a `Lakes` bottom that changes across a lake, or a bed top
+that changes along a line, stays a raster. Period settings (`inflow`, `rainfall`, ...) take no field: a property
+holds no period. The geometry's properties are read where it is placed; `{"cells": "edge"}` has none.
+
+`WaterMover(from, to, type, value, from_key, to_key)` pairs by property instead of naming one feature: every
+feature `from` names is paired with the feature `to` names whose property `to_key` equals its property `from_key`
+(raw equality, no coercion), one mover each. A stream gives at its line's last reach and takes at its first. A
+null or empty property pairs nothing; a property a feature lacks refuses by name; a feature matching two receivers
+refuses (a mover never splits a provider's water); a statement that pairs nothing refuses. The keys take the two
+names and no `from_at` or `to_at`, and `Diversions` takes none. ex-gwf-lak-p02 (22 SFR reaches, 2 lakes with MANNING
+outlets, 4 movers) authored on a gridgen DISV with every Streams and Lakes value a field and the four movers paired
+by key writes the same SFR, LAK and MVR files and results as the same deck stated by numbers and names, and equals
+flopy's own DIS reference bitwise (heads in five layers, lake stages, the 22 reach stages, the four mover flows, max
+difference 0.0) with the reach table the composite places; reaches 10 and 11 of the published script share a cell
+and the composite places one reach per line piece per cell, so the published SFR table itself is proven by keywords,
+bitwise.
+
 ### Period settings of the placement composites
 
 `Streams`, `Lakes`, `MultiAquiferWells` and `UnsaturatedZone` each take every period setting
