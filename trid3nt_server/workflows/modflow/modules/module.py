@@ -14,7 +14,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from ..authoring.griddata import field_name
+from ..authoring.griddata import field_name, surface_of
 from ..errors import ModflowError
 from ...runtime.module import MOMENT, Module, SlotRefused
 from trid3nt_server.inputs.temporal import Series
@@ -307,7 +307,7 @@ def _lakes(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             f"Lakes leakance is one number for the lake; got {leakance!r}.",
             error_code="MODFLOW_STRESS_UNSTATED")
     settings = _settings(value, "Lakes", numbers=(*_LAKE_FLUXES, *_LAKE_NUMBERS), words=_LAKE_WORDS)
-    read = field_name(value["stage"], label="Lakes stage")
+    read = field_name(value["stage"], label="Lakes stage") or surface_of(value["stage"], label="Lakes stage") is not None
     stage = value["stage"] if read else _timed(value["stage"], composite="Lakes", argument="stage")
     if not read and isinstance(stage, dict) and 0 not in stage:
         raise ModflowError("Lakes stage keyed by period states period 1, the lake's starting stage.",
@@ -327,7 +327,8 @@ _lakes.__doc__ = (
     "    lies above the lake's bottom (a number or a raster); those cells are not solved, and the lake connects\n"
     "    to the solved cells beside and below them over lakebed leakance. The stage is the lake's starting stage;\n"
     "    stage, bottom and leakance each take {\"field\": NAME}: the number the property NAME of the lake's own\n"
-    "    feature holds, in the model's units. A setting not stated is not in the package. A setting is mf6's own LAK period setting: a number from\n"
+    "    feature holds, in the model's units. The stage also takes {\"surface\": RASTER}: the raster (the run's bed) read at the cells the\n"
+    "    polygon holds, the elevation more than half of them share within 0.001 m, else the lake refuses. A setting not stated is not in the package. A setting is mf6's own LAK period setting: a number from\n"
     "    period 1 or {period from 1: value}; status is ACTIVE, INACTIVE or CONSTANT, a stage keyed by period names\n"
     "    period 1 as the starting stage and is the stage a CONSTANT lake holds, auxiliary is {name: value} of the\n"
     "    LAK_AUXILIARY names. outlets is a list of {to, couttype, rate | invert, width, rough, slope} leaving\n"

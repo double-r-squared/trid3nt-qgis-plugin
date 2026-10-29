@@ -18,7 +18,7 @@ from trid3nt_server.workflows.runtime.module import Slot
 
 from ..errors import ModflowError
 
-__all__ = ["METRES", "SECONDS", "field_name", "field_value", "frame_of", "needs_botm", "needs_top", "place", "sample"]
+__all__ = ["METRES", "SECONDS", "field_name", "field_value", "frame_of", "needs_botm", "needs_top", "place", "sample", "surface_of"]
 
 # mf6 reads a year as 365.25 days.
 SECONDS = {"seconds": 1.0, "minutes": 60.0, "hours": 3600.0, "days": 86400.0,
@@ -174,6 +174,16 @@ def field_name(value: Any, *, label: str) -> str | None:
         raise ModflowError(f"{label} reads a feature's property as {{\"field\": NAME}}; got {value!r}.",
                            error_code="MODFLOW_STRESS_UNSTATED")
     return value["field"].strip()
+
+
+def surface_of(value: Any, *, label: str) -> Any:
+    """The raster a value ``{"surface": RASTER}`` reads, or None when the value is no such form."""
+    if not (isinstance(value, Mapping) and "surface" in value):
+        return None
+    if set(value) != {"surface"} or value["surface"] is None or isinstance(value["surface"], (bool, int, float)):
+        raise ModflowError(f"{label} reads a raster as {{\"surface\": RASTER}}; got {value!r}.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    return value["surface"]
 
 
 def field_value(field: str, properties: Mapping[str, Any] | None, *, label: str, where: str) -> float:

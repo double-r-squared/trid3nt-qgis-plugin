@@ -15,7 +15,7 @@ from trid3nt_server.inputs.geometry import flatten_features
 from trid3nt_server.inputs.point import Point, require_viable
 
 from ..errors import ModflowError
-from .griddata import METRES, field_name, field_value, sample
+from .griddata import METRES, field_name, field_value, sample, surface_of
 
 __all__ = ["GIVERS", "at_cell", "cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "maw_statements",
            "pick", "place", "place_interbeds", "place_lakes", "place_maw", "place_streams", "place_uzf", "point_cell", "uzf_statements"]
@@ -792,6 +792,9 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
                     raise ModflowError(
                         f"Lakes: {name} holds no cell centre of the accepted mesh; state a "
                         "polygon over cells of it.", error_code="MODFLOW_STRESS_OUTSIDE")
+                if (surface := surface_of(values["stage"], label="Lakes stage")) is not None:
+                    values = {**values, "stage": _flat_stage(surface, name=name, placed=centred, points=points, cells=cells,
+                                                              utm_epsg=int(utm_epsg), frame=frame)}
                 bottoms = _column(values["bottom"], "bottom", name="Lakes", placed=centred,
                                   points=points, cells=cells, utm_epsg=int(utm_epsg), frame=frame,
                                   dimension="L")
@@ -818,6 +821,33 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
                     f"Lakes: {stated} belong to one lake, and this statement's geometry places {len(lakes) - first}; "
                     f"state the {stated} on a statement holding one polygon.", error_code="MODFLOW_STRESS_UNSTATED")
     return lakes
+
+
+# USGS Elevation-Derived Hydrography Data Acquisition Specifications, Vertical Alignment of lake/pond polygons:
+# a water body's z-values match its hydro-flattened surface within 0.001 m; a centre at the mode is within it.
+_FLAT_WITHIN_M = 0.001
+
+
+def _flat_stage(surface: Any, *, name: str, placed: list[int], points: Any, cells: Any, utm_epsg: int,
+                frame: Any) -> float:
+    """The elevation more than half of a lake's cell centres share, or the refusal naming the lake, the modal share and the spread."""
+    import numpy as np
+
+    metres = _metres(frame, "Lakes stage reads a surface")
+    found = np.asarray(_column(surface, "stage", name="Lakes", placed=placed, points=points,
+                               cells=cells, utm_epsg=utm_epsg, frame=frame, dimension="L"), dtype=float)
+    # Islands and banks inside a polygon sit above the flattened water, so the water is the mode, not every centre.
+    near = np.abs(found[:, None] - found[None, :]) * metres <= _FLAT_WITHIN_M
+    counts = near.sum(axis=1)
+    best = int(np.argmax(counts))
+    if counts[best] * 2 <= len(found):
+        raise ModflowError(
+            f"Lakes: {name} reads its stage off a surface, and no elevation (within {_FLAT_WITHIN_M} m) is shared by "
+            f"more than half of the {len(found)} cell centre(s) the polygon holds (the most shared is "
+            f"{counts[best] / len(found):.0%}; the surface spans {(found.max() - found.min()) * metres:.3f} m, from "
+            f"{found.min() * metres:.3f} to {found.max() * metres:.3f} m); state the stage as a number or a field.",
+            error_code="MODFLOW_STRESS_UNSTATED")
+    return float(np.median(found[near[best]]))
 
 
 def _metres(frame: Any, what: str) -> float:

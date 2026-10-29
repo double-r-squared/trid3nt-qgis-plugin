@@ -118,6 +118,76 @@ def test_the_bottom_read_from_a_raster_sets_each_cell_s_depth(tmp_path):
     assert packagedata == [[0, 12.0, 11]]
 
 
+def _surface(tmp_path, middle_row):
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    path = tmp_path / "surface.tif"
+    grid = np.full((3, 3), 9.0, dtype="float32")
+    grid[1] = middle_row
+    with rasterio.open(path, "w", driver="GTiff", height=3, width=3, count=1, dtype="float32",
+                       crs="EPSG:32617", transform=from_origin(0.0, 30.0, 10.0, 10.0)) as dst:
+        dst.write(grid, 1)
+    return {"uri": str(path), "units": "m"}
+
+
+def test_a_stage_read_off_a_flat_surface_is_the_one_elevation_the_lake_s_cells_hold(tmp_path):
+    flat = _surface(tmp_path, [7.5, 7.5, 7.5])
+    packagedata, _, _ = _place([_statement(_MIDDLE_ROW, stage={"surface": flat})])
+    assert packagedata[0][1] == 7.5
+
+
+def test_a_stage_is_the_mode_when_islands_and_banks_are_the_minority(tmp_path):
+    # two of the three centres of the lake are the flattened water, one is a bank 6 m above it
+    bank = _surface(tmp_path, [373.81, 373.81, 380.15])
+    assert _place([_statement(_MIDDLE_ROW, stage={"surface": bank})])[0][0][1] == pytest.approx(373.81)
+
+
+def test_a_drawn_down_reservoir_with_a_two_thirds_majority_at_the_water_level_is_accepted(tmp_path):
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    path = tmp_path / "pool.tif"
+    grid = np.array([[254.75, 254.75, 254.75], [254.75, 257.9, 258.0], [9.0, 9.0, 9.0]], dtype="float32")
+    with rasterio.open(path, "w", driver="GTiff", height=3, width=3, count=1, dtype="float32",
+                       crs="EPSG:32617", transform=from_origin(0.0, 30.0, 10.0, 10.0)) as dst:
+        dst.write(grid, 1)
+    pool = {"stage": {"surface": {"uri": str(path), "units": "m"}}}
+    assert _place([_statement(_box(1.0, 11.0, 29.0, 29.0), **pool)])[0][0][1] == pytest.approx(254.75)
+
+
+def test_a_stage_with_no_majority_refuses_naming_the_lake_the_share_and_the_spread(tmp_path):
+    ragged = _surface(tmp_path, [254.75, 257.0, 260.0])
+    with pytest.raises(ModflowError) as caught:
+        _place([_statement(_MIDDLE_ROW, stage={"surface": ragged})])
+    text = str(caught.value)
+    assert "lake 1" in text and "33%" in text and "5.250 m" in text
+
+
+def test_exactly_half_is_no_majority(tmp_path):
+    with pytest.raises(ModflowError):
+        _place([_statement(_box(1.0, 11.0, 19.0, 19.0), stage={"surface": _surface(tmp_path, [7.5, 9.0, 9.0])})])
+
+
+def test_the_mode_counts_centres_within_the_tolerance_as_one_and_a_centre_over_it_apart_does_not(tmp_path):
+    assert _place([_statement(_MIDDLE_ROW, stage={"surface": _surface(tmp_path, [7.5, 7.5005, 7.5])})])[0][0][1] == 7.5
+    with pytest.raises(ModflowError):
+        _place([_statement(_MIDDLE_ROW, stage={"surface": _surface(tmp_path, [7.5, 7.502, 7.504])})])
+
+
+def test_a_stage_surface_read_in_feet_is_converted_onto_the_model_s_length_unit(tmp_path):
+    flat = {**_surface(tmp_path, [10.0, 10.0, 10.0]), "units": "ft"}
+    assert _place([_statement(_MIDDLE_ROW, stage={"surface": flat})])[0][0][1] == pytest.approx(3.048)
+
+
+@pytest.mark.parametrize("held", [3.0, None, {"surface": 1, "field": "x"}])
+def test_a_stage_surface_that_is_no_raster_refuses(held):
+    with pytest.raises(ModflowError):
+        _place([_statement(_CENTRE, stage={"surface": held} if not isinstance(held, dict) else held)])
+
+
 def test_a_neighbour_the_run_does_not_solve_is_not_connected():
     active = [[1] * _N, [1] * _N]
     active[0][1] = 0
@@ -252,6 +322,17 @@ def test_an_argument_the_composite_does_not_take_refuses():
     with pytest.raises(ModflowError) as caught:
         _fill({"Lakes": {"geometry": "where", **_VALUES, "depth": 3.0}}, where=_CENTRE)
     assert "depth" in str(caught.value)
+
+
+def test_a_stage_read_off_a_surface_passes_through_the_composite_unread(tmp_path):
+    surface = _surface(tmp_path, [7.5, 7.5, 7.5])
+    sheet = _fill({"Lakes": {"geometry": "where", **_VALUES, "stage": {"surface": surface}}}, where=_CENTRE)
+    assert sheet.filled["LAK_PACKAGEDATA"].value["lakes"][0]["values"]["stage"] == {"surface": surface}
+
+
+def test_a_stage_surface_beside_other_keys_refuses():
+    with pytest.raises(ModflowError):
+        _fill({"Lakes": {"geometry": "where", **_VALUES, "stage": {"surface": "bed", "field": "x"}}}, where=_CENTRE)
 
 
 def test_a_geometry_reading_nothing_states_nothing():

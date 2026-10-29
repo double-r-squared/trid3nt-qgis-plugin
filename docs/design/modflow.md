@@ -157,7 +157,12 @@ composite refuses by name; a `rainfall` or `evaporation` not stated is absent fr
 package. A polygon holding no cell centre, a cell in two lakes and a lake with no solved
 cell beside or below it refuse. `LAK_NLAKES`, `LAK_CONNECTIONDATA` and, beside a stated
 flux, `LAK_PERIODDATA` stated beside `Lakes` refuse. The lake stage is not a read the run
-publishes.
+publishes. `stage` may be `{"surface": RASTER}` (the run's `bed`, or any raster): the stage is the modal elevation of the
+raster at the centres of the cells the polygon holds, centres within 0.001 m (USGS's tolerance for a lake's z-values
+against its hydro-flattened surface) counting as one, provided the mode covers more than half of the centres; the
+median of those centres is taken. Islands and banks inside the polygon are the minority. No majority, or a cell the
+raster measures nothing at, refuses naming the lake, the modal share and the spread, so a reservoir polygon wider than
+the water the DEM was flattened over refuses. A gauge stage is a stated number or a `field`; nothing is fetched for it.
 
 MAW is stated by its own dictionary keywords (`MAW_NMAWWELLS`, `MAW_PACKAGEDATA`,
 `MAW_CONNECTIONDATA`, `MAW_PERIODDATA`, the options): ex-gwf-maw-p01, both variants, authored
