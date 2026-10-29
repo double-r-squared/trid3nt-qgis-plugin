@@ -147,9 +147,11 @@ def test_river_rejects_unknown_source():
         river.validate(RIVER_SPEC, _validated(bbox=list(_KANSAS), source="merit_hydro"))
 
 
-def test_river_source_aliases_resolve():
-    for alias in ("nhdplus", "nhd"):
-        assert _validated(bbox=list(_KANSAS), source=alias)["source"] == "nhdplus_hr"
+def test_river_source_is_osm_and_the_old_nhd_labels_refuse():
+    assert _validated(bbox=list(_KANSAS))["source"] == "osm"
+    for label in ("nhdplus_hr", "nhdplus", "nhd"):
+        with pytest.raises(RouterInputError):
+            river.validate(RIVER_SPEC, _validated(bbox=list(_KANSAS), source=label))
 
 
 

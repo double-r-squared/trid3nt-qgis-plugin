@@ -116,7 +116,7 @@ docstring: |-
 
   When NOT to use:
       - DO NOT use for raw, unfiltered NHDPlus reach geometry by
-        HUC4 -- use ``fetch_river_geometry`` (the bulk NHDPlus HR
+        HUC4 -- use ``fetch_nhdplus_hr_flowline_network`` (the bulk NHDPlus HR
         fetcher) instead; NLDI navigate is a *traversal* primitive,
         not a bbox-scoped reach dump.
       - DO NOT use for streamflow / discharge values -- pair with
@@ -167,7 +167,7 @@ docstring: |-
       - Composes WITH: ``fetch_noaa_nwm_streamflow`` (join NWM discharge
         values to navigated reaches by COMID); ``fetch_usgs_nwis_gauges``
         (point NWIS gauges along the traversal).
-      - Composes ALONGSIDE: ``fetch_river_geometry`` (bulk NHDPlus
+      - Composes ALONGSIDE: ``fetch_nhdplus_hr_flowline_network`` (bulk NHDPlus
         HR fetch when bbox scope is wanted rather than network
         traversal); ``fetch_fema_nfhl_zones`` (intersect downstream
         flowlines with regulatory flood zones for impact analysis).

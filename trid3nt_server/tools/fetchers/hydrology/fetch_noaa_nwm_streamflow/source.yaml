@@ -132,7 +132,7 @@ docstring: |-
   Do NOT use this for: gauge-based observed point streamflow at a USGS
   station (use ``fetch_usgs_nwis_gauges`` -- NWIS, the actual instrument
   record); river-reach polylines without flow values (use
-  ``fetch_river_geometry`` -- NHDPlus HR); precipitation forcing (use ``fetch_mrms_qpe`` for
+  ``fetch_nhdplus_hr_flowline_network`` -- NHDPlus HR); precipitation forcing (use ``fetch_mrms_qpe`` for
   radar/gauge QPE or ``lookup_precip_return_period`` for Atlas 14 design
   storms); flood-extent rasters (NWM does not publish inundation directly -- that requires a hydraulic model run with NWM forcing).
 
@@ -169,7 +169,7 @@ docstring: |-
         ``streamflow_cms`` (float, m^3/s), ``valid_time`` (ISO-8601 UTC),
         ``product``. The ``feature_id`` is the join key downstream composers
         use to map to NHDPlus reach polylines (via
-        ``fetch_river_geometry``) -- this tool emits point centroids so the
+        ``fetch_nhdplus_hr_flowline_network``) -- this tool emits point centroids so the
         layer renders standalone as a discharge map.
 
   Cache: ``ttl_class="dynamic-1h"``, ``source_class="nwm_streamflow"``.
@@ -178,7 +178,7 @@ docstring: |-
   so identical-bbox/hour calls hit the same FlatGeobuf.
 
   Cross-tool dependencies:
-      - Composes WITH: ``fetch_river_geometry`` (downstream NHDPlus polyline join via
+      - Composes WITH: ``fetch_nhdplus_hr_flowline_network`` (downstream NHDPlus polyline join via
         ``feature_id``).
       - Composes ALONGSIDE: ``fetch_mrms_qpe`` (precip forcing),
         ``fetch_usgs_nwis_gauges`` (NWIS point gauge cross-check),

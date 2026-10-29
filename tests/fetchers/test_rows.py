@@ -162,6 +162,8 @@ _HYDROGRAPHY_FEATURES = {
     "fetch_nhd_water_surface": {"water surface"},
     "fetch_watershed": {"basin"},
     "fetch_nhd_waterbody_at_point": {"waterbody"},
+    "fetch_nhd_hr_waterbodies": {"waterbodies"},
+    "fetch_nhdplus_hr_flowline_network": {"flowline network"},
 }
 
 

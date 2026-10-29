@@ -33,9 +33,8 @@ _WATERWAY_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
 #: Closed vocabulary of individual OSM ``waterway`` values a caller may name.
 _WATERWAY_ALLOWED_VALUES: tuple[str, ...] = ("river", "stream", "canal", "ditch", "drain")
 
-#: Accepted ``source`` labels, kept for signature back-compat: both resolve to the
-#: OSM path, which is the only one this row has.
-_RIVER_SOURCES: frozenset[str] = frozenset({"nhdplus_hr", "osm"})
+#: The ``source`` labels this row answers to: OSM Overpass is the only one it has.
+_RIVER_SOURCES: frozenset[str] = frozenset({"osm"})
 
 
 def _resolve_waterway_classes(sc: str, sfx: str, waterway_type: Any) -> list[str]:
@@ -87,9 +86,8 @@ def validate(spec: SourceSpec, params: dict[str, Any]) -> None:
     source = params.get("source")
     if source is not None and str(source) not in _RIVER_SOURCES:
         raise router_input_error(
-            sc, f"unsupported source={source!r}; allowed: 'nhdplus_hr' or 'osm' "
-            "(both resolve to the OSM waterway path, which is this row's only "
-            "source).", sfx,
+            sc, f"unsupported source={source!r}; allowed: 'osm' (this row's only "
+            "source; NHDPlus HR flowlines are fetch_nhdplus_hr_flowline_network).", sfx,
         )
     _resolve_waterway_classes(sc, sfx, params.get("waterway_type"))
 

@@ -206,6 +206,11 @@ def fetch_from_endpoint(
             raise
         except Exception as exc:  # noqa: BLE001 -- pyogrio DataSourceError and kin
             raise _verbatim_upstream(spec, url, exc)
+        if capped is None and len(df) >= max_features:
+            raise router_input_error(
+                spec.error_code_prefix,
+                f"the query reached the {max_features}-feature ceiling, so the read may be "
+                "cut short; narrow the box.", "RESULT_TOO_LARGE")
         if df.crs is not None and df.crs.to_epsg() != 4326:
             df = df.to_crs("EPSG:4326")
         out.extend(

@@ -211,8 +211,8 @@ docstring: |-
         network; NWM is the MODELED companion. When the user says "USGS
         gauges" / "real readings" -> THIS tool. When they say "modeled flow" /
         "NWM" / "the whole river network" -> ``fetch_noaa_nwm_streamflow``.
-      - River-reach POLYLINES without gauges -- use ``fetch_river_geometry``
-        (NHDPlus HR) or ``fetch_nhdplus_nldi_navigate``.
+      - River-reach POLYLINES without gauges -- use ``fetch_nhdplus_hr_flowline_network``
+        (NHDPlus HR), ``fetch_river_geometry`` (OpenStreetMap) or ``fetch_nhdplus_nldi_navigate``.
       - there is no global river-discharge fetcher.
       - Precipitation / design-storm forcing -- use ``fetch_mrms_qpe`` or
         ``lookup_precip_return_period``.
@@ -284,7 +284,7 @@ docstring: |-
         (derive a bbox or surface a state from a place name BEFORE this call),
         ``fetch_administrative_boundaries`` (state/county framing).
       - Cross-checks: ``fetch_noaa_nwm_streamflow`` (modeled reach flow  --
-        observed-vs-modeled comparison), ``fetch_river_geometry`` (the reach
+        observed-vs-modeled comparison), ``fetch_nhdplus_hr_flowline_network`` (the reach
         polylines the gauges sit on).
       - Upstream data source: USGS Water Services
         (waterservices.usgs.gov/nwis/iv + /nwis/site).

@@ -1,0 +1,130 @@
+# The STANDING water in a box: NHDPlus HR NHDWaterbody (MapServer layer 9), lakes
+# and reservoirs as polygons with their NHD identity. Read through the ArcGIS
+# query URL by the vector driver, which pages past the service's 2000-record cap.
+schema_version: v1
+
+name: fetch_nhd_hr_waterbodies
+source_class: nhd_hr_waterbodies
+error_prefix: NHD_HR_WATERBODIES
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer/9/query"
+
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+
+gates:
+  max_features: 50000
+
+ingest:
+  access: ogr
+  ogr:
+    driver: ESRIJSON
+    page_size: 2000
+    empty_is_typed_error: true
+  query_template:
+    out_fields: "nhdplusid,permanent_identifier,ftype,fcode,gnis_name,areasqkm,reachcode"
+  # FType 390 is LakePond and 436 is Reservoir in the service's own type table;
+  # the other NHDWaterbody types (playa, ice mass, swamp or marsh, estuary) are
+  # not standing fresh water.
+  where_clauses:
+    - {template: "ftype IN (390, 436)"}
+
+normalize:
+  crs: "EPSG:4326"
+  units: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  display_name: "NHD lakes and reservoirs"
+  bbox_from_features:
+    pad: 0.002
+  style:
+    kind: reference
+    geometry: polygon
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  kb_per_feature: 20.0
+  features_per_sq_deg: 400.0
+  floor_mb: 0.05
+  ceil_mb: 50.0
+
+coverage:
+-   data_class: hydrography
+    kind: measured
+    extent:
+      kind: surface
+      rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      note: USGS NHDPlus HR lakes, ponds and reservoirs over the US and Puerto Rico
+    window:
+      series: false
+      latest: '2023-01-01'
+    resolution_m: 5.0
+    datum: null
+    units: {}
+    # WHAT THIS ROW PUBLISHES of its class: every lake, pond and reservoir in
+    # the box, each a closed outline with its NHD identity.
+    vocabulary:
+      waterbodies: waterbodies
+
+caveats:
+  - "lakes, ponds and reservoirs only (NHD FType 390 and 436); playas, ice masses, swamps and marshes, and estuaries are not published"
+  - "every polygon intersecting the box comes back WHOLE and unsimplified, so a large lake reaches well past the box"
+  - "the NHD `elevation` column is deliberately not published: it mixes feet, metres and nulls across bodies and states no datum, so it is not a stage"
+  - "the box is the run's own; more than 50000 polygons in it refuses by name rather than truncating"
+  - "CONUS, Alaska, Hawaii and Puerto Rico (NHDPlus HR)"
+
+docstring: |-
+  Fetch every lake, pond and reservoir in a box -> NHD polygons with their identity.
+
+  What it does:
+      Queries USGS NHDPlus HR NHDWaterbody (layer 9) over the box, keeps FType
+      390 LakePond and 436 Reservoir, and pages past the service's 2000-record
+      cap. Each polygon carries ``nhdplusid``, ``permanent_identifier``,
+      ``ftype``, ``fcode``, ``gnis_name``, ``areasqkm`` and ``reachcode``, the
+      keys a flowline's ``wbarea_permanent_identifier`` names a body by.
+
+  When to use:
+      - A model needs the standing water in an area as geometry: lakes a
+        groundwater model holds as lake cells, ponds on a map.
+      - You need the SET of waterbodies in a box, not the one body at a point.
+
+  When NOT to use:
+      - DO NOT use for ONE body at a seed - ``fetch_nhd_waterbody_at_point``.
+      - DO NOT use for a lake's STAGE or depth: NHD publishes neither a usable
+        stage nor a bottom.
+      - DO NOT use for vegetated wetlands - ``fetch_nwi_wetlands``.
+
+  Parameters:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+
+  Returns:
+      ``LayerURI`` for a FlatGeobuf in EPSG:4326 of polygons.
+      ``layer_type="vector"``, ``role="primary"``.
+
+  Cache: ``ttl_class="static-30d"``, keyed on the box.
+
+  Errors:
+      - ``NHD_HR_WATERBODIES_INPUT_INVALID``: a malformed box.
+      - ``NHD_HR_WATERBODIES_EMPTY``: no lake, pond or reservoir in the box.
+      - ``NHD_HR_WATERBODIES_UPSTREAM_ERROR``: the NHD service failed.
+
+  Tier-1 free. No API key.

@@ -15,7 +15,7 @@ rest and make up the sixth slice.
 | `credentials/` | credential resolution, the access-token gate and the connect handshake | 4 | 50 |
 | `derive/` | the derive tools, the two session tools | 3 | 51 |
 | `render/` | the emitter, the uri registry, publication, the format set, charts | 35 | 431 |
-| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 82 | 2294 |
+| `fetchers/` | the fetch router, its executors, hooks and fallbacks | 83 | 2321 |
 | `gates/` | the gates, a declined card at each of them, the code-exec approval gate, the context budget, the circuit breaker | 20 | 303 |
 | `inputs/` | the typed inputs: a Point, an Extent, a Shape, the domain with the companions its producer measured, the bed it reads as elevations on the run's own vertical frame, the boundary runs, the line a placed read follows, the observation a run opens on and the weather, rain and sea state a record measured, each from every form it arrives in, the user-input normalizers under them, and a user's own file adopted as a layer | 25 | 319 |
 | `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes, the runs that prescribe a role and the shoreline the domain's own edge is | 11 | 280 |
@@ -44,7 +44,7 @@ instance fixtures, and nothing else has one.
 
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
-    make test-fetchers        # tests/fetchers                                                                              2294
+    make test-fetchers        # tests/fetchers                                                                              2321
     make test-spatial         # tests/derive tests/render tests/mesh                                         762
     make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      2610
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1140

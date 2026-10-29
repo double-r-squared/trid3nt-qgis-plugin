@@ -22,10 +22,7 @@ params:
     quantize: res_10
   source:
     type: str
-    default: nhdplus_hr
-    aliases:
-      nhdplus: nhdplus_hr
-      nhd: nhdplus_hr
+    default: osm
   waterway_type:
     type: str
     schema_optional: true
@@ -84,8 +81,7 @@ caveats:
 - OpenStreetMap waterway ways (river/stream/canal by default) via the Overpass API (3-mirror fallback),
   clipped to the exact bbox. Global, keyless. An area with no OSM waterways returns a valid 0-feature layer,
   not an error.
-- The vestigial NHDPlus HR HUC4 FileGDB fallback leg was removed; all
-  requests now use the OSM Overpass waterway path regardless of the source label.
+- OSM is this row's only source; NHDPlus HR flowlines are fetch_nhdplus_hr_flowline_network.
 docstring: |-
   Fetch river and stream flowline geometry for a bbox (OSM Overpass waterways).
 
@@ -125,10 +121,10 @@ docstring: |-
   **Parameters:**
   - ``bbox`` (tuple[float,float,float,float]): ``(min_lon, min_lat, max_lon,
     max_lat)`` in EPSG:4326. Max area 5,000 km2.
-  - ``source`` (str, default ``"nhdplus_hr"``): accepted for backward
-    compatibility; ``"nhdplus_hr"`` and ``"osm"`` both resolve to the OSM
-    Overpass waterway path.
-    Unsupported labels (e.g. ``"merit_hydro"``) raise a typed input error.
+  - ``source`` (str, default ``"osm"``): the one source this row has, OpenStreetMap
+    Overpass waterways. Any other label (e.g. ``"nhdplus_hr"``, ``"merit_hydro"``)
+    raises a typed input error; NHDPlus HR flowlines are
+    ``fetch_nhdplus_hr_flowline_network``.
   - ``waterway_type`` (str | list[str] | None, default ``None``): widens or
     narrows the OSM ``waterway`` tag set. ``None`` keeps the default channel
     network (``river``/``stream``/``canal``). Pass individual OSM values

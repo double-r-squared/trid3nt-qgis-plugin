@@ -1,0 +1,124 @@
+# The MOVING water in a box: NHDPlus HR NetworkNHDFlowline (MapServer layer 3),
+# the stream network as polylines with its topology and drainage attributes.
+schema_version: v1
+
+name: fetch_nhdplus_hr_flowline_network
+source_class: nhdplus_hr_flowline_network
+error_prefix: NHDPLUS_HR_FLOWLINE_NETWORK
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer/3/query"
+
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+
+gates:
+  max_features: 100000
+
+ingest:
+  access: ogr
+  ogr:
+    driver: ESRIJSON
+    page_size: 2000
+    empty_is_typed_error: true
+  query_template:
+    out_fields: "nhdplusid,gnis_name,ftype,fcode,hydroseq,dnhydroseq,levelpathi,fromnode,tonode,wbarea_permanent_identifier,streamorde,totdasqkm,slope,lengthkm,minelevsmo,maxelevsmo"
+
+normalize:
+  crs: "EPSG:4326"
+  units: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  display_name: "NHDPlus HR flowlines"
+  bbox_from_features:
+    pad: 0.002
+  style:
+    kind: reference
+    geometry: line
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  kb_per_feature: 3.0
+  features_per_sq_deg: 4000.0
+  floor_mb: 0.05
+  ceil_mb: 50.0
+
+coverage:
+-   data_class: hydrography
+    kind: measured
+    extent:
+      kind: surface
+      rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      note: USGS NHDPlus HR network flowlines over the US and Puerto Rico
+    window:
+      series: false
+      latest: '2023-01-01'
+    resolution_m: 5.0
+    datum: null
+    units: {}
+    # WHAT THIS ROW PUBLISHES of its class: the flowline network in the box,
+    # each line with its place in the network.
+    vocabulary:
+      flowline network: flowline network
+
+caveats:
+  - "every flowline intersecting the box comes back WHOLE; ftype 558 ArtificialPath lines are the centrelines through wide rivers and name the polygon they run through in wbarea_permanent_identifier"
+  - "minelevsmo and maxelevsmo are CENTIMETERS and slope is unitless (USGS SIR 2025-5031, NHDPlusFlowlineVAA table); totdasqkm is km2, lengthkm km"
+  - "NHD publishes no stream width, depth, bed material or roughness: a line carries identity, topology and drainage area only"
+  - "more than 100000 lines in the box refuses by name rather than truncating"
+  - "CONUS, Alaska, Hawaii and Puerto Rico (NHDPlus HR)"
+
+docstring: |-
+  Fetch the NHDPlus HR stream network in a box -> flowlines with topology and drainage area.
+
+  What it does:
+      Queries USGS NHDPlus HR NetworkNHDFlowline (layer 3) over the box and pages
+      past the service's 2000-record cap. Each line carries ``nhdplusid``,
+      ``gnis_name``, ``ftype``, ``fcode``, ``hydroseq``, ``dnhydroseq``,
+      ``levelpathi``, ``fromnode``, ``tonode``, ``wbarea_permanent_identifier``,
+      ``streamorde``, ``totdasqkm`` (km2), ``slope`` (unitless), ``lengthkm``
+      (km), ``minelevsmo`` and ``maxelevsmo`` (cm).
+
+  When to use:
+      - A model needs the streams in an area as lines with drainage area,
+        slope and downstream links.
+      - You need the network of a box, not the navigation from one point.
+
+  When NOT to use:
+      - DO NOT use for navigation from one point - ``fetch_nhdplus_nldi_navigate``.
+      - DO NOT use for stream width, depth or roughness: NHD publishes none.
+      - DO NOT use for the polygon a wide river fills - ``fetch_nhd_water_surface``.
+
+  Parameters:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+
+  Returns:
+      ``LayerURI`` for a FlatGeobuf in EPSG:4326 of lines.
+      ``layer_type="vector"``, ``role="primary"``.
+
+  Cache: ``ttl_class="static-30d"``, keyed on the box.
+
+  Errors:
+      - ``NHDPLUS_HR_FLOWLINE_NETWORK_INPUT_INVALID``: a malformed box.
+      - ``NHDPLUS_HR_FLOWLINE_NETWORK_EMPTY``: no flowline in the box.
+      - ``NHDPLUS_HR_FLOWLINE_NETWORK_UPSTREAM_ERROR``: the NHD service failed.
+
+  Tier-1 free. No API key.
