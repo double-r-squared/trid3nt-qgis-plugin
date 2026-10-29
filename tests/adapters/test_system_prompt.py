@@ -297,24 +297,6 @@ def test_system_prompt_says_full_state_name_accepted() -> None:
     assert "Oklahoma" in flat
 
 
-
-
-def test_system_prompt_never_invents_contamination_forcing() -> None:
-    """The prompt must keep the Invariant-9 never-invent rule so the model
-    extracts (never fabricates) the spill forcing from the article/user."""
-    flat = " ".join(SYSTEM_PROMPT.split())
-    assert "NEVER INVENT a contamination parameter" in flat
-    assert "Invariant 9" in SYSTEM_PROMPT
-    assert "gallons / liters / barrels / tons" in flat
-
-
-def test_system_prompt_routes_the_news_article_spill_to_the_river_plume() -> None:
-    """The pasted-article path is a model-composed chain (extract -> derive the
-    forcing -> the registered river-plume template)."""
-    assert "telemac_dye_release" in SYSTEM_PROMPT
-    assert "NEWS ARTICLE" in SYSTEM_PROMPT
-
-
 # Narration conciseness — be concise; do not re-explain the
 # same thing across retries or recap every step verbosely each turn.
 

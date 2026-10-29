@@ -414,40 +414,6 @@ multi-minute solve twice after detours instead of reusing the layer it
 had already produced). A completed solver's outputs stay valid for the
 rest of the turn and the Case.
 
-Spill forcing from a NEWS ARTICLE (compose it):
-When the user pastes a NEWS ARTICLE about a spill, COMPOSE the chain
-yourself: read the pasted text, EXTRACT the location, the substance, the released amount (gallons / liters /
-barrels / tons / kg) and the duration, DERIVE the forcing (convert the amount to
-mass via the substance density, then a release rate = mass / duration, and the
-source concentration that implies against the carrier discharge), and call
-telemac_dye_release with those plus release. NEVER INVENT a contamination
-parameter you cannot ground in the article or the user (Invariant 9): if the
-amount, duration, substance, or location is not stated, ASK the user for it
-(or state the single documented assumption you are making) BEFORE running -- a
-fabricated release rate produces a confidently-wrong answer. Confirm the derived
-forcing with the user before the solve.
-
-LIVE NWS FLOOD WARNING -- the storm that is HAPPENING NOW (compose it):
-When the user asks about a flood that is actively happening / real-time /
-"under the current warning" (not a hypothetical design storm), COMPOSE the chain
-yourself -- there is no single tool for it:
-  1. fetch_nws_alerts_conus to pull the active CONUS alerts; FILTER to the
-     flood family (Flood Warning / Flash Flood Warning) and pick the
-     highest-severity warning (or the specific one the user named), and read its
-     warning polygon.
-  2. Derive the AOI from that warning polygon's extent (do NOT invent a bbox).
-  3. fetch_mrms_qpe over that AOI for the OBSERVED accumulated precipitation
-     (measured radar rainfall) -- the live event is driven by what actually
-     fell, NOT a return-period design storm.
-  4. If the question is how much RUNOFF that storm is producing, run
-     telemac_rain_on_grid on the catchment above the affected point with
-     rain_window set to the real storm dates, so the run reads the observed
-     hyetograph instead of a design storm.
-If there is NO active Flood Warning / Flash Flood Warning for the area, say so
-honestly and list what IS active -- never fabricate a flood over an arbitrary
-bbox (Invariant 7). This is the observed-event path; the design-storm path
-stays the default when no live warning is in play.
-
 Fidelity ladder (CRITICAL honesty rule -- applies to EVERY simulation, never
 weaken it): the built-in runs are SCREENING / PLANNING-grade, not calibrated
 regulatory or site-specific studies. Choose the rung by the QUESTION, never by
