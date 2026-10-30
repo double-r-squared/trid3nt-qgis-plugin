@@ -1,7 +1,7 @@
 summary: Where a DISSOLVED RELEASE goes in an unconfined aquifer - a conservative solute plume over time, checked against measured wells.
 routing: 'THE tool for "where does this release go", "how far does the plume reach". MODFLOW 6 flow
   and solute transport over a triangle mesh of `domain`: natural `recharge` and `streams` as the
-  water table, the release infiltrating over the `source` polygon at `source_rate` carrying
+  water table, lakes, the release infiltrating over the `source` polygon at `source_rate` carrying
   `source_concentration`. `porosity`, both dispersivities, `background_concentration`, `snapshot`
   and `solute` are stated, never defaulted; the period is the TDIS_PERIODDATA keyword. Wells reporting
   `solute` at the `snapshot` are charted against the model. Metres, days, `concentration_units`.'

@@ -154,15 +154,15 @@ connections run by lake cell (layer, cell) and then by neighbour id, which on a 
 is flopy's order, and the same p01 footprint placed as a polygon reproduces the keyword
 deck's heads and stage bitwise. `stage`, `bottom` and `leakance` are stated or the
 composite refuses by name; a `rainfall` or `evaporation` not stated is absent from the
-package. A polygon holding no cell centre, a cell in two lakes and a lake with no solved
-cell beside or below it refuse. `LAK_NLAKES`, `LAK_CONNECTIONDATA` and, beside a stated
+package. A polygon holding no cell centre is no lake of this mesh: it is skipped, and the run's journal says once how many
+were skipped and their total area. A cell in two lakes and a lake with no solved
+cell beside or below it refuse; a statement whose every polygon is skipped writes no LAK package. `LAK_NLAKES`, `LAK_CONNECTIONDATA` and, beside a stated
 flux, `LAK_PERIODDATA` stated beside `Lakes` refuse. The lake stage is not a read the run
 publishes. `stage` may be `{"surface": RASTER}` (the run's `bed`, or any raster): the stage is the modal elevation of the
 raster at the centres of the cells the polygon holds, centres within 0.001 m (USGS's tolerance for a lake's z-values
 against its hydro-flattened surface) counting as one, provided the mode covers more than half of the centres; the
-median of those centres is taken. Islands and banks inside the polygon are the minority. No majority, or a cell the
-raster measures nothing at, refuses naming the lake, the modal share and the spread, so a reservoir polygon wider than
-the water the DEM was flattened over refuses. A gauge stage is a stated number or a `field`; nothing is fetched for it.
+median of those centres is taken. Islands and banks inside the polygon are the minority. A lake with no majority is skipped like a polygon holding no cell centre,
+and the one journal note names it, its cell centres and the spread; a cell the raster measures nothing at refuses. A gauge stage is a stated number or a `field`; nothing is fetched for it.
 
 MAW is stated by its own dictionary keywords (`MAW_NMAWWELLS`, `MAW_PACKAGEDATA`,
 `MAW_CONNECTIONDATA`, `MAW_PERIODDATA`, the options): ex-gwf-maw-p01, both variants, authored
@@ -563,6 +563,18 @@ concentration unit, so a template whose OBSERVE row observes `CONCENTRATION` sea
 required `concentration_units`; `published_units` reports it, the measured reading
 converts into it at ingestion or refuses, and the concentration layer carries it.
 
+## Lakes in the two templates
+
+`modflow_water_table` and `modflow_plume` state `Lakes` over the `waterbodies` need (NHDPlus HR lakes and ponds and
+reservoirs, optional: a place no source covers runs without lakes). The stage is `{"surface": "bed"}`, the flat water
+surface the bed paints inside each polygon; `lake_bottom` (one elevation in metres for every lake) and `lake_leakance`
+(1 per day) are stated inputs with no source, refused by `Lakes` by name when a lake is found and unstated. A waterbody
+smaller than the mesh is skipped and journaled. A lake exchanges water with the aquifer only: no outlets and no
+`WaterMover`, since the streams are Drains (NHDPlus carries no width, so no Streams) and a Drain receives nothing. The
+streams are the NHDPlus flowline network (`of="flowline network"`), each line a drain at the land surface through
+`drain_conductance`. `mark_lake_outlets` publishes the key a lake-to-stream mover pairs on for when a stream has a
+width source.
+
 ## The plume template
 
 `modflow_plume` answers "where does a dissolved release go": the steady unconfined flow of
@@ -577,8 +589,7 @@ in `TDIS_TIME_UNITS`. The `observe` row asks the wells reporting
 each: extent and shape, never a mass balance. The domain's perimeter is held at constant head at the
 starting head (the fetched water-table depth under the bed, every solved layer): the aquifer
 continues past the domain, and a closed edge with the streams as the only outlet piles the
-recharge up above the land. The kettle ponds are not yet lakes, so the cells around them can
-still stand above land. A finished run records the steps its staged clock
+recharge up above the land. The NHD waterbodies of the domain are lakes (below), so the cells around the kettle ponds no longer stand above land. A finished run records the steps its staged clock
 marched as the completion's `ntimestep`, which the packet cross-checks the frames against.
 
 ## The worker

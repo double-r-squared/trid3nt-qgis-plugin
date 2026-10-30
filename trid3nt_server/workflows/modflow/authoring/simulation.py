@@ -22,7 +22,7 @@ from .movers import grouped, resolved_moves
 from .observations import place_observations
 from .refinement import Child, built_children, children_of, refined_idomain
 from .release import place_release
-from .stress import (GIVERS, lake_statements, layer_rows, maw_statements, place as place_stress, place_interbeds,
+from .stress import (GIVERS, hold_lakes, lake_statements, layer_rows, maw_statements, place as place_stress, place_interbeds,
                      place_lakes, place_maw, place_streams, place_uzf)
 
 from ..errors import ModflowError
@@ -445,6 +445,12 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
 
     A statement's row becomes period 1's rows, carried forward by mf6; the bound is the
     placement's own count; ``active`` is the carrier's solved cells - the grid is one."""
+    # a lake's water stands where the aquifer's cell is not solved, so no other package places a row there
+    lakeless = active
+    if grid is not None and (lakes := lake_statements(sheet)):
+        active = hold_lakes(lakes, active if active is not None else [[1] * len(cells) for _ in range(nlay)],
+                            points=points, cells=cells, utm_epsg=utm_epsg, nlay=nlay, frame=frame,
+                            top=grid[0], botm=grid[1])
     derived: set[str] = set()
     features = list(features or [])
     used: dict[str, set[str]] = {}
@@ -482,9 +488,11 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
     row = groups.get("LAK", {}).get("packagedata")
     if row is not None and isinstance(row.value, Mapping) and "lakes" in row.value:
         found, tables["LAK"] = _lakened(sheet, groups["LAK"], row, stem=stem, nlay=nlay, points=points, cells=cells,
-                                        utm_epsg=utm_epsg, frame=frame, active=active, top=grid[0], botm=grid[1])
+                                        utm_epsg=utm_epsg, frame=frame, active=lakeless, top=grid[0], botm=grid[1])
         features += found
         derived |= {"LAK_NLAKES", "LAK_NOUTLETS", "LAK_NTABLES", "LAK_CONNECTIONDATA"}
+        if not found:
+            del groups["LAK"]
     row = groups.get("MAW", {}).get("packagedata")
     if row is not None and isinstance(row.value, Mapping) and "wells" in row.value:
         features += _welled(sheet, groups["MAW"], row, nlay=nlay, points=points, cells=cells,

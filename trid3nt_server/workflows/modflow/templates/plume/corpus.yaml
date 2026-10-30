@@ -8,3 +8,4 @@ modflow_plume:
 - model a sewage effluent plume in an unconfined sand and gravel aquifer
 - compare the modelled plume concentration with the measured wells
 - groundwater solute transport from a source polygon, measured against monitoring wells
+- where does a plume go in groundwater beside lakes and ponds

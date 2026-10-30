@@ -7698,6 +7698,16 @@
         "type": "float",
         "units": "m2/day"
       },
+      "lake_bottom": {
+        "desc": "Where the bed of every lake in the domain lies, as an elevation in metres on the run's vertical frame: it decides which layers a lake holds (every solved layer whose top lies above it). No dataset measures lake depth nationally, so it is stated; one number serves all the lakes of the run, and it is asked only where a waterbody is found",
+        "type": "float",
+        "units": "m"
+      },
+      "lake_leakance": {
+        "desc": "The leakance of the lake beds, how readily water crosses between a lake and the aquifer beside and below it, in 1 per day (conductance per unit area of lakebed). No dataset measures it, so it is stated; asked only where a waterbody is found",
+        "type": "float",
+        "units": "1/day"
+      },
       "well": {
         "desc": "Where a pumping well stands, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair or 'lat,lon'. Stated, the well pumps well_rate at the cell it lies in; unstated, no well is composed",
         "type": "Point"
@@ -7713,6 +7723,16 @@
         "desc": "The conductance of the stream beds the aquifer drains through, per cell a stream crosses: how readily water at a head above the bed leaves the aquifer. No dataset measures it, so it is stated",
         "type": "float",
         "units": "m2/day"
+      },
+      "lake_bottom": {
+        "desc": "Where the bed of every lake in the domain lies, as an elevation in metres on the run's vertical frame: it decides which layers a lake holds (every solved layer whose top lies above it). No dataset measures lake depth nationally, so it is stated; one number serves all the lakes of the run, and it is asked only where a waterbody is found",
+        "type": "float",
+        "units": "m"
+      },
+      "lake_leakance": {
+        "desc": "The leakance of the lake beds, how readily water crosses between a lake and the aquifer beside and below it, in 1 per day (conductance per unit area of lakebed). No dataset measures it, so it is stated; asked only where a waterbody is found",
+        "type": "float",
+        "units": "1/day"
       },
       "source_rate": {
         "desc": "The depth of treated effluent that infiltrates per day over the source polygon, spread over the polygon as drawn: the release's total volume over its period divided by the polygon's area. It enters the flow as recharge on top of the natural recharge, and it is stated",

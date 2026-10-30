@@ -8,3 +8,4 @@ modflow_water_table:
 - what does a pumping well draw the water table down to
 - groundwater head map of an aquifer fed by recharge and drained by rivers
 - simulate the water table and the groundwater budget for this watershed
+- groundwater heads around the lakes and streams of this catchment

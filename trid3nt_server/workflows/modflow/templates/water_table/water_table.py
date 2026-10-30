@@ -19,6 +19,8 @@ __all__ = ["CAPTIONS", "INPUTS", "MESH", "OUTPUTS", "STEERING", "modflow_water_t
 
 class INPUTS:
     drain_conductance = Input()
+    lake_bottom = Input().stated()
+    lake_leakance = Input().stated()
     well = Input().stated()
     well_rate = Input().stated()
 
@@ -66,7 +68,15 @@ class INPUTS:
         "day, or a raster publishing its unit; unfilled, the source publishing "
         "groundwater_recharge here.")).need(
         "aquifer property", of="groundwater_recharge")
-    streams = Input().need("hydrography", geometry="polyline")
+    streams = Input(desc=(
+        "The streams that drain the aquifer: the NHDPlus flowline network over the domain, each line a drain "
+        "at the land surface; unfilled, the source publishing the flowline network here.")).need(
+        "hydrography", of="flowline network", geometry="polyline")
+    waterbodies = Input(desc=(
+        "The lakes, ponds and reservoirs of the domain as polygons; unfilled, the source publishing "
+        "waterbodies here, and absent where none does. Each one holding a cell centre of the mesh is a lake "
+        "that exchanges water with the aquifer only; one smaller than the mesh is skipped and said.")).need(
+        "hydrography", of="waterbodies", geometry="polygon").optional_need()
     observe = Input(OBSERVE, desc=(
         "A well's measured water level the solved water table is checked "
         "against at the well's own cell: a point layer of wells reporting it; "
@@ -102,6 +112,9 @@ class STEERING(GWF):
     # at the land surface: a stream drains the aquifer wherever the head stands above its bed
     Drains = {"geometry": "streams", "layer": 1, "elevation": "bed",
               "conductance": "drain_conductance"}
+    # a lake stands at the flat water surface the bed paints inside its polygon; its bed leaks both ways
+    Lakes = {"geometry": "waterbodies", "stage": {"surface": "bed"}, "bottom": "lake_bottom",
+             "leakance": "lake_leakance"}
     Wells = {"geometry": "well", "layer": 1, "rate": "well_rate"}
 
 

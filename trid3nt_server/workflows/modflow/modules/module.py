@@ -280,9 +280,9 @@ def _outlets(held: Any) -> list[dict[str, Any]]:
     return outlets
 
 
-def _lakes(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+def _lakes(value: Any, run: Mapping[str, Any] | None = None) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     if isinstance(value, (list, tuple)) and value:
-        stated = [item for each in value if (item := _lakes(each)[0])]
+        stated = [item for each in value if (item := _lakes(each, run)[0])]
         return ({"LAK_PACKAGEDATA": {"lakes": [row["LAK_PACKAGEDATA"]["lakes"][0]
                                                for row in stated]}} if stated else {}), {}
     if not isinstance(value, Mapping):
@@ -294,6 +294,10 @@ def _lakes(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
                               "auxiliary", "outlets"))
     if value.get("geometry") is None:
         return {}, {}
+    stage = value.get("stage")
+    if run is not None and isinstance(stage, Mapping) and set(stage) == {"surface"} and isinstance(stage["surface"], str):
+        # the surface names an input of the run, as every other argument that reads one
+        value = {**value, "stage": {"surface": run.get(stage["surface"])}}
     for argument in _LAKES:
         if value.get(argument) is None:
             raise ModflowError(
@@ -323,12 +327,12 @@ def _lakes(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
 _lakes.__doc__ = (
     "The LAK lakes a polygon geometry places: Lakes(geometry, stage, bottom, leakance[, name, table, rainfall, "
     "evaporation, runoff, inflow, withdrawal, status, auxiliary, outlets]), or a list of such statements.\n\n"
-    "    Each polygon is one lake holding the cells whose centres it contains, in every solved layer whose top\n"
+    "    Each polygon is one lake holding the cells whose centres it contains (one holding none is skipped and said), in every solved layer whose top\n"
     "    lies above the lake's bottom (a number or a raster); those cells are not solved, and the lake connects\n"
     "    to the solved cells beside and below them over lakebed leakance. The stage is the lake's starting stage;\n"
     "    stage, bottom and leakance each take {\"field\": NAME}: the number the property NAME of the lake's own\n"
     "    feature holds, in the model's units. The stage also takes {\"surface\": RASTER}: the raster (the run's bed) read at the cells the\n"
-    "    polygon holds, the elevation more than half of them share within 0.001 m, else the lake refuses. A setting not stated is not in the package. A setting is mf6's own LAK period setting: a number from\n"
+    "    polygon holds, the elevation more than half of them share within 0.001 m, else the lake is skipped and said. A setting not stated is not in the package. A setting is mf6's own LAK period setting: a number from\n"
     "    period 1 or {period from 1: value}; status is ACTIVE, INACTIVE or CONSTANT, a stage keyed by period names\n"
     "    period 1 as the starting stage and is the stage a CONSTANT lake holds, auxiliary is {name: value} of the\n"
     "    LAK_AUXILIARY names. outlets is a list of {to, couttype, rate | invert, width, rough, slope} leaving\n"

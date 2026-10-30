@@ -420,7 +420,7 @@ def hold_lakes(statements: list[Mapping[str, Any]], idomain: Any, *, points: Any
     """``idomain`` as one row per layer with every lake cell zero: a lake's water stands where the aquifer's cell is not solved."""
     rows = layer_rows(idomain, nlay=nlay, ncpl=len(cells))
     for lake in _lakes(statements, points=points, cells=cells, utm_epsg=utm_epsg, nlay=nlay,
-                       frame=frame, active=rows, top=top, botm=botm):
+                       frame=frame, active=rows, top=top, botm=botm)[0]:
         for layer, cell in lake["held"]:
             rows[layer][cell] = 0
     return rows
@@ -445,8 +445,18 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
     import shapely
 
     metres = _metres(frame, "Lakes writes connection lengths")
-    lakes = _lakes(statements, points=points, cells=cells, utm_epsg=utm_epsg, nlay=nlay,
-                   frame=frame, active=active, top=top, botm=botm)
+    lakes, skipped = _lakes(statements, points=points, cells=cells, utm_epsg=utm_epsg, nlay=nlay,
+                            frame=frame, active=active, top=top, botm=botm)
+    if lakes or skipped:
+        from trid3nt_server.inputs.run_notes import journal_note
+
+        journal_note(
+            f"Lakes: {len(lakes)} lake(s) placed" + (
+                f"; {len(skipped)} waterbod{'y' if len(skipped) == 1 else 'ies'} skipped, not lakes of this mesh: "
+                + "; ".join(f"{each['label']} ({each['why']}, {each['cells']} cell centre(s)"
+                            + (f", spread {each['spread']:.3f} m" if each["spread"] is not None else "")
+                            + f", {each['area']:.0f} m2)" for each in skipped) if skipped else "")
+            + "; the lakes exchange water with the aquifer only (no outlets, no inflow).")
     tops, bottoms = _levels(top, botm, nlay=nlay, ncpl=len(cells))
     centres = shapely.centroid(shapely.polygons(
         [[(float(points[v][0]), float(points[v][1])) for v in ring] for ring in cells]))
@@ -754,8 +764,8 @@ def _levels(top: Any, botm: Any, *, nlay: int, ncpl: int) -> tuple[Any, Any]:
 
 
 def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_epsg: int | None,
-           nlay: int, frame: Any, active: Any, top: Any, botm: Any) -> list[dict[str, Any]]:
-    """Every polygon of every statement as a lake: its stated values and the ``(layer, cell)`` pairs it holds."""
+           nlay: int, frame: Any, active: Any, top: Any, botm: Any) -> tuple[list[dict[str, Any]], list[float]]:
+    """Every polygon of every statement as a lake - its stated values and the ``(layer, cell)`` pairs it holds - and the areas (m2) of the polygons holding no cell centre, which are no lake of this mesh."""
     import shapely
     from pyproj import Transformer
     from shapely.geometry import shape as geo
@@ -773,6 +783,7 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
         [[(float(points[v][0]), float(points[v][1])) for v in ring] for ring in cells]))
     tree = shapely.STRtree(centres)
     lakes: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
     owner: dict[tuple[int, int], str] = {}
     for statement in statements:
         first = len(lakes)
@@ -787,14 +798,20 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
                                    error_code="MODFLOW_STRESS_UNSTATED")
             for one in (area.geoms if area.geom_type == "MultiPolygon" else [area]):
                 name = f"lake {len(lakes) + 1}"
+                label = str((properties or {}).get("permanent_identifier") or (properties or {}).get("gnis_name") or name)
                 centred = sorted(int(c) for c in tree.query(one, predicate="contains"))
                 if not centred:
-                    raise ModflowError(
-                        f"Lakes: {name} holds no cell centre of the accepted mesh; state a "
-                        "polygon over cells of it.", error_code="MODFLOW_STRESS_OUTSIDE")
+                    skipped.append({"label": label, "why": "no cell centre", "cells": 0, "spread": None,
+                                    "area": float(one.area)})
+                    continue
                 if (surface := surface_of(values["stage"], label="Lakes stage")) is not None:
-                    values = {**values, "stage": _flat_stage(surface, name=name, placed=centred, points=points, cells=cells,
-                                                              utm_epsg=int(utm_epsg), frame=frame)}
+                    stage, spread = _flat_stage(surface, placed=centred, points=points, cells=cells,
+                                                utm_epsg=int(utm_epsg), frame=frame)
+                    if stage is None:
+                        skipped.append({"label": label, "why": "no majority stage", "cells": len(centred),
+                                        "spread": spread, "area": float(one.area)})
+                        continue
+                    values = {**values, "stage": stage}
                 bottoms = _column(values["bottom"], "bottom", name="Lakes", placed=centred,
                                   points=points, cells=cells, utm_epsg=int(utm_epsg), frame=frame,
                                   dimension="L")
@@ -820,7 +837,7 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
                 raise ModflowError(
                     f"Lakes: {stated} belong to one lake, and this statement's geometry places {len(lakes) - first}; "
                     f"state the {stated} on a statement holding one polygon.", error_code="MODFLOW_STRESS_UNSTATED")
-    return lakes
+    return lakes, skipped
 
 
 # USGS Elevation-Derived Hydrography Data Acquisition Specifications, Vertical Alignment of lake/pond polygons:
@@ -828,9 +845,9 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
 _FLAT_WITHIN_M = 0.001
 
 
-def _flat_stage(surface: Any, *, name: str, placed: list[int], points: Any, cells: Any, utm_epsg: int,
-                frame: Any) -> float:
-    """The elevation more than half of a lake's cell centres share, or the refusal naming the lake, the modal share and the spread."""
+def _flat_stage(surface: Any, *, placed: list[int], points: Any, cells: Any, utm_epsg: int,
+                frame: Any) -> tuple[float | None, float]:
+    """``(the elevation more than half of a lake's cell centres share, spread)``; the stage is None where no elevation is shared by a majority, and the spread is the surface's range over the centres in metres."""
     import numpy as np
 
     metres = _metres(frame, "Lakes stage reads a surface")
@@ -840,14 +857,8 @@ def _flat_stage(surface: Any, *, name: str, placed: list[int], points: Any, cell
     near = np.abs(found[:, None] - found[None, :]) * metres <= _FLAT_WITHIN_M
     counts = near.sum(axis=1)
     best = int(np.argmax(counts))
-    if counts[best] * 2 <= len(found):
-        raise ModflowError(
-            f"Lakes: {name} reads its stage off a surface, and no elevation (within {_FLAT_WITHIN_M} m) is shared by "
-            f"more than half of the {len(found)} cell centre(s) the polygon holds (the most shared is "
-            f"{counts[best] / len(found):.0%}; the surface spans {(found.max() - found.min()) * metres:.3f} m, from "
-            f"{found.min() * metres:.3f} to {found.max() * metres:.3f} m); state the stage as a number or a field.",
-            error_code="MODFLOW_STRESS_UNSTATED")
-    return float(np.median(found[near[best]]))
+    spread = float((found.max() - found.min()) * metres)
+    return (None if counts[best] * 2 <= len(found) else float(np.median(found[near[best]]))), spread
 
 
 def _metres(frame: Any, what: str) -> float:

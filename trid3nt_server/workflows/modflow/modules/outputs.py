@@ -401,7 +401,7 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
     At a data input's site the read takes the site's own coordinates, lands on the cell
     the run solves it in, and with no site or a site off the grid composes nothing.
     On a multi-layer run a well's published depth picks its layer; a well publishing
-    no depth, or one reaching below the model base, is left out and said."""
+    no depth, one reaching below the model base, or one in a cell inactive at every saved time, is left out and said."""
     import numpy as np
 
     plane, point, cell = primitive.plane, None, None
@@ -432,6 +432,11 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
         cell = point_cell(point, label="series point", points=solved.nodes[0],
                           cells=solved.nodes[1], utm_epsg=solved.utm_epsg)
     column = values[:, cell]
+    if data_site and not np.isfinite(column).any():
+        site = primitive.at.site_id or primitive.at.site_name or "an unnamed site"
+        raise OutputEmpty(
+            f"the site {site}'s cell is inactive in layer {layer} at every saved time (a lake holds it, or the run "
+            "does not solve it); the site is left out rather than read where the model holds no value.")
     if not data_site and not np.isfinite(column).any():
         raise OutputEmpty(
             f"the cell holding the point is dry or inactive in layer {layer} at every saved time.")

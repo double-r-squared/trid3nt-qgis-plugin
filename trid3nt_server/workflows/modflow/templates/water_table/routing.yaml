@@ -6,7 +6,7 @@ routing: 'THE tool for "where does the water table stand", "groundwater heads un
   - a basin drawn or supplied as `domain` - one unconfined layer whose top is the land surface
   (`bed`), stated by `saturated_thickness`, `transmissivity` and a starting `water_table_depth`, fed by
   `recharge` over the whole domain and drained along `streams` at the land surface through
-  `drain_conductance`; each unstated is fetched. Lengths in metres, time in days. State `well`
+  `drain_conductance`, and lakes; each unstated is fetched. Lengths in metres, time in days. State `well`
   and `well_rate` together to pump.'
 not_for: surface-water flooding, a river plume or a lake circulation (the TELEMAC templates);
   contaminant transport in groundwater; a transient drawdown test

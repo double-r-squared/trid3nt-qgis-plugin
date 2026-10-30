@@ -351,3 +351,12 @@ def test_a_well_with_no_depth_or_one_below_the_base_is_left_out_and_said(solved,
     with pytest.raises(P.OutputEmpty) as caught:
         GWF.READS["series"](P.series("HEAD", at=_deep_well(depth)), solved())
     assert said in str(caught.value) and "USGS-1" in str(caught.value)
+
+
+def test_a_well_whose_cell_is_inactive_at_every_saved_time_is_left_out_and_named(solved):
+    lon, lat = _TO_LONLAT(13.5, 16.5)
+    inactive = Observation(value=3.0, units="m", site_id="USGS-LAKE", lon=lon, lat=lat,
+                           quantity="groundwater_head", datum="NAVD88", sampled="2024-06-11T00:00:00Z")
+    with pytest.raises(P.OutputEmpty) as caught:
+        GWF.READS["series"](P.series("HEAD", at=inactive, plane=1), solved())
+    assert "USGS-LAKE" in str(caught.value) and "inactive" in str(caught.value) and "left out" in str(caught.value)

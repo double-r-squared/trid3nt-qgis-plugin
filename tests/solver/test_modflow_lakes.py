@@ -158,23 +158,39 @@ def test_a_drawn_down_reservoir_with_a_two_thirds_majority_at_the_water_level_is
     assert _place([_statement(_box(1.0, 11.0, 29.0, 29.0), **pool)])[0][0][1] == pytest.approx(254.75)
 
 
-def test_a_stage_with_no_majority_refuses_naming_the_lake_the_share_and_the_spread(tmp_path):
+def test_a_stage_with_no_majority_is_skipped_and_the_journal_names_the_lake_its_cells_and_the_spread(
+        tmp_path, monkeypatch):
+    notes = []
+    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
     ragged = _surface(tmp_path, [254.75, 257.0, 260.0])
-    with pytest.raises(ModflowError) as caught:
-        _place([_statement(_MIDDLE_ROW, stage={"surface": ragged})])
-    text = str(caught.value)
-    assert "lake 1" in text and "33%" in text and "5.250 m" in text
+
+    packagedata, _, _ = _place([_statement(_MIDDLE_ROW, stage={"surface": ragged})])
+
+    assert packagedata == []
+    assert len(notes) == 1
+    assert "lake 1" in notes[0] and "no majority stage" in notes[0] and "3 cell centre(s)" in notes[0]
+    assert "spread 5.250 m" in notes[0]
 
 
 def test_exactly_half_is_no_majority(tmp_path):
-    with pytest.raises(ModflowError):
-        _place([_statement(_box(1.0, 11.0, 19.0, 19.0), stage={"surface": _surface(tmp_path, [7.5, 9.0, 9.0])})])
+    flat = _surface(tmp_path, [7.5, 9.0, 9.0])
+    assert _place([_statement(_box(1.0, 11.0, 19.0, 19.0), stage={"surface": flat})])[0] == []
 
 
 def test_the_mode_counts_centres_within_the_tolerance_as_one_and_a_centre_over_it_apart_does_not(tmp_path):
     assert _place([_statement(_MIDDLE_ROW, stage={"surface": _surface(tmp_path, [7.5, 7.5005, 7.5])})])[0][0][1] == 7.5
-    with pytest.raises(ModflowError):
-        _place([_statement(_MIDDLE_ROW, stage={"surface": _surface(tmp_path, [7.5, 7.502, 7.504])})])
+    assert _place([_statement(_MIDDLE_ROW, stage={"surface": _surface(tmp_path, [7.5, 7.502, 7.504])})])[0] == []
+
+
+def test_both_kinds_of_skipped_waterbody_are_counted_in_one_note(tmp_path, monkeypatch):
+    notes = []
+    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
+    ragged = _surface(tmp_path, [254.75, 257.0, 260.0])
+
+    _place([_statement(_box(11.0, 11.0, 14.0, 14.0)), _statement(_MIDDLE_ROW, stage={"surface": ragged})])
+
+    assert len(notes) == 1 and "2 waterbodies skipped" in notes[0]
+    assert "no cell centre" in notes[0] and "no majority stage" in notes[0]
 
 
 def test_a_stage_surface_read_in_feet_is_converted_onto_the_model_s_length_unit(tmp_path):
@@ -226,10 +242,17 @@ def test_a_length_unit_the_run_does_not_state_refuses():
 # ---- Part B: what refuses --------------------------------------------------
 
 
-def test_a_polygon_holding_no_cell_centre_refuses_naming_the_lake():
-    with pytest.raises(ModflowError) as caught:
-        _place([_statement(_box(11.0, 11.0, 14.0, 14.0))])
-    assert "lake 1" in str(caught.value) and "no cell centre" in str(caught.value)
+def test_a_polygon_holding_no_cell_centre_is_skipped_and_the_journal_says_how_many_and_how_much(monkeypatch):
+    notes = []
+    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
+    small = _box(11.0, 11.0, 14.0, 14.0)
+
+    packagedata, connectiondata, _ = _place([_statement(small), _statement(_CENTRE), _statement(small)])
+
+    assert packagedata == [[0, 12.0, 4]] and len(connectiondata) == 4
+    assert len(notes) == 1
+    assert "1 lake(s) placed" in notes[0] and "2 waterbodies" in notes[0] and "no cell centre" in notes[0]
+    assert "aquifer only" in notes[0]
 
 
 def test_a_lake_bottom_above_every_layer_top_refuses():
@@ -263,10 +286,9 @@ def test_a_line_is_no_lake():
         _place([_statement(line)])
 
 
-def test_a_lake_off_the_mesh_refuses():
-    with pytest.raises(ModflowError) as caught:
-        _place([_statement(_box(100.0, 100.0, 120.0, 120.0))])
-    assert "no cell centre" in str(caught.value)
+def test_a_lake_off_the_mesh_is_skipped():
+    packagedata, connectiondata, _ = _place([_statement(_box(100.0, 100.0, 120.0, 120.0))])
+    assert packagedata == [] and connectiondata == []
 
 
 # ---- Part B: the lake cells leave the aquifer ------------------------------
@@ -330,6 +352,12 @@ def test_a_stage_read_off_a_surface_passes_through_the_composite_unread(tmp_path
     assert sheet.filled["LAK_PACKAGEDATA"].value["lakes"][0]["values"]["stage"] == {"surface": surface}
 
 
+def test_a_stage_surface_names_an_input_of_the_run_and_reads_it(tmp_path):
+    surface = _surface(tmp_path, [7.5, 7.5, 7.5])
+    sheet = _fill({"Lakes": {"geometry": "where", **_VALUES, "stage": {"surface": "bed"}}}, where=_CENTRE, bed=surface)
+    assert sheet.filled["LAK_PACKAGEDATA"].value["lakes"][0]["values"]["stage"] == {"surface": surface}
+
+
 def test_a_stage_surface_beside_other_keys_refuses():
     with pytest.raises(ModflowError):
         _fill({"Lakes": {"geometry": "where", **_VALUES, "stage": {"surface": "bed", "field": "x"}}}, where=_CENTRE)
@@ -389,6 +417,33 @@ def _rundir(sheet, mesh, tmp_path):
     rundir.mkdir(exist_ok=True)
     shutil.copy(out["disv"], rundir / "mesh.disv")
     return rundir
+
+
+def test_a_drain_line_crossing_a_lake_places_no_row_in_the_lake_cell_and_mf6_validates(staged_beside, tmp_path):
+    mesh = _mesh(tmp_path)
+    line = {"type": "LineString", "coordinates": [list(_TO_LONLAT(1.0, 15.0)), list(_TO_LONLAT(29.0, 15.0))]}
+    sheet = _fill({"Lakes": {"geometry": "where", **_VALUES},
+                   "Drains": {"geometry": "line", "layer": 1, "elevation": 9.0, "conductance": 5.0}},
+                  where=_CENTRE, line=line)
+    rundir = _rundir(sheet, mesh, tmp_path)
+
+    written = serialize(sheet, rundir, mesh)["written"]
+
+    assert "gwf.drn" in written and "gwf.lak" in written
+    rows = (rundir / "gwf.drn").read_text().split("BEGIN period", 1)[1].split("END period", 1)[0].split("\n")[1:]
+    assert [row.split()[:2] for row in rows if row.strip()] == [["1", "4"], ["1", "6"]]
+    assert validate_authored_simulation(rundir) == {"rc": 0}
+
+
+def test_lakes_that_all_hold_no_cell_centre_write_no_lak_package(staged_beside, tmp_path):
+    mesh = _mesh(tmp_path)
+    sheet = _fill({"Lakes": {"geometry": "where", **_VALUES}}, where=_box(11.0, 11.0, 14.0, 14.0))
+    rundir = _rundir(sheet, mesh, tmp_path)
+
+    written = serialize(sheet, rundir, mesh)["written"]
+
+    assert "gwf.lak" not in written
+    assert validate_authored_simulation(rundir) == {"rc": 0}
 
 
 def test_lakes_write_the_lak_package_the_disv_holds_the_lake_cell_inactive_and_mf6_validates(
