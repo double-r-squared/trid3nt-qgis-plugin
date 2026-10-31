@@ -18,7 +18,7 @@ from trid3nt_server.workflows.runtime.module import Slot
 
 from ..errors import ModflowError
 
-__all__ = ["METRES", "SECONDS", "field_name", "field_value", "frame_of", "needs_botm", "needs_top", "place", "sample", "surface_of"]
+__all__ = ["METRES", "SECONDS", "field_name", "field_value", "frame_of", "needs_botm", "needs_top", "place", "sample", "surface_of", "surface_pixels"]
 
 # mf6 reads a year as 365.25 days.
 SECONDS = {"seconds": 1.0, "minutes": 60.0, "hours": 3600.0, "days": 86400.0,
@@ -230,6 +230,44 @@ def sample(artifact: Any, *, label: str, name: str, scratch: str, points: Any,
     found = _at(values, transform=transform, xs=xs, ys=ys, label=label, name=name,
                 unmeasured=unmeasured)
     return found if factor == 1.0 else [item * factor for item in found]
+
+
+def surface_pixels(artifact: Any, *, label: str, name: str, scratch: str, utm_epsg: int, frame: Any) -> Any:
+    """A raster artifact read once -> ``pixels(polygon)``: the values (model length) and the count of the raster's own pixels whose centres lie inside a UTM polygon, nodata pixels counted but not valued."""
+    import numpy as np
+    from rasterio.features import geometry_mask
+    from rasterio.windows import Window, from_bounds, transform as window_transform
+    from pyproj import Transformer
+    from shapely.ops import transform as reproject
+
+    from trid3nt_server.inputs.bed import Bed
+    from trid3nt_server.tools.derive._raster_layers import read, staged
+
+    if isinstance(artifact, Bed):
+        if artifact.is_depth:
+            flat = -float(artifact.depth_m) * _factor({"units": "m"}, dimension="L", frame=frame, label=label, name=name)
+            return lambda polygon: ([flat], 1)
+        artifact = artifact.source
+    factor = _factor(artifact, dimension="L", frame=frame, label=label, name=name)
+    values, _provenance, crs, transform = read(staged(artifact, role=name, scratch=scratch))
+    to_raster = (Transformer.from_crs(int(utm_epsg), crs, always_xy=True).transform if crs is not None else None)
+
+    def pixels(polygon: Any) -> tuple[list[float], int]:
+        shape = reproject(to_raster, polygon) if to_raster else polygon
+        window = from_bounds(*shape.bounds, transform=transform)
+        row0, col0 = max(int(np.floor(window.row_off)), 0), max(int(np.floor(window.col_off)), 0)
+        row1 = min(int(np.ceil(window.row_off + window.height)), values.shape[0])
+        col1 = min(int(np.ceil(window.col_off + window.width)), values.shape[1])
+        if row1 <= row0 or col1 <= col0:
+            return [], 0
+        cut = Window(col0, row0, col1 - col0, row1 - row0)
+        inside = geometry_mask([shape], out_shape=(row1 - row0, col1 - col0), transform=window_transform(cut, transform),
+                               invert=True, all_touched=False)
+        found = values[row0:row1, col0:col1][inside].astype("float64")
+        measured = found[np.isfinite(found)]
+        return [float(item) * factor for item in measured], int(found.size)
+
+    return pixels
 
 
 def _factor(artifact: Any, *, dimension: str, frame: Any, label: str, name: str) -> float:

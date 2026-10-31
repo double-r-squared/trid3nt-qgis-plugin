@@ -15,7 +15,7 @@ from trid3nt_server.inputs.geometry import flatten_features
 from trid3nt_server.inputs.point import Point, require_viable
 
 from ..errors import ModflowError
-from .griddata import METRES, field_name, field_value, sample, surface_of
+from .griddata import METRES, field_name, field_value, sample, surface_of, surface_pixels
 
 __all__ = ["GIVERS", "at_cell", "cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "maw_statements",
            "pick", "place", "place_interbeds", "place_lakes", "place_maw", "place_streams", "place_uzf", "point_cell", "uzf_statements"]
@@ -448,15 +448,20 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
     lakes, skipped = _lakes(statements, points=points, cells=cells, utm_epsg=utm_epsg, nlay=nlay,
                             frame=frame, active=active, top=top, botm=botm)
     if lakes or skipped:
-        from trid3nt_server.inputs.run_notes import journal_note
+        from trid3nt_server.inputs.run_notes import cut_coverage, journal_note
 
+        ponds = sum(1 for lake in lakes if lake["embedded"])
         journal_note(
-            f"Lakes: {len(lakes)} lake(s) placed" + (
-                f"; {len(skipped)} waterbod{'y' if len(skipped) == 1 else 'ies'} skipped, not lakes of this mesh: "
-                + "; ".join(f"{each['label']} ({each['why']}, {each['cells']} cell centre(s)"
-                            + (f", spread {each['spread']:.3f} m" if each["spread"] is not None else "")
-                            + f", {each['area']:.0f} m2)" for each in skipped) if skipped else "")
-            + "; the lakes exchange water with the aquifer only (no outlets, no inflow).")
+            f"Lakes: {len(lakes)} lake(s) placed" + (f", {ponds} of them embedded in one cell" if ponds else "")
+            + "; a stage read from the surface is the lake's start stage (the median of the pixels inside its polygon), and LAK solves the level;"
+            + " the lakes exchange water with the aquifer only (no outlets, no inflow)."
+            + (f" {len(skipped)} waterbod{'y is' if len(skipped) == 1 else 'ies are'} smaller than this mesh resolves and"
+               f" {'is' if len(skipped) == 1 else 'are'} not captured; a mesh refined toward the waterbodies layer captures them."
+               if skipped else ""))
+        if ponds:
+            cut_coverage(f"Lakes: {ponds} pond(s) smaller than a cell are embedded in the cell they overlap most, "
+                         "straight-sided (ASSUMPTION: the polygon's measured area at every stage, exchanging through "
+                         "its bed with the cell's vertical conductivity).")
     tops, bottoms = _levels(top, botm, nlay=nlay, ncpl=len(cells))
     centres = shapely.centroid(shapely.polygons(
         [[(float(points[v][0]), float(points[v][1])) for v in ring] for ring in cells]))
@@ -472,6 +477,11 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
     packagedata, connectiondata, found, outlets = [], [], [], []
     for number, lake in enumerate(lakes):
         rows = []
+        if lake["embedded"]:
+            layer, cell = lake["embedded"]
+            # Half the cell's thickness is the length mf6 gives a vertical connection.
+            rows.append([number, 0, (layer, cell), "embeddedv", lake["leakance"], 0.0, 0.0,
+                         0.5 * float(tops[layer][cell] - bottoms[layer][cell]), 0.0])
         for layer, cell in lake["held"]:
             beside = []
             for a, b in zip(cells[cell], list(cells[cell][1:]) + [cells[cell][0]]):
@@ -502,7 +512,7 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
     features = []
     for number, lake in enumerate(lakes):
         features.append({"package": "LAK", "name": lake["given"], "number": number,
-                         "cells": {cell for _, cell in lake["held"]}, "table": lake["table"], "properties": lake["properties"],
+                         "cells": {cell for _, cell in lake["held"]} or {lake["embedded"][1]}, "table": lake["table"], "properties": lake["properties"],
                          "outlets": list(range(len(outlets), len(outlets) + len(lake["outlets"])))})
         for outlet in lake["outlets"]:
             outletno = len(outlets)
@@ -764,8 +774,9 @@ def _levels(top: Any, botm: Any, *, nlay: int, ncpl: int) -> tuple[Any, Any]:
 
 
 def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_epsg: int | None,
-           nlay: int, frame: Any, active: Any, top: Any, botm: Any) -> tuple[list[dict[str, Any]], list[float]]:
-    """Every polygon of every statement as a lake - its stated values and the ``(layer, cell)`` pairs it holds - and the areas (m2) of the polygons holding no cell centre, which are no lake of this mesh."""
+           nlay: int, frame: Any, active: Any, top: Any, botm: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Every polygon of every statement as a lake - its stated values and the ``(layer, cell)`` pairs it holds, or for a polygon holding no cell centre the one ``embedded`` cell it connects to - and the polygons left out with the reason."""
+    import numpy as np
     import shapely
     from pyproj import Transformer
     from shapely.geometry import shape as geo
@@ -777,14 +788,14 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
         raise ModflowError(
             "Lakes places by geometry, and this run has no accepted mesh "
             "with a projected zone to place it on.", error_code="MODFLOW_STRESS_OUTSIDE")
-    tops, _ = _levels(top, botm, nlay=nlay, ncpl=len(cells))
+    tops, bottoms = _levels(top, botm, nlay=nlay, ncpl=len(cells))
     to_utm = Transformer.from_crs(4326, int(utm_epsg), always_xy=True).transform
-    centres = shapely.centroid(shapely.polygons(
-        [[(float(points[v][0]), float(points[v][1])) for v in ring] for ring in cells]))
-    tree = shapely.STRtree(centres)
+    polygons = shapely.polygons([[(float(points[v][0]), float(points[v][1])) for v in ring] for ring in cells])
+    tree = shapely.STRtree(shapely.centroid(polygons))
     lakes: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     owner: dict[tuple[int, int], str] = {}
+    readers: dict[int, Any] = {}
     for statement in statements:
         first = len(lakes)
         for number, (part, properties) in enumerate(
@@ -799,23 +810,35 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
             for one in (area.geoms if area.geom_type == "MultiPolygon" else [area]):
                 name = f"lake {len(lakes) + 1}"
                 label = str((properties or {}).get("permanent_identifier") or (properties or {}).get("gnis_name") or name)
-                centred = sorted(int(c) for c in tree.query(one, predicate="contains"))
-                if not centred:
-                    skipped.append({"label": label, "why": "no cell centre", "cells": 0, "spread": None,
-                                    "area": float(one.area)})
-                    continue
                 if (surface := surface_of(values["stage"], label="Lakes stage")) is not None:
-                    stage, spread = _flat_stage(surface, placed=centred, points=points, cells=cells,
-                                                utm_epsg=int(utm_epsg), frame=frame)
+                    if id(surface) not in readers:
+                        with tempfile.TemporaryDirectory(prefix="trid3nt_stress_") as work:
+                            readers[id(surface)] = surface_pixels(surface, label="Lakes stage", name="stage", scratch=work,
+                                                                  utm_epsg=int(utm_epsg), frame=frame)
+                    found, count = readers[id(surface)](one)
+                    if _is_constant(values.get("status")):
+                        stage, spread = _flat_stage(found, count, frame=frame)
+                    else:
+                        stage, spread = (float(np.median(found)) if found else None), None
                     if stage is None:
-                        skipped.append({"label": label, "why": "no majority stage", "cells": len(centred),
-                                        "spread": spread, "area": float(one.area)})
+                        why = ("no DEM pixel centre" if not count else
+                               "no DEM pixel measured" if spread is None and found == [] else "no majority stage")
+                        skipped.append({"label": label, "why": why, "count": count, "spread": spread,
+                                        "area": float(one.area)})
                         continue
                     values = {**values, "stage": stage}
-                bottoms = _column(values["bottom"], "bottom", name="Lakes", placed=centred,
-                                  points=points, cells=cells, utm_epsg=int(utm_epsg), frame=frame,
-                                  dimension="L")
-                held = [(layer, cell) for cell, low in zip(centred, bottoms) for layer in range(nlay)
+                entry = {"name": name, "held": [], "embedded": None, "stage": values["stage"], "properties": properties,
+                         "leakance": values["leakance"], "values": values, "given": statement.get("name"),
+                         "outlets": statement.get("outlets") or [], "table": statement.get("table"), "polygon": one,
+                         "label": label}
+                centred = sorted(int(c) for c in tree.query(one, predicate="contains"))
+                if not centred:
+                    lakes.append(entry)
+                    continue
+                bottoms_at = _column(values["bottom"], "bottom", name="Lakes", placed=centred,
+                                     points=points, cells=cells, utm_epsg=int(utm_epsg), frame=frame,
+                                     dimension="L")
+                held = [(layer, cell) for cell, low in zip(centred, bottoms_at) for layer in range(nlay)
                         if (active is None or active[layer][cell] > 0) and tops[layer][cell] > low]
                 if not held:
                     raise ModflowError(
@@ -829,36 +852,88 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
                             f"{item[0] + 1}; a cell belongs to one lake.",
                             error_code="MODFLOW_STRESS_OUTSIDE")
                     owner[item] = name
-                lakes.append({"name": name, "held": sorted(held), "stage": values["stage"], "properties": properties,
-                              "leakance": values["leakance"], "values": values, "given": statement.get("name"),
-                              "outlets": statement.get("outlets") or [], "table": statement.get("table")})
+                lakes.append({**entry, "held": sorted(held)})
         for stated in ("outlets", "table"):
             if statement.get(stated) and len(lakes) - first != 1:
                 raise ModflowError(
                     f"Lakes: {stated} belong to one lake, and this statement's geometry places {len(lakes) - first}; "
                     f"state the {stated} on a statement holding one polygon.", error_code="MODFLOW_STRESS_UNSTATED")
+    _embed([lake for lake in lakes if not lake["held"]], lakes, skipped, owner=owner, polygons=polygons, points=points,
+           cells=cells, utm_epsg=int(utm_epsg), nlay=nlay, frame=frame, active=active, tops=tops)
     return lakes, skipped
 
 
+def _embed(ponds: list[dict[str, Any]], lakes: list[dict[str, Any]], skipped: list[dict[str, Any]], *, owner: Mapping[Any, str],
+           polygons: Any, points: Any, cells: Any, utm_epsg: int, nlay: int, frame: Any, active: Any, tops: Any) -> None:
+    """Connect each pond (a polygon holding no cell centre) to the one cell its whole polygon lies in, with the straight-sided table of its measured area; one that cannot is dropped from ``lakes`` and named in ``skipped``."""
+    import shapely
+
+    metres = _metres(frame, "Lakes embeds ponds")
+    tree = shapely.STRtree(polygons)
+    # mf6 refuses an embedded lake in a cell another lake connects to vertically, and a held cell has one below it.
+    lake_cells = {cell: name for (_, cell), name in owner.items()}
+    for pond in ponds:
+        one = pond["polygon"]
+        # A pond is embedded only where its whole polygon lies in the one cell; one crossing cells or leaving the mesh is not placed.
+        inside = sorted(int(c) for c in tree.query(one, predicate="within"))
+        cell = inside[0] if inside else None
+        why, layer = None, None
+        if cell is None:
+            why = "its polygon is not inside one cell"
+        elif cell in lake_cells:
+            why = f"the cell it lies in is held by {lake_cells[cell]}"
+        elif not any(active is None or active[each][cell] > 0 for each in range(nlay)):
+            why = "the cell it lies in is not solved"
+        else:
+            low = _column(pond["values"]["bottom"], "bottom", name="Lakes", placed=[cell], points=points, cells=cells,
+                          utm_epsg=utm_epsg, frame=frame, dimension="L")[0]
+            layer = next((each for each in range(nlay)
+                          if (active is None or active[each][cell] > 0) and tops[each][cell] > low), None)
+            if layer is None:
+                raise ModflowError(
+                    f"Lakes: {pond['name']} embeds in cell {cell}, and no solved layer there has a top above the "
+                    "lake's bottom.", error_code="MODFLOW_STRESS_OUTSIDE")
+        if why is not None:
+            lakes.remove(pond)
+            skipped.append({"label": pond["label"], "why": why, "count": 0, "spread": None, "area": float(one.area)})
+            continue
+        start = _timed(pond["stage"])[0]
+        if not start > low:
+            raise ModflowError(
+                f"Lakes: {pond['name']} stands at {start} and its bottom is {low}; a lake's stage lies above its bottom.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+        extent = float(one.area) / metres ** 2
+        pond["embedded"] = (layer, cell)
+        if pond["table"] is None:
+            pond["table"] = [[low, 0.0, extent, extent], [start, extent * (start - low), extent, extent]]
+
+
+def _is_constant(status: Any) -> bool:
+    """Whether a lake's stated status (a word, or period-keyed words) is CONSTANT in any period."""
+    states = _timed(status).values() if status is not None else ()
+    return any(str(item).strip().lower() == "constant" for item in states)
+
+
 # USGS Elevation-Derived Hydrography Data Acquisition Specifications, Vertical Alignment of lake/pond polygons:
-# a water body's z-values match its hydro-flattened surface within 0.001 m; a centre at the mode is within it.
+# a water body's z-values match its hydro-flattened surface within 0.001 m; a pixel at the mode is within it.
 _FLAT_WITHIN_M = 0.001
 
 
-def _flat_stage(surface: Any, *, placed: list[int], points: Any, cells: Any, utm_epsg: int,
-                frame: Any) -> tuple[float | None, float]:
-    """``(the elevation more than half of a lake's cell centres share, spread)``; the stage is None where no elevation is shared by a majority, and the spread is the surface's range over the centres in metres."""
+def _flat_stage(found: list[float], count: int, *, frame: Any) -> tuple[float | None, float | None]:
+    """``(the elevation more than half of a lake's ``count`` pixels share, spread)``; the stage is None where no elevation is shared by a majority, and the spread is the range of the ``found`` values in metres, None where none was measured."""
     import numpy as np
 
+    if not found:
+        return None, None
     metres = _metres(frame, "Lakes stage reads a surface")
-    found = np.asarray(_column(surface, "stage", name="Lakes", placed=placed, points=points,
-                               cells=cells, utm_epsg=utm_epsg, frame=frame, dimension="L"), dtype=float)
-    # Islands and banks inside a polygon sit above the flattened water, so the water is the mode, not every centre.
-    near = np.abs(found[:, None] - found[None, :]) * metres <= _FLAT_WITHIN_M
-    counts = near.sum(axis=1)
-    best = int(np.argmax(counts))
-    spread = float((found.max() - found.min()) * metres)
-    return (None if counts[best] * 2 <= len(found) else float(np.median(found[near[best]]))), spread
+    # Islands and banks inside a polygon sit above the flattened water, so the water is the mode, not every pixel.
+    ordered = np.sort(np.asarray(found, dtype=float))
+    within = _FLAT_WITHIN_M / metres
+    low = np.searchsorted(ordered, ordered - within, side="left")
+    high = np.searchsorted(ordered, ordered + within, side="right")
+    best = int(np.argmax(high - low))
+    spread = float((ordered[-1] - ordered[0]) * metres)
+    return (None if (high - low)[best] * 2 <= count else float(np.median(ordered[low[best]:high[best]]))), spread
 
 
 def _metres(frame: Any, what: str) -> float:

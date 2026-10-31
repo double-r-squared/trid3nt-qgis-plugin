@@ -158,39 +158,58 @@ def test_a_drawn_down_reservoir_with_a_two_thirds_majority_at_the_water_level_is
     assert _place([_statement(_box(1.0, 11.0, 29.0, 29.0), **pool)])[0][0][1] == pytest.approx(254.75)
 
 
-def test_a_stage_with_no_majority_is_skipped_and_the_journal_names_the_lake_its_cells_and_the_spread(
-        tmp_path, monkeypatch):
-    notes = []
-    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
+def _constant(geometry, surface, **over):
+    return _statement(geometry, stage={"surface": surface}, status="CONSTANT", **over)
+
+
+def test_a_lake_with_no_flat_surface_starts_at_the_median_of_the_pixels_inside_it_and_is_not_skipped(tmp_path):
     ragged = _surface(tmp_path, [254.75, 257.0, 260.0])
 
     packagedata, _, _ = _place([_statement(_MIDDLE_ROW, stage={"surface": ragged})])
 
-    assert packagedata == []
-    assert len(notes) == 1
-    assert "lake 1" in notes[0] and "no majority stage" in notes[0] and "3 cell centre(s)" in notes[0]
-    assert "spread 5.250 m" in notes[0]
+    assert packagedata[0][1] == 257.0
 
 
-def test_exactly_half_is_no_majority(tmp_path):
-    flat = _surface(tmp_path, [7.5, 9.0, 9.0])
-    assert _place([_statement(_box(1.0, 11.0, 19.0, 19.0), stage={"surface": flat})])[0] == []
-
-
-def test_the_mode_counts_centres_within_the_tolerance_as_one_and_a_centre_over_it_apart_does_not(tmp_path):
-    assert _place([_statement(_MIDDLE_ROW, stage={"surface": _surface(tmp_path, [7.5, 7.5005, 7.5])})])[0][0][1] == 7.5
-    assert _place([_statement(_MIDDLE_ROW, stage={"surface": _surface(tmp_path, [7.5, 7.502, 7.504])})])[0] == []
-
-
-def test_both_kinds_of_skipped_waterbody_are_counted_in_one_note(tmp_path, monkeypatch):
+def test_a_constant_lake_with_no_majority_is_skipped_and_the_one_line_note_counts_it(tmp_path, monkeypatch):
     notes = []
     monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
     ragged = _surface(tmp_path, [254.75, 257.0, 260.0])
 
-    _place([_statement(_box(11.0, 11.0, 14.0, 14.0)), _statement(_MIDDLE_ROW, stage={"surface": ragged})])
+    packagedata, _, _ = _place([_constant(_MIDDLE_ROW, ragged)])
 
-    assert len(notes) == 1 and "2 waterbodies skipped" in notes[0]
-    assert "no cell centre" in notes[0] and "no majority stage" in notes[0]
+    assert packagedata == []
+    assert len(notes) == 1 and "\n" not in notes[0]
+    assert "1 waterbody is smaller than this mesh resolves and is not captured" in notes[0]
+    assert "a mesh refined toward the waterbodies layer captures them" in notes[0]
+    assert "lake 1" not in notes[0] and "m2" not in notes[0] and "spread" not in notes[0]
+
+
+def test_a_constant_lake_with_exactly_half_at_one_level_is_skipped(tmp_path):
+    flat = _surface(tmp_path, [7.5, 9.0, 9.0])
+    assert _place([_constant(_box(1.0, 11.0, 19.0, 19.0), flat)])[0] == []
+
+
+def test_a_constant_lake_counts_pixels_within_the_tolerance_as_one_and_a_pixel_over_it_apart_does_not(tmp_path):
+    assert _place([_constant(_MIDDLE_ROW, _surface(tmp_path, [7.5, 7.5005, 7.5]))])[0][0][1] == 7.5
+    assert _place([_constant(_MIDDLE_ROW, _surface(tmp_path, [7.5, 7.502, 7.504]))])[0] == []
+
+
+def test_the_skipped_waterbodies_are_counted_in_one_line_with_no_id_area_or_reason(tmp_path, monkeypatch):
+    notes = []
+    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
+    ragged = _surface(tmp_path, [254.75, 257.0, 260.0])
+
+    _place([_constant(_box(11.0, 11.0, 14.0, 14.0), ragged), _constant(_MIDDLE_ROW, ragged)])
+
+    assert len(notes) == 1 and "2 waterbodies are smaller than this mesh resolves and are not captured" in notes[0]
+    assert "no DEM" not in notes[0] and "pixel" not in notes[0].split("; ")[-1]
+
+
+def test_the_journal_calls_a_stage_read_from_the_surface_the_start_stage(tmp_path, monkeypatch):
+    notes = []
+    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
+    _place([_statement(_MIDDLE_ROW, stage={"surface": _surface(tmp_path, [7.5, 7.5, 7.5])})])
+    assert "start stage" in notes[0]
 
 
 def test_a_stage_surface_read_in_feet_is_converted_onto_the_model_s_length_unit(tmp_path):
@@ -242,17 +261,98 @@ def test_a_length_unit_the_run_does_not_state_refuses():
 # ---- Part B: what refuses --------------------------------------------------
 
 
-def test_a_polygon_holding_no_cell_centre_is_skipped_and_the_journal_says_how_many_and_how_much(monkeypatch):
+def test_a_pond_inside_a_lake_cell_is_not_captured_and_the_note_counts_it(monkeypatch):
     notes = []
     monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
-    small = _box(11.0, 11.0, 14.0, 14.0)
+    inside_the_lake_cell = _box(12.0, 12.0, 14.0, 14.0)
 
-    packagedata, connectiondata, _ = _place([_statement(small), _statement(_CENTRE), _statement(small)])
+    packagedata, connectiondata, _ = _place([_statement(inside_the_lake_cell), _statement(_CENTRE)])
 
     assert packagedata == [[0, 12.0, 4]] and len(connectiondata) == 4
     assert len(notes) == 1
-    assert "1 lake(s) placed" in notes[0] and "2 waterbodies" in notes[0] and "no cell centre" in notes[0]
-    assert "aquifer only" in notes[0]
+    assert "1 lake(s) placed" in notes[0] and "2 waterbodies" not in notes[0]
+    assert "1 waterbody is smaller than this mesh resolves" in notes[0] and "aquifer only" in notes[0]
+
+
+_POND = _box(2.0, 1.0, 8.0, 4.0)
+_STRADDLE = _box(7.0, 1.0, 17.0, 4.0)
+
+
+def _features(statements, grid=_ONE_LAYER, **over):
+    return place_lakes(statements, points=_POINTS, cells=_CELLS, utm_epsg=32617, nlay=1,
+                       frame=("meters", "days"), **grid, **over)
+
+
+def test_a_pond_wholly_inside_one_cell_is_embedded_in_it(monkeypatch):
+    notes, covered = [], []
+    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
+    monkeypatch.setattr("trid3nt_server.inputs.run_notes.cut_coverage", covered.append)
+
+    packagedata, connectiondata, _, _, features = _features([_statement(_POND)])
+
+    assert packagedata == [[0, 12.0, 1]]
+    assert connectiondata == [[0, 0, (0, 0), "embeddedv", 0.1, 0.0, 0.0, 5.0, 0.0]]
+    area = 6.0 * 3.0
+    (low, v0, a0, b0), (high, v1, a1, b1) = features[0]["table"]
+    assert (low, v0, high) == (0.0, 0.0, 12.0)
+    assert a0 == b0 == a1 == b1 == pytest.approx(area, rel=1e-3) and v1 == pytest.approx(12.0 * area, rel=1e-3)
+    assert features[0]["cells"] == {0}
+    assert "1 of them embedded" in notes[0]
+    assert len(covered) == 1 and "straight-sided" in covered[0] and "ASSUMPTION" in covered[0]
+
+
+def test_a_polygon_crossing_cells_that_holds_no_cell_centre_is_not_placed():
+    assert _features([_statement(_STRADDLE)])[0] == []
+
+
+def test_a_polygon_partly_off_the_mesh_is_not_placed():
+    assert _features([_statement(_box(-5.0, 1.0, 4.0, 4.0))])[0] == []
+
+
+def test_an_embedded_pond_holds_no_cell_of_the_idomain():
+    rows = hold_lakes([_statement(_POND)], None, points=_POINTS, cells=_CELLS, utm_epsg=32617,
+                      nlay=1, frame=("meters", "days"), **_ONE_LAYER)
+    assert rows == [[1] * _N]
+
+
+def test_a_pond_stands_above_its_bottom_or_refuses():
+    with pytest.raises(ModflowError) as caught:
+        _features([_statement(_POND, stage=5.0, bottom=9.0)])
+    assert "lake 1" in str(caught.value) and "above its bottom" in str(caught.value)
+
+
+def _raster(tmp_path, grid, pixel):
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    path = tmp_path / "fine.tif"
+    grid = np.asarray(grid, dtype="float32")
+    with rasterio.open(path, "w", driver="GTiff", height=grid.shape[0], width=grid.shape[1], count=1, dtype="float32",
+                       crs="EPSG:32617", transform=from_origin(0.0, 30.0, pixel, pixel)) as dst:
+        dst.write(grid, 1)
+    return {"uri": str(path), "units": "m"}
+
+
+def test_a_two_cell_lake_reads_its_stage_off_the_pixels_inside_it_not_the_cell_centres(tmp_path):
+    grid = [[9.0] * 6 for _ in range(6)]
+    for row in (2, 3):              # row 3 is y 10-15, row 2 is y 15-20
+        for col in (1, 2, 3):
+            grid[row][col] = 7.5
+    fine = _raster(tmp_path, grid, 5.0)
+    # pixel centres inside the box: x 2.5 to 17.5 at y 12.5 and 17.5 - eight pixels, six of them water
+    assert _place([_statement(_box(1.0, 11.0, 19.0, 19.0), stage={"surface": fine})])[0][0][1] == 7.5
+
+
+def test_a_pond_smaller_than_a_cell_reads_its_stage_off_the_pixels_inside_it(tmp_path):
+    fine = _raster(tmp_path, [[5.0] * 30 for _ in range(30)], 1.0)
+    packagedata, _, _, _, features = _features([_statement(_POND, stage={"surface": fine})])
+    assert packagedata == [[0, 5.0, 1]] and features[0]["table"][1][0] == 5.0
+
+
+def test_a_pond_with_no_dem_pixel_centre_is_skipped(tmp_path):
+    coarse = _raster(tmp_path, [[5.0] * 3 for _ in range(3)], 10.0)
+    assert _features([_statement(_box(11.0, 11.0, 14.0, 14.0), stage={"surface": coarse})])[0] == []
 
 
 def test_a_lake_bottom_above_every_layer_top_refuses():
@@ -435,14 +535,16 @@ def test_a_drain_line_crossing_a_lake_places_no_row_in_the_lake_cell_and_mf6_val
     assert validate_authored_simulation(rundir) == {"rc": 0}
 
 
-def test_lakes_that_all_hold_no_cell_centre_write_no_lak_package(staged_beside, tmp_path):
+def test_an_embedded_pond_writes_its_lak_package_and_table_and_mf6_validates(staged_beside, tmp_path):
     mesh = _mesh(tmp_path)
-    sheet = _fill({"Lakes": {"geometry": "where", **_VALUES}}, where=_box(11.0, 11.0, 14.0, 14.0))
+    sheet = _fill({"Lakes": {"geometry": "where", **_VALUES}}, where=_POND)
     rundir = _rundir(sheet, mesh, tmp_path)
 
     written = serialize(sheet, rundir, mesh)["written"]
 
-    assert "gwf.lak" not in written
+    assert "gwf.lak" in written
+    assert "EMBEDDEDV" in (rundir / "gwf.lak").read_text().upper()
+    assert any(name.endswith(".tab") for name in written)
     assert validate_authored_simulation(rundir) == {"rc": 0}
 
 

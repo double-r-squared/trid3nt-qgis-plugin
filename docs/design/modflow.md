@@ -154,15 +154,30 @@ connections run by lake cell (layer, cell) and then by neighbour id, which on a 
 is flopy's order, and the same p01 footprint placed as a polygon reproduces the keyword
 deck's heads and stage bitwise. `stage`, `bottom` and `leakance` are stated or the
 composite refuses by name; a `rainfall` or `evaporation` not stated is absent from the
-package. A polygon holding no cell centre is no lake of this mesh: it is skipped, and the run's journal says once how many
-were skipped and their total area. A cell in two lakes and a lake with no solved
-cell beside or below it refuse; a statement whose every polygon is skipped writes no LAK package. `LAK_NLAKES`, `LAK_CONNECTIONDATA` and, beside a stated
+package. A polygon holding no cell centre is placed in one more way: a pond lying WHOLLY inside one cell connects EMBEDDEDV to that
+cell, on the uppermost solved layer whose top lies above `bottom`, with CONNLEN half that cell's thickness (the length mf6
+gives a vertical connection) and a two-row lake table, the straight-sided one:
+`(bottom, 0, A, A)` and `(stage, A x (stage - bottom), A, A)`, A the polygon's measured area on `DISV_LENGTH_UNITS`
+squared (mf6 holds area constant and extends volume by the last area above the last row, so it is exact at every
+stage). EMBEDDEDH is never written: a hydro-flattened pond exchanges through its flat bed, and a wall exchange needs a
+perimeter and depth no dataset gives. The ladder is per cell and holds on any mesh: a lake holding cell centres is lake cells;
+a pond wholly inside one cell is embedded; anything else holding no centre (it crosses cells, or lies partly off the mesh, or its
+cell is held by a lake or not solved) is not placed, and there is no size cutoff above that. A pond holds no cell, so the DISV is
+untouched. The straight-sided table is an ASSUMPTION stated on the run's card and in the journal. A stage not above
+`bottom` refuses. A cell in two lakes and a lake with no solved
+cell beside or below it refuse; a statement whose every polygon is not placed writes no LAK package. `LAK_NLAKES`, `LAK_CONNECTIONDATA` and, beside a stated
 flux, `LAK_PERIODDATA` stated beside `Lakes` refuse. The lake stage is not a read the run
-publishes. `stage` may be `{"surface": RASTER}` (the run's `bed`, or any raster): the stage is the modal elevation of the
-raster at the centres of the cells the polygon holds, centres within 0.001 m (USGS's tolerance for a lake's z-values
-against its hydro-flattened surface) counting as one, provided the mode covers more than half of the centres; the
-median of those centres is taken. Islands and banks inside the polygon are the minority. A lake with no majority is skipped like a polygon holding no cell centre,
-and the one journal note names it, its cell centres and the spread; a cell the raster measures nothing at refuses. A gauge stage is a stated number or a `field`; nothing is fetched for it.
+publishes. `stage` may be `{"surface": RASTER}` (the run's `bed`, or any raster): it is the lake's START stage, the median
+of the finite pixels of the raster whose centres lie inside the polygon, because both templates are steady with the lakes on
+LAK's default status (ACTIVE) and LAK solves the level from its budget; the stated number is only where the solve begins. A lake
+whose `status` is CONSTANT in any period holds its stage, so it keeps the strict flat rule: the stage is the mode of the pixels
+within 0.001 m (USGS's tolerance for a lake's z-values against its hydro-flattened surface) provided the mode covers more
+than half of the pixel centres (a nodata pixel counts against it), else the lake is not placed. A gauge stage is a stated
+number or a `field`; nothing is fetched for it. The journal says one line of counts: the lakes placed and embedded, and
+"N waterbodies are smaller than this mesh resolves and are not captured; a mesh refined toward the waterbodies layer captures
+them" - no ids, areas or spreads reach the model. The user asks for the refinement; nothing refines automatically. ex-gwf-lak-p01
+and p02 hold no embedded lake; one pond authored through `Lakes` equals a flopy-built embedded lake (the same DISV, drain and
+rainfall; heads and the lake stage, max difference 0.0).
 
 MAW is stated by its own dictionary keywords (`MAW_NMAWWELLS`, `MAW_PACKAGEDATA`,
 `MAW_CONNECTIONDATA`, `MAW_PERIODDATA`, the options): ex-gwf-maw-p01, both variants, authored
@@ -569,7 +584,7 @@ converts into it at ingestion or refuses, and the concentration layer carries it
 reservoirs, optional: a place no source covers runs without lakes). The stage is `{"surface": "bed"}`, the flat water
 surface the bed paints inside each polygon; `lake_bottom` (one elevation in metres for every lake) and `lake_leakance`
 (1 per day) are stated inputs with no source, refused by `Lakes` by name when a lake is found and unstated. A waterbody
-smaller than the mesh is skipped and journaled. A lake exchanges water with the aquifer only: no outlets and no
+wholly inside one cell is embedded in it (above); one that cannot be placed is counted in the journal. A lake exchanges water with the aquifer only: no outlets and no
 `WaterMover`, since the streams are Drains (NHDPlus carries no width, so no Streams) and a Drain receives nothing. The
 streams are the NHDPlus flowline network (`of="flowline network"`), each line a drain at the land surface through
 `drain_conductance`. `mark_lake_outlets` publishes the key a lake-to-stream mover pairs on for when a stream has a
