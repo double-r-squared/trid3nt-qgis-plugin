@@ -431,3 +431,16 @@ def test_a_keyword_stated_as_none_is_not_stated_with_or_without_a_module_default
     state = _filled({**_DYE, "keywords": {name: None}})
     assert name not in state.inputs and name not in state.keywords
     assert state.ready == _filled(_DYE).ready
+
+
+def test_a_coverage_line_a_restaged_run_says_again_stands_on_the_card_once():
+    from trid3nt_server.inputs.run_notes import bind_coverage, cut_coverage, drain_coverage, run_coverage
+
+    token = bind_coverage()
+    try:
+        cut_coverage("the cut covers the water")
+        cut_coverage("the cut covers the water")
+        cut_coverage("the cut covers the land")
+        assert run_coverage() == ["the cut covers the water", "the cut covers the land"]
+    finally:
+        drain_coverage(token)

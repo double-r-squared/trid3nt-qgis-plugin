@@ -49,6 +49,9 @@ async def mesh_op(fn: str | None = None, at: int | None = None,
     wavelength_sizing_function, enforce_mesh_gradation, delete_boundary_faces,
     laplacian2, fix_mesh, identify_ocean_boundary_sections; plus set_bed,
     set_boundary_roles. Order matters; duplicates are legal.
+    ``set_region_size(geometry, edge_length_m)`` makes the mesh finer inside every
+    polygon of a layer or a drawn shape, on every mesher (triangle, voronoi and
+    gridgen included): "resolve the lakes", "finer inside this polygon".
 
     Params:
         fn: the function to call. Omit only with remove=True.

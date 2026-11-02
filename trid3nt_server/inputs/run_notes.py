@@ -51,7 +51,8 @@ def cut_coverage(text: str) -> None:
     """State what the cut covers, on the journal AND on the run's own card."""
     journal_note(text)
     covered = _COVERAGE.get()
-    if covered is not None:
+    # A card edit stages the run again, which says the same line again.
+    if covered is not None and str(text) not in covered:
         covered.append(str(text))
 
 

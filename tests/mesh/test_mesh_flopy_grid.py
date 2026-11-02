@@ -641,10 +641,198 @@ def test_the_gridgen_config_words_take_stated_scalars_and_lists():
 
 def test_the_op_names_are_everything_the_box_may_be_asked_to_call():
     assert set(op_names(get_mesher("triangle"))) == {
-        "add_polygon", "add_hole", "add_region", "set_bed",
+        "add_polygon", "add_hole", "add_region", "set_region_size", "set_bed",
         "set_boundary_roles"}
     assert set(op_names(get_mesher("voronoi"))) == set(
         op_names(get_mesher("triangle")))
     assert set(op_names(get_mesher("gridgen"))) == {
-        "add_active_domain", "add_refinement_features", "set_bed",
-        "set_boundary_roles"}
+        "add_active_domain", "add_refinement_features", "set_region_size",
+        "set_bed", "set_boundary_roles"}
+
+
+def test_every_flopy_mesher_answers_to_the_one_refine_word():
+    for mesher in ("triangle", "voronoi", "gridgen"):
+        space, fn = resolve_op(get_mesher(mesher), "set_region_size")
+        assert (space.origin, space.phase) == ("flopy_grid", PRE)
+        assert fn is None
+
+
+def test_a_drawn_refine_region_is_a_recipe_entry_these_meshers_accept():
+    from trid3nt_server.inputs.gate.spatial_roles import parse_drawn_roles
+    from trid3nt_server.tools.mesh.op_tool import drawn_ops
+
+    drawn = parse_drawn_roles({"type": "FeatureCollection", "features": [{
+        "type": "Feature", "geometry": _DOMAIN,
+        "properties": {"role": "refine_region", "target_size_m": 20.0}}]})
+    entries = drawn_ops(drawn)
+    assert [e["fn"] for e in entries] == ["set_region_size"]
+    for mesher in ("triangle", "voronoi", "gridgen"):
+        MeshTool.build_mesh(
+            mesher=mesher, extent=_AOI, resolution_m=60.0,
+            ops=[mesh_op(e["fn"], **e["kwargs"]) for e in entries])
+
+
+def test_a_refine_layer_is_staged_projected_with_its_edge(monkeypatch, tmp_path):
+    sent = _stub(monkeypatch, tmp_path)
+    layer = {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {}, "geometry": _DOMAIN}]}
+    FLOPY.build(_recipe(ops=[mesh_op("set_region_size", geometry=layer,
+                                     edge_length_m=15.0)]))
+    entry, = sent["config"]["ops"]
+    assert entry == {"fn": "set_region_size", "kwargs": {
+        "geometry": "/data/op0_geometry.geojson", "edge_length_m": 15.0}}
+    staged, = tmp_path.rglob("op0_geometry.geojson")
+    easting, northing = json.loads(staged.read_text())[
+        "features"][0]["geometry"]["coordinates"][0][0]
+    assert 100_000 < easting < 900_000 and northing > 3_000_000
+
+
+_RIM = [[0.0, 0.0], [1000.0, 0.0], [1000.0, 1000.0], [0.0, 1000.0]]
+
+
+def _square(x0, y0, side):
+    return [[x0, y0], [x0 + side, y0], [x0 + side, y0 + side], [x0, y0 + side],
+            [x0, y0]]
+
+
+def _layer(tmp_path, *rings, name="layer.geojson"):
+    path = tmp_path / name
+    path.write_text(json.dumps({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {},
+         "geometry": {"type": "Polygon", "coordinates": [ring]}}
+        for ring in rings]}))
+    return str(path)
+
+
+def test_triangle_sizes_every_polygon_of_a_layer_through_its_own_calls(
+        tmp_path, _exes_on_path):
+    """Each polygon is an outline plus one region point at the edge squared; the
+    command line gains the bare -a that makes the region's area count."""
+    driver = _driver()
+    builder = driver._TriangleBuild({"outer_rings": [_RIM], "holes": []},
+                                    str(tmp_path))
+    layer = _layer(tmp_path, _square(100, 100, 100), _square(600, 600, 50))
+    report = builder.entry({"fn": "set_region_size", "kwargs": {
+        "geometry": layer, "edge_length_m": 20.0}})
+    assert report["regions"] == 2 and report["maximum_area"] == 400.0
+    assert [area for _p, _a, area in builder.tri._regions] == [400.0, 400.0]
+    points = [point for point, _a, _area in builder.tri._regions]
+    assert 100 < points[0][0] < 200 and 600 < points[1][0] < 650
+    builder.tri.build = lambda: None
+    builder.build()
+    assert len(builder.tri._polygons) == 3, "the rim and one outline each"
+    assert builder.tri.additional_args == ["-a"]
+
+
+def test_triangle_keeps_the_stated_switches_beside_the_region_switch(
+        tmp_path, _exes_on_path):
+    driver = _driver()
+    builder = driver._TriangleBuild(
+        {"outer_rings": [_RIM], "holes": [], "additional_args": ["-D"]},
+        str(tmp_path))
+    builder.entry({"fn": "set_region_size", "kwargs": {
+        "geometry": _layer(tmp_path, _square(100, 100, 100)),
+        "edge_length_m": 20.0}})
+    builder.tri.build = lambda: None
+    builder.build()
+    assert builder.tri.additional_args == ["-D", "-a"]
+
+
+def test_triangle_draws_only_the_refine_polygons_wholly_inside_the_domain(
+        tmp_path, _exes_on_path):
+    """A ring across the rim would enclose ground outside the domain, which
+    Triangle meshes; one clipped to the rim runs along the rim's own segments."""
+    driver = _driver()
+    builder = driver._TriangleBuild({"outer_rings": [_RIM], "holes": []},
+                                    str(tmp_path))
+    layer = _layer(tmp_path, _square(900, 100, 200), _square(2000, 2000, 50),
+                   _square(300, 300, 50))
+    report = builder.entry({"fn": "set_region_size", "kwargs": {
+        "geometry": layer, "edge_length_m": 20.0}})
+    assert report["polygons"] == 3 and report["regions"] == 1
+    assert report["not_inside_domain"] == 2
+    (ring,) = builder.sized
+    assert min(x for x, _y in ring) == 300.0
+
+
+def test_triangle_merges_overlapping_refine_polygons_into_one_outline(
+        tmp_path, _exes_on_path):
+    driver = _driver()
+    builder = driver._TriangleBuild({"outer_rings": [_RIM], "holes": []},
+                                    str(tmp_path))
+    layer = _layer(tmp_path, _square(100, 100, 200), _square(200, 100, 200))
+    report = builder.entry({"fn": "set_region_size", "kwargs": {
+        "geometry": layer, "edge_length_m": 20.0}})
+    assert report["polygons"] == 2 and report["regions"] == 1
+
+
+def test_a_refine_without_an_edge_or_a_polygon_refuses_by_name(
+        tmp_path, _exes_on_path):
+    driver = _driver()
+    builder = driver._TriangleBuild({"outer_rings": [_RIM], "holes": []},
+                                    str(tmp_path))
+    layer = _layer(tmp_path, _square(100, 100, 100))
+    with pytest.raises(ValueError) as excinfo:
+        builder.entry({"fn": "set_region_size", "kwargs": {"geometry": layer}})
+    assert "edge_length_m" in str(excinfo.value)
+    with pytest.raises(driver._Refusal) as excinfo:
+        builder.entry({"fn": "set_region_size", "kwargs": {
+            "geometry": layer, "edge_length_m": 0}})
+    assert excinfo.value.document["code"] == "MESH_OP_REGION_SIZE"
+    line = tmp_path / "line.geojson"
+    line.write_text(json.dumps({"type": "LineString",
+                                "coordinates": [[0.0, 0.0], [5.0, 5.0]]}))
+    with pytest.raises(driver._Refusal) as excinfo:
+        builder.entry({"fn": "set_region_size", "kwargs": {
+            "geometry": str(line), "edge_length_m": 20.0}})
+    assert excinfo.value.document["code"] == "MESH_OP_GEOMETRY_EMPTY"
+
+
+def _gridgen_refine(monkeypatch, tmp_path, edge, delr=100.0, layers=None,
+                    driver=None):
+    import flopy.utils.gridgen as gridgen_lib
+
+    driver = driver or _driver()
+    calls = []
+    monkeypatch.setattr(gridgen_lib.Gridgen, "add_refinement_features",
+                        lambda self, **kw: calls.append(kw))
+    monkeypatch.setattr(gridgen_lib.Gridgen, "build", lambda self: None)
+    monkeypatch.setattr(gridgen_lib.Gridgen, "get_gridprops_disv",
+                        lambda self: {"vertices": [], "cell2d": []})
+    ops = [{"fn": "set_region_size", "kwargs": {
+        "geometry": _layer(tmp_path, _square(100, 100, 100)),
+        "edge_length_m": edge}}]
+    if layers:
+        ops.append({"fn": "add_refinement_features", "kwargs": {
+            "features": _layer(tmp_path, _square(500, 500, 50), name="b.geojson"),
+            "featuretype": "polygon", "level": 1, "layers": layers}})
+    cfg = {"delr": [delr] * 10, "delc": [delr] * 10, "xoff": 0.0, "yoff": 0.0,
+           "angrot": 0.0, "crs_epsg": 32618, "ops": ops, "sources": {}}
+    driver._gridgen(cfg, str(tmp_path))
+    return calls
+
+
+def test_gridgen_sizes_a_layer_by_the_quadtree_level_that_reaches_the_edge(
+        monkeypatch, tmp_path, _exes_on_path):
+    (call, *_rest) = _gridgen_refine(monkeypatch, tmp_path, edge=25.0)
+    assert call["level"] == 2 and call["featuretype"] == "polygon"
+    assert call["layers"] == [0] and len(call["features"]) == 1
+    (call, *_rest) = _gridgen_refine(monkeypatch, tmp_path, edge=30.0)
+    assert call["level"] == 2, "an edge between two levels takes the finer one"
+
+
+def test_gridgen_refines_every_layer_the_grid_spans(
+        monkeypatch, tmp_path, _exes_on_path):
+    call, _other = _gridgen_refine(monkeypatch, tmp_path, edge=50.0,
+                                   layers=[0, 1, 2])
+    assert call["layers"] == [0, 1, 2]
+
+
+def test_gridgen_refuses_an_edge_the_base_cell_already_meets(
+        monkeypatch, tmp_path, _exes_on_path):
+    driver = _driver()
+    with pytest.raises(driver._Refusal) as excinfo:
+        _gridgen_refine(monkeypatch, tmp_path, edge=100.0, driver=driver)
+    doc = excinfo.value.document
+    assert doc["code"] == "MESH_OP_REGION_NOT_FINER"
+    assert doc["escalation"] == {"edge_length_m": 50.0}

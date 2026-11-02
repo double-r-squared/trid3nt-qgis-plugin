@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import inspect
 import json
+import math
 import sys
 
 import numpy as np
 from shapely.geometry import Polygon, shape as _shape
+from shapely.ops import unary_union
 
 #: Cells with this or smaller unsigned area are construction artifacts, not
 #: elements: the build is in metres, so a square nanometre is below anything
@@ -95,6 +97,25 @@ def _bind_call(fn, kwargs: dict):
     return fn(**kwargs)
 
 
+def set_region_size(geometry: str, edge_length_m: float) -> tuple[list, float]:
+    """The polygon parts a refine statement draws over and the target edge, both checked.
+
+    The one refine word of the three meshers; each expands it into its library's own calls."""
+    parts = _polygons(_load_geoms(geometry))
+    if not parts:
+        raise _Refusal(
+            "MESH_OP_GEOMETRY_EMPTY",
+            "set_region_size sizes the inside of polygons and the staged "
+            "geometry carries none; stage a Polygon or MultiPolygon layer "
+            "and retry")
+    if not edge_length_m > 0:
+        raise _Refusal(
+            "MESH_OP_REGION_SIZE",
+            "set_region_size needs a target edge_length_m above zero, got %r"
+            % (edge_length_m,))
+    return parts, float(edge_length_m)
+
+
 class _TriangleBuild:
     """One Triangle (or Voronoi-over-Triangle) build: rings in, ``.build()`` out.
 
@@ -116,6 +137,14 @@ class _TriangleBuild:
             self.outer.append(_open(ring))
         for ring in cfg.get("holes") or ():
             self.holes.append(_open(ring))
+        # The domain's own rim, which a refine polygon must lie wholly inside: a ring crossing it
+        # would enclose ground outside the domain (Triangle meshes every enclosed region), and a
+        # ring clipped to it runs nearly along the rim's own segments, which Triangle's segment
+        # intersection fails on.
+        self.domain = unary_union([Polygon(ring) for ring in self.outer]).difference(
+            unary_union([Polygon(ring) for ring in self.holes])) \
+            if self.outer else None
+        self.sized: list[list[tuple[float, float]]] = []
 
     def add_outer(self, ring) -> None:
         self.outer.append(_open(ring))
@@ -167,6 +196,21 @@ class _TriangleBuild:
             kwargs["point"] = geom.representative_point().coords[0]
             _bind_call(self.tri.add_region, kwargs)
             report["called"] = 1
+        elif name == "set_region_size":
+            parts, edge = _bind_call(set_region_size, kwargs)
+            merged = unary_union(parts)
+            inside = [geom for geom in _polygons([merged])
+                      if self.domain is None or self.domain.contains(geom)]
+            for geom in inside:
+                self.sized.append(_open(geom.exterior.coords))
+                self.sized.extend(_open(ring.coords) for ring in geom.interiors)
+                point = geom.representative_point()
+                _bind_call(self.tri.add_region, {
+                    "point": (point.x, point.y), "attribute": 0,
+                    "maximum_area": edge * edge})
+            report.update({"polygons": len(parts), "regions": len(inside),
+                           "not_inside_domain": len(_polygons([merged])) - len(inside),
+                           "maximum_area": edge * edge})
         else:
             raise ValueError(
                 "the triangle mesher has no method %r (this driver runs the "
@@ -175,8 +219,12 @@ class _TriangleBuild:
 
     def build(self):
         """Write the .poly inputs and run the executable -> the built object."""
-        for ring in self.outer:
+        for ring in self.outer + self.sized:
             _bind_call(self.tri.add_polygon, {"polygon": ring})
+        if self.sized:
+            # The build states a global maximum_area, and Triangle reads a region's area only
+            # beside a bare -a (the switch twice: one fixed, one varying).
+            self.tri.additional_args = [*(self.tri.additional_args or ()), "-a"]
         for index, ring in enumerate(self.holes):
             # The hole's own edges bound its pocket, so the ring is segments
             # exactly like an outer - what makes it a hole is the point below.
@@ -245,6 +293,23 @@ def _gridgen(cfg: dict, out: str) -> tuple[list, list, list[dict], dict]:
             kwargs["feature"] = _load_geoms(kwargs.pop("feature"))
         elif name == "add_refinement_features":
             kwargs["features"] = _load_geoms(kwargs.pop("features"))
+        elif name == "set_region_size":
+            parts, edge = _bind_call(set_region_size, kwargs)
+            # A quadtree level halves a cell, so the level is the halvings of the finest base cell down to the edge.
+            base = float(min(delr.min(), delc.min()))
+            level = math.ceil(math.log2(base / edge) - 1e-9)
+            if level < 1:
+                raise _Refusal(
+                    "MESH_OP_REGION_NOT_FINER",
+                    "set_region_size asks for an edge of %g m and the base grid's finest cell is "
+                    "already %g m, so no quadtree level refines it; state an edge below %g m"
+                    % (edge, base, base),
+                    escalation={"edge_length_m": base / 2})
+            name = "add_refinement_features"
+            kwargs = {"features": parts, "featuretype": "polygon",
+                      "level": level, "layers": list(range(nlay))}
+            report.update({"polygons": len(parts), "level": level,
+                           "cell_m": base / 2 ** level})
         else:
             raise ValueError(
                 "the gridgen mesher has no method %r (this driver runs the "

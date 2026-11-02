@@ -455,9 +455,11 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
             f"Lakes: {len(lakes)} lake(s) placed" + (f", {ponds} of them embedded in one cell" if ponds else "")
             + "; a stage read from the surface is the lake's start stage (the median of the pixels inside its polygon), and LAK solves the level;"
             + " the lakes exchange water with the aquifer only (no outlets, no inflow)."
-            + (f" {len(skipped)} waterbod{'y is' if len(skipped) == 1 else 'ies are'} smaller than this mesh resolves and"
-               f" {'is' if len(skipped) == 1 else 'are'} not captured; a mesh refined toward the waterbodies layer captures them."
-               if skipped else ""))
+            + (f" {len(skipped)} waterbod{'y is' if len(skipped) == 1 else 'ies are'} not placed." if skipped else ""))
+        by_mesh = sum(1 for item in skipped if item.get("by_mesh"))
+        if by_mesh:
+            cut_coverage(f"Lakes: {by_mesh} waterbod{'y is' if by_mesh == 1 else 'ies are'} smaller than the mesh resolves and not placed;"
+                         " refine toward the waterbodies layer: mesh_op(fn='set_region_size', geometry=<waterbodies layer>, edge_length_m=<edge, m>)")
         if ponds:
             cut_coverage(f"Lakes: {ponds} pond(s) smaller than a cell are embedded in the cell they overlap most, "
                          "straight-sided (ASSUMPTION: the polygon's measured area at every stage, exchanging through "
@@ -870,6 +872,7 @@ def _embed(ponds: list[dict[str, Any]], lakes: list[dict[str, Any]], skipped: li
 
     metres = _metres(frame, "Lakes embeds ponds")
     tree = shapely.STRtree(polygons)
+    footprint = shapely.union_all(polygons)
     # mf6 refuses an embedded lake in a cell another lake connects to vertically, and a held cell has one below it.
     lake_cells = {cell: name for (_, cell), name in owner.items()}
     for pond in ponds:
@@ -895,7 +898,9 @@ def _embed(ponds: list[dict[str, Any]], lakes: list[dict[str, Any]], skipped: li
                     "lake's bottom.", error_code="MODFLOW_STRESS_OUTSIDE")
         if why is not None:
             lakes.remove(pond)
-            skipped.append({"label": pond["label"], "why": why, "count": 0, "spread": None, "area": float(one.area)})
+            # A finer mesh places a pond only where the mesh lies wholly under it and the cell is solved.
+            skipped.append({"label": pond["label"], "why": why, "count": 0, "spread": None, "area": float(one.area),
+                            "by_mesh": why != "the cell it lies in is not solved" and bool(footprint.contains(one))})
             continue
         start = _timed(pond["stage"])[0]
         if not start > low:

@@ -49,6 +49,10 @@ _TRIANGLE_OPS = ("add_polygon", "add_hole", "add_region")
 #: the executable reads. With none, the base rectilinear grid IS the mesh.
 _GRIDGEN_OPS = ("add_active_domain", "add_refinement_features")
 
+#: The one refine word all three meshers answer to, under the name the driver defines it by: finer inside a
+#: polygon layer. The driver expands it into the library's own calls.
+_REGION_OPS = ("set_region_size",)
+
 #: The constructors' own keyword arguments, declared like an op roster.
 _TRIANGLE_BUILD = ("maximum_area", "angle", "nodes", "additional_args")
 _GRIDGEN_BUILD = ("delr", "delc", "xoff", "yoff", "angrot")
@@ -405,7 +409,9 @@ TRIANGLE = register_mesher(
     build,
     kinds=("unstructured_tri",),
     namespaces=(OpNamespace(origin="triangle", phase=PRE,
-                            names=_TRIANGLE_OPS),),
+                            names=_TRIANGLE_OPS),
+                OpNamespace(origin="flopy_grid", phase=PRE,
+                            names=_REGION_OPS)),
     default_ops=(),
     build_params=_TRIANGLE_BUILD,
 )
@@ -417,7 +423,9 @@ VORONOI = register_mesher(
     # Voronoi polygons are the DUAL of the same Triangle build, so they take
     # Triangle's ops verbatim and its constructor's params beside them.
     namespaces=(OpNamespace(origin="triangle", phase=PRE,
-                            names=_TRIANGLE_OPS),),
+                            names=_TRIANGLE_OPS),
+                OpNamespace(origin="flopy_grid", phase=PRE,
+                            names=_REGION_OPS)),
     default_ops=(),
     build_params=_TRIANGLE_BUILD,
 )
@@ -427,7 +435,9 @@ GRIDGEN = register_mesher(
     build,
     kinds=("quadtree",),
     namespaces=(OpNamespace(origin="gridgen", phase=PRE,
-                            names=_GRIDGEN_OPS),),
+                            names=_GRIDGEN_OPS),
+                OpNamespace(origin="flopy_grid", phase=PRE,
+                            names=_REGION_OPS)),
     # No default ops: with no refinement the base rectilinear grid IS the mesh,
     # which is how a structured example reaches DISV through this one path.
     default_ops=(),

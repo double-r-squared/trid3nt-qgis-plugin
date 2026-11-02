@@ -174,8 +174,17 @@ whose `status` is CONSTANT in any period holds its stage, so it keeps the strict
 within 0.001 m (USGS's tolerance for a lake's z-values against its hydro-flattened surface) provided the mode covers more
 than half of the pixel centres (a nodata pixel counts against it), else the lake is not placed. A gauge stage is a stated
 number or a `field`; nothing is fetched for it. The journal says one line of counts: the lakes placed and embedded, and
-"N waterbodies are smaller than this mesh resolves and are not captured; a mesh refined toward the waterbodies layer captures
-them" - no ids, areas or spreads reach the model. The user asks for the refinement; nothing refines automatically. ex-gwf-lak-p01
+"N waterbodies are not placed" - no ids, areas or spreads reach the model. The review card carries ONE more row (a coverage
+row, counted only over the waterbodies left out for the mesh's resolution: a polygon on the mesh holding no cell centre and not
+inside one solved cell, or inside a cell another lake holds; a lake left out for its stage is not counted, a finer mesh does not
+change it): "N waterbodies are smaller than the mesh resolves and not placed; refine toward the waterbodies layer:
+mesh_op(fn='set_region_size', geometry=<waterbodies layer>, edge_length_m=<edge, m>)". The user states the refinement, on the
+mesh they build and supply; nothing refines automatically. `set_region_size` is the one refine word of every mesher (a drawn
+refine region emits it too): triangle and voronoi expand it to `add_polygon` on each polygon's outline (clipped to the domain)
+and `add_region` at its representative point with `maximum_area` the edge squared, and the build gains Triangle's bare `-a`
+switch, without which a region's area is ignored under the build's global `maximum_area`; gridgen expands it to
+`add_refinement_features(polygon, level)` with the level that halves the finest base cell down to the edge (an edge the base
+cell already meets refuses). ex-gwf-lak-p01
 and p02 hold no embedded lake; one pond authored through `Lakes` equals a flopy-built embedded lake (the same DISV, drain and
 rainfall; heads and the lake stage, max difference 0.0).
 

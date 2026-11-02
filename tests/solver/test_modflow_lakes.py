@@ -179,8 +179,7 @@ def test_a_constant_lake_with_no_majority_is_skipped_and_the_one_line_note_count
 
     assert packagedata == []
     assert len(notes) == 1 and "\n" not in notes[0]
-    assert "1 waterbody is smaller than this mesh resolves and is not captured" in notes[0]
-    assert "a mesh refined toward the waterbodies layer captures them" in notes[0]
+    assert "1 waterbody is not placed" in notes[0] and "refine" not in notes[0]
     assert "lake 1" not in notes[0] and "m2" not in notes[0] and "spread" not in notes[0]
 
 
@@ -201,7 +200,7 @@ def test_the_skipped_waterbodies_are_counted_in_one_line_with_no_id_area_or_reas
 
     _place([_constant(_box(11.0, 11.0, 14.0, 14.0), ragged), _constant(_MIDDLE_ROW, ragged)])
 
-    assert len(notes) == 1 and "2 waterbodies are smaller than this mesh resolves and are not captured" in notes[0]
+    assert len(notes) == 1 and "2 waterbodies are not placed" in notes[0]
     assert "no DEM" not in notes[0] and "pixel" not in notes[0].split("; ")[-1]
 
 
@@ -262,8 +261,9 @@ def test_a_length_unit_the_run_does_not_state_refuses():
 
 
 def test_a_pond_inside_a_lake_cell_is_not_captured_and_the_note_counts_it(monkeypatch):
-    notes = []
+    notes, covered = [], []
     monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
+    monkeypatch.setattr("trid3nt_server.inputs.run_notes.cut_coverage", covered.append)
     inside_the_lake_cell = _box(12.0, 12.0, 14.0, 14.0)
 
     packagedata, connectiondata, _ = _place([_statement(inside_the_lake_cell), _statement(_CENTRE)])
@@ -271,7 +271,8 @@ def test_a_pond_inside_a_lake_cell_is_not_captured_and_the_note_counts_it(monkey
     assert packagedata == [[0, 12.0, 4]] and len(connectiondata) == 4
     assert len(notes) == 1
     assert "1 lake(s) placed" in notes[0] and "2 waterbodies" not in notes[0]
-    assert "1 waterbody is smaller than this mesh resolves" in notes[0] and "aquifer only" in notes[0]
+    assert "1 waterbody is not placed" in notes[0] and "aquifer only" in notes[0]
+    assert len(covered) == 1 and covered[0].startswith("Lakes: 1 waterbody is smaller than the mesh resolves")
 
 
 _POND = _box(2.0, 1.0, 8.0, 4.0)
@@ -303,6 +304,32 @@ def test_a_pond_wholly_inside_one_cell_is_embedded_in_it(monkeypatch):
 
 def test_a_polygon_crossing_cells_that_holds_no_cell_centre_is_not_placed():
     assert _features([_statement(_STRADDLE)])[0] == []
+
+
+def _card_rows(statements, monkeypatch, **over):
+    covered = []
+    monkeypatch.setattr("trid3nt_server.inputs.run_notes.cut_coverage", covered.append)
+    _features(statements, **over)
+    return [line for line in covered if "refine toward" in line]
+
+
+def test_waterbodies_the_mesh_is_too_coarse_for_are_one_card_row_that_counts_them_and_names_the_statement(monkeypatch):
+    (row,) = _card_rows([_statement(_STRADDLE), _statement(_box(17.0, 11.0, 23.0, 14.0))], monkeypatch)
+    assert row.startswith("Lakes: 2 waterbodies are smaller than the mesh resolves and not placed")
+    assert "mesh_op(fn='set_region_size', geometry=<waterbodies layer>, edge_length_m=<edge, m>)" in row
+    assert len(row) <= 200 and "lake" not in row.split(": ", 1)[1]
+
+
+def test_one_waterbody_is_said_in_the_singular(monkeypatch):
+    (row,) = _card_rows([_statement(_STRADDLE)], monkeypatch)
+    assert row.startswith("Lakes: 1 waterbody is smaller than the mesh resolves")
+
+
+def test_a_waterbody_off_the_mesh_or_left_out_for_its_stage_is_not_a_mesh_row(tmp_path, monkeypatch):
+    ragged = _surface(tmp_path, [254.75, 257.0, 260.0])
+    off = [_statement(_box(100.0, 100.0, 120.0, 120.0)), _statement(_box(-5.0, 1.0, 4.0, 4.0)),
+           _constant(_MIDDLE_ROW, ragged)]
+    assert _card_rows(off, monkeypatch) == []
 
 
 def test_a_polygon_partly_off_the_mesh_is_not_placed():
