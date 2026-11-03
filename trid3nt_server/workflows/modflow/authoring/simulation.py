@@ -23,7 +23,7 @@ from .observations import place_observations
 from .refinement import Child, built_children, children_of, refined_idomain
 from .release import place_release
 from .stress import (GIVERS, hold_lakes, lake_statements, layer_rows, maw_statements, place as place_stress, place_interbeds,
-                     place_lakes, place_maw, place_streams, place_uzf)
+                     place_lakes, place_maw, place_river_areas, place_streams, place_uzf, river_area)
 
 from ..errors import ModflowError
 from ...runtime.sheet import Filled, fill
@@ -454,19 +454,37 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
     derived: set[str] = set()
     features = list(features or [])
     used: dict[str, set[str]] = {}
-    for prefix, rows in groups.items():
+    # a river polygon's cells are placed first: a drain in a cell a river holds would count the same water twice
+    rivered: set[tuple[int, int]] = set()
+    river_counts: list[dict[str, int]] = []
+    dropped = 0
+    for prefix, rows in sorted(groups.items(), key=lambda item: item[0] != "RIV"):
         row = rows.get("stress_period_data")
         if row is None or not isinstance(row.value, Mapping) \
                 or "stress" not in row.value:
             continue
         placed: list[tuple] = []
+        areal = False
         for statement in row.value.get("statements", [row.value]):
-            found = place_stress(statement, points=points, cells=cells, utm_epsg=utm_epsg, nlay=nlay, frame=frame,
-                                 active=active, start=start)
+            if river_area(statement):
+                areal = True
+                found, counts = place_river_areas(statement, points=points, cells=cells, utm_epsg=utm_epsg, nlay=nlay,
+                                                  frame=frame, active=active)
+                rivered |= {item[0] for item in found}
+                river_counts.append(counts)
+            else:
+                found = place_stress(statement, points=points, cells=cells, utm_epsg=utm_epsg, nlay=nlay, frame=frame,
+                                     active=active, start=start)
+            if prefix == "DRN" and rivered:
+                kept = [item for item in found if item[0] not in rivered]
+                dropped, found = dropped + len(found) - len(kept), kept
             if prefix in GIVERS:
                 features += [{"package": prefix, "name": statement.get("name"), "number": len(placed) + rank,
                               "cells": {item[0][1]}, "layer": item[0][0]} for rank, item in enumerate(found)]
             placed += found
+        if areal and not placed:
+            del groups[prefix]
+            continue
         if (names := {item for line in placed for item in line[1:] if isinstance(item, str)}):
             used[prefix] = names
         rows["stress_period_data"] = replace(row, value={0: placed})
@@ -474,6 +492,8 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
             slot=sheet.body.MODULE_INPUT[f"{prefix}_MAXBOUND"],
             value=len(placed), provenance=row.provenance)
         derived.add(f"{prefix}_MAXBOUND")
+    if river_counts:
+        _river_note(river_counts, dropped)
     tables: dict[str, list] = {}
     row = groups.get("SFR", {}).get("packagedata")
     if row is not None and isinstance(row.value, Mapping) and "streams" in row.value:
@@ -530,6 +550,21 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
     observed = _observations(sheet, groups, features, module=name or str(sheet.module), nlay=nlay, points=points,
                              cells=cells, utm_epsg=utm_epsg, active=active)
     return derived, {prefix: files for prefix, files in tables.items() if files}, series, observed, features
+
+
+def _river_note(counts: list[dict[str, int]], dropped: int) -> None:
+    """One journal line of the river areas' counts: cells and area placed, cells left out by reason, drain rows dropped."""
+    from trid3nt_server.inputs.run_notes import journal_note
+
+    left = {reason: sum(item[reason] for item in counts) for reason in
+            ("no majority stage", "no pixel measured", "no pixel centre", "unsolved")}
+    journal_note(
+        f"Rivers: {sum(item['cells'] for item in counts)} river cell(s) placed over {sum(item['polygons'] for item in counts)} "
+        f"polygon(s), {sum(item['area'] for item in counts)} m2 of river; each cell's conductance is the stated leakance times "
+        "the river's area in it, its stage the elevation more than half of the DEM pixels inside the river in that cell share"
+        + (f"; {sum(left.values())} cell(s) the river overlaps are not placed ("
+           + ", ".join(f"{number} {reason}" for reason, number in left.items() if number) + ") and keep their drain" if any(left.values()) else "")
+        + (f"; {dropped} drain row(s) in river cells are dropped, the river exchanging there" if dropped else "") + ".")
 
 
 def _named_series(used: Mapping[str, set[str]], series: Mapping[str, Mapping[str, Any]]) -> None:

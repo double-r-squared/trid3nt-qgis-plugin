@@ -29,9 +29,9 @@ _AUX = ("concentration", "CONCENTRATION", "M/L3")
 def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: bool = False, moves: bool = False):
     columns = tuple(dimensions)
 
-    def expand(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    def expand(value: Any, run: Mapping[str, Any] | None = None) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
         if isinstance(value, (list, tuple)) and value:
-            expanded = [slots for item in value if (slots := expand(item)[0])]
+            expanded = [slots for item in value if (slots := expand(item, run)[0])]
             stated = [slots[f"{package}_STRESS_PERIOD_DATA"] for slots in expanded]
             carrying = [f"{package}_AUXILIARY" in slots for slots in expanded]
             if any(carrying) and not all(carrying):
@@ -61,17 +61,36 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: 
                 error_code="MODFLOW_STRESS_UNSTATED")
         aux = {_AUX[0]: _AUX[2]} if carries and value.get(_AUX[0]) is not None else {}
         taken = {**dimensions, **aux}
+        if any(isinstance(held, Mapping) and "leakance" in held and _named(held, run).get("leakance") is None
+               for held in value.values()):
+            raise ModflowError(
+                f"{name} states no leakance; the engine has no value for it, so state it from a measurement or a named source.",
+                error_code="MODFLOW_STRESS_UNSTATED")
         return {f"{package}_STRESS_PERIOD_DATA": {
             "stress": package, "composite": name, "geometry": value["geometry"],
-            "values": {column: value[column] for column in taken},
+            "values": {column: _named(value[column], run) for column in taken},
             "dimensions": dict(taken), "layer": layer, **({"name": _given(value, name)} if moves else {})},
             **({f"{package}_AUXILIARY": [_AUX[1]]} if aux else {})}, {}
 
     expand.__doc__ = (
         f"The {package} package's cells a geometry places: {name}(geometry, layer, "
         f"{', '.join(columns)}{f', [{_AUX[0]}]' if carries else ''}{', [name]' if moves else ''}), or a list of such statements; a geometry reading nothing states nothing."
-        + (f"\n\n    name is what WaterMover calls each cell row this statement places; the {package} package gives water to the mover, never takes it." if moves else ""))
+        + (f"\n\n    name is what WaterMover calls each cell row this statement places; the {package} package gives water to the mover, never takes it." if moves else "")
+        + ("\n\n    conductance may be {\"leakance\": N} (1 per the model's time unit): the geometry's polygons are then the river, "
+           "and every solved cell they overlap is one row whose conductance is N times the polygons' area inside it, the "
+           "measured area of a river wide enough to have two banks. stage may then be {\"surface\": RASTER}: the elevation "
+           "more than half of the raster's pixel centres inside the river in that cell share within 0.001 m, a cell showing none "
+           "is not placed and is counted in the journal; stage and rbot also take {\"field\": NAME}." if package == "RIV" else ""))
     return expand
+
+
+def _named(held: Any, run: Mapping[str, Any] | None) -> Any:
+    """A column stated as ``{"leakance": NAME}`` or ``{"surface": NAME}`` with the input NAME read off the run, as every other argument that names one."""
+    if run is not None and isinstance(held, Mapping) and len(held) == 1:
+        (form, name), = held.items()
+        if form in ("leakance", "surface") and isinstance(name, str):
+            return {form: run.get(name)}
+    return held
 
 
 _STATUS = ("ACTIVE", "INACTIVE", "CONSTANT")

@@ -7708,6 +7708,16 @@
         "type": "float",
         "units": "1/day"
       },
+      "river_bottom": {
+        "desc": "Where the bed of every river in the domain lies, as an elevation in metres on the run's vertical frame: the level below which the river no longer gives water to a head that falls under it. No dataset measures river depth nationally, so it is stated; one number serves all the rivers of the run, and it is asked only where a river area is found",
+        "type": "float",
+        "units": "m"
+      },
+      "river_leakance": {
+        "desc": "The leakance of the river beds, how readily water crosses between a river and the aquifer under it, in 1 per day (conductance per unit area of riverbed: the bed's hydraulic conductivity over its thickness). No dataset measures it, so it is stated; asked only where a river area is found",
+        "type": "float",
+        "units": "1/day"
+      },
       "well": {
         "desc": "Where a pumping well stands, as a Point: the pick's {coordinates, name} verbatim, a (lon, lat) pair or 'lat,lon'. Stated, the well pumps well_rate at the cell it lies in; unstated, no well is composed",
         "type": "Point"
@@ -7731,6 +7741,16 @@
       },
       "lake_leakance": {
         "desc": "The leakance of the lake beds, how readily water crosses between a lake and the aquifer beside and below it, in 1 per day (conductance per unit area of lakebed). No dataset measures it, so it is stated; asked only where a waterbody is found",
+        "type": "float",
+        "units": "1/day"
+      },
+      "river_bottom": {
+        "desc": "Where the bed of every river in the domain lies, as an elevation in metres on the run's vertical frame: the level below which the river no longer gives water to a head that falls under it. No dataset measures river depth nationally, so it is stated; one number serves all the rivers of the run, and it is asked only where a river area is found",
+        "type": "float",
+        "units": "m"
+      },
+      "river_leakance": {
+        "desc": "The leakance of the river beds, how readily water crosses between a river and the aquifer under it, in 1 per day (conductance per unit area of riverbed: the bed's hydraulic conductivity over its thickness). No dataset measures it, so it is stated; asked only where a river area is found",
         "type": "float",
         "units": "1/day"
       },

@@ -15,10 +15,11 @@ from trid3nt_server.inputs.geometry import flatten_features
 from trid3nt_server.inputs.point import Point, require_viable
 
 from ..errors import ModflowError
-from .griddata import METRES, field_name, field_value, sample, surface_of, surface_pixels
+from .griddata import METRES, field_name, field_value, leakance_of, sample, surface_of, surface_pixels
 
 __all__ = ["GIVERS", "at_cell", "cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "maw_statements",
-           "pick", "place", "place_interbeds", "place_lakes", "place_maw", "place_streams", "place_uzf", "point_cell", "uzf_statements"]
+           "pick", "place", "place_interbeds", "place_lakes", "place_maw", "place_river_areas", "place_streams", "place_uzf", "point_cell",
+           "river_area", "uzf_statements"]
 
 # The boundary packages that give water to the mover: each row a statement of theirs places is a feature.
 GIVERS = ("WEL", "DRN", "GHB", "RIV")
@@ -35,6 +36,10 @@ def place(statement: Mapping[str, Any], *, points: Any, cells: Any,
     starting head there; ``start`` is its one row per layer."""
     name = statement["composite"]
     layers = _layers(statement["layer"], name=name, nlay=nlay)
+    if river_area(statement) or (name == "Rivers" and surface_of(statement["values"].get("stage"), label="Rivers stage") is not None):
+        raise ModflowError(
+            "Rivers reads a stage off a surface only over a river area: state the conductance as {\"leakance\": N} "
+            "so the polygons are the river.", error_code="MODFLOW_STRESS_UNSTATED")
     if points is None or cells is None or not utm_epsg:
         raise ModflowError(
             f"{name} places by geometry, and this run has no accepted mesh "
@@ -386,6 +391,93 @@ def _rows(reaches: list[dict[str, Any]], auxiliary: tuple, diversions: list[tupl
                          "cells": {reach["cell"]}, "table": reach.get("table"), "properties": reach["owner"][1],
                          "first": reach["first"], "last": reach["last"]})
     return packagedata, connectiondata, _by_period(found), divisions, features
+
+
+def river_area(statement: Mapping[str, Any]) -> bool:
+    """Whether a Rivers statement states its conductance as ``{"leakance": N}``: its polygons are the river, held by the cells they overlap."""
+    conductance = statement["values"].get("conductance") if statement.get("composite") == "Rivers" else None
+    return isinstance(conductance, Mapping) and "leakance" in conductance
+
+
+def place_river_areas(statement: Mapping[str, Any], *, points: Any, cells: Any, utm_epsg: int | None, nlay: int,
+                      frame: Any = None, active: Any = None) -> tuple[list[tuple], dict[str, int]]:
+    """A Rivers statement over polygons -> ``(rows, counts)``: one RIV row per solved cell the polygons overlap.
+
+    A cell's conductance is the stated leakance times the area of the polygons inside it (the RIV description's
+    conductance is the streambed's hydraulic conductivity times width times length over its thickness, which is
+    leakance times area). The stage may be ``{"surface": RASTER}``: the elevation more than half of the raster's
+    pixel centres inside the river in that cell share within 0.001 m, else the cell is not placed; any other
+    value is a number, a ``{"field": NAME}`` or a raster read at the cell's centre. ``counts`` holds the cells placed, the
+    polygons, the area placed (m2) and the cells left out by reason."""
+    import shapely
+    from pyproj import Transformer
+    from shapely.geometry import shape as geo
+    from shapely.ops import transform
+
+    from trid3nt_server.inputs.shape import shape
+
+    if points is None or cells is None or not utm_epsg:
+        raise ModflowError("Rivers places by geometry, and this run has no accepted mesh with a projected zone to place it on.",
+                           error_code="MODFLOW_STRESS_OUTSIDE")
+    layers = _layers(statement["layer"], name="Rivers", nlay=nlay)
+    if len(layers) != 1:
+        raise ModflowError("Rivers over an area places on one layer; state the layer the river bed lies in.",
+                           error_code="MODFLOW_STRESS_LAYER")
+    layer = layers[0]
+    metres = _metres(frame, "Rivers writes a conductance from an area")
+    values = statement["values"]
+    leakance = leakance_of(values["conductance"], label="Rivers conductance")
+    to_utm = Transformer.from_crs(4326, int(utm_epsg), always_xy=True).transform
+    parts = []
+    for number, (part, properties) in enumerate(flatten_features(shape(statement["geometry"], label="Rivers").features), start=1):
+        area = transform(to_utm, geo(part))
+        if area.geom_type not in ("Polygon", "MultiPolygon"):
+            raise ModflowError(f"Rivers with a leakance places polygons; got a {area.geom_type}.",
+                               error_code="MODFLOW_STRESS_UNSTATED")
+        parts.append((area, (f"feature {number} of the geometry", properties)))
+    polygons = shapely.polygons([[(float(points[v][0]), float(points[v][1])) for v in ring] for ring in cells])
+    tree = shapely.STRtree(polygons)
+    inside: dict[int, list[tuple[Any, tuple[str, Any]]]] = {}
+    for area, owner in parts:
+        for cell in tree.query(area, predicate="intersects"):
+            piece = area.intersection(polygons[cell])
+            if piece.area > 0.0:
+                inside.setdefault(int(cell), []).append((piece, owner))
+    counts = {"polygons": len(parts), "cells": 0, "area": 0, "unsolved": 0, "no pixel centre": 0, "no pixel measured": 0,
+              "no majority stage": 0}
+    placed = sorted(inside)
+    solved = [cell for cell in placed if active is None or active[layer][cell] > 0]
+    counts["unsolved"] = len(placed) - len(solved)
+    surface = surface_of(values["stage"], label="Rivers stage")
+    reader = None
+    if surface is not None:
+        with tempfile.TemporaryDirectory(prefix="trid3nt_stress_") as work:
+            reader = surface_pixels(surface, label="Rivers stage", name="stage", scratch=work, utm_epsg=int(utm_epsg), frame=frame)
+    stage: dict[int, float] = {}
+    kept = []
+    for cell in solved:
+        if reader is not None:
+            found, count = reader(shapely.union_all([piece for piece, _ in inside[cell]]))
+            level, _ = _flat_stage(found, count, frame=frame)
+            if level is None:
+                counts["no pixel centre" if not count else "no pixel measured" if not found else "no majority stage"] += 1
+                continue
+            stage[cell] = level
+        kept.append(cell)
+    owners = [[owner for _, owner in inside[cell]] for cell in kept]
+    mesh = {"points": points, "cells": cells, "utm_epsg": int(utm_epsg), "frame": frame}
+    columns: dict[str, list[float]] = {}
+    for key, value in values.items():
+        if key == "conductance":
+            columns[key] = [leakance * sum(piece.area for piece, _ in inside[cell]) / metres ** 2 for cell in kept]
+        elif key == "stage" and reader is not None:
+            columns[key] = [stage[cell] for cell in kept]
+        else:
+            columns[key] = _column(value, key, name="Rivers", placed=kept, dimension=statement["dimensions"][key],
+                                   owners=owners, **mesh) if kept else []
+    counts["cells"] = len(kept)
+    counts["area"] = int(round(sum(piece.area for cell in kept for piece, _ in inside[cell])))
+    return [((layer, cell), *(column[rank] for column in columns.values())) for rank, cell in enumerate(kept)], counts
 
 
 def lake_statements(sheet: Any) -> list[Mapping[str, Any]]:

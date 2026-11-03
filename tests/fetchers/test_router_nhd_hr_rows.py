@@ -1,4 +1,4 @@
-"""``fetch_nhd_hr_waterbodies`` and ``fetch_nhdplus_hr_flowline_network``: the box in, NHD features with their identity out.
+"""``fetch_nhd_hr_waterbodies``, ``fetch_nhd_hr_river_areas`` and ``fetch_nhdplus_hr_flowline_network``: the box in, NHD features with their identity out.
 
 Offline. The driver read is replaced by recorded NHDPlus HR features (three
 waterbodies, four flowlines from the Des Moines box), so what is covered is the
@@ -24,6 +24,8 @@ _BOX = (-93.75, 41.45, -93.45, 41.70)
 
 _WATERBODY_COLUMNS = ["nhdplusid", "permanent_identifier", "ftype", "fcode",
                       "gnis_name", "areasqkm", "reachcode"]
+_RIVER_AREA_COLUMNS = ["nhdplusid", "permanent_identifier", "ftype", "fcode",
+                       "gnis_name", "areasqkm"]
 _FLOWLINE_COLUMNS = ["nhdplusid", "gnis_name", "ftype", "fcode", "hydroseq",
                      "dnhydroseq", "levelpathi", "fromnode", "tonode",
                      "wbarea_permanent_identifier", "streamorde", "totdasqkm",
@@ -51,6 +53,14 @@ def test_waterbodies_ask_only_lakes_and_reservoirs_with_their_identity(specs):
     assert "MapServer/9/query" in specs["fetch_nhd_hr_waterbodies"].endpoints["data"].url
 
 
+def test_river_areas_ask_only_the_river_and_canal_water_with_their_identity(specs):
+    q = _query(specs["fetch_nhd_hr_river_areas"])
+    assert q["where"] == "ftype IN (460, 537)"
+    assert q["outFields"].split(",") == _RIVER_AREA_COLUMNS
+    assert "elevation" not in q["outFields"]
+    assert "MapServer/8/query" in specs["fetch_nhd_hr_river_areas"].endpoints["data"].url
+
+
 def test_flowlines_ask_the_whole_network_with_topology(specs):
     q = _query(specs["fetch_nhdplus_hr_flowline_network"])
     assert q["where"] == "1=1"
@@ -74,6 +84,7 @@ def _driver(monkeypatch, fixture: str, capture: list | None = None):
 
 @pytest.mark.parametrize("name,fixture,columns", [
     ("fetch_nhd_hr_waterbodies", "waterbodies.geojson", _WATERBODY_COLUMNS),
+    ("fetch_nhd_hr_river_areas", "river_areas.geojson", _RIVER_AREA_COLUMNS),
     ("fetch_nhdplus_hr_flowline_network", "flowlines.geojson", _FLOWLINE_COLUMNS)])
 def test_every_feature_the_driver_read_reaches_the_file(
         specs, monkeypatch, name, fixture, columns):
@@ -109,6 +120,7 @@ def test_an_empty_box_refuses_by_name(specs, monkeypatch):
 
 @pytest.mark.parametrize("word,geometry,name", [
     ("waterbodies", "polygon", "fetch_nhd_hr_waterbodies"),
+    ("river areas", "polygon", "fetch_nhd_hr_river_areas"),
     ("flowline network", "polyline", "fetch_nhdplus_hr_flowline_network")])
 def test_a_need_by_word_and_shape_is_answered_by_the_row(word, geometry, name):
     for lon, lat in ((None, None), (-93.6, 41.6)):
@@ -120,6 +132,7 @@ def test_a_need_by_word_and_shape_is_answered_by_the_row(word, geometry, name):
 
 @pytest.mark.parametrize("word,geometry,name", [
     ("waterbodies", "polyline", "fetch_nhd_hr_waterbodies"),
+    ("river areas", "polyline", "fetch_nhd_hr_river_areas"),
     ("flowline network", "polygon", "fetch_nhdplus_hr_flowline_network")])
 def test_the_wrong_shape_excludes_the_row(word, geometry, name):
     choice = match(Need(slot="s", data_class="hydrography", of=word,
@@ -129,6 +142,7 @@ def test_the_wrong_shape_excludes_the_row(word, geometry, name):
 
 def test_the_rows_are_found_through_their_class(class_routes_to_the_match):
     class_routes_to_the_match("hydrography", "fetch_nhd_hr_waterbodies")
+    class_routes_to_the_match("hydrography", "fetch_nhd_hr_river_areas")
     class_routes_to_the_match("hydrography", "fetch_nhdplus_hr_flowline_network")
 
 

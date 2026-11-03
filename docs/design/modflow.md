@@ -353,6 +353,17 @@ as `to` they refuse naming the package, since mf6 moves water to SFR, LAK, MAW a
 against a flopy-authored reference (a drain to a lake, a well, a river and a general-head boundary to reaches and a
 lake; heads, stages and every mover flow equal, 0.0).
 
+A river wide enough to have two banks is a polygon, not a line: `Rivers` states `conductance` as `{"leakance": N}` (1 per
+the model's time unit) and its geometry is then the river, every solved cell a polygon overlaps (by area, not by its centre) one
+RIV row whose conductance is N times the polygons' area inside the cell - mf6's RIV conductance is the bed's hydraulic
+conductivity times width times length over its thickness, which is the leakance times the area. `stage` may be
+`{"surface": RASTER}`: the elevation more than half of the raster's pixel centres inside the river in that cell share within
+0.001 m (the lake CONSTANT rule, per cell), so a river the DEM flattens bank to bank and steps downstream takes each cell's own
+level; a cell showing no majority, or holding no pixel centre, is not placed. `stage` and `rbot` also take `{"field": NAME}`.
+The cells placed are placed first: a `Drains` row in one of them is not written (the river exchanges there; a drain would count
+the same water twice), and a cell not placed keeps its drain. The journal says one line of counts: cells and area placed, cells
+left out by reason, drain rows dropped. The surface form and the leakance form refuse anywhere but a river area.
+
 ### Observations
 
 `Observations(type, name[, package, at, on, layer, connection, to_at, to_layer, digits])`, or a list, is one line of
@@ -594,10 +605,19 @@ reservoirs, optional: a place no source covers runs without lakes). The stage is
 surface the bed paints inside each polygon; `lake_bottom` (one elevation in metres for every lake) and `lake_leakance`
 (1 per day) are stated inputs with no source, refused by `Lakes` by name when a lake is found and unstated. A waterbody
 wholly inside one cell is embedded in it (above); one that cannot be placed is counted in the journal. A lake exchanges water with the aquifer only: no outlets and no
-`WaterMover`, since the streams are Drains (NHDPlus carries no width, so no Streams) and a Drain receives nothing. The
+`WaterMover`, since the streams are Drains (NHDPlus carries no width, so no Streams; the wide rivers are Rivers, below) and a Drain receives nothing. The
 streams are the NHDPlus flowline network (`of="flowline network"`), each line a drain at the land surface through
 `drain_conductance`. `mark_lake_outlets` publishes the key a lake-to-stream mover pairs on for when a stream has a
 width source.
+
+## Rivers in the two templates
+
+`modflow_water_table` and `modflow_plume` state `Rivers` over the `river_areas` need (NHDPlus HR NHDArea StreamRiver and CanalDitch
+polygons, optional: a place with none runs without): `stage` is `{"surface": "bed"}`, `rbot` the stated `river_bottom` (one elevation
+in metres for every river of the run), `conductance` `{"leakance": river_leakance}` (1 per day); the two stated inputs have no source and
+are asked only where a river area is found. A channel too narrow for NHD to map a surface stays a flowline and a drain. A narrow
+stream as a RIV is not built: a run can state `Rivers` on the flowline network with a width of its own (conductance a number or a
+field), and the leakance form is for the polygon.
 
 ## The plume template
 

@@ -21,6 +21,8 @@ class INPUTS:
     drain_conductance = Input()
     lake_bottom = Input().stated()
     lake_leakance = Input().stated()
+    river_bottom = Input().stated()
+    river_leakance = Input().stated()
     well = Input().stated()
     well_rate = Input().stated()
 
@@ -77,6 +79,12 @@ class INPUTS:
         "waterbodies here, and absent where none does. Each one holding a cell centre of the mesh is a lake "
         "that exchanges water with the aquifer only; one smaller than the mesh is skipped and said.")).need(
         "hydrography", of="waterbodies", geometry="polygon").optional_need()
+    river_areas = Input(desc=(
+        "The rivers wide enough to have two banks, as the polygons NHD maps their water surface in; unfilled, the "
+        "source publishing river areas here, and absent where none does. Every solved cell a polygon overlaps is a "
+        "river cell, exchanging with the aquifer over the river's measured area in it, in place of the drain of a "
+        "flowline running through it; a cell whose DEM pixels show no flat water level is left out and said.")).need(
+        "hydrography", of="river areas", geometry="polygon").optional_need()
     observe = Input(OBSERVE, desc=(
         "A well's measured water level the solved water table is checked "
         "against at the well's own cell: a point layer of wells reporting it; "
@@ -115,6 +123,9 @@ class STEERING(GWF):
     # a lake stands at the flat water surface the bed paints inside its polygon; its bed leaks both ways
     Lakes = {"geometry": "waterbodies", "stage": {"surface": "bed"}, "bottom": "lake_bottom",
              "leakance": "lake_leakance"}
+    # a river stands at the flat water surface the bed paints inside its polygon, and a drain in a cell it holds is not written
+    Rivers = {"geometry": "river_areas", "layer": 1, "stage": {"surface": "bed"},
+              "conductance": {"leakance": "river_leakance"}, "rbot": "river_bottom"}
     Wells = {"geometry": "well", "layer": 1, "rate": "well_rate"}
 
 

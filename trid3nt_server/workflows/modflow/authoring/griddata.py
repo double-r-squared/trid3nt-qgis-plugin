@@ -18,7 +18,7 @@ from trid3nt_server.workflows.runtime.module import Slot
 
 from ..errors import ModflowError
 
-__all__ = ["METRES", "SECONDS", "field_name", "field_value", "frame_of", "needs_botm", "needs_top", "place", "sample", "surface_of", "surface_pixels"]
+__all__ = ["METRES", "SECONDS", "field_name", "field_value", "frame_of", "leakance_of", "needs_botm", "needs_top", "place", "sample", "surface_of", "surface_pixels"]
 
 # mf6 reads a year as 365.25 days.
 SECONDS = {"seconds": 1.0, "minutes": 60.0, "hours": 3600.0, "days": 86400.0,
@@ -184,6 +184,18 @@ def surface_of(value: Any, *, label: str) -> Any:
         raise ModflowError(f"{label} reads a raster as {{\"surface\": RASTER}}; got {value!r}.",
                            error_code="MODFLOW_STRESS_UNSTATED")
     return value["surface"]
+
+
+def leakance_of(value: Any, *, label: str) -> float | None:
+    """The leakance a value ``{"leakance": NUMBER}`` states (1 per the model's time unit), or None when the value is no such form."""
+    if not (isinstance(value, Mapping) and "leakance" in value):
+        return None
+    held = value.get("leakance")
+    if set(value) != {"leakance"} or isinstance(held, bool) or not isinstance(held, (int, float)) \
+            or not 0.0 < held < float("inf"):
+        raise ModflowError(f"{label} states a leakance as {{\"leakance\": NUMBER}}, a positive finite number; got {value!r}.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    return float(held)
 
 
 def field_value(field: str, properties: Mapping[str, Any] | None, *, label: str, where: str) -> float:

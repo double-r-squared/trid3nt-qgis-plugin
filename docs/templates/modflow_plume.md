@@ -6,7 +6,7 @@ Where a DISSOLVED RELEASE goes in an unconfined aquifer - a conservative solute 
 
 |  |  |
 |---|---|
-| module | `gwf` - 511 keywords in its dictionary, of which this template states 16 |
+| module | `gwf` - 511 keywords in its dictionary, of which this template states 17 |
 | solves | `trid3nt_server.workflows.modflow.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
@@ -26,6 +26,7 @@ Where a DISSOLVED RELEASE goes in an unconfined aquifer - a conservative solute 
 | `recharge` | matched on a need for aquifer property | What reaches the water table over the domain: a number in metres per day, or a raster publishing its unit; unfilled, the source publishing groundwater_recharge here. | - |
 | `streams` | matched on a need for hydrography | The streams that drain the aquifer: the NHDPlus flowline network over the domain, each line a drain at the land surface; unfilled, the source publishing the flowline network here. | - |
 | `waterbodies` | matched on a need for hydrography | The lakes, ponds and reservoirs of the domain as polygons; unfilled, the source publishing waterbodies here, and absent where none does. Each one holding a cell centre of the mesh is a lake that exchanges water with the aquifer only; one smaller than the mesh is skipped and said. | - |
+| `river_areas` | matched on a need for hydrography | The rivers wide enough to have two banks, as the polygons NHD maps their water surface in; unfilled, the source publishing river areas here, and absent where none does. Every solved cell a polygon overlaps is a river cell, exchanging with the aquifer over the river's measured area in it, in place of the drain of a flowline running through it; a cell whose DEM pixels show no flat water level is left out and said. | - |
 | `observe` | matched on a need for water quality sample | The measured concentrations of the solute at wells, at the snapshot: every well reporting it, each compared with the model at its own cell; unfilled, the measured water quality here. | - |
 | `mesh` | supplied by the caller | a mesh this case already built, as its uri or its layer name, solved on in place of the one the run would build; the user may state one; unstated, the run builds its own. | - |
 
@@ -38,6 +39,8 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `drain_conductance` | m2/day | required | The conductance of the stream beds the aquifer drains through, per cell a stream crosses: how readily water at a head above the bed leaves the aquifer. No dataset measures it, so it is stated |
 | `lake_bottom` | m | optional | Where the bed of every lake in the domain lies, as an elevation in metres on the run's vertical frame: it decides which layers a lake holds (every solved layer whose top lies above it). No dataset measures lake depth nationally, so it is stated; one number serves all the lakes of the run, and it is asked only where a waterbody is found |
 | `lake_leakance` | 1/day | optional | The leakance of the lake beds, how readily water crosses between a lake and the aquifer beside and below it, in 1 per day (conductance per unit area of lakebed). No dataset measures it, so it is stated; asked only where a waterbody is found |
+| `river_bottom` | m | optional | Where the bed of every river in the domain lies, as an elevation in metres on the run's vertical frame: the level below which the river no longer gives water to a head that falls under it. No dataset measures river depth nationally, so it is stated; one number serves all the rivers of the run, and it is asked only where a river area is found |
+| `river_leakance` | 1/day | optional | The leakance of the river beds, how readily water crosses between a river and the aquifer under it, in 1 per day (conductance per unit area of riverbed: the bed's hydraulic conductivity over its thickness). No dataset measures it, so it is stated; asked only where a river area is found |
 | `source_rate` | m/day | required | The depth of treated effluent that infiltrates per day over the source polygon, spread over the polygon as drawn: the release's total volume over its period divided by the polygon's area. It enters the flow as recharge on top of the natural recharge, and it is stated |
 | `source_concentration` | - | required | The concentration of the solute in the effluent that infiltrates, in concentration_units. The infiltrating water carries it into the transport model, and it is stated |
 | `background_concentration` | - | required | The concentration of the solute in the aquifer's own water before the release, which is also that of the natural recharge replacing it, in concentration_units. It is stated |
