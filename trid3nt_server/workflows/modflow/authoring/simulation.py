@@ -16,7 +16,7 @@ from typing import Any, Mapping
 
 from . import DISV_FILE
 from .accepted_mesh import mesh_artifact, mesh_nodes
-from .griddata import frame_of, needs_botm, needs_top, place
+from .griddata import SECONDS, frame_of, needs_botm, needs_top, place
 from .mesh_files import _layering, botm_of, disv_dimensions, top_of, unstructured
 from .movers import grouped, resolved_moves
 from .observations import place_observations
@@ -235,6 +235,9 @@ def _coupled(flopy: Any, sim: Any, coupled: Any, body: Mapping[str, Any], *, flo
         coupled, groups, nlay=int(grid["dims"]["nlay"]), points=grid["points"], cells=grid["cells"],
         utm_epsg=grid["utm_epsg"], frame=grid["frame"], active=active, features=features, name=name, stem=at.stem,
         grid=(grid["top"], grid["botm"]))
+    # mf6 stops a transport model beside a flow model that moves water unless the transport model carries the mover's package
+    if coupled.module == "gwt" and "MVR" in at.groups:
+        groups.setdefault("MVT", {})
     _unstated(coupled, set(groups) | set(_REQUIRED_PACKAGES[coupled.module]), derived)
     sources = [[flow.get_package(prefix.lower()).package_name, "AUX", "CONCENTRATION"] for prefix in carrying]
     if coupled.module == "gwt" and sources and "sources" not in groups.get("SSM", {}):
@@ -495,12 +498,19 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
     if river_counts:
         _river_note(river_counts, dropped)
     tables: dict[str, list] = {}
+    heads: list[Mapping[str, Any]] = []
     row = groups.get("SFR", {}).get("packagedata")
     if row is not None and isinstance(row.value, Mapping) and "streams" in row.value:
-        found, tables["SFR"] = _streamed(sheet, groups["SFR"], row, stem=stem, nlay=nlay, points=points, cells=cells,
-                                         utm_epsg=utm_epsg, frame=frame, active=active)
+        found, tables["SFR"] = _streamed(
+            sheet, groups["SFR"], row, stem=stem, nlay=nlay, points=points, cells=cells, utm_epsg=utm_epsg, frame=frame,
+            active=active, leave_out={**_lake_cells(lakeless, active), **{cell: "river" for _, cell in rivered}})
         features += found
         derived |= {"SFR_NREACHES", "SFR_CONNECTIONDATA"}
+        table = {line[0]: line for line in groups["SFR"]["packagedata"].value}
+        heads = [{"name": reach["name"], "number": reach["number"], "properties": reach["properties"],
+                  "width": table[reach["number"]][4], "slope": table[reach["number"]][5],
+                  "bed_top": table[reach["number"]][6], "manning": table[reach["number"]][9]}
+                 for reach in found if reach["first"]]
     elif isinstance(getattr(groups.get("SFR", {}).get("diversions"), "value", None), Mapping):
         raise ModflowError(
             "Diversions move water between the reaches the Streams lines place; this run states SFR "
@@ -508,11 +518,13 @@ def _stressed(sheet: Any, groups: dict[str, dict[str, Any]], *, nlay: int, point
     row = groups.get("LAK", {}).get("packagedata")
     if row is not None and isinstance(row.value, Mapping) and "lakes" in row.value:
         found, tables["LAK"] = _lakened(sheet, groups["LAK"], row, stem=stem, nlay=nlay, points=points, cells=cells,
-                                        utm_epsg=utm_epsg, frame=frame, active=lakeless, top=grid[0], botm=grid[1])
+                                        utm_epsg=utm_epsg, frame=frame, active=lakeless, top=grid[0], botm=grid[1], heads=heads)
         features += found
         derived |= {"LAK_NLAKES", "LAK_NOUTLETS", "LAK_NTABLES", "LAK_CONNECTIONDATA"}
         if not found:
             del groups["LAK"]
+        elif (routes := {(lake["name"], lake["routed"]): lake["into"] for lake in found if lake.get("routed")}):
+            _routed(groups, routes, sheet, row.provenance)
     row = groups.get("MAW", {}).get("packagedata")
     if row is not None and isinstance(row.value, Mapping) and "wells" in row.value:
         features += _welled(sheet, groups["MAW"], row, nlay=nlay, points=points, cells=cells,
@@ -728,6 +740,27 @@ def _joined(flopy: Any, sim: Any, parent: Any, child: Any, held: _Model, moved: 
         owner=exchange, filename=f"{stem}.mvr", how=f"the movers across the {parent.name}-{child.name} exchange")
 
 
+def _lake_cells(before: Any, after: Any) -> dict[int, str]:
+    """The cells a lake holds - solved before the lakes were laid and not after - by number, each with the reason a reach is left out of it."""
+    if after is before:
+        return {}
+    return {cell: "lake" for layer, held in enumerate(after) for cell, now in enumerate(held)
+            if not now and (before is None or before[layer][cell])}
+
+
+def _conversions(frame: Any, package: str) -> dict[str, float]:
+    """mf6's ``length_conversion`` and ``time_conversion`` for the model's units: what converts a Manning roughness from metres and seconds (SFR and LAK outlets)."""
+    length, time = (str(unit or "unstated").strip().lower() for unit in (frame or (None, None)))
+    factor, seconds = {"meters": 1.0, "feet": 3.28081, "centimeters": 100.0}.get(length), SECONDS.get(time)
+    if factor is None or seconds is None:
+        raise ModflowError(
+            f"{package}'s Manning roughness converts from metres and seconds to the model's units, and "
+            f"DISV_LENGTH_UNITS is {length!r}, TDIS_TIME_UNITS {time!r}; state {package}_LENGTH_CONVERSION and {package}_TIME_CONVERSION, "
+            "or the units as meters, feet or centimeters and seconds, minutes, hours, days or years.",
+            error_code="MODFLOW_UNITS_UNSTATED")
+    return {"length_conversion": factor, "time_conversion": seconds}
+
+
 def _streamed(sheet: Any, rows: dict[str, Any], row: Any, *, stem: str = "", **mesh: Any) -> tuple[list[Mapping[str, Any]], list]:
     """Cut the Streams lines into reaches: the package's reach list, its connections, its count, its diversions, its cross-section files and its period settings."""
     stated = sorted(f"SFR_{name.upper()}" for name in ("nreaches", "connectiondata") if name in rows)
@@ -755,6 +788,9 @@ def _streamed(sheet: Any, rows: dict[str, Any], row: Any, *, stem: str = "", **m
     for reach in features:
         if reach["table"] is not None:
             files.setdefault(tuple(map(tuple, reach["table"])), f"{stem}sfr_xs{len(files) + 1}.tab")
+    if not {"unit_conversion", "length_conversion", "time_conversion"} & set(rows):
+        for name, value in _conversions(mesh["frame"], "SFR").items():
+            rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"SFR_{name.upper()}"], value=value, provenance=row.provenance)
     placed = {"packagedata": packagedata, "connectiondata": connectiondata, "nreaches": len(packagedata),
               **({"perioddata": perioddata} if perioddata else {}),
               **({"diversions": divisions} if divisions else {}),
@@ -764,6 +800,18 @@ def _streamed(sheet: Any, rows: dict[str, Any], row: Any, *, stem: str = "", **m
         rows[name] = Filled(slot=sheet.body.MODULE_INPUT[f"SFR_{name.upper()}"],
                             value=value, provenance=row.provenance)
     return features, [(name, [list(line) for line in table]) for table, name in files.items()]
+
+
+def _routed(groups: dict[str, dict[str, Any]], routes: Mapping[Any, Mapping[str, str]], sheet: Any, provenance: Any) -> None:
+    """The WaterMover statements carrying every routed lake's outlet into its line: all of its water, paired by the two properties, added to the run's MVR movers."""
+    movers = [{"composite": "WaterMover", "from": name, "from_at": None, "to": into["streams"], "to_at": None, "type": "FACTOR",
+               "value": 1.0, "from_outlet": outlet, "keys": (into["from_key"], into["to_key"])}
+              for (name, outlet), into in routes.items()]
+    rows = groups.setdefault("MVR", {})
+    held = rows.get("perioddata")
+    stated = held.value["movers"] if held is not None and isinstance(held.value, Mapping) and "movers" in held.value else []
+    rows["perioddata"] = Filled(slot=sheet.body.MODULE_INPUT["MVR_PERIODDATA"], value={"movers": [*stated, *movers]},
+                                provenance=held.provenance if held is not None else provenance)
 
 
 def _declared(rows: dict[str, Any]) -> tuple[str, ...]:
@@ -790,6 +838,8 @@ def _lakened(sheet: Any, rows: dict[str, Any], row: Any, *, stem: str = "", **me
         placed["perioddata"] = perioddata
     if outlets:
         placed.update(outlets=outlets, noutlets=len(outlets))
+        if not {"length_conversion", "time_conversion"} & set(rows):
+            placed.update(_conversions(mesh["frame"], "LAK"))
     if tabled:
         placed.update(tables=[[lake["number"], f"{stem}lak_tab{lake['number'] + 1}.tab"] for lake in tabled],
                       ntables=len(tabled))

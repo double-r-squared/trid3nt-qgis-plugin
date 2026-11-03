@@ -401,11 +401,11 @@ GWF.CARRIER_OWNED = tuple(f"{prefix}_" for prefix in _SIMULATION_OWNED)
 GWF.composites(reads={"Periods": ("until", "steps")}, Periods=periods)
 GWF.FILLED_BY = MappingProxyType({MOMENT: {"TDIS_START_DATE_TIME": _start_date_time}})
 GWF.composites(
-    reads={name: ("geometry", *(column for column, _ in columns), "concentration", *(("leakance", "surface", "flowlines") if name == "Rivers" else ()))
+    reads={name: ("geometry", "unless", *(column for column, _ in columns), "concentration", *(("leakance", "surface", "flowlines") if name == "Rivers" else ()))
            for name, (_, columns) in _STRESS.items()},
     **{name: _stress(name, package, dict(columns), carries=True, moves=package in GIVERS)
        for name, (package, columns) in _STRESS.items()})
-GWF.composites(reads={"Streams": ("geometry", "cross_section", *_STREAMS, *_STREAM_NUMBERS)}, Streams=_streams)
+GWF.composites(reads={"Streams": ("geometry", "cross_section", "when", *_STREAMS, *_STREAM_NUMBERS)}, Streams=_streams)
 GWF.composites(reads={"Lakes": ("geometry", "table", *_LAKES, *_LAKE_FLUXES, *_LAKE_NUMBERS)}, Lakes=_lakes)
 GWF.composites(reads={"WaterMover": ("from_at", "to_at")}, WaterMover=_movers)
 GWF.composites(reads={"Diversions": ("from_at", "to_at")}, Diversions=_diversions)

@@ -46,7 +46,7 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: 
             raise ModflowError(
                 f"{name} takes a mapping of geometry, layer and {', '.join(columns)}, or a list of them; "
                 f"got {value!r}.", error_code="MODFLOW_STRESS_UNSTATED")
-        if value.get("geometry") is None:
+        if value.get("geometry") is None or value.get("unless"):
             return {}, {}
         for argument in ("layer", *columns):
             if value.get(argument) is None:
@@ -77,6 +77,7 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: 
         f"The {package} package's cells a geometry places: {name}(geometry, layer, "
         f"{', '.join(columns)}{f', [{_AUX[0]}]' if carries else ''}{', [name]' if moves else ''}), or a list of such statements; a geometry reading nothing states nothing."
         + (f"\n\n    name is what WaterMover calls each cell row this statement places; the {package} package gives water to the mover, never takes it." if moves else "")
+        + "\n\n    unless names an input of the run: a statement whose unless reads a value states no cells, so the geometry is free for another package."
         + ("\n\n    conductance may be {\"leakance\": N} (1 per the model's time unit): the geometry's polygons are then the river, "
            "and every solved cell they overlap is one row whose conductance is N times the polygons' area inside it, the "
            "measured area of a river wide enough to have two banks. stage may then be {\"surface\": RASTER}: the elevation "
@@ -202,8 +203,8 @@ def _streams(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
             f"{', '.join(_STREAMS)} and an optional layer, or a list of them; got {value!r}.",
             error_code="MODFLOW_STRESS_UNSTATED")
     _unknown(value, "Streams", ("geometry", "layer", "name", "cross_section", *_STREAMS, *_STREAM_NUMBERS,
-                                *_STREAM_WORDS, "auxiliary"))
-    if value.get("geometry") is None:
+                                *_STREAM_WORDS, "auxiliary", "when"))
+    if value.get("geometry") is None or ("when" in value and not value["when"]):
         return {}, {}
     for argument in _STREAMS:
         if value.get(argument) is None:
@@ -241,7 +242,9 @@ def _streams(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
 _streams.__doc__ = (
     "The SFR reaches a line geometry places: Streams(geometry, width, slope, bed_top, bed_thickness, "
     "bed_conductivity, manning[, layer, name, cross_section, status, bedk, stage, inflow, rainfall, evaporation, "
-    "runoff, upstream_fraction, auxiliary]), or a list of such statements.\n\n"
+    "runoff, upstream_fraction, auxiliary, when]), or a list of such statements.\n\n"
+    "    when names an input of the run: a statement whose when reads nothing (or zero) states no stream, so the lines it\n"
+    "    would have placed are free for another package.\n"
     "    The line is cut by the cells it crosses in its digitized order, downstream; each\n"
     "    reach lies on the cell's top solved layer unless layer states one. A setting is mf6's own SFR\n"
     "    period setting: a number from period 1 or {period from 1: value}, written to every reach of the\n"
@@ -304,6 +307,26 @@ def _outlets(held: Any) -> list[dict[str, Any]]:
     return outlets
 
 
+_INTO = ("streams", "from_key", "to_key", "when")
+
+
+def _into(held: Any, run: Mapping[str, Any] | None) -> Mapping[str, str] | None:
+    """The lakes-into-streams statement, or None where its ``when`` input reads nothing in the run."""
+    if held is None:
+        return None
+    if not isinstance(held, Mapping):
+        raise ModflowError(f"Lakes into is a mapping of {', '.join(_INTO)}; got {held!r}.", error_code="MODFLOW_STRESS_UNSTATED")
+    _unknown(held, "Lakes into", _INTO)
+    for argument in _INTO[:3]:
+        if not isinstance(held.get(argument), str) or not held[argument].strip():
+            raise ModflowError(
+                f"Lakes into states no {argument}; it is the name of a Streams statement and of the two properties that pair a "
+                "lake with the line leaving it.", error_code="MODFLOW_STRESS_UNSTATED")
+    if "when" in held and not (run or {}).get(held["when"]):
+        return None
+    return {argument: held[argument].strip() for argument in _INTO[:3]}
+
+
 def _lakes(value: Any, run: Mapping[str, Any] | None = None) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     if isinstance(value, (list, tuple)) and value:
         stated = [item for each in value if (item := _lakes(each, run)[0])]
@@ -315,9 +338,13 @@ def _lakes(value: Any, run: Mapping[str, Any] | None = None) -> tuple[Mapping[st
             f"{', '.join(_LAKES)} and optionally {', '.join(_LAKE_FLUXES)}, or a list of them; got {value!r}.",
             error_code="MODFLOW_STRESS_UNSTATED")
     _unknown(value, "Lakes", ("geometry", "name", "table", *_LAKES, *_LAKE_FLUXES, *_LAKE_NUMBERS, *_LAKE_WORDS,
-                              "auxiliary", "outlets"))
+                              "auxiliary", "outlets", "into"))
     if value.get("geometry") is None:
         return {}, {}
+    into = _into(value.get("into"), run)
+    if into is not None and _given(value, "Lakes") is None:
+        raise ModflowError("Lakes into names the lakes to WaterMover by the statement's name; state a name.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
     stage = value.get("stage")
     if run is not None and isinstance(stage, Mapping) and set(stage) == {"surface"} and isinstance(stage["surface"], str):
         # the surface names an input of the run, as every other argument that reads one
@@ -344,7 +371,7 @@ def _lakes(value: Any, run: Mapping[str, Any] | None = None) -> tuple[Mapping[st
         "composite": "Lakes", "geometry": value["geometry"], "name": _given(value, "Lakes"),
         "table": None if value.get("table") is None else _table(
             value["table"], composite="Lakes", argument="table", widths=(3,)),
-        "outlets": _outlets(value["outlets"]) if value.get("outlets") is not None else [],
+        "outlets": _outlets(value["outlets"]) if value.get("outlets") is not None else [], "into": into,
         "values": {"bottom": value["bottom"], "leakance": leakance, **settings, "stage": stage}}]}}, {}
 
 
@@ -359,7 +386,10 @@ _lakes.__doc__ = (
     "    polygon holds, the elevation more than half of them share within 0.001 m, else the lake is skipped and said. A setting not stated is not in the package. A setting is mf6's own LAK period setting: a number from\n"
     "    period 1 or {period from 1: value}; status is ACTIVE, INACTIVE or CONSTANT, a stage keyed by period names\n"
     "    period 1 as the starting stage and is the stage a CONSTANT lake holds, auxiliary is {name: value} of the\n"
-    "    LAK_AUXILIARY names. outlets is a list of {to, couttype, rate | invert, width, rough, slope} leaving\n"
+    "    LAK_AUXILIARY names. into is {streams, from_key, to_key[, when]}: a lake whose property from_key equals the property to_key of the\n"
+    "    one line of the Streams statement named streams has a MANNING outlet to outside, its invert the bed top and its width, roughness and\n"
+    "    slope those of that line's first reach, and a WaterMover (FACTOR 1) carrying all of it into that reach; a lake no line leaves has none, two\n"
+    "    lines leaving one lake refuse, and a when naming an input of the run that reads nothing there states no outlets. outlets is a list of {to, couttype, rate | invert, width, rough, slope} leaving\n"
     "    the lake (one polygon): to is the number of the lake it discharges into or \"outside\"; couttype is SPECIFIED\n"
     "    (rate), MANNING (invert, width, rough, slope) or WEIR (invert, width), each value from period 1 or keyed by period.\n"
     "    name is what WaterMover calls the lake; table is the rows (stage, volume, sarea) of the lake's stage-volume-area\n"

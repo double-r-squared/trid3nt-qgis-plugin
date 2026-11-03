@@ -23,6 +23,10 @@ class INPUTS:
     lake_leakance = Input().stated()
     river_bottom = Input().stated()
     river_leakance = Input().stated()
+    stream_width = Input().stated()
+    stream_bed_thickness = Input().stated()
+    stream_bed_k = Input().stated()
+    stream_manning = Input().stated()
     well = Input().stated()
     well_rate = Input().stated()
 
@@ -72,12 +76,15 @@ class INPUTS:
         "aquifer property", of="groundwater_recharge")
     streams = Input(desc=(
         "The streams that drain the aquifer: the NHDPlus flowline network over the domain, each line a drain "
-        "at the land surface; unfilled, the source publishing the flowline network here.")).need(
+        "at the land surface, or where stream_width is stated a routed stream whose slope is the flowline's own; "
+        "unfilled, the source publishing the flowline network here.")).need(
         "hydrography", of="flowline network", geometry="polyline")
     waterbodies = Input(desc=(
         "The lakes, ponds and reservoirs of the domain as polygons; unfilled, the source publishing "
         "waterbodies here, and absent where none does. Each one holding a cell centre of the mesh is a lake "
-        "that exchanges water with the aquifer only; one smaller than the mesh is skipped and said.")).need(
+        "that exchanges water with the aquifer, and where stream_width is stated and streams carries the tags "
+        "mark_lake_outlets writes also discharges into the stream line leaving it; one smaller than the mesh is "
+        "skipped and said.")).need(
         "hydrography", of="waterbodies", geometry="polygon").optional_need()
     river_areas = Input(desc=(
         "The rivers wide enough to have two banks, as the polygons NHD maps their water surface in; unfilled, the "
@@ -118,11 +125,18 @@ class STEERING(GWF):
                "water_table_depth": "water_table_depth"}
     Recharge = {"geometry": "domain", "layer": 1, "rate": "recharge"}
     # at the land surface: a stream drains the aquifer wherever the head stands above its bed
-    Drains = {"geometry": "streams", "layer": 1, "elevation": "bed",
+    Drains = {"geometry": "streams", "unless": "stream_width", "layer": 1, "elevation": "bed",
               "conductance": "drain_conductance"}
+    # where a width is stated the lines are routed streams at the same land surface, in place of the drains
+    Streams = {"geometry": "streams", "when": "stream_width", "layer": 1, "name": "streams", "width": "stream_width",
+               "slope": {"field": "slope"}, "bed_top": "bed", "bed_thickness": "stream_bed_thickness",
+               "bed_conductivity": "stream_bed_k", "manning": "stream_manning"}
     # a lake stands at the flat water surface the bed paints inside its polygon; its bed leaks both ways
+    # where a width is stated, a lake drains into the line a flowline layer tagged by mark_lake_outlets leaves it by
     Lakes = {"geometry": "waterbodies", "stage": {"surface": "bed"}, "bottom": "lake_bottom",
-             "leakance": "lake_leakance"}
+             "leakance": "lake_leakance", "name": "lakes",
+             "into": {"streams": "streams", "from_key": "permanent_identifier", "to_key": "receives_from_waterbody",
+                      "when": "stream_width"}}
     # a river stands at the flat water surface the bed paints inside its polygon, and a drain in a cell it holds is not written
     Rivers = {"geometry": "river_areas", "flowlines": "streams", "layer": 1, "stage": {"surface": "bed"},
               "conductance": {"leakance": "river_leakance"}, "rbot": "river_bottom"}

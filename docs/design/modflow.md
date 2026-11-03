@@ -124,12 +124,12 @@ SFR is stated by its own dictionary keywords (`SFR_NREACHES`, `SFR_PACKAGEDATA`,
 gridgen DISV equals flopy's own DIS reference bitwise (heads, every reach's stage, every
 reach's downstream flow, max difference 0.0). A cellid on a DISV is `[layer, cell]`,
 0-based. The `Streams` composite places lines as those reaches: `Streams(geometry, width,
-slope, bed_top, bed_thickness, bed_conductivity, manning[, layer])`, or a list of them.
+slope, bed_top, bed_thickness, bed_conductivity, manning[, layer, when])`, or a list of them.
 Each line is cut by the cells it crosses in its digitized order (downstream), one reach per
 piece inside a cell, its length the line's length there on `DISV_LENGTH_UNITS`, its layer the
 cell's top solved layer unless `layer` states one. Consecutive reaches connect; a line ending in
-a cell that holds one reach of another line (not that line's last) joins it, and two such reaches
-there refuse. Reaches are numbered from 0, upstream before downstream. `ustrf` is 1.0 and `ndv`
+a cell that holds one reach of another line (not that line's last) joins it, and where several are there the nearest to its end
+(refusing on a tie). Reaches are numbered from 0, upstream before downstream. `ustrf` is 1.0 and `ndv`
 0 unless a `Diversions` statement says otherwise. A line's part past the mesh edge is left out, as for the
 other stresses; one that leaves the mesh and returns refuses naming the cells. A stated
 `SFR_NREACHES` or `SFR_CONNECTIONDATA` beside `Streams` refuses; `manning` is a number, the
@@ -604,11 +604,42 @@ converts into it at ingestion or refuses, and the concentration layer carries it
 reservoirs, optional: a place no source covers runs without lakes). The stage is `{"surface": "bed"}`, the flat water
 surface the bed paints inside each polygon; `lake_bottom` (one elevation in metres for every lake) and `lake_leakance`
 (1 per day) are stated inputs with no source, refused by `Lakes` by name when a lake is found and unstated. A waterbody
-wholly inside one cell is embedded in it (above); one that cannot be placed is counted in the journal. A lake exchanges water with the aquifer only: no outlets and no
-`WaterMover`, since the streams are Drains (NHDPlus carries no width, so no Streams; the wide rivers are Rivers, below) and a Drain receives nothing. The
+wholly inside one cell is embedded in it (above); one that cannot be placed is counted in the journal. A lake exchanges water with the aquifer only, unless the run routes its streams (below). The
 streams are the NHDPlus flowline network (`of="flowline network"`), each line a drain at the land surface through
-`drain_conductance`. `mark_lake_outlets` publishes the key a lake-to-stream mover pairs on for when a stream has a
-width source.
+`drain_conductance` unless a stream width is stated; the wide rivers are Rivers (below).
+
+## Routed streams and lake outlets in the two templates
+
+`stream_width` (a number in metres, or `{"field": NAME}` off each flowline) is the switch. Unstated, the flowline network stays Drains. Stated,
+the `Streams` statement of both templates places the lines as SFR reaches (`when: "stream_width"`) and the `Drains` statement states nothing
+(`unless: "stream_width"`): a `when` or `unless` names an input of the run, and a statement whose `when` reads nothing, or whose `unless`
+reads a value, states no cells. NHDPlus publishes no width for a small stream, so none is fetched. The reach values: `width` the stated
+width, `slope` the flowline's own NHDPlus `slope` (a field of the line; a value that is not positive, as -9998 where NHDPlus holds none,
+refuses naming the flowline), `bed_top` the run's `bed` read at the reach's cell centre (the land surface the drain it replaces stood
+at), and `stream_bed_thickness`, `stream_bed_k` and `stream_manning` stated inputs, asked by name only where a width is stated. The streambed top
+is the land surface because the DEM does not resolve the channel: on the Des Moines ring the lowest pixel within half a pixel of a small
+stream's line lies 0.49 m (median; p10 -0.31, p90 1.94) below the cell's median, and is not monotone downstream (consecutive
+cells of one flowline read 243.20, 243.51, 242.78, 242.97 and 242.75 m, a 0.7 m jitter against the 1 mm the line drops over 100 m); the NHDPlus
+smoothed elevations sit a median 0.57 m (p10 -0.73, p90 +4.96) from that lowest pixel.
+
+SFR converts Manning's roughness through `SFR_LENGTH_CONVERSION` (3.28081 feet, 1.0 meters, 100.0 centimeters) and `SFR_TIME_CONVERSION` (the seconds in the
+time unit), written from the run's `DISV_LENGTH_UNITS` and `TDIS_TIME_UNITS` when the run states none of the three conversions; LAK writes its own two the
+same way when it has outlets. A reach is left out of a cell a river polygon or a lake holds (`leave_out`, as a drain there is
+not written); a line cut there is two lines, each with its own upstream reach, and only a line's true last reach joins another line. A
+line ending in a cell where several other lines pass joins the one its end touches, the nearest; two as near refuse.
+
+`Lakes` takes `into` = `{streams, from_key, to_key[, when]}`: a lake whose property `from_key` (the template: `permanent_identifier`) equals the
+property `to_key` (`receives_from_waterbody`, which `mark_lake_outlets` writes on the flowline below a lake's last in-lake path) of a line of the `Streams` statement
+named `streams` has one MANNING outlet to outside and a `WaterMover` (FACTOR 1.0, paired by the two keys) carrying the outlet's whole flow
+into that line's first reach. The outlet takes its values from that reach, as the published ex-gwf-lak-p02 states them (its two outlets repeat the receiving
+reach's width 5, roughness 0.05 and slope, with an invert 0.41 above the reach's bed top): `invert` the reach's `bed_top`, `width`, `rough`
+and `slope` the reach's. A lake no line leaves has no outlet; two lines leaving one lake refuse. The streams the template reads must be the flowline layer
+`mark_lake_outlets` tagged: untagged streams (the fetched layer) route no lake, and the journal says so. A transport body beside a flow
+model that moves water carries the `MVT` package, which mf6 requires.
+
+A canary run with the COMPLEX preset closes the head change at 0.1 m, and a lake discharging 117 m3/d through a Manning outlet at its invert stands at one
+centimetre, which that closure cannot see: the lake budget stays open by the whole outflow. At `IMS_OUTER_DVCLOSE` 0.001 the routed solve needs 136
+outer iterations against the preset's 100 (`IMS_OUTER_MAXIMUM`), so the twins that route a lake state both.
 
 ## Rivers in the two templates
 

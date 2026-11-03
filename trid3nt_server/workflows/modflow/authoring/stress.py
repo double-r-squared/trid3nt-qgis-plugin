@@ -9,6 +9,7 @@ model's frame, by the dimension its column states.
 from __future__ import annotations
 
 import tempfile
+from types import MappingProxyType
 from typing import Any, Mapping
 
 from trid3nt_server.inputs.geometry import flatten_features
@@ -208,7 +209,8 @@ def _by_period(found: list[tuple[int, list]]) -> dict[int, list[list]]:
 
 def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
                   utm_epsg: int | None, nlay: int, frame: Any = None, active: Any = None,
-                  auxiliary: tuple = (), diversions: list[Mapping[str, Any]] = ()
+                  auxiliary: tuple = (), diversions: list[Mapping[str, Any]] = (),
+                  leave_out: Mapping[int, str] = MappingProxyType({})
                   ) -> tuple[list[list], list[list], dict[int, list[list]], list[list], list[dict[str, Any]]]:
     """Streams statements -> ``(packagedata, connectiondata, perioddata, diversions, features)``, one SFR reach per line piece in a cell.
 
@@ -221,7 +223,12 @@ def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: An
     names the SFR_AUXILIARY columns. A diversion statement moves water from one reach to another: the target
     becomes a downstream connection of the source (numbered after it), receives only the diverted water (USTRF 0.0),
     and the source counts it in NDV. ``features`` is each reach as ``{package, name, number, cells, table, properties, first, last}``, its
-    properties those of its line's feature and first and last whether it is its line's upstream or downstream reach."""
+    properties those of its line's feature and first and last whether it is its line's upstream or downstream reach.
+    ``leave_out`` is the cells (by number, with the reason) that carry no reach: a line is cut there into the lines on either side,
+    and each of those is a line of its own; a feature's first and last are those of the line it was drawn as. A slope that is not
+    positive refuses naming the line."""
+    import itertools
+
     import shapely
     from pyproj import Transformer
     from shapely.geometry import shape as geo
@@ -239,7 +246,8 @@ def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: An
                                  for ring in cells])
     tree = shapely.STRtree(polygons)
     reaches: list[dict[str, Any]] = []
-    lines = 0
+    lines = itertools.count()
+    dropped: dict[str, int] = {}
     for statement in statements:
         first = len(reaches)
         for number, (part, properties) in enumerate(
@@ -249,12 +257,11 @@ def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: An
                 raise ModflowError(f"Streams places lines; got a {line.geom_type}.",
                                    error_code="MODFLOW_STRESS_UNSTATED")
             for one in (line.geoms if line.geom_type == "MultiLineString" else [line]):
-                cut = _cut(one, tree, polygons, cells, line_id=lines, metres=metres,
-                           layer=statement.get("layer"), nlay=nlay, active=active)
+                cut = _cut(one, tree, polygons, cells, lines=lines, metres=metres,
+                           layer=statement.get("layer"), nlay=nlay, active=active, leave_out=leave_out, dropped=dropped)
                 for reach in cut:
                     reach["owner"] = (f"feature {number} of the geometry", properties)
                 reaches += cut
-                lines += 1
         placed = [reach["cell"] for reach in reaches[first:]]
         for reach in reaches[first:]:
             reach["settings"] = {key: value for key, value in (statement.get("settings") or {}).items()
@@ -267,6 +274,19 @@ def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: An
                              owners=[[reach["owner"]] for reach in reaches[first:]])
             for reach, item in zip(reaches[first:], column):
                 reach[key] = item
+            if key == "slope":
+                for reach in reaches[first:]:
+                    if not 0.0 < reach[key] < float("inf"):
+                        where, properties = reach["owner"]
+                        raise ModflowError(
+                            f"Streams: {where}{' (nhdplusid ' + str(properties['nhdplusid']) + ')' if (properties or {}).get('nhdplusid') else ''} "
+                            f"states a slope of {reach[key]!r}; a reach's slope is positive "
+                            "(NHDPlus HR holds -9998 where it is missing).", error_code="MODFLOW_STRESS_UNSTATED")
+    if dropped:
+        from trid3nt_server.inputs.run_notes import journal_note
+
+        journal_note(f"Streams: {len(reaches)} reach(es) placed; " + ", ".join(
+            f"{count} piece(s) of lines in {reason} cells left out" for reason, count in dropped.items()) + ".")
     if not reaches:
         raise ModflowError(
             "Streams places by geometry and the geometry touches no cell of the "
@@ -285,29 +305,48 @@ def _reaches(reaches: list[dict[str, Any]]) -> list[dict[str, Any]]:
             for rank, reach in enumerate(reaches)]
 
 
-def _cut(line: Any, tree: Any, polygons: Any, cells: Any, *, line_id: int, metres: float,
-         layer: Any, nlay: int, active: Any) -> list[dict[str, Any]]:
+def _cut(line: Any, tree: Any, polygons: Any, cells: Any, *, lines: Any, metres: float,
+         layer: Any, nlay: int, active: Any, leave_out: Mapping[int, str] = MappingProxyType({}),
+         dropped: dict[str, int] | None = None) -> list[dict[str, Any]]:
+    import shapely
+
+    dropped = {} if dropped is None else dropped
     pieces = []
     for cell in tree.query(line, predicate="intersects"):
         cut = line.intersection(polygons[cell])
         for piece in getattr(cut, "geoms", [cut]):
             if piece.geom_type == "LineString" and piece.length > 0.0:
                 pieces.append((line.project(piece.interpolate(0.5, normalized=True)),
-                               int(cell), piece.length))
-    if sum(length for _, _, length in pieces) > line.length * (1.0 + 1e-9):
+                               int(cell), piece.length, piece))
+    if sum(length for _, _, length, _ in pieces) > line.length * (1.0 + 1e-9):
         raise ModflowError(
             "Streams places a line along a cell edge, which counts it in both cells; "
             "move the line off the edge.", error_code="MODFLOW_STRESS_OUTSIDE")
-    pieces.sort()
-    for (_, before, _), (_, after, _) in zip(pieces, pieces[1:]):
+    pieces.sort(key=lambda piece: piece[:3])
+    for (_, before, _, _), (_, after, _, _) in zip(pieces, pieces[1:]):
         if not set(cells[before]) & set(cells[after]):
             raise ModflowError(
                 f"Streams: the line leaves the mesh between cells {before} and {after} and "
                 "returns; a stream is one connected line on the mesh, so split it there.",
                 error_code="MODFLOW_STRESS_OUTSIDE")
-    return [{"line": line_id, "first": rank == 0, "last": rank == len(pieces) - 1, "cell": cell,
-             "length": length / metres, "layer": _reach_layer(cell, layer, nlay, active)}
-            for rank, (_, cell, length) in enumerate(pieces)]
+    runs: list[list[tuple[float, int, float, Any]]] = [[]]
+    for piece in pieces:
+        if (why := leave_out.get(piece[1])) is not None:
+            dropped[why] = dropped.get(why, 0) + 1
+            if runs[-1]:
+                runs.append([])
+        else:
+            runs[-1].append(piece)
+    runs = [run for run in runs if run]
+    reaches = []
+    for rank, run in enumerate(runs):
+        line_id = next(lines)
+        reaches += [{"line": line_id, "first": at == 0, "last": at == len(run) - 1, "cell": cell,
+                     "head": rank == 0 and at == 0, "tail": rank == len(runs) - 1 and at == len(run) - 1,
+                     "length": length / metres, "layer": _reach_layer(cell, layer, nlay, active),
+                     "geom": piece, "end": shapely.Point(line.coords[-1])}
+                    for at, (_, cell, length, piece) in enumerate(run)]
+    return reaches
 
 
 def _reach_layer(cell: int, layer: Any, nlay: int, active: Any) -> int:
@@ -326,6 +365,17 @@ def _reach_layer(cell: int, layer: Any, nlay: int, active: Any) -> int:
         error_code="MODFLOW_STRESS_OUTSIDE")
 
 
+def _nearest(held: list[int], reaches: list[dict[str, Any]], reach: Mapping[str, Any]) -> list[int]:
+    """The one reach among several of other lines in a line's last cell that the line's end touches, the nearest; two as near refuse."""
+    near = sorted((reach["end"].distance(reaches[other]["geom"]), other) for other in held)
+    if near[1][0] - near[0][0] > 1e-6:
+        return [near[0][1]]
+    raise ModflowError(
+        f"Streams: the line ending in cell {reach['cell']} meets {len(held)} reaches "
+        f"of other lines there and cannot choose the one it joins ({sum(1 for gap, _ in near if gap - near[0][0] <= 1e-6)} are as near its end); "
+        "end it in a cell where one line passes.", error_code="MODFLOW_STRESS_UNSTATED")
+
+
 def _rows(reaches: list[dict[str, Any]], auxiliary: tuple, diversions: list[tuple[int, int, Mapping[str, Any]]]
           ) -> tuple[list[list], list[list], dict[int, list[list]], list[list], list[dict[str, Any]]]:
     """Number the reaches upstream first, join the lines, and write each reach's packagedata, connection, diversion and period rows."""
@@ -334,15 +384,14 @@ def _rows(reaches: list[dict[str, Any]], auxiliary: tuple, diversions: list[tupl
         if rank + 1 < len(reaches) and not reach["last"]:
             downstream[rank] = rank + 1
             continue
+        if not reach["tail"]:
+            continue
         held = [other for other, each in enumerate(reaches)
                 if each["line"] != reach["line"] and not each["last"]
                 and (each["layer"], each["cell"]) == (reach["layer"], reach["cell"])]
         if len(held) > 1:
-            raise ModflowError(
-                f"Streams: the line ending in cell {reach['cell']} meets {len(held)} reaches "
-                "of other lines there and cannot choose the one it joins; end it in a "
-                "cell where one line passes.", error_code="MODFLOW_STRESS_UNSTATED")
-        if held and reach["last"]:
+            held = _nearest(held, reaches, reach)
+        if held:
             downstream[rank] = held[0]
     upstream: dict[int, list[int]] = {rank: [] for rank in range(len(reaches))}
     for rank, below in downstream.items():
@@ -389,7 +438,7 @@ def _rows(reaches: list[dict[str, Any]], auxiliary: tuple, diversions: list[tupl
                       for period, value in sorted(_timed(item["value"]).items())]
         features.append({"package": "SFR", "name": reach.get("name"), "number": number[rank],
                          "cells": {reach["cell"]}, "table": reach.get("table"), "properties": reach["owner"][1],
-                         "first": reach["first"], "last": reach["last"]})
+                         "first": reach["head"], "last": reach["tail"]})
     return packagedata, connectiondata, _by_period(found), divisions, features
 
 
@@ -547,7 +596,7 @@ def hold_lakes(statements: list[Mapping[str, Any]], idomain: Any, *, points: Any
 
 def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
                 utm_epsg: int | None, nlay: int, frame: Any = None, active: Any = None,
-                top: Any, botm: Any, auxiliary: tuple = ()
+                top: Any, botm: Any, auxiliary: tuple = (), heads: list[Mapping[str, Any]] = ()
                 ) -> tuple[list[list], list[list], dict[int, list[list]], list[list], list[dict[str, Any]]]:
     """Lakes statements -> ``(packagedata, connectiondata, perioddata, outlets, features)`` rows, one LAK lake per polygon.
 
@@ -558,8 +607,9 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
     the statement's one lake for the lake number ``to`` (from 1) or outside, numbered in statement order, its
     values the columns its type reads and mf6's unread value elsewhere.
     ``active`` is one row per layer of the cells the run solves, ``top`` the grid's top and ``botm`` its bottoms;
-    ``auxiliary`` names the LAK_AUXILIARY columns. ``features`` is each lake as ``{package, name, number, cells,
-    outlets, table, properties}``, its outlets the numbers they were given."""
+    ``auxiliary`` names the LAK_AUXILIARY columns. ``heads`` are the first reach of each placed line, which a lake's
+    ``into`` pairs with. ``features`` is each lake as ``{package, name, number, cells, outlets, table, properties,
+    into, routed}``, its outlets the numbers they were given and routed whether one of them leaves into a line."""
     import numpy as np
     import shapely
 
@@ -573,7 +623,8 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
         journal_note(
             f"Lakes: {len(lakes)} lake(s) placed" + (f", {ponds} of them embedded in one cell" if ponds else "")
             + "; a stage read from the surface is the lake's start stage (the median of the pixels inside its polygon), and LAK solves the level;"
-            + " the lakes exchange water with the aquifer only (no outlets, no inflow)."
+            + (" the lakes exchange water with the aquifer only (no outlets, no inflow)." if not any(
+                lake["outlets"] or lake["into"] for lake in lakes) else " a lake has the outlets its statement gives it, and no inflow.")
             + (f" {len(skipped)} waterbod{'y is' if len(skipped) == 1 else 'ies are'} not placed." if skipped else ""))
         by_mesh = sum(1 for item in skipped if item.get("by_mesh"))
         if by_mesh:
@@ -583,6 +634,7 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
             cut_coverage(f"Lakes: {ponds} pond(s) smaller than a cell are embedded in the cell they overlap most, "
                          "straight-sided (ASSUMPTION: the polygon's measured area at every stage, exchanging through "
                          "its bed with the cell's vertical conductivity).")
+    _route(lakes, heads)
     tops, bottoms = _levels(top, botm, nlay=nlay, ncpl=len(cells))
     centres = shapely.centroid(shapely.polygons(
         [[(float(points[v][0]), float(points[v][1])) for v in ring] for ring in cells]))
@@ -634,7 +686,8 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
     for number, lake in enumerate(lakes):
         features.append({"package": "LAK", "name": lake["given"], "number": number,
                          "cells": {cell for _, cell in lake["held"]} or {lake["embedded"][1]}, "table": lake["table"], "properties": lake["properties"],
-                         "outlets": list(range(len(outlets), len(outlets) + len(lake["outlets"])))})
+                         "outlets": list(range(len(outlets), len(outlets) + len(lake["outlets"]))),
+                         "into": lake["into"], "routed": lake.get("routed", 0)})
         for outlet in lake["outlets"]:
             outletno = len(outlets)
             out = outlet["to"] - 1
@@ -649,6 +702,51 @@ def place_lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any,
             found += _setting_rows(outletno, outlet, _OUTLET_SETTINGS,
                                    label=f"Lakes outlet {outletno + 1}", tabled=_OUTLET_TABLED)
     return packagedata, connectiondata, _by_period(found), outlets, features
+
+
+def _route(lakes: list[dict[str, Any]], heads: list[Mapping[str, Any]]) -> None:
+    """Give each lake its ``into`` statement's lake the MANNING outlet to outside whose values are those of the one line it drains into.
+
+    A line drains a lake when its property ``to_key`` equals the lake's ``from_key``; the outlet's invert is that line's first reach's bed top and its
+    width, roughness and slope are that reach's. A lake no line drains has none, a lake two lines drain refuses."""
+    routed = tagged = 0
+    keys: set[str] = set()
+    for lake in lakes:
+        into = lake["into"]
+        if into is None:
+            continue
+        lines = [head for head in heads if head["name"] == into["streams"]]
+        if not lines:
+            raise ModflowError(
+                f"Lakes into names the streams {into['streams']!r}, and no line of a Streams statement of that name is placed.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+        properties = lake["properties"] or {}
+        if into["from_key"] not in properties:
+            raise ModflowError(
+                f"Lakes into pairs by the property {into['from_key']!r}, and {lake['label']} carries no such property.",
+                error_code="MODFLOW_STRESS_UNSTATED")
+        keys |= {into["to_key"]} if any(into["to_key"] in head["properties"] for head in lines) else set()
+        held = properties[into["from_key"]]
+        found = [head for head in lines if held not in (None, "") and head["properties"].get(into["to_key"]) == held]
+        if len(found) > 1:
+            raise ModflowError(
+                f"Lakes into: {lake['label']} is drained by {len(found)} lines of {into['streams']!r} ({into['to_key']}={held!r}); "
+                "a lake gives its water to one line.", error_code="MODFLOW_STRESS_UNSTATED")
+        if found:
+            head, = found
+            lake["outlets"] = [*lake["outlets"], {"couttype": "MANNING", "to": 0, "invert": head["bed_top"], "width": head["width"],
+                                                  "rough": head["manning"], "slope": head["slope"]}]
+            lake["routed"] = len(lake["outlets"])
+            routed += 1
+        tagged += 1
+    if tagged:
+        from trid3nt_server.inputs.run_notes import journal_note
+
+        journal_note(
+            f"Lakes: {routed} of {tagged} lake(s) drain into the line that leaves them (a MANNING outlet at the bed top of that line's first reach, "
+            "its width, roughness and slope, all of its water moved to that reach)"
+            + ("" if keys else "; no line carries the pairing property, so no lake has an outlet - mark_lake_outlets tags the lines a lake drains into")
+            + ".")
 
 
 def place_maw(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_epsg: int | None,
@@ -950,7 +1048,8 @@ def _lakes(statements: list[Mapping[str, Any]], *, points: Any, cells: Any, utm_
                     values = {**values, "stage": stage}
                 entry = {"name": name, "held": [], "embedded": None, "stage": values["stage"], "properties": properties,
                          "leakance": values["leakance"], "values": values, "given": statement.get("name"),
-                         "outlets": statement.get("outlets") or [], "table": statement.get("table"), "polygon": one,
+                         "outlets": statement.get("outlets") or [], "into": statement.get("into"), "table": statement.get("table"),
+                         "polygon": one,
                          "label": label}
                 centred = sorted(int(c) for c in tree.query(one, predicate="contains"))
                 if not centred:
