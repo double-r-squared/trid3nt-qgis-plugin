@@ -736,3 +736,24 @@ def test_every_declared_of_matches_as_it_did_unless_it_names_a_published_quantit
         ("aquifer property", "groundwater_recharge"),
         ("groundwater level", "water_table_depth"),
         ("groundwater level", "water_table_elevation")}
+
+
+@pytest.mark.parametrize(("fetcher", "data_class", "param", "asked"), [
+    ("fetch_chirps_precipitation", "precipitation series", "date", "2024-06-01"),
+    ("fetch_firms_active_fire", "ignition", "date", "2024-06-01"),
+    ("fetch_hrrr_forecast", "weather forcing", "cycle", DURING),
+])
+def test_a_series_row_stating_its_moment_in_one_param_is_asked_the_runs_opening(
+        fetcher, data_class, param, asked):
+    """A source called by one date or one cycle is a survivor of a run that states
+    its moment, and is handed that moment in the param its own spec declares."""
+    from trid3nt_server.tools.search.match import base_ask
+
+    rows = [(name, row) for name, row in _registered_rows()
+            if name == fetcher and row.data_class == data_class]
+    assert rows
+    choice = match(Need(slot="probe", data_class=data_class, lon=_DES_MOINES[0],
+                        lat=_DES_MOINES[1], opens=DURING, until=UNTIL), rows)
+    assert choice.picked == fetcher, choice.sentence
+    ask = base_ask(choice, "probe", None, *_DES_MOINES, DURING, UNTIL)
+    assert ask[param] == asked

@@ -292,7 +292,7 @@ def test_the_bathymetry_sources_are_found_through_their_class(
     """A covered fetcher carries no corpus: its class is the door."""
     for fetcher in ("fetch_bluetopo", "fetch_greatlakes_bathymetry",
                     "fetch_cudem", "fetch_etopo",
-                    "fetch_regional_coastal_dem"):
+                    "fetch_regional_coastal_dem", "fetch_ncei_tsunami_dem"):
         class_routes_to_the_match("bathymetry", fetcher)
 
 
@@ -507,3 +507,23 @@ def test_a_coast_with_a_regional_integration_ranks_it_above_the_coarser_beds(
     laid = _bed_rank(-124.20, 41.75)
     assert laid.index("fetch_regional_coastal_dem") < laid.index("fetch_bluetopo")
     assert laid[-1] == "fetch_etopo"
+
+
+def test_the_alaskan_tsunami_dem_is_the_finest_bed_at_sand_point_on_mhw() -> None:
+    """Sand Point is inside the row's outline, its datum is the run's MHW, and the
+    mosaic is cut to the MHW grids finest cell first; the lower 48 is outside."""
+    from pathlib import Path
+
+    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+
+    spec = load_spec_from_path(Path(
+        "trid3nt_server/tools/fetchers/ocean/fetch_ncei_tsunami_dem/source.yaml"))
+    rule = spec.ingest["imageserver"]["export_query"]["mosaicRule"]
+    assert "VerticalDatum='MHW'" in rule
+    assert '"sortField":"ZOrder","ascending":true' in rule
+    assert spec.vertical_datum == "MHW"
+    assert spec.ingest["imageserver"]["export_query"]["noData"] == "-9999"
+    assert spec.ingest["imageserver"]["nodata_sentinel"] == -9999
+    row = spec.coverage[0]
+    assert row.extent.covers(-160.5, 55.35)
+    assert not row.extent.covers(-82.5, 27.8)

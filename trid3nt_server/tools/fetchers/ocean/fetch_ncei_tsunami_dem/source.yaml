@@ -1,0 +1,153 @@
+schema_version: v1
+name: fetch_ncei_tsunami_dem
+source_class: ncei_tsunami_dem
+shape: raster-cog
+supports_global_query: false
+error_prefix: NCEI_TSUNAMI_DEM
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: COVERAGE_GAP
+endpoints:
+  data:
+    url: https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics
+auth:
+  mode: none
+  user_agent: trid3nt_default
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  # The SAMPLE LATTICE, declared: the service resamples to whatever grid is asked for, and the
+  # default is the 1/3 arc-second the Alaskan grids are built on (3 / 10800 deg).
+  px_per_deg:
+    type: float
+    default: 10800.0
+    min: 60.0
+    max: 12000.0
+  max_px_per_side:
+    type: int
+    default: 4000
+    min: 64
+    max: 4000
+ingest:
+  access: imageserver_export
+  imageserver:
+    service: DEM_all
+    px_min: 64
+    px_per_deg: 10800.0
+    px_max: 4000
+    export_query:
+      bboxSR: '4326'
+      imageSR: '4326'
+      format: tiff
+      pixelType: F32
+      f: image
+      interpolation: RSP_NearestNeighbor
+      noData: '-9999'
+      # DEM_all serves every NCEI-hosted DEM under one endpoint on several vertical references at
+      # once (NAVD 88, MHHW, Sea Level, MHW). The rule cuts it to the MHW grids and orders them by the
+      # catalogue's ZOrder, finest cell first, so each pixel is the finest MHW grid that holds it.
+      mosaicRule: '{"mosaicMethod":"esriMosaicAttribute","sortField":"ZOrder","ascending":true,"mosaicOperation":"MT_FIRST","where":"VerticalDatum=''MHW'' AND CenterY>50 AND (CenterX<-129 OR CenterX>170)"}'
+    # A pixel no grid holds comes back as -9999 and the file declares it nodata; a bbox with no grid in it is COVERAGE_GAP.
+    nodata_sentinel: -9999
+normalize:
+  crs: EPSG:4326
+  units: meters
+  quantity: elevation
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style:
+    kind: continuous
+    ramp: gray
+    units: m
+  emit_bbox: true
+  display_name: NCEI tsunami inundation DEM, Alaska (MHW)
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 400.0
+  floor_mb: 0.05
+  ceil_mb: 80.0
+coverage:
+-   data_class: bathymetry
+    kind: measured
+    extent:
+      kind: surface
+      rings:
+      - [[-159.26, 55.79], [-157.56, 55.79], [-157.56, 56.72], [-159.26, 56.72]]
+      - [[-146.77, 60.49], [-145.21, 60.49], [-145.21, 60.82], [-146.77, 60.82]]
+      - [[-134.31, 54.49], [-132.49, 54.49], [-132.49, 56.28], [-134.31, 56.28]]
+      - [[-167.2, 53.5], [-165.9, 53.5], [-165.9, 54.35], [-167.2, 54.35]]
+      - [[-137.27, 57.53], [-135.97, 57.53], [-135.97, 58.67], [-137.27, 58.67]]
+      - [[-152.1, 59.32], [-150.89, 59.32], [-150.89, 59.82], [-152.1, 59.82]]
+      - [[-162.8, 54.45], [-161.8, 54.45], [-161.8, 55.35], [-162.8, 55.35]]
+      - [[-152.8, 57.58], [-152.0, 57.58], [-152.0, 58.0], [-152.8, 58.0]]
+      - [[-135.35, 55.53], [-134.03, 55.53], [-134.03, 56.71], [-135.35, 56.71]]
+      - [[-161.0, 54.7], [-159.17, 54.7], [-159.17, 55.7], [-161.0, 55.7]]
+      - [[-149.47, 60.06], [-149.31, 60.06], [-149.31, 60.16], [-149.47, 60.16]]
+      - [[172.45, 52.27], [174.21, 52.27], [174.21, 53.06], [172.45, 53.06]]
+      - [[-135.83, 56.78], [-135.08, 56.78], [-135.08, 57.27], [-135.83, 57.27]]
+      note: the thirteen Alaskan communities NCEI built a 1/3 or 1 arc-second tsunami inundation DEM for - a short list rather than a coast
+    window:
+      series: false
+      latest: '2012-03-01'
+    resolution_m: 10.0
+    datum: MHW
+    units:
+      elevation: m
+    value_column: elevation
+
+caveats:
+- The communities are Chignik, Cordova, Craig, Dutch Harbor, Elfin Cove, Kachemak Bay, King Cove, Kodiak, Port Alexander, Sand Point, Seward, Shemya and Sitka.
+- Topography AND bathymetry in one grid, referenced to MEAN HIGH WATER (the shoreline datum NCEI
+  built the tsunami inundation models on), metres positive up, the sea floor NEGATIVE. The grids
+  stop at each community's own outline; a bbox reaching past one gets nodata beyond it.
+- Where two grids overlap the finest cell wins; a grid built on a coarser cell (3 or 8 arc-second)
+  is not served, only the 1/3 and 1 arc-second ones.
+- The grids were built between 2006 and 2012 and do not follow the shore since.
+docstring: |-
+  Fetch an NCEI tsunami inundation DEM of an Alaskan community over a bbox as a float32 GeoTIFF on Mean High Water.
+
+  **What it does:**
+      Exports the NOAA NCEI tsunami inundation digital elevation models
+      built for the Alaskan communities (Sand Point, Chignik, Kodiak, Seward,
+      Sitka, Cordova and others) onto the requested lattice, as a single-band
+      float32 GeoTIFF (EPSG:4326, metres, POSITIVE UP: the sea floor is
+      NEGATIVE). The vertical datum is MEAN HIGH WATER, the datum the grids
+      were built on.
+
+  **When to use:**
+      - A tsunami or surge model of an Alaskan harbour that wants its bed and
+        its shore on MHW with no tidal conversion.
+      - User asks for "the tsunami inundation DEM", "the 1/3 arc-second DEM for
+        Sand Point", "topography and bathymetry for this Alaskan town".
+
+  **When NOT to use:**
+      - A coast outside the listed communities: the grid is not there and the
+        export comes back empty. ``fetch_etopo`` reaches everywhere at 15
+        arc-seconds on EGM2008.
+      - The lower 48 coast: use ``fetch_cudem`` (NAVD88).
+
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326, inside one
+          community's grid. Sand Point: ``(-160.62, 55.30, -160.38, 55.42)``.
+      px_per_deg: the sample lattice in pixels per DEGREE on both axes (default
+          10800, the grids' own 1/3 arc-second).
+      max_px_per_side: per-axis pixel ceiling (default 4000).
+
+  **Returns:**
+      A ``LayerURI`` pointing at the cached GeoTIFF. ``layer_type="raster"``,
+      ``role="input"``, ``units="meters"``.
+
+  **Errors:**
+      - ``NCEI_TSUNAMI_DEM_INPUT_INVALID``: bad bbox, or a lattice past the
+        pixel ceiling (retryable=False).
+      - ``NCEI_TSUNAMI_DEM_UPSTREAM``: the ImageServer failed or returned a
+        non-TIFF body (retryable=True).
+
+  **Vertical datum:**
+      Mean High Water. It is not NAVD88 and not EGM2008: a water level on
+      another reference needs a stated offset before they are read together.

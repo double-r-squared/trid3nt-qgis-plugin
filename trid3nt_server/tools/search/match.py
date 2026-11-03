@@ -222,6 +222,8 @@ _SHAPE_WORD: Mapping[str, str] = {"polyline": "line"}
 def _unaskable(name: str, coverage: Coverage, need: Need) -> str:
     """Why the probe could not call this source at all, or "" where it can; a param is askable only where the NEED holds its value."""
     asked = set(_ASKABLE) | set(coverage.ask)
+    if coverage.window.series:
+        asked |= {param for param, _ in _INSTANT_PARAMS}
     if need.lon is None or need.lat is None:
         asked.discard("seed_point")
     if coverage.extent.points or coverage.extent.read_from:
@@ -263,6 +265,11 @@ _WINDOW_PARAMS = ((("start_date", "end_date"), 10),
                   (("start_time", "end_time"), None))
 
 
+#: The params a source states ONE moment in, by spelling and instant resolution: a series row is asked the run's opening
+#: in the first of these it declares (``valid_time`` is asked of any row).
+_INSTANT_PARAMS = (("valid_time", None), ("date", 10), ("cycle", None))
+
+
 #: How long ONE cadence is, by the word a row leads its cadence with. A record
 #: that speaks for a moment is bracketed by the minute either side; a word none
 #: of these reads is a day, the coarsest cadence a series is published at.
@@ -298,8 +305,13 @@ def base_ask(choice: SourceChoice, purpose: str, bbox: Sequence[float] | None,
         step = _cadence(_picked_row(choice))
         ask[first] = _moved(opens, -step, cut)
         ask[last] = _moved(until or opens, step, cut)
-    elif opens and "valid_time" in params:
-        ask["valid_time"] = str(opens)
+    elif opens:
+        row = _picked_row(choice)
+        series = row is not None and row.window.series
+        spelled = next(((param, cut) for param, cut in _INSTANT_PARAMS
+                        if param in params and (series or param == "valid_time")), None)
+        if spelled is not None:
+            ask[spelled[0]] = str(opens)[:spelled[1]]
     return ask
 
 

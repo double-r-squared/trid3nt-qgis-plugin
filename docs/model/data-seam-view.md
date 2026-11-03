@@ -40,6 +40,7 @@ flowchart LR
     lineSlot["LineSlot<br/>trid3nt_server/inputs/line.py"]
     matchedSlot["SourceMatch<br/>trid3nt_server/workflows/runtime/fill.py"]
     modelMatch["SourceMatch<br/>trid3nt_server/tools/search/find_sources/find_sources.py"]
+    nceiTsunamiDemDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_ncei_tsunami_dem/source.yaml"]
     needDeclaration["SlotNeed<br/>trid3nt_server/inputs/input.py"]
     objectStore["ObjectStore<br/>trid3nt_server/store/objects.py"]
     offsetRowDeclaration["VerticalFrame<br/>trid3nt_server/workflows/runtime/fill.py"]

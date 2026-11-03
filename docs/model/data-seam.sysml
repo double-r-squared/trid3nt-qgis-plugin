@@ -340,6 +340,12 @@ package DataSeam {
         */
     }
 
+    part nceiTsunamiDemDeclaration : BedSourceDeclaration {
+        doc /*
+        code: trid3nt_server/tools/fetchers/ocean/fetch_ncei_tsunami_dem/source.yaml
+        */
+    }
+
     part etopoDeclaration : BedSourceDeclaration {
         doc /*
         code: trid3nt_server/tools/fetchers/ocean/fetch_etopo/source.yaml
