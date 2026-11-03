@@ -36,7 +36,7 @@ from .authoring.restart import Previous, check_matches, checkpoint_outputs, prev
 from .errors import GeoclawError
 from .modules import GEO, SlotRefused, body_on
 from .modules.module import rupture_end
-from .modules.outputs import Solved
+from .modules.outputs import Solved, refuse_dry_start
 
 if TYPE_CHECKING:
     from trid3nt_server.workflows.runtime.fill import Fill
@@ -393,6 +393,8 @@ class GeoclawWorkflow(Workflow):
         else:
             journal_note(f"Total mass at initial time {mass}" if mass is not None else
                          "the engine printed no Total mass at initial time")
+        if str(solved.get("module")) == "geoclaw_bouss":
+            await asyncio.to_thread(refuse_dry_start, Solved({**solved, "sheet": run["sheet"]}, GEO))
         outputs, captions = self._outputs()
         # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
         anchors = await anchors_of(env, outputs)

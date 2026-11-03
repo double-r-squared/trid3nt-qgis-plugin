@@ -42,8 +42,8 @@ _ARCSEC = 3600.0
 _WALL_S_PER_WORK = 3.0e-4
 
 #: The basis both cards state beside the estimate.
-WALL_BASIS = ("counting every cell the regions allow; scaled from the 7-level Copalis runs (2400 s in 245 s at "
-              "8 arcmin, 3600 s in about 50 min at 4 arcmin) - a guide to the cost of the finer levels, not a limit")
+WALL_BASIS = ("an upper bound: every cell the regions allow refined at every step, the run flags fewer; scaled from "
+              "7-level Copalis runs (3600 s in about 50 min at 4 arcmin); a small run's fixed costs can exceed it")
 
 
 def flagregion(mesh: Mesh, name: str, minlevel: int, maxlevel: int, t1: float,
@@ -230,7 +230,7 @@ def _with_facts(mesh: Mesh, grid: RegularGrid, ratios: list[int],
         *[(f"level[{c['level']}]", f"{c['forced']} cells forced, up to "
            f"{c['allowed']} allowed") for c in counts[1:]],
     ]
-    rows.append(("wall_estimate", f"about {facts['wall_s_per_sim_s'] * 3600.0 / 60.0:.0f} min of wall per simulated hour "
+    rows.append(("wall_estimate", f"up to about {facts['wall_s_per_sim_s'] * 3600.0 / 60.0:.0f} min of wall per simulated hour "
                  f"on the box that measured it, {WALL_BASIS}"))
     if abs(grid.dlat * M_PER_DEG_LAT - float(stated_m)) > 1e-6 * float(stated_m):
         notes.append(f"the stated {float(stated_m):g} m was fitted to the "

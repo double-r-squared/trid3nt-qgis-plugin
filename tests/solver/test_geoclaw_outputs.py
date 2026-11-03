@@ -321,3 +321,20 @@ def test_the_table_names_exactly_the_outputs_the_reads_know(store):
     assert {row.unit for row in GEO.MODULE_OUTPUT.values()} == {"m", "m/s", "s"}
     assert set(GEO.READS) == {"field", "max_over_time", "series"}
 
+
+
+def test_a_run_whose_first_frame_holds_no_wet_cell_refuses_as_no_water(store):
+    from trid3nt_server.workflows.geoclaw.modules.outputs import refuse_dry_start
+
+    with pytest.raises(GeoclawError) as caught:
+        refuse_dry_start(_solved(GEO_DRY_TOLERANCE=1.0e9))
+    assert caught.value.error_code == "GEOCLAW_NO_WATER"
+    assert "no cell of the domain holds water, so there is nothing to simulate" in str(caught.value)
+
+
+def test_a_run_whose_first_frame_holds_water_or_no_frame_at_its_start_passes(store):
+    from trid3nt_server.workflows.geoclaw.modules.outputs import refuse_dry_start
+
+    refuse_dry_start(_solved())
+    refuse_dry_start(_solved(GEO_DRY_TOLERANCE=1.0e9, CLAW_T0=5.0))
+    refuse_dry_start(_solved(GEO_DRY_TOLERANCE=1.0e9, FGOUT_FGOUT_GRIDS=None))

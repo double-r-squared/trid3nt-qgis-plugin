@@ -18,7 +18,7 @@ from trid3nt_server.workflows.runtime.primitives import OutputEmpty, Primitive, 
 
 from ..errors import GeoclawError
 
-__all__ = ["PRIMITIVES", "Solved", "read_field", "read_max_over_time", "read_series"]
+__all__ = ["PRIMITIVES", "Solved", "read_field", "read_max_over_time", "read_series", "refuse_dry_start"]
 
 # Each output by token: the primitive that reads it, and the keyword that makes the engine write it.
 _READ_BY = {"MAX_DEPTH": "max_over_time", "MAX_SPEED": "max_over_time", "MAX_SURFACE": "max_over_time",
@@ -203,6 +203,32 @@ def _initial_wet(solved: Solved, grid: Any, stage: _Stage) -> Any:
         raise _refuse("OVERLAND_UNANCHORED", f"the first fgout frame is written at t = {first.t:g} s, so no frame holds "
                       f"the initial sea; state FGOUT_FGOUT_GRIDS tstart {start:g}, the run's CLAW_T0.")
     return first.h > solved.dry_tolerance
+
+
+def refuse_dry_start(solved: Solved) -> None:
+    """Refuse a run whose first fgout frame, written at the run's start, holds no wet cell.
+
+    The Boussinesq executable prints no initial mass (its zeta is 0 for a flat sea and for no water alike), so its
+    frame 0 is the only account of whether the domain holds water. A run with no fgout, or a first frame written after
+    the start, has no such account and passes."""
+    from ..engine import no_water_sentence
+
+    records = solved.stated("FGOUT_FGOUT_GRIDS")
+    if not records or solved.unsaved("DEPTH") is not None:
+        return
+    with solved.staged() as stage:
+        from clawpack.geoclaw.fgout_tools import FGoutGrid
+
+        fgno = int(records[0][0])
+        stage.fetch("fgout_grids.data")
+        grid = FGoutGrid(fgno, str(stage.work))
+        grid.read_fgout_grids_data(fgno)
+        first = _frame(grid, stage, 1)
+        if first.t != float(solved.stated("CLAW_T0") or 0.0):
+            return
+        if not (first.h > solved.dry_tolerance).any():
+            raise _refuse("NO_WATER", no_water_sentence(f"The first fgout frame (t = {first.t:g} s) holds no cell deeper "
+                                                        f"than GEO_DRY_TOLERANCE {solved.dry_tolerance:g} m"))
 
 
 def read_max_over_time(primitive: Primitive, solved: Solved) -> Rasters:

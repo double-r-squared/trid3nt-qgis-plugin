@@ -574,7 +574,7 @@ class GeoclawSheet(Sheet):
         if facts and tfinal is not None:
             minutes = facts["wall_s_per_sim_s"] * float(tfinal) / 60.0
             rows.append(ParamSheetRow(
-                name="wall_estimate", value=f"about {minutes:.0f} min of wall for CLAW_TFINAL {float(tfinal):g} s",
+                name="wall_estimate", value=f"up to about {minutes:.0f} min of wall for CLAW_TFINAL {float(tfinal):g} s",
                 desc="The run's wall time: the grid's wall seconds per simulated second times CLAW_TFINAL. Read-only, not enforced.",
                 origin=Origin.DERIVED, editable=False, source_badge=WALL_BASIS, group="Grid"))
         for content in self.files.values():

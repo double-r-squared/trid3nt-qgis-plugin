@@ -382,10 +382,10 @@ def test_the_sheet_card_states_the_run_total_from_the_grids_rate_and_clawtfinal(
     art = _grid_recipe(tmp_path)
     per_hour = art.probes["claw_grid"]["wall_s_per_sim_s"] * 3600.0 / 60.0
     row = _wall_row(art, CLAW_TFINAL=2400.0)
-    assert row.value == f"about {per_hour * 2400.0 / 3600.0:.0f} min of wall for CLAW_TFINAL 2400 s"
-    assert row.editable is False and "not a limit" in row.source_badge
+    assert row.value == f"up to about {per_hour * 2400.0 / 3600.0:.0f} min of wall for CLAW_TFINAL 2400 s"
+    assert row.editable is False and "upper bound" in row.source_badge
     # an edit of CLAW_TFINAL re-fills the sheet, and the row is drawn again from the new value
-    assert _wall_row(art, CLAW_TFINAL=3600.0).value == f"about {per_hour:.0f} min of wall for CLAW_TFINAL 3600 s"
+    assert _wall_row(art, CLAW_TFINAL=3600.0).value == f"up to about {per_hour:.0f} min of wall for CLAW_TFINAL 3600 s"
 
 
 def test_the_sheet_card_states_no_wall_estimate_without_a_grid_or_a_stated_end(tmp_path):

@@ -171,7 +171,7 @@ async def test_the_gate_card_names_the_finest_cell_and_the_cells_per_level(
     assert rows["grid"].startswith("level-1 grid 30 x 30 cells")
     assert rows["level[2]"] == "100 cells forced, up to 100 allowed"
     assert rows["level[3]"] == "0 cells forced, up to 3600 allowed"
-    assert rows["wall_estimate"].startswith("about ") and "per simulated hour" in rows["wall_estimate"]
+    assert rows["wall_estimate"].startswith("up to about ") and "per simulated hour" in rows["wall_estimate"]
 
 
 def _copalis_ops():
@@ -186,7 +186,7 @@ def test_the_wall_estimate_reproduces_the_measured_copalis_runs(tmp_path):
     ops = _copalis_ops()
     mesh = MeshSession(_recipe(*ops, box=(-128.5, 45.0, -123.5, 49.0), edge=4.0 / 60.0 * 111_320.0,
                                ratios=(2, 5, 2, 2, 2, 3)), workdir=tmp_path).mesh
-    minutes = int(dict(mesh.meta["card_rows"])["wall_estimate"].split()[1])
+    minutes = int(dict(mesh.meta["card_rows"])["wall_estimate"].split()[3])
     # the full run took about 50 minutes for its simulated hour (3600 s)
     assert 47 <= minutes <= 53
 

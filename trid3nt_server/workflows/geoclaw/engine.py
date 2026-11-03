@@ -78,6 +78,11 @@ def _metrics(rundir: Path) -> dict[str, Any]:
     return {}
 
 
+def no_water_sentence(measure: str) -> str:
+    """The refusal sentence for a domain holding no water, after the ``measure`` that showed it."""
+    return f"{measure}: no cell of the domain holds water, so there is nothing to simulate"
+
+
 def classify_exit(rundir: Path, exit_code: int
                   ) -> tuple[str, int, str | None, dict[str, Any]]:
     """The post-exit verdict -> ``(status, exit_code, error, extra)``.
@@ -89,8 +94,7 @@ def classify_exit(rundir: Path, exit_code: int
     mass = metrics.get("initial_mass")
     if isinstance(mass, (int, float)) and mass <= 0:
         return ("error", 2,
-                f"Total mass at initial time is {mass:g}: no cell of the domain holds water, "
-                "so there is nothing to simulate", {**metrics, "error_code": "GEOCLAW_NO_WATER"})
+                no_water_sentence(f"Total mass at initial time is {mass:g}"), {**metrics, "error_code": "GEOCLAW_NO_WATER"})
     if exit_code != 0:
         said = str(metrics.get("error")
                    or f"{GEOCLAW_SOLVER_NAME} exited with non-zero code "

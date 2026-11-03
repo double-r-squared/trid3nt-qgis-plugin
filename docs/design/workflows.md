@@ -552,7 +552,7 @@ parameter (one list for x, y and t), and `flagregion` ops, each one Clawpack
 FlagRegion over a lon/lat rectangle or a ruled rectangle (`ruled`: Clawpack's RuledRectangle fields `ixy`, `s`, `lower`, `upper`, `method` and the `filename` it is written to by RuledRectangle.write, the record's `spatial_region_type` 2; cell counts use its polygon). It builds the level-1 lattice; its finest
 cell (metres and arc-seconds) and the cells each level is forced and allowed
 by the flagregions ride the one mesh gate card as read-only rows, with a wall-time
-estimate per simulated hour that states its measured basis; the sheet card states the
+estimate per simulated hour, worded "up to about N min" as an upper bound (every cell the regions allow refined at every step; the run flags fewer) with its measured basis; the sheet card states the
 run's total (that rate times the stated `CLAW_TFINAL`, redrawn when either is edited) as a
 read-only row off the same probe fact; no budget is enforced, the resolution being the
 user's lever. Refinement is stated as flagregions only:
@@ -578,7 +578,11 @@ refinement-ratio list applies to x, y and t.
 The engine's exit verdict (`classify_exit`) reads the worker's metrics: a run whose
 `Total mass at initial time` is zero (no wet cell) refuses first, naming it; any other
 mass is reported in the journal and on the record for the user to read, since a small
-domain is a legitimate run.
+domain is a legitimate run. The Boussinesq executable prints no initial mass (its `Total zeta`
+is 0 for a flat sea and for no water alike), so after its solve a run that states an fgout
+grid is read at its first frame: written at `CLAW_T0` and holding no cell deeper than
+`GEO_DRY_TOLERANCE` it refuses `GEOCLAW_NO_WATER` with the same sentence; a run with no fgout
+or a first frame after its start has no such account and passes.
 
 The bed is the engine's own list of topofiles, coarse to fine. The `Topography`
 composite on the wrapper takes the surfaces in that order, each a bed (a raster or
