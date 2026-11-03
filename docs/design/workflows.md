@@ -677,7 +677,7 @@ values and a real storm for its forcing. `Storm` is a composite beside the fault
 returns for ONE storm (several refuse naming them) and writes the fixes spanning CLAW_T0 to CLAW_TFINAL as GeoClaw's storm
 file through Clawpack's `Storm` writer, in SI units (`workflows/geoclaw/authoring/storm.py`), setting `SURGE_STORM_FILE`. The
 wind model, drag law and refinement are the body's own keywords (`SURGE_STORM_SPECIFICATION_TYPE` takes any model the engine
-reads a track for, by its integer); Clawpack's writer omits a kept fix without the radius of maximum wind and gives one without the outer radius its 500 km
+reads a track for, by its integer or Clawpack's own lower-case name; the DeMaria model is stated as 7, since the writer lower-cases a name and its table keys that one 'DeMaria'); Clawpack's writer omits a kept fix without the radius of maximum wind and gives one without the outer radius its 500 km
 default, the review card saying how many fixes were omitted and which took the default; a track that begins after the run or ends
 before it, or that has fewer than two fixes with a radius of maximum wind spanning the run, refuses. The
 workflow fetches the track (`storm_name` and `season` over the level-1 box) and, with no stated `event_time`, counts the run

@@ -84,6 +84,17 @@ def test_every_model_the_engine_reads_a_track_for_is_a_keyword_value_of_the_body
         assert f"{number}                    =: storm_specification_type" in (rundir / "surge.data").read_text()
 
 
+def test_a_model_stated_by_clawpacks_name_is_written_as_its_code_and_demaria_is_stated_as_7(tmp_path):
+    sheet = _sheet(tmp_path / "name", SURGE_STORM_SPECIFICATION_TYPE="willoughby")
+    rundir = tmp_path / "run"
+    written = serialize(sheet, rundir)
+    check_staged_run(rundir, sheet=sheet, written=written["written"])
+    assert "9                    =: storm_specification_type" in (rundir / "surge.data").read_text()
+
+    with pytest.raises(Exception, match="does not take 'demaria'"):
+        _sheet(tmp_path / "demaria", SURGE_STORM_SPECIFICATION_TYPE="demaria")
+
+
 def test_the_template_reads_only_inputs_it_declares_and_states_no_sea_level():
     steering = template.STEERING
     declared = {name for name in vars(template.INPUTS) if not name.startswith("_")}

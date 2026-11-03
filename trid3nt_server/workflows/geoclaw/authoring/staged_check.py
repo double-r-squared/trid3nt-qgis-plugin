@@ -68,7 +68,7 @@ def check_staged_run(rundir: Path | str, *, sheet: Any,
             fields = _fields(row)
             found = [_record(obj, fields, stated)
                      for obj, stated in zip(found, row.value)]
-        if not _same(row.value, found):
+        if not _same(_written_form(identifier, row.value), found):
             _refuse("MISMATCH",
                     f"{identifier}: the sheet states {row.value!r} and "
                     f"{path.name} carries {found!r} - the engine's file "
@@ -83,6 +83,15 @@ def check_staged_run(rundir: Path | str, *, sheet: Any,
     logger.info("geoclaw staged check passed: %i identifiers over %i files",
                 len(checked), len(written))
     return result
+
+
+def _written_form(identifier: str, value: Any) -> Any:
+    """What the file holds for a stated value: the storm model's name is written as Clawpack's own table gives its code (the writer lower-cases the name)."""
+    if identifier == "SURGE_STORM_SPECIFICATION_TYPE" and isinstance(value, str):
+        from clawpack.geoclaw.data import SurgeData
+
+        return SurgeData.storm_spec_dict_mapping.get(value.lower(), value)
+    return value
 
 
 def _refuse(code: str, message: str) -> None:

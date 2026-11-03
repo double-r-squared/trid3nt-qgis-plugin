@@ -127,10 +127,11 @@ _CHOICES: Mapping[str, tuple[str, ...]] = {
     # storm_module.f90: case(0..2) else stop.
     "SURGE_DRAG_LAW": ("0", "1", "2"),
     "SURGE_ROTATION_OVERRIDE": ("0", "1", "2", "normal", "n", "s"),
-    # SurgeData.storm_spec_dict_mapping, the writer's own name-to-code table.
+    # SurgeData.storm_spec_dict_mapping, the writer's own name-to-code table; the writer looks a name up
+    # lower-cased, so the table's 'DeMaria' key is unreachable and that model is stated as 7.
     "SURGE_STORM_SPECIFICATION_TYPE": (
         "data", "holland80", "holland08", "holland10", "cle", "slosh",
-        "rankine", "modified-rankine", "demaria", "willoughby",
+        "rankine", "modified-rankine", "willoughby",
         "-1", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"),
     # FGmaxData.write: num_fgmax_val not in [1, 2, 5] raises.
     "FGMAX_NUM_FGMAX_VAL": ("1", "2", "5"),
