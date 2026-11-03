@@ -15,7 +15,7 @@ from trid3nt_server.inputs.geometry import flatten_features
 from trid3nt_server.inputs.point import Point, require_viable
 
 from ..errors import ModflowError
-from .griddata import METRES, field_name, field_value, leakance_of, sample, surface_of, surface_pixels
+from .griddata import METRES, depth_of, field_name, field_value, leakance_of, sample, surface_of, surface_pixels
 
 __all__ = ["GIVERS", "at_cell", "cells_of", "edge_cells", "hold_lakes", "lake_statements", "layer_rows", "maw_statements",
            "pick", "place", "place_interbeds", "place_lakes", "place_maw", "place_river_areas", "place_streams", "place_uzf", "point_cell",
@@ -407,7 +407,7 @@ def place_river_areas(statement: Mapping[str, Any], *, points: Any, cells: Any, 
     conductance is the streambed's hydraulic conductivity times width times length over its thickness, which is
     leakance times area). The stage may be ``{"surface": RASTER}``: the elevation more than half of the raster's
     pixel centres inside the river in that cell share within 0.001 m, else the cell is not placed; any other
-    value is a number, a ``{"field": NAME}`` or a raster read at the cell's centre. ``counts`` holds the cells placed, the
+    value is a number, a ``{"field": NAME}`` or a raster read at the cell's centre; ``rbot`` may be ``{"depth": N}``, each row's stage minus N. ``counts`` holds the cells placed, the
     polygons, the area placed (m2) and the cells left out by reason."""
     import shapely
     from pyproj import Transformer
@@ -472,6 +472,11 @@ def place_river_areas(statement: Mapping[str, Any], *, points: Any, cells: Any, 
             columns[key] = [leakance * sum(piece.area for piece, _ in inside[cell]) / metres ** 2 for cell in kept]
         elif key == "stage" and reader is not None:
             columns[key] = [stage[cell] for cell in kept]
+        elif key == "rbot" and depth_of(value, label="Rivers rbot") is not None:
+            if "stage" not in columns:
+                raise ModflowError("Rivers rbot as {\"depth\": N} is the stage minus N, and the stage is not a column before it.",
+                                   error_code="MODFLOW_STRESS_UNSTATED")
+            columns[key] = [level - depth_of(value, label="Rivers rbot") for level in columns["stage"]]
         else:
             columns[key] = _column(value, key, name="Rivers", placed=kept, dimension=statement["dimensions"][key],
                                    owners=owners, **mesh) if kept else []

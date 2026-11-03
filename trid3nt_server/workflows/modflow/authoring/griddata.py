@@ -198,6 +198,18 @@ def leakance_of(value: Any, *, label: str) -> float | None:
     return float(held)
 
 
+def depth_of(value: Any, *, label: str) -> float | None:
+    """The depth a value ``{"depth": NUMBER}`` states (the model's length unit, below the stage), or None when the value is no such form."""
+    if not (isinstance(value, Mapping) and "depth" in value):
+        return None
+    held = value.get("depth")
+    if set(value) != {"depth"} or isinstance(held, bool) or not isinstance(held, (int, float)) \
+            or not 0.0 < held < float("inf"):
+        raise ModflowError(f"{label} states a depth as {{\"depth\": NUMBER}}, a positive finite number; got {value!r}.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    return float(held)
+
+
 def field_value(field: str, properties: Mapping[str, Any] | None, *, label: str, where: str) -> float:
     """The finite number a feature's property holds, in the model's units; a property the feature lacks or a non-number refuses by name."""
     if not properties or field not in properties:

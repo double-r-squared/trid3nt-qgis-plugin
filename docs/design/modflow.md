@@ -614,7 +614,7 @@ width source.
 
 `modflow_water_table` and `modflow_plume` state `Rivers` over the `river_areas` need (NHDPlus HR NHDArea StreamRiver and CanalDitch
 polygons, optional: a place with none runs without): `stage` is `{"surface": "bed"}`, `rbot` the stated `river_bottom` (one elevation
-in metres for every river of the run), `conductance` `{"leakance": river_leakance}` (1 per day); the two stated inputs have no source and
+in metres for every river of the run, or `{"depth": N}`: each row's stage minus N, the bed following a sloping stage), `conductance` `{"leakance": river_leakance}` (1 per day); the two stated inputs have no source and
 are asked only where a river area is found. A channel too narrow for NHD to map a surface stays a flowline and a drain. A narrow
 stream as a RIV is not built: a run can state `Rivers` on the flowline network with a width of its own (conductance a number or a
 field), and the leakance form is for the polygon.

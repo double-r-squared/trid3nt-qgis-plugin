@@ -80,7 +80,7 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: 
            "and every solved cell they overlap is one row whose conductance is N times the polygons' area inside it, the "
            "measured area of a river wide enough to have two banks. stage may then be {\"surface\": RASTER}: the elevation "
            "more than half of the raster's pixel centres inside the river in that cell share within 0.001 m, a cell showing none "
-           "is not placed and is counted in the journal; stage and rbot also take {\"field\": NAME}." if package == "RIV" else ""))
+           "is not placed and is counted in the journal; stage and rbot also take {\"field\": NAME}, and rbot {\"depth\": N}: each row's stage minus N, in the model's length unit." if package == "RIV" else ""))
     return expand
 
 

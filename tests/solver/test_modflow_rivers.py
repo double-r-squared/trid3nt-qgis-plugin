@@ -99,6 +99,28 @@ def test_a_stage_surface_is_each_cell_s_own_flat_level_and_a_split_cell_is_left_
     assert counts["cells"] == 2 and counts["no majority stage"] == 1
 
 
+def test_a_depth_bottom_is_each_row_s_own_stage_minus_the_depth(tmp_path):
+    # cell 3 holds 7.5 m, cell 4 holds 8 m, cell 5 holds 9 m: each bed follows its own stage
+    surface = _levels(tmp_path, [7.5, 7.5, 8.0, 8.0, 9.0, 9.0], [7.5, 7.5, 8.0, 8.0, 9.0, 9.0])
+
+    rows, _ = _place(_statement(_MIDDLE_ROW, stage={"surface": surface}, rbot={"depth": 1.5}))
+
+    assert [(row[0][1], row[1], row[3]) for row in rows] == [(3, 7.5, 6.0), (4, 8.0, 6.5), (5, 9.0, 7.5)]
+
+
+def test_a_depth_bottom_under_a_number_stage_is_that_number_minus_the_depth():
+    rows, _ = _place(_statement(_MIDDLE_ROW, rbot={"depth": 2.5}))
+
+    assert {row[3] for row in rows} == {5.0}
+
+
+@pytest.mark.parametrize("depth", [0, -1.0, None, "1", True])
+def test_a_depth_that_is_no_positive_number_refuses(depth):
+    with pytest.raises(ModflowError) as caught:
+        _place(_statement(_MIDDLE_ROW, rbot={"depth": depth}))
+    assert "depth" in str(caught.value)
+
+
 def test_a_cell_with_no_pixel_centre_inside_the_river_is_left_out_and_counted(tmp_path):
     surface = _levels(tmp_path, [7.5] * 6, [7.5] * 6)
 
