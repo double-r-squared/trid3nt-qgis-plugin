@@ -619,6 +619,18 @@ are asked only where a river area is found. A channel too narrow for NHD to map 
 stream as a RIV is not built: a run can state `Rivers` on the flowline network with a width of its own (conductance a number or a
 field), and the leakance form is for the polygon.
 
+The river stage per cell (UNDER INSPECTION: NATE ruled the rule, not yet judged on more rivers). The cell's stage is, in order:
+(1) the DEM level more than half of the in-polygon pixel centres share within 0.001 m (the flattened water);
+(2) else, where the surface slopes, the median of the pixels inside the narrowest window of width `S x L + q` holding more than half of
+them: `S` the `slope` field of the NHDPlus flowline nearest the cell's river among the flowlines whose `wbarea_permanent_identifier`
+is the polygon's `permanent_identifier` (the template passes the `streams` layer as the Rivers statement's `flowlines`), `L` the square
+root of the cell's area, `q` the DEM's value step on the river's pixels - the coarsest of 1, 0.1, 0.01, 0.001 m on whose grid a quarter of
+them fall, else 0 (3DEP rivers are whole centimetres: 0.01 on the Des Moines and the Sacramento); (3) else the cell is not placed and
+is counted in the journal line. A flowline slope that is null or not positive (NHDPlus holds -9998 where missing) refuses by flowline
+name when it is the one used. NHDPlus elevations (MinElevSmo, MaxElevSmo) are not used: they sit 0.48 to 0.74 m above the flattened
+DEM water on the Des Moines. Known edge: a short connector flowline inside the polygon can be the nearest line to a cell and carry a
+steep slope, widening that cell's window.
+
 ## The plume template
 
 `modflow_plume` answers "where does a dissolved release go": the steady unconfined flow of

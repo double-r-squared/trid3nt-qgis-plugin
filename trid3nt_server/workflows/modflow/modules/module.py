@@ -69,7 +69,8 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: 
         return {f"{package}_STRESS_PERIOD_DATA": {
             "stress": package, "composite": name, "geometry": value["geometry"],
             "values": {column: _named(value[column], run) for column in taken},
-            "dimensions": dict(taken), "layer": layer, **({"name": _given(value, name)} if moves else {})},
+            "dimensions": dict(taken), "layer": layer, **({"name": _given(value, name)} if moves else {}),
+            **({"flowlines": value["flowlines"]} if value.get("flowlines") is not None else {})},
             **({f"{package}_AUXILIARY": [_AUX[1]]} if aux else {})}, {}
 
     expand.__doc__ = (
@@ -79,8 +80,12 @@ def _stress(name: str, package: str, dimensions: Mapping[str, str], *, carries: 
         + ("\n\n    conductance may be {\"leakance\": N} (1 per the model's time unit): the geometry's polygons are then the river, "
            "and every solved cell they overlap is one row whose conductance is N times the polygons' area inside it, the "
            "measured area of a river wide enough to have two banks. stage may then be {\"surface\": RASTER}: the elevation "
-           "more than half of the raster's pixel centres inside the river in that cell share within 0.001 m, a cell showing none "
-           "is not placed and is counted in the journal; stage and rbot also take {\"field\": NAME}, and rbot {\"depth\": N}: each row's stage minus N, in the model's length unit." if package == "RIV" else ""))
+           "more than half of the raster's pixel centres inside the river in that cell share within 0.001 m. A cell showing none is read off the "
+           "sloping surface: flowlines is the NHDPlus flowline layer, the river's own being those whose wbarea_permanent_identifier is the "
+           "polygon's permanent_identifier, and the stage is the median of the pixels in a window of width slope x cell length + the raster's "
+           "own value step when more than half of the pixels lie in it, the slope that of the flowline nearest the cell's river. A cell "
+           "showing neither is not placed and is counted in the journal. stage and rbot also take {\"field\": NAME}, and rbot "
+           "{\"depth\": N}: each row's stage minus N, in the model's length unit." if package == "RIV" else ""))
     return expand
 
 

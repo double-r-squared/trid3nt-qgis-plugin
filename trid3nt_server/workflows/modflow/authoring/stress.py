@@ -406,8 +406,12 @@ def place_river_areas(statement: Mapping[str, Any], *, points: Any, cells: Any, 
     A cell's conductance is the stated leakance times the area of the polygons inside it (the RIV description's
     conductance is the streambed's hydraulic conductivity times width times length over its thickness, which is
     leakance times area). The stage may be ``{"surface": RASTER}``: the elevation more than half of the raster's
-    pixel centres inside the river in that cell share within 0.001 m, else the cell is not placed; any other
-    value is a number, a ``{"field": NAME}`` or a raster read at the cell's centre; ``rbot`` may be ``{"depth": N}``, each row's stage minus N. ``counts`` holds the cells placed, the
+    pixel centres inside the river in that cell share within 0.001 m; any other
+    value is a number, a ``{"field": NAME}`` or a raster read at the cell's centre. A surface cell with no such level takes the median
+    of the pixels in a window of width ``slope x sqrt(cell area) + step`` when more than half of its pixels lie in it: ``slope`` is the
+    slope field of the flowline nearest the cell's river among the statement's ``flowlines`` whose ``wbarea_permanent_identifier``
+    is a polygon's ``permanent_identifier``, ``step`` the raster's decimal value step on the river pixels (0 where they are not
+    quantized); ``rbot`` may be ``{"depth": N}``, each row's stage minus N. ``counts`` holds the cells placed, the
     polygons, the area placed (m2) and the cells left out by reason."""
     import shapely
     from pyproj import Transformer
@@ -444,7 +448,7 @@ def place_river_areas(statement: Mapping[str, Any], *, points: Any, cells: Any, 
             if piece.area > 0.0:
                 inside.setdefault(int(cell), []).append((piece, owner))
     counts = {"polygons": len(parts), "cells": 0, "area": 0, "unsolved": 0, "no pixel centre": 0, "no pixel measured": 0,
-              "no majority stage": 0}
+              "no flowline": 0, "no majority stage": 0, "sloped": 0, "step": 0.0}
     placed = sorted(inside)
     solved = [cell for cell in placed if active is None or active[layer][cell] > 0]
     counts["unsolved"] = len(placed) - len(solved)
@@ -455,10 +459,28 @@ def place_river_areas(statement: Mapping[str, Any], *, points: Any, cells: Any, 
             reader = surface_pixels(surface, label="Rivers stage", name="stage", scratch=work, utm_epsg=int(utm_epsg), frame=frame)
     stage: dict[int, float] = {}
     kept = []
+    rivers = _linked_flowlines(statement.get("flowlines"), to_utm) if reader is not None else []
+    step = 0.0
+    if rivers and solved:
+        everything, _ = reader(shapely.union_all([piece for cell in solved for piece, _ in inside[cell]]))
+        step = _value_step(everything, frame=frame)
+    counts["step"] = step
     for cell in solved:
         if reader is not None:
-            found, count = reader(shapely.union_all([piece for piece, _ in inside[cell]]))
+            river = shapely.union_all([piece for piece, _ in inside[cell]])
+            found, count = reader(river)
             level, _ = _flat_stage(found, count, frame=frame)
+            if level is None and found and rivers:
+                linked = {str(properties.get("permanent_identifier")) for _, (_, properties) in inside[cell]}
+                near = min(((river.distance(line), slope, name) for line, wbarea, slope, name in rivers if wbarea in linked),
+                           default=None)
+                if near is None:
+                    counts["no flowline"] += 1
+                    continue
+                width = (_slope_of(near[1], near[2], label="Rivers flowlines") * polygons[cell].area ** 0.5 / _metres(frame, "Rivers stage reads a surface")
+                         + step)
+                level = _sloped_stage(found, count, width)
+                counts["sloped"] += level is not None
             if level is None:
                 counts["no pixel centre" if not count else "no pixel measured" if not found else "no majority stage"] += 1
                 continue
@@ -1019,6 +1041,59 @@ def _is_constant(status: Any) -> bool:
 # USGS Elevation-Derived Hydrography Data Acquisition Specifications, Vertical Alignment of lake/pond polygons:
 # a water body's z-values match its hydro-flattened surface within 0.001 m; a pixel at the mode is within it.
 _FLAT_WITHIN_M = 0.001
+
+
+def _linked_flowlines(flowlines: Any, to_utm: Any) -> list[tuple[Any, str, Any, str]]:
+    """The statement's flowline layer -> ``(UTM line, wbarea_permanent_identifier, slope, nhdplusid)`` for each line that names a waterbody area."""
+    from shapely.geometry import shape as geo
+    from shapely.ops import transform
+
+    from trid3nt_server.inputs.shape import shape
+
+    if flowlines is None:
+        return []
+    out = []
+    for part, properties in flatten_features(shape(flowlines, label="Rivers flowlines").features):
+        wbarea = properties.get("wbarea_permanent_identifier")
+        if wbarea in (None, "") or part.get("type") not in ("LineString", "MultiLineString"):
+            continue
+        out.append((transform(to_utm, geo(part)), str(wbarea), properties.get("slope"), str(properties.get("nhdplusid"))))
+    return out
+
+
+def _slope_of(slope: Any, name: str, *, label: str) -> float:
+    """The unitless slope a flowline's field holds, or the refusal naming the flowline (NHDPlus HR holds -9998 where it is missing)."""
+    if isinstance(slope, bool) or not isinstance(slope, (int, float)) or not 0.0 < slope < float("inf"):
+        raise ModflowError(f"{label}: the flowline {name} states a slope of {slope!r}; the river's stage window needs a positive slope.",
+                           error_code="MODFLOW_STRESS_UNSTATED")
+    return float(slope)
+
+
+def _value_step(found: list[float], *, frame: Any) -> float:
+    """The coarsest decimal step (1 m to 0.001 m) on whose grid a quarter of the river's pixels fall, in the model's length unit; 0 where none does."""
+    import numpy as np
+
+    if not found:
+        return 0.0
+    metres = _metres(frame, "Rivers stage reads a surface")
+    values = np.asarray(found, dtype=float) * metres
+    slack = 4.0 * float(np.spacing(np.float32(np.abs(values).max())))
+    for power in range(4):
+        step = 10.0 ** -power
+        if float((np.abs(values / step - np.round(values / step)) * step <= slack).mean()) >= 0.25:
+            return step / metres
+    return 0.0
+
+
+def _sloped_stage(found: list[float], count: int, width: float) -> float | None:
+    """The median of the ``found`` pixels in the window of ``width`` holding the most of them, None where that window holds no more than half of the ``count`` pixels."""
+    import numpy as np
+
+    ordered = np.sort(np.asarray(found, dtype=float))
+    end = np.searchsorted(ordered, ordered + width, side="right")
+    held = end - np.arange(ordered.size)
+    best = int(np.argmax(held))
+    return None if held[best] * 2 <= count else float(np.median(ordered[best:end[best]]))
 
 
 def _flat_stage(found: list[float], count: int, *, frame: Any) -> tuple[float | None, float | None]:

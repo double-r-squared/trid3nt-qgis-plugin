@@ -121,6 +121,78 @@ def test_a_depth_that_is_no_positive_number_refuses(depth):
     assert "depth" in str(caught.value)
 
 
+def _river_feature(identifier="R1"):
+    return {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"permanent_identifier": identifier}, "geometry": _MIDDLE_ROW}]}
+
+
+def _flowlines(*lines):
+    """Each line is ``(wbarea, slope)`` laid along the river's axis (y 15)."""
+    return {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"nhdplusid": 100 + rank, "wbarea_permanent_identifier": wbarea, "slope": slope},
+         "geometry": {"type": "LineString", "coordinates": [list(_TO_LONLAT(1.0, 15.0)), list(_TO_LONLAT(29.0, 15.0))]}}
+        for rank, (wbarea, slope) in enumerate(lines)]}
+
+
+def _sloped(tmp_path, west, flat=8.03):
+    """Cell 3 (x 0-10) holds the four ``west`` pixels (a sloping surface), cells 4 and 5 the flat level ``flat``."""
+    grid = np.full((6, 6), 9.0)
+    grid[2], grid[3] = [west[0], west[1], flat, flat, flat, flat], [west[2], west[3], flat, flat, flat, flat]
+    return _fine(tmp_path, grid)
+
+
+def _slope_place(surface, lines, identifier="R1"):
+    return _place({**_statement(_river_feature(identifier), stage={"surface": surface}), "flowlines": _flowlines(*lines)})
+
+
+def test_a_cell_with_no_flat_level_takes_the_median_of_the_window_the_slope_times_its_length_allows(tmp_path):
+    # pixels 7.50 7.52 7.54 7.60 lie on the 0.01 grid, as do the flat 8.0 cells: the step is 0.01 and the cell is 10 m long
+    surface = _sloped(tmp_path, [7.50, 7.52, 7.54, 7.60])
+
+    rows, counts = _slope_place(surface, [("R1", 0.0031)])
+
+    # window 0.0031 x 10 + 0.01 = 0.041 holds 7.50, 7.52, 7.54 (three of four), whose median is 7.52
+    assert [(row[0][1], row[1]) for row in rows] == [(3, pytest.approx(7.52)), (4, pytest.approx(8.03)), (5, pytest.approx(8.03))]
+    assert counts["sloped"] == 1 and counts["step"] == pytest.approx(0.01)
+
+
+def test_a_window_holding_half_or_fewer_of_the_pixels_leaves_the_cell_out(tmp_path):
+    surface = _sloped(tmp_path, [7.50, 7.52, 7.54, 7.60])
+
+    rows, counts = _slope_place(surface, [("R1", 0.001)])
+
+    assert [row[0][1] for row in rows] == [4, 5] and counts["no majority stage"] == 1 and counts["sloped"] == 0
+
+
+def test_a_surface_that_is_not_quantized_has_no_value_step(tmp_path):
+    surface = _sloped(tmp_path, [7.5000, 7.5237, 7.5412, 7.6031], flat=8.0371)
+
+    rows, counts = _slope_place(surface, [("R1", 0.0045)])
+
+    # window 0.0045 x 10 = 0.045 and no step: 7.5000 .. 7.5450 holds three of four
+    assert counts["step"] == 0.0 and (3, pytest.approx(7.5237)) in [(row[0][1], row[1]) for row in rows]
+    assert _slope_place(surface, [("R1", 0.003)])[1]["no majority stage"] == 1
+
+
+def test_only_a_flowline_naming_the_river_gives_its_slope(tmp_path):
+    surface = _sloped(tmp_path, [7.50, 7.52, 7.54, 7.60])
+
+    rows, counts = _slope_place(surface, [("OTHER", 0.5), ("R1", 0.001)])
+    assert [row[0][1] for row in rows] == [4, 5] and counts["no majority stage"] == 1
+
+    rows, counts = _slope_place(surface, [("OTHER", 0.5)])
+    assert [row[0][1] for row in rows] == [4, 5] and counts["no flowline"] == 1
+
+
+@pytest.mark.parametrize("slope", [None, 0, -9998.0, "0.1"])
+def test_a_slope_that_is_no_positive_number_refuses_naming_the_flowline(tmp_path, slope):
+    surface = _sloped(tmp_path, [7.50, 7.52, 7.54, 7.60])
+
+    with pytest.raises(ModflowError) as caught:
+        _slope_place(surface, [("R1", slope)])
+    assert "100" in str(caught.value) and "slope" in str(caught.value)
+
+
 def test_a_cell_with_no_pixel_centre_inside_the_river_is_left_out_and_counted(tmp_path):
     surface = _levels(tmp_path, [7.5] * 6, [7.5] * 6)
 
@@ -174,11 +246,14 @@ def test_the_cell_row_placement_leaves_the_area_forms_to_the_river_placement():
 
 def test_a_run_input_named_in_the_forms_is_read_off_the_run(tmp_path):
     surface = _levels(tmp_path, [7.5] * 6, [7.5] * 6)
-    sheet = _fill({"Rivers": {"geometry": "where", "layer": 1, "stage": {"surface": "bed"},
+    lines = _flowlines(("R1", 0.003))
+    sheet = _fill({"Rivers": {"geometry": "where", "flowlines": "lines", "layer": 1, "stage": {"surface": "bed"},
                               "conductance": {"leakance": "leak"}, "rbot": 2.0}},
-                  where=_MIDDLE_ROW, bed=surface, leak=0.1)
+                  where=_MIDDLE_ROW, lines=lines, bed=surface, leak=0.1)
 
     statement = sheet.filled["RIV_STRESS_PERIOD_DATA"].value
+
+    assert statement["flowlines"] == lines
 
     assert statement["values"]["stage"] == {"surface": surface}
     assert statement["values"]["conductance"] == {"leakance": 0.1} and river_area(statement)

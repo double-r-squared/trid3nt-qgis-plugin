@@ -557,11 +557,13 @@ def _river_note(counts: list[dict[str, int]], dropped: int) -> None:
     from trid3nt_server.inputs.run_notes import journal_note
 
     left = {reason: sum(item[reason] for item in counts) for reason in
-            ("no majority stage", "no pixel measured", "no pixel centre", "unsolved")}
+            ("no flowline", "no majority stage", "no pixel measured", "no pixel centre", "unsolved")}
     journal_note(
         f"Rivers: {sum(item['cells'] for item in counts)} river cell(s) placed over {sum(item['polygons'] for item in counts)} "
         f"polygon(s), {sum(item['area'] for item in counts)} m2 of river; each cell's conductance is the stated leakance times "
         "the river's area in it, its stage the elevation more than half of the DEM pixels inside the river in that cell share"
+        + (f", else for {sloped} cell(s) the median of the pixels in a window of the nearest river flowline's slope times the cell's length "
+           f"plus the DEM's value step ({max(item['step'] for item in counts):g} m model length)" if (sloped := sum(item["sloped"] for item in counts)) else "")
         + (f"; {sum(left.values())} cell(s) the river overlaps are not placed ("
            + ", ".join(f"{number} {reason}" for reason, number in left.items() if number) + ") and keep their drain" if any(left.values()) else "")
         + (f"; {dropped} drain row(s) in river cells are dropped, the river exchanging there" if dropped else "") + ".")

@@ -141,7 +141,7 @@ class STEERING(GWF):
     Lakes = {"geometry": "waterbodies", "stage": {"surface": "bed"}, "bottom": "lake_bottom",
              "leakance": "lake_leakance"}
     # a river stands at the flat water surface the bed paints inside its polygon, and a drain in a cell it holds is not written
-    Rivers = {"geometry": "river_areas", "layer": 1, "stage": {"surface": "bed"},
+    Rivers = {"geometry": "river_areas", "flowlines": "streams", "layer": 1, "stage": {"surface": "bed"},
               "conductance": {"leakance": "river_leakance"}, "rbot": "river_bottom"}
 
     # A total variation diminishing scheme: the upstream one smears a plume front across several cells
