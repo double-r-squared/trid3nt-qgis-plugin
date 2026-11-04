@@ -28,7 +28,7 @@ small/coarse AOIs used in the proofs -- they scale with AOI and resolution.
 | Engine | Domain | Mechanism | Env gates | Rough local runtime |
 |--------|--------|-----------|-----------|---------------------|
 | **TELEMAC** | free-surface hydrodynamics: river dye and tracer release, rain on grid, scour and sediment plume, 3D stratified flow, harbour agitation (ARTEMIS) | docker `trid3nt-local/telemac:latest` (locally built; opentelemac v9.0.0 conda env), rundir bind-mounted at `/data`, no boto3 in the image | `TRID3NT_SOLVER_BACKEND=local-docker`, `TRID3NT_TELEMAC_IMAGE`, `TRID3NT_RUNS_DIR` | ~2.8-3.2 min (167-190 s measured across several real local runs, `wall_s` in `telemac_metrics.json`) for reach-scale unstructured meshes (4.3k-18.6k nodes / 7.2k-35.5k elements); a mesh-only preview run (no physics solve) completes in ~7 s |
-| **OceanMesh2D** | unstructured mesh generation from a sizing function | docker `trid3nt-local/mesh:latest` (locally built), an environment only: the recipe bind-mounts its driver and a rundir and overrides the entrypoint | `TRID3NT_MESH_IMAGE` | seconds to a few minutes, set by the sizing function rather than the AOI alone |
+| **OceanMesh2D** | unstructured mesh generation from a sizing function | in the server process: the oceanmesh library from the `mesh` extra (`pip install -e '.[mesh]'`) | - | seconds to a few minutes, set by the sizing function rather than the AOI alone |
 
 Notes:
 
@@ -38,8 +38,7 @@ Notes:
 - The rundir is bind-mounted (`-v <rundir>:/data`) and the AGENT-side supervisor does the
   upload; the container reaches no network of its own.
 - Cancellation works locally: the cancel chain kills the named container.
-- Images are built from the worker Dockerfiles: `scripts/build_telemac_image.sh`, or
-  `docker build -t trid3nt-local/mesh:latest workers/mesh/`. Worker code is INERT until its
+- Images are built from the worker Dockerfiles: `scripts/build_telemac_image.sh`. Worker code is INERT until its
   image is rebuilt -- edit, rebuild, then smoke THROUGH the image.
 
 ---

@@ -25,21 +25,16 @@ def scripts_dir(engine: str) -> Path:
 
 def run_image_script(*, image: str, engine: str, script: str, rundir: Path,
                      argv: Sequence[str], extra_mounts: Sequence[tuple[Path, str]] = (),
-                     timeout_s: float,
-                     entrypoint_override: bool = False) -> subprocess.CompletedProcess:
+                     timeout_s: float) -> subprocess.CompletedProcess:
     """Run ``script`` inside ``image`` against ``rundir`` -> the finished process.
 
-    ``extra_mounts`` are ``(host, container)`` pairs bound between the scripts and rundir mounts, in order;
-    ``entrypoint_override`` shells ``python`` as the entrypoint rather than its first argument."""
+    ``extra_mounts`` are ``(host, container)`` pairs bound between the scripts and rundir mounts, in order."""
     cmd = ["docker", "run", "--rm", "--network", "none",
           "-v", f"{scripts_dir(engine)}:/drivers:ro"]
     for host, target in extra_mounts:
         cmd += ["-v", f"{host}:{target}"]
     cmd += ["-v", f"{rundir}:/data"]
-    if entrypoint_override:
-        cmd += ["--entrypoint", "python", image]
-    else:
-        cmd += [image, "python"]
+    cmd += [image, "python"]
     cmd += [f"/drivers/{script}", *argv]
     logger.info("%s: %s", script, " ".join(cmd))
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)

@@ -1,8 +1,7 @@
-"""In-container OceanMesh2D driver for the ``om2d`` mesher.
+"""The OceanMesh2D build behind the ``om2d`` mesher, run in this process.
 
-Runs INSIDE the image where the CHLNDDEV ``oceanmesh`` port is installed and
-imports nothing from trid3nt. The recipe's ops travel as ``{fn, kwargs}`` data,
-each called VERBATIM on the library: THIS is where the signature is the schema."""
+Imports the CHLNDDEV ``oceanmesh`` port, so only ``om2d.py`` imports this module, lazily. The recipe's ops
+arrive as ``{fn, kwargs}`` data, each called VERBATIM on the library: THIS is where the signature is the schema."""
 
 from __future__ import annotations
 
@@ -11,7 +10,6 @@ import functools
 import inspect
 import json
 import math
-import sys
 
 import numpy as np
 import oceanmesh as om
@@ -19,6 +17,8 @@ from scipy.spatial import cKDTree
 from shapely import contains_xy
 from shapely.geometry import shape as _shape
 from shapely.ops import unary_union
+
+from trid3nt_server.tools.mesh.meshers import MeshToolError
 
 
 #: How wide the finest-edge band around an obstacle outline is, in units of that
@@ -49,18 +49,6 @@ _CELL_PARAMS = ("entities", "faces", "cells", "t")
 
 class _EmptyAfterOp(Exception):
     """An op took the last element; the empty-mesh refusal states which one."""
-
-
-class _Refusal(Exception):
-    """A typed refusal the HOST re-raises under its own code.
-
-    The code, the reason and the escalation travel back as a document."""
-
-    def __init__(self, code: str, message: str, escalation: dict | None = None
-                 ) -> None:
-        super().__init__(message)
-        self.document = {"code": code, "message": message,
-                         "escalation": escalation}
 
 
 def _seed_library_randomness(seed: int) -> None:
@@ -228,7 +216,7 @@ class _EdgeShoreline:
         self.dropped = sum(walk.shape[0] for walk in walked) \
             - sum(part.shape[0] for part in kept)
         if not self.points.shape[0]:
-            raise _Refusal(
+            raise MeshToolError(
                 "MESH_DOMAIN_HAS_NO_SHORELINE",
                 "every stretch of this domain's edge is named by an inflow, an "
                 "outflow or an open run, so none of it is shoreline and there is "
@@ -576,7 +564,8 @@ def _is_mesh(result) -> bool:
             and result[1].shape[1] in (3, 4))
 
 
-def op_build(cfg: dict, out: str) -> int:
+def op_build(cfg: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
+    """Generate the mesh -> ``(points lon/lat, cells, pfix, stats)``."""
     _seed_library_randomness(int(cfg.get("seed", 0)))
     build = _Build(cfg)
     reports: list[dict] = []
@@ -651,7 +640,6 @@ def op_build(cfg: dict, out: str) -> int:
         remap[used] = np.arange(used.shape[0])
         points = points[used]
         cells = remap[cells]
-    np.savez(out + "/om2d_mesh.npz", points=points, cells=cells, pfix=pfix)
 
     tri = points[cells]
     seg = np.sqrt(np.concatenate([
@@ -681,9 +669,7 @@ def op_build(cfg: dict, out: str) -> int:
         "edge_median_m": round(float(np.median(seg)), 1),
         "edge_max_m": round(float(seg.max()), 1),
     }
-    json.dump(stats, open(out + "/om2d_stats.json", "w"), indent=2)
-    print("OM2D_OK", json.dumps(stats)[:4000])
-    return 0
+    return points, cells, pfix, stats
 
 
 def _rim_edges(points, cells, build: _Build) -> dict:
@@ -911,12 +897,12 @@ def _sections(ends, points, cells, bed, node_ids, first: int) -> list[dict]:
     return out
 
 
-def op_post(cfg: dict, out: str) -> int:
-    """Run ops over a mesh the host already holds -> the mesh and the results."""
-    npz = np.load(cfg["mesh_npz"])
-    points = np.asarray(npz["points"], dtype=float)
-    cells = np.asarray(npz["cells"], dtype=np.int64)
-    bed = np.asarray(npz["bed"], dtype=float) if "bed" in npz.files else None
+def op_post(cfg: dict, points: np.ndarray, cells: np.ndarray, bed: np.ndarray | None
+            ) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Run ops over a mesh the host holds -> ``(points, cells, {ops, results, clean_notes})``."""
+    points = np.asarray(points, dtype=float)
+    cells = np.asarray(cells, dtype=np.int64)
+    bed = np.asarray(bed, dtype=float) if bed is not None else None
     mpd = _m_per_deg(0.5 * (float(points[:, 1].min()) + float(points[:, 1].max())))
     reports: list[dict] = []
     notes: list[str] = []
@@ -928,44 +914,4 @@ def op_post(cfg: dict, out: str) -> int:
     points, cells, results = _run_mesh_ops(
         cfg.get("ops") or [], points, cells, bed, mpd, reports, env_extra,
         notes=notes)
-    stem = out + "/" + str(cfg["out_stem"])
-    np.savez(stem + ".npz", points=points, cells=cells)
-    report = {"ops": reports, "results": results, "clean_notes": notes}
-    json.dump(report, open(stem + ".json", "w"), indent=2)
-    print("OM2D_POST_OK", json.dumps({"ops": reports})[:2000])
-    return 0
-
-
-_OPS = {"build": op_build, "post": op_post}
-
-
-def main() -> int:
-    # Contract (host <-> container over the mounted /data dir):
-    #   argv[1] = <op>   argv[2] = /data/<config>.json   argv[3] = /data
-    #
-    #   build  config: bbox, domain_geojson, optional open_runs_geojson,
-    #          min_edge_length_m, max_edge_length_m, seed, max_iter,
-    #          pre_ops [{fn, kwargs}], post_ops [{fn, kwargs}]. Stages the
-    #          domain, runs the pre ops into a sizing function, generates, runs
-    #          the post ops, and emits /data/om2d_mesh.npz (points (N,2)
-    #          lon/lat, cells (M,3) 0-based, pfix (K,2)) plus
-    #          /data/om2d_stats.json.
-    #
-    #   post   config: mesh_npz (points, cells, optional bed),
-    #          min_edge_length_m, max_edge_length_m, ops [{fn, kwargs}]. Runs
-    #          the ops over that mesh and emits <config stem>.npz and
-    #          <config stem>.json (the per-op results).
-    op = sys.argv[1]
-    cfg = json.load(open(sys.argv[2]))
-    out = sys.argv[3].rstrip("/")
-    try:
-        return _OPS[op](cfg, out)
-    except _Refusal as refusal:
-        json.dump(refusal.document, open(out + "/om2d_refusal.json", "w"),
-                  indent=2)
-        print("OM2D_REFUSED", json.dumps(refusal.document))
-        return 3
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    return points, cells, {"ops": reports, "results": results, "clean_notes": notes}

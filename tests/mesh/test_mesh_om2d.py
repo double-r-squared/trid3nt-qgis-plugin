@@ -73,31 +73,6 @@ def test_the_mesher_owns_the_domain_primitives_the_library_has_no_word_for():
         assert (space.origin, space.phase) == ("om2d", PRE)
 
 
-def test_the_boxs_own_typed_refusal_reaches_the_caller_with_its_escalation(
-        tmp_path, monkeypatch):
-    """A domain refusal is only knowable where the library is.
-
-    GSHHG L1 describes the land / OCEAN boundary, so an inland water body has no
-    shoreline there; the driver writes the refusal and the host re-raises it typed."""
-    import subprocess
-
-    document = {"code": "MESH_DOMAIN_HAS_NO_SHORELINE",
-                "message": "every stretch of this domain's edge is named ...",
-                "escalation": {"tool": "fetch_nhd_waterbodies",
-                               "overrides": {"bbox": list(_AOI)}}}
-
-    def fake_run(argv, **kw):
-        (tmp_path / "om2d_refusal.json").write_text(json.dumps(document))
-        return subprocess.CompletedProcess(argv, 3, "OM2D_REFUSED", "")
-
-    from trid3nt_server.workflows.solver import image_script
-    monkeypatch.setattr(image_script.subprocess, "run", fake_run)
-    with pytest.raises(MeshToolError) as excinfo:
-        OM2D._run_op(tmp_path, "build", "om2d_config.json", "om2d_mesh.npz")
-    assert excinfo.value.error_code == "MESH_DOMAIN_HAS_NO_SHORELINE"
-    assert excinfo.value.escalation["tool"] == "fetch_nhd_waterbodies"
-
-
 def test_an_unknown_op_refuses_with_the_nearest_names():
     with pytest.raises(MeshToolError) as excinfo:
         _recipe(ops=[mesh_op("feature_sizing_funtcion")])
@@ -170,36 +145,36 @@ def test_the_journal_states_no_caveat_a_measurement_does_not_stand_behind(tmp_pa
 
 
 def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None,
-               points=None, cells=None, results=None):
-    """Answer the container calls with a known mesh, and record what was sent."""
+               points=None, cells=None, results=None, post=None):
+    """Answer the build with a known mesh, and record what it was handed and what was staged."""
     sent: dict[str, object] = {"configs": [], "staged": {}}
 
-    def fake_run_op(rundir, op, config_name, produces):
-        config = json.loads(Path(rundir, config_name).read_text())
-        sent["rundir"] = str(rundir)
+    def snapshot(config):
+        if "domain_geojson" in config:
+            sent["rundir"] = str(Path(config["domain_geojson"]).parent)
         sent["staged"].update({path.name: path.read_text()
-                               for path in Path(rundir).glob("*.geojson")})
-        sent["configs"].append((op, config))
-        if op == "build":
-            sent["config"] = config
-            np.savez(Path(rundir, "om2d_mesh.npz"),
-                     points=(_POINTS if points is None else points),
-                     cells=(_CELLS if cells is None else cells),
-                     pfix=(np.empty((0, 2)) if pfix is None else np.asarray(pfix)))
-            Path(rundir, "om2d_stats.json").write_text(json.dumps(
-                stats or {"engine": "oceanmesh(test)",
-                          "sizing_functions": ["feature_sizing_function"]}))
-            return
-        npz = np.load(Path(rundir, config["mesh_npz"].replace("/data/", "")
-                           if config["mesh_npz"].startswith("/data/")
-                           else config["mesh_npz"]))
-        np.savez(Path(rundir, config["out_stem"] + ".npz"),
-                 points=npz["points"], cells=npz["cells"])
-        Path(rundir, config["out_stem"] + ".json").write_text(json.dumps(
-            {"ops": [], "results": results or {}, "clean_notes": []}))
+                               for path in Path(sent["rundir"]).glob("*.geojson")})
 
-    monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
-    monkeypatch.setattr(OM2D, "_run_op", fake_run_op)
+    class _Fake:
+        def op_build(self, config):
+            snapshot(config)
+            sent["configs"].append(("build", config))
+            sent["config"] = config
+            return (_POINTS if points is None else points,
+                    _CELLS if cells is None else cells,
+                    np.empty((0, 2)) if pfix is None else np.asarray(pfix),
+                    stats or {"engine": "oceanmesh(test)",
+                              "sizing_functions": ["feature_sizing_function"]})
+
+        def op_post(self, config, pts, cls, bed):
+            snapshot(config)
+            sent["configs"].append(("post", config))
+            if post is not None:
+                return post(config, pts, cls)
+            return pts, cls, {"ops": [], "results": results or {},
+                              "clean_notes": []}
+
+    monkeypatch.setattr(OM2D, "_driver", lambda: _Fake())
     return sent
 
 
@@ -247,7 +222,7 @@ def test_the_domain_polygon_is_the_only_thing_the_box_is_cut_from(
     because the shoreline IS the polygon's edge."""
     sent = _stub_om2d(monkeypatch, tmp_path)
     mesh = OM2D.build(_recipe())
-    assert sent["config"]["domain_geojson"] == "/data/domain.geojson"
+    assert sent["config"]["domain_geojson"] == str(Path(sent["rundir"]) / "domain.geojson")
     assert "shoreline_shp" not in sent["config"]
     provenance = mesh.meta["artifact"]["provenance"]
     assert provenance["domain_source"] == "domain polygon (1 part(s))"
@@ -294,7 +269,7 @@ def test_a_data_valued_op_kwarg_is_staged_into_the_box_as_a_path(
         mesh_op("distance_sizing_from_line_function", line_file=str(lines),
                 rate=0.05)]))
     entry = sent["config"]["pre_ops"][0]
-    assert entry["kwargs"]["line_file"].startswith("/data/op0_line_file")
+    assert entry["kwargs"]["line_file"].startswith(sent["rundir"] + "/op0_line_file")
     assert entry["kwargs"]["rate"] == 0.05
 
 
@@ -400,19 +375,12 @@ def test_a_recipe_that_never_asks_opens_no_boundary(monkeypatch, tmp_path):
 def test_an_op_that_renumbers_after_a_primitive_refuses_by_name(
         monkeypatch, tmp_path):
     """A bed painted before a renumbering would belong to nodes that are gone."""
-    sent = _stub_om2d(monkeypatch, tmp_path)
+    sent = _stub_om2d(
+        monkeypatch, tmp_path,
+        post=lambda config, pts, cls: (
+            _POINTS[:3], np.array([[0, 1, 2]], dtype=np.int64),
+            {"ops": [], "results": {}, "clean_notes": []}))
     _no_fetch_bed(monkeypatch)
-    real = OM2D._run_op
-
-    def shrinking(rundir, op, config_name, produces):
-        real(rundir, op, config_name, produces)
-        if op != "post":
-            return
-        config = json.loads(Path(rundir, config_name).read_text())
-        np.savez(Path(rundir, config["out_stem"] + ".npz"),
-                 points=_POINTS[:3], cells=np.array([[0, 1, 2]], dtype=np.int64))
-
-    monkeypatch.setattr(OM2D, "_run_op", shrinking)
     with pytest.raises(MeshToolError) as excinfo:
         OM2D.build(_recipe(ops=[
             mesh_op("set_bed", source="fetch_cudem"),
@@ -469,49 +437,6 @@ def test_a_library_op_records_the_note_that_its_kwargs_bound_elsewhere(
     mesh = OM2D.build(_recipe(ops=[mesh_op("laplacian2")]))
     notes = mesh.meta["artifact"]["provenance"]["op_notes"]
     assert any("laplacian2" in note and "cannot import" in note for note in notes)
-
-
-def test_the_scripts_live_in_the_worker_tree_beside_their_dockerfiles():
-    from trid3nt_server.workflows.solver.image_script import scripts_dir
-
-    mesh_names = {p.name for p in scripts_dir("mesh").glob("*.py")
-                  if p.name != "__init__.py"}
-    # Only what the image DOES lives there.
-    assert mesh_names == {"om2d.py"}
-    assert not scripts_dir("telemac").exists()
-    assert "sandbox" not in str(scripts_dir("mesh"))
-
-
-def test_the_box_mounts_the_product_scripts_dir():
-    from trid3nt_server.workflows.solver.image_script import scripts_dir
-
-    assert OM2D._INCONTAINER_SCRIPT == "om2d.py"
-    assert (scripts_dir("mesh") / "om2d.py").exists()
-
-
-def test_the_om2d_box_is_shelled_with_a_named_op(monkeypatch, tmp_path):
-    from trid3nt_server.workflows.solver.image_script import scripts_dir
-
-    seen: dict[str, object] = {}
-
-    class _Done:
-        returncode = 0
-        stdout = ""
-        stderr = ""
-
-    def fake_run(argv, **kwargs):
-        seen["argv"] = list(argv)
-        Path(tmp_path, "made.json").write_text("{}")
-        return _Done()
-
-    from trid3nt_server.workflows.solver import image_script
-    monkeypatch.setattr(image_script.subprocess, "run", fake_run)
-    OM2D._run_op(tmp_path, "post", "cfg.json", "made.json")
-    argv = seen["argv"]
-    assert argv[-4:] == ["/drivers/om2d.py", "post",
-                         "/data/cfg.json", "/data"]
-    assert f"{scripts_dir('mesh')}:/drivers:ro" in argv
-    assert "--network" in argv and argv[argv.index("--network") + 1] == "none"
 
 
 def test_two_nodes_a_fraction_of_a_metre_apart_are_fused_into_one():
@@ -618,32 +543,9 @@ def test_a_node_on_the_rasters_rim_reads_a_whole_cell_not_its_edge(tmp_path):
 
 
 def _driver():
-    """The in-container driver, imported here with its library stubbed.
+    from trid3nt_server.tools.mesh.meshers import om2d_build
 
-    ``oceanmesh`` lives only in the mesh image; the binding, the unit conversion
-    and the result adoption are ours and belong under the offline suite.
-    """
-    import importlib.util
-    import sys
-    import types
-
-    from trid3nt_server.workflows.solver.image_script import scripts_dir
-
-    stub = types.ModuleType("oceanmesh")
-    stub.Domain = type("Domain", (), {"__init__": lambda self, bbox, func: None})
-    saved = sys.modules.get("oceanmesh")
-    sys.modules["oceanmesh"] = stub
-    try:
-        spec = importlib.util.spec_from_file_location(
-            "_om2d_driver_under_test", scripts_dir("mesh") / "om2d.py")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-    finally:
-        if saved is None:
-            del sys.modules["oceanmesh"]
-        else:
-            sys.modules["oceanmesh"] = saved
-    return module
+    return om2d_build
 
 
 def test_the_environment_fills_what_the_recipe_left_unstated():
@@ -752,3 +654,27 @@ def test_the_build_directory_is_gone_when_the_build_returns(monkeypatch, tmp_pat
     sent = _stub_om2d(monkeypatch, tmp_path)
     OM2D.build(_recipe(resolution_m=60.0))
     assert not Path(sent["rundir"]).exists()
+
+
+def test_an_absent_oceanmesh_is_refused_by_name_with_the_extra_that_installs_it(monkeypatch):
+    import importlib.util
+
+    real = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec",
+                        lambda name, *a, **k: None if name == "oceanmesh" else real(name, *a, **k))
+    with pytest.raises(MeshToolError) as excinfo:
+        OM2D._driver()
+    assert excinfo.value.error_code == "MESH_OCEANMESH_MISSING"
+    assert ".[mesh]" in str(excinfo.value)
+
+
+def test_a_failure_inside_the_library_is_a_build_failure_naming_it(monkeypatch):
+    class _Breaks:
+        def op_build(self, config):
+            raise ValueError("the domain came back with NO elements")
+
+    monkeypatch.setattr(OM2D, "_driver", lambda: _Breaks())
+    with pytest.raises(MeshToolError) as excinfo:
+        OM2D.build(_recipe(resolution_m=60.0))
+    assert excinfo.value.error_code == "MESH_BUILD_FAILED"
+    assert "NO elements" in str(excinfo.value)

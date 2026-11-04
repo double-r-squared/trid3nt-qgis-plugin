@@ -92,9 +92,9 @@ package MeshSeam {
 
     part def MesherBox {
         doc /*
-        The mesh library where it lives - a GPL-isolated image with no network
-        and nothing of this server in it. One config in, arrays and a stats
-        document out, or a typed refusal written as a document.
+        The mesh library's build module, run in the server process and imported
+        only on first use. One config in, arrays and a stats document out, or a
+        typed refusal.
         */
     }
 
@@ -177,8 +177,6 @@ package MeshSeam {
     port def ArraysIn;
     port def StatsOut;
     port def StatsIn;
-    port def RefusalOut;
-    port def RefusalIn;
     port def TopologyOut;
     port def TopologyIn;
 
@@ -391,19 +389,6 @@ package MeshSeam {
         item clean_notes : StringList;
     }
 
-    interface def BoxRefusal {
-        doc /*
-        The box refusing in its own words. The refusals about the DOMAIN are only
-        knowable where the library is, so they come back as a document and reach
-        the caller as a typed refusal rather than as a return code wrapped in a
-        stack trace - carrying, where there is one, the call that DOES what the
-        refused ask could not.
-        */
-        item code : String;
-        item message : String;
-        item escalation : Map [0..1];
-    }
-
     interface def TopologyBundle {
         doc /*
         What a SELAFIN cannot hold, measured off the accepted mesh's own walk for
@@ -484,7 +469,6 @@ package MeshSeam {
         port configOut : ConfigOut;
         port arraysIn : ArraysIn;
         port statsIn : StatsIn;
-        port refusalIn : RefusalIn;
     }
 
     part regGridAdapter : MesherAdapter {
@@ -527,12 +511,11 @@ package MeshSeam {
 
     part om2dBox : MesherBox {
         doc /*
-        code: workers/mesh/scripts/om2d.py
+        code: trid3nt_server/tools/mesh/meshers/om2d_build.py
         */
         port configIn : ConfigIn;
         port arraysOut : ArraysOut;
         port statsOut : StatsOut;
-        port refusalOut : RefusalOut;
     }
 
     part selafinIo : SelafinIo {
@@ -648,9 +631,6 @@ package MeshSeam {
 
     interface statsReturned : BoxBuildStats
         connect om2dBox.statsOut to om2dAdapter.statsIn;
-
-    interface refusalReturned : BoxRefusal
-        connect om2dBox.refusalOut to om2dAdapter.refusalIn;
 
     interface topologyWritten : TopologyBundle
         connect telemacMeshFiles.topologyOut to topologyWriter.topologyIn;
@@ -846,18 +826,14 @@ package MeshSeam {
 
     requirement def TheBoxNeverImportsTheServer {
         doc /*
-        The mesh library runs in a GPL-isolated image with no network and nothing
-        of this server in it. A driver that reached into the server package would
-        be running our defaults, our fetches and our opinions inside a box whose
-        whole point is that it holds only the library.
+        The TELEMAC steering scripts run in their own interpreter with the
+        opentelemac tree on its path and nothing of this server beside it. A
+        script that reached into the server package would be running our
+        defaults, our fetches and our opinions inside a process whose whole
+        point is that it holds only the engine's own readers.
 
-        The rule is written over the DIRECTORY every shipped driver lives in, so
-        it holds for the engine drivers beside the mesh box for the same reason:
-        each one is executed inside an image where nothing of this server exists
-        to import.
+        The rule is written over the DIRECTORY every such script lives in.
 
-        forbid: workers.mesh.scripts -> trid3nt_server
-        forbid: workers.mesh.scripts -> trid3nt_contracts
         forbid: trid3nt_server.workflows.telemac.authoring.engine_scripts -> trid3nt_contracts
         */
     }
@@ -1002,12 +978,11 @@ package MeshSeam {
     verify requirement ModelShrinksWithTheTree by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
-    satisfy requirement TheBoxNeverImportsTheServer by om2dBox;
     satisfy requirement TheBoxNeverImportsTheServer by telemacCasDriver;
     verify requirement TheBoxNeverImportsTheServer by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
     verify requirement TheBoxNeverImportsTheServer by
-        "tests/mesh/test_mesh_om2d.py::test_the_scripts_live_in_the_worker_tree_beside_their_dockerfiles";
+        "tests/telemac/test_telemac_cas_validate.py::test_the_installed_engine_tree_writes_and_reads_a_steering_file";
 
     satisfy requirement TheMeshFrontIsEngineAgnostic by meshRouter;
     satisfy requirement TheMeshFrontIsEngineAgnostic by meshGate;

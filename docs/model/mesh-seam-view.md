@@ -16,7 +16,7 @@ flowchart LR
     meshSession["MeshSession<br/>trid3nt_server/tools/mesh/session.py"]
     mesherRegistry["MesherRegistry<br/>trid3nt_server/tools/mesh/meshers/__init__.py"]
     om2dAdapter["MesherAdapter<br/>trid3nt_server/tools/mesh/meshers/om2d.py"]
-    om2dBox["MesherBox<br/>workers/mesh/scripts/om2d.py"]
+    om2dBox["MesherBox<br/>trid3nt_server/tools/mesh/meshers/om2d_build.py"]
     opTool["OpTool<br/>trid3nt_server/tools/mesh/op_tool.py"]
     recipeObject["RecipeObject<br/>trid3nt_server/tools/mesh/recipe.py"]
     regGridAdapter["MesherAdapter<br/>trid3nt_server/tools/mesh/meshers/reg_grid.py"]
@@ -41,7 +41,6 @@ flowchart LR
     meshSession -- "RecipeOpEntry (meshSession pass through)" --> recipeObject
     meshSession -- "MeasuredMeshProbes" --> meshGate
     meshRouter -- "MeshRecipeAsk" --> recipeObject
-    om2dBox -- "BoxRefusal" --> om2dAdapter
     regGridAdapter -- "MesherRegistration" --> mesherRegistry
     sharedPrimitives -- "BoundaryRoleRuns" --> om2dAdapter
     om2dBox -- "BoxBuildStats" --> om2dAdapter
@@ -105,16 +104,6 @@ What the box built, as arrays: the nodes in lon/lat, the 0-based triangles, and 
 | `points` | RealArray | required |
 | `cells` | IntTable | required |
 | `pfix` | RealArray | required |
-
-### `BoxRefusal`
-
-The box refusing in its own words. The refusals about the DOMAIN are only knowable where the library is, so they come back as a document and reach the caller as a typed refusal rather than as a return code wrapped in a stack trace - carrying, where there is one, the call that DOES what the refused ask could not.
-
-| item | type | required |
-| --- | --- | --- |
-| `code` | String | required |
-| `message` | String | required |
-| `escalation` | Map | optional |
 
 ### `MeasuredMeshProbes`
 
@@ -239,7 +228,7 @@ What a SELAFIN cannot hold, measured off the accepted mesh's own walk for every 
 | **RecipeIsTheOneMeshDefiningObject** | `recipeObject`, `meshRouter`, `meshSession` | `tests/mesh/test_build_mesh_tool.py::test_a_recipe_builds_nothing`<br/>`tests/mesh/test_build_mesh_tool.py::test_editing_a_recipe_returns_a_new_frozen_one`<br/>`tests/mesh/test_build_mesh_tool.py::test_engine_vocabulary_is_not_a_param_of_the_generalization`<br/>`tests/mesh/test_build_mesh_tool.py::test_accept_freezes_the_recipe_as_the_artifacts_provenance`<br/>`tests/telemac/test_mesh_declaration_travel.py::test_the_mesh_step_carries_the_recipe_whole` |
 | **RegenerationIsWholesale** | `meshSession`, `opTool` | `tests/mesh/test_build_mesh_tool.py::test_the_same_recipe_builds_the_same_mesh_twice`<br/>`tests/mesh/test_build_mesh_tool.py::test_reset_puts_the_recipe_back_to_the_declaration`<br/>`tests/mesh/test_build_mesh_tool.py::test_the_journal_replays_to_an_identical_mesh`<br/>`tests/mesh/test_build_mesh_tool.py::test_a_recipe_edit_after_a_hand_edit_refuses_rather_than_discarding_it`<br/>`tests/mesh/test_mesh_gate_loop.py::test_mesh_op_appends_regenerates_and_re_presents` |
 | **SignatureIsTheSchema** | `mesherRegistry`, `om2dAdapter` | `tests/mesh/test_mesh_meshers.py::test_an_op_a_mesher_never_registered_is_refused_by_name`<br/>`tests/mesh/test_mesh_om2d.py::test_an_unknown_op_refuses_with_the_nearest_names`<br/>`tests/mesh/test_mesh_om2d.py::test_the_wrapper_registers_the_librarys_own_names_tagged_by_phase`<br/>`tests/mesh/test_mesh_om2d.py::test_a_library_op_records_the_note_that_its_kwargs_bound_elsewhere`<br/>`tests/mesh/test_mesh_om2d.py::test_a_required_parameter_the_domain_cannot_supply_refuses_by_name` |
-| **TheBoxNeverImportsTheServer** | `om2dBox`, `telemacCasDriver` | `tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree`<br/>`tests/mesh/test_mesh_om2d.py::test_the_scripts_live_in_the_worker_tree_beside_their_dockerfiles` |
+| **TheBoxNeverImportsTheServer** | `telemacCasDriver` | `tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree`<br/>`tests/telemac/test_telemac_cas_validate.py::test_the_installed_engine_tree_writes_and_reads_a_steering_file` |
 | **TheGateIsNeverSpecialised** | `meshGate` | `tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree`<br/>`tests/mesh/test_mesh_gate_loop.py::test_the_accept_is_the_card_submitted_rather_than_a_tool`<br/>`tests/mesh/test_mesh_gate_loop.py::test_adopting_a_hand_edited_layer_is_a_row_on_the_card` |
 | **TheMeshFrontIsEngineAgnostic** | `meshRouter`, `meshGate`, `mesherRegistry` | `tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree`<br/>`tests/mesh/test_build_mesh_tool.py::test_reg_grid_conforms_with_a_near_empty_default_recipe` |
 | **TopologyIsWrittenForEveryMesh** | `telemacMeshFiles`, `topologyWriter` | `tests/telemac/test_telemac_boundary_topology.py::test_a_walk_naming_no_liquid_boundary_states_the_closed_basin`<br/>`tests/telemac/test_telemac_boundary_topology.py::test_the_walk_states_the_numbering_a_steering_author_reads`<br/>`tests/telemac/test_telemac_boundary_topology.py::test_an_empty_role_is_not_a_role` |
@@ -255,7 +244,7 @@ What a SELAFIN cannot hold, measured off the accepted mesh's own walk for every 
 - **RecipeIsTheOneMeshDefiningObject** - A mesh is not a spec plus a history of edits: it is the current PROGRAM that produces it. There is no record object and no edit chain - the journal is audit, undo is editing the recipe back, and the one structured revert is reset-to-declaration. The recipe is a VALUE, so it reaches for nothing that holds it: a recipe that could see its session or its gate would be state with a program beside it, which is the shape this law replaced.
 - **RegenerationIsWholesale** - Every change swaps the recipe and rebuilds the WHOLE mesh. Nothing is patched incrementally, because a mesh patched from a program that no longer describes it is a mesh nobody can rebuild. The one thing no recipe produces - a hand-edit - is adopted and FLAGGED rather than pretended into the recipe, and a later recipe edit refuses instead of discarding it.
 - **SignatureIsTheSchema** - An op's name must exist in the registering mesher's namespaces and its kwargs must bind to the REAL callable's signature. There is no schema of ours beside the library's: a function this process cannot import has no signature to bind against here, so it passes through with a journaled note and the driver that runs it binds against the real one. An unknown name is refused with the nearest matches rather than ignored.
-- **TheBoxNeverImportsTheServer** - The mesh library runs in a GPL-isolated image with no network and nothing of this server in it. A driver that reached into the server package would be running our defaults, our fetches and our opinions inside a box whose whole point is that it holds only the library. The rule is written over the DIRECTORY every shipped driver lives in, so it holds for the engine drivers beside the mesh box for the same reason: each one is executed inside an image where nothing of this server exists to import.
+- **TheBoxNeverImportsTheServer** - The TELEMAC steering scripts run in their own interpreter with the opentelemac tree on its path and nothing of this server beside it. A script that reached into the server package would be running our defaults, our fetches and our opinions inside a process whose whole point is that it holds only the engine's own readers. The rule is written over the DIRECTORY every such script lives in.
 - **TheGateIsNeverSpecialised** - One gate machine presents, asks and accepts every user-gated thing. A mesh edit is a CARD on it - lines, rows and a reply applied back onto the session - never a loop, a card contract or a tool surface of its own: a second gate machine is a second place a person is asked, and the two drift in what they promise. The mesh gate therefore reaches the tool registry for nothing; the one edit tool it needs is registered like any other.
 - **TheMeshFrontIsEngineAgnostic** - A mesh is a mesh. The three params every mesher means the same thing by are the whole of the generalization, and an engine's vocabulary enters only as an op. A mesh module that imported an engine's workflows would be a second place a mesh gets built, and the mesh a human approved and the mesh a solver ran on would be two objects that happen to agree.
 - **TopologyIsWrittenForEveryMesh** - The bundle is measured for every run on an accepted mesh, whatever its boundary carries. An absent bundle and a bundle naming no liquid boundary read alike to a caller, and only one of them is an answer: a closed basin states that its whole boundary is solid wall, and a reader that needed a role refuses in its own words about the role it needed.

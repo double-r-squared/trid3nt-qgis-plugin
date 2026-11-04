@@ -1,8 +1,8 @@
 """The ``om2d`` mesher: OceanMesh2D, wrapped where it lives.
 
 Three registrations and nothing else: op namespaces, the role adapter, the
-default recipe. The library runs in the GPL-isolated image; this file composes
-the ask, shells the box, and reads back the one neutral mesh."""
+default recipe. The library is the optional ``mesh`` extra; this file composes
+the ask, runs ``om2d_build`` over it, and reads back the one neutral mesh."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ import dataclasses
 import json
 import logging
 import math
-import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,19 +27,10 @@ from trid3nt_server.tools.mesh.meshers import (
     mesh_op,
     register_mesher,
 )
-from trid3nt_server.workflows.solver.image_script import run_image_script
 
 logger = logging.getLogger("trid3nt_server.tools.mesh.meshers.om2d")
 
 __all__ = ["OM2D", "build"]
-
-#: The GPL-isolated OceanMesh2D image and the script mounted into it.
-_MESH_IMAGE_DEFAULT = "trid3nt-local/mesh:latest"
-_INCONTAINER_SCRIPT = "om2d.py"
-#: What the driver writes when it refuses in its own words: code, reason, and the
-#: call that DOES what the refused ask could not.
-_REFUSAL_FILE = "om2d_refusal.json"
-_CONTAINER_TIMEOUT_S = 2400
 
 #: DistMesh seeds its initial point cloud from numpy's global generator, which
 #: ``generate_mesh`` seeds itself from this value: one number is the whole
@@ -133,9 +123,9 @@ def _build(recipe: Any, rundir: Path) -> Mesh:
                   if op.origin == "primitives"), len(post))
     config = {
         "bbox": list(domain.bbox),
-        "domain_geojson": f"/data/{domain.polygon_name}",
+        "domain_geojson": str(rundir / domain.polygon_name),
         "open_runs_geojson": (None if domain.open_runs_name is None
-                              else f"/data/{domain.open_runs_name}"),
+                              else str(rundir / domain.open_runs_name)),
         "min_edge_length_m": resolution_m,
         "max_edge_length_m": _unbounded_m(domain.bbox),
         "seed": _SEED,
@@ -145,10 +135,9 @@ def _build(recipe: Any, rundir: Path) -> Mesh:
         "post_ops": [_staged(op, rundir, len(pre) + i, resolution_m, notes)
                      for i, op in enumerate(post[:split])],
     }
-    (rundir / "om2d_config.json").write_text(json.dumps(config))
-    _run_op(rundir, "build", "om2d_config.json", "om2d_mesh.npz")
+    points, cells, pfix, stats = _generate(config)
 
-    mesh, stats = _read_built(rundir, domain, resolution_m, ops,
+    mesh, stats = _read_built(points, cells, pfix, stats, domain, resolution_m, ops,
                               stated=recipe.resolution_m not in (None, ""))
     mesh = _apply_tail(mesh, post[split:], rundir, resolution_m, notes)
     mesh = _emitted(mesh, rundir, domain, stats, notes)
@@ -165,21 +154,20 @@ def _unbounded_m(bbox: tuple[float, float, float, float]) -> float:
     return round(math.hypot(across, (lat1 - lat0) * _M_PER_DEG), 1)
 
 
-def _read_built(rundir: Path, domain: "_Domain", resolution_m: float,
+def _read_built(points: Any, cells: Any, pfix: Any, stats: Mapping[str, Any],
+                domain: "_Domain", resolution_m: float,
                 ops: tuple[BoundOp, ...], *, stated: bool
                 ) -> tuple[Mesh, Mapping[str, Any]]:
-    """The container's arrays as the neutral mesh, cleaned once and projected."""
+    """The build's arrays as the neutral mesh, cleaned once and projected."""
     import numpy as np
 
     from trid3nt_server.tools.mesh.shared.nodes import reproject_nodes_to_utm
 
-    npz = np.load(rundir / "om2d_mesh.npz")
-    lonlat = np.asarray(npz["points"], dtype=float)
-    cells = np.asarray(npz["cells"], dtype=np.int64)
-    pfix = np.asarray(npz["pfix"], dtype=float)
+    lonlat = np.asarray(points, dtype=float)
+    cells = np.asarray(cells, dtype=np.int64)
+    pfix = np.asarray(pfix, dtype=float)
     lonlat, cells, repaired = _clean_once(lonlat, cells)
     points, utm_epsg = reproject_nodes_to_utm(lonlat)
-    stats = _stats(rundir)
     return Mesh(
         points=points, cells=cells, crs_authid=f"EPSG:{int(utm_epsg)}",
         meta={
@@ -250,30 +238,29 @@ def _run_tail_op(mesh: Mesh, op: BoundOp, rundir: Path, index: int,
     import numpy as np
 
     lonlat = np.asarray(mesh.meta["lonlat"], dtype=float)
-    npz_name = f"om2d_tail_{index}_in.npz"
-    arrays = {"points": lonlat, "cells": np.asarray(mesh.cells, dtype=np.int64)}
-    if mesh.has_bed:
-        arrays["bed"] = np.asarray(mesh.bed, dtype=float)
-    np.savez(rundir / npz_name, **arrays)
-    stem = f"om2d_tail_{index}_out"
-    config_name = f"om2d_tail_{index}.json"
-    (rundir / config_name).write_text(json.dumps({
-        "mesh_npz": f"/data/{npz_name}",
-        "out_stem": stem,
-        "min_edge_length_m": resolution_m,
-        "max_edge_length_m": _unbounded_m(mesh.meta["lonlat_bbox"]),
-        "ops": [_staged(op, rundir, index, resolution_m, notes)]}))
-    _run_op(rundir, "post", config_name, f"{stem}.json")
-    report = json.loads((rundir / f"{stem}.json").read_text())
-    out = np.load(rundir / f"{stem}.npz")
-    new_lonlat = np.asarray(out["points"], dtype=float)
+    driver = _driver()
+    try:
+        new_lonlat, new_cells, report = driver.op_post(
+            {"min_edge_length_m": resolution_m,
+             "max_edge_length_m": _unbounded_m(mesh.meta["lonlat_bbox"]),
+             "ops": [_staged(op, rundir, index, resolution_m, notes)]},
+            lonlat, np.asarray(mesh.cells, dtype=np.int64),
+            np.asarray(mesh.bed, dtype=float) if mesh.has_bed else None)
+    except MeshToolError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise MeshToolError(
+            "MESH_BUILD_FAILED",
+            f"the om2d mesher post failed: {type(exc).__name__}: {exc}") from exc
+    report = json.loads(json.dumps(report))
+    new_lonlat = np.asarray(new_lonlat, dtype=float)
     if new_lonlat.shape == lonlat.shape and np.allclose(new_lonlat, lonlat):
         return mesh, report["results"].get(op.name)
     from trid3nt_server.tools.mesh.shared.nodes import reproject_nodes_to_utm
 
     points, utm_epsg = reproject_nodes_to_utm(new_lonlat)
     return dataclasses.replace(
-        mesh, points=points, cells=np.asarray(out["cells"], dtype=np.int64),
+        mesh, points=points, cells=np.asarray(new_cells, dtype=np.int64),
         crs_authid=f"EPSG:{int(utm_epsg)}",
         meta={**dict(mesh.meta), "lonlat": new_lonlat,
               "utm_epsg": int(utm_epsg)}), report["results"].get(op.name)
@@ -288,7 +275,7 @@ def _bound_inputs(op: BoundOp) -> dict[str, Any]:
 
 def _staged(op: BoundOp, rundir: Path, index: int, resolution_m: float,
             notes: list[str]) -> dict[str, Any]:
-    """One op as the container reads it: its name and its kwargs as /data paths.
+    """One op as the build reads it: its name and its kwargs with data staged as files in the rundir.
 
     Code-as-data: the name travels verbatim and the driver calls it verbatim."""
     from trid3nt_server.tools.mesh.inputs import op_input
@@ -299,12 +286,12 @@ def _staged(op: BoundOp, rundir: Path, index: int, resolution_m: float,
         if isinstance(converted, Path):
             local = rundir / f"op{index}_{name}{converted.suffix or '.tif'}"
             local.write_bytes(converted.read_bytes())
-            kwargs[name] = f"/data/{local.name}"
+            kwargs[name] = str(local)
         elif isinstance(converted, Mapping) and "type" in converted:
             local = rundir / f"op{index}_{name}.geojson"
             local.write_text(json.dumps(
                 _resampleable_lines(converted, resolution_m, op.name, notes)))
-            kwargs[name] = f"/data/{local.name}"
+            kwargs[name] = str(local)
         else:
             kwargs[name] = converted
     return {"fn": op.name, "kwargs": kwargs}
@@ -545,38 +532,37 @@ def _geometry_bounds(geometries: list[dict[str, Any]]
     return (float(minx), float(miny), float(maxx), float(maxy))
 
 
-def _run_op(rundir: Path, op: str, config_name: str, produces: str) -> None:
-    """One script op in the OceanMesh2D box, or a typed refusal carrying its output."""
-    image = os.environ.get("TRID3NT_MESH_IMAGE") or _MESH_IMAGE_DEFAULT
-    cp = run_image_script(
-        image=image, engine="mesh", script=_INCONTAINER_SCRIPT,
-        rundir=rundir, argv=[op, f"/data/{config_name}", "/data"],
-        timeout_s=_CONTAINER_TIMEOUT_S, entrypoint_override=True)
-    if cp.returncode != 0 or not (rundir / produces).exists():
-        _refusal(rundir)
+def _driver() -> Any:
+    """The ``om2d_build`` module, imported on first use, or the refusal naming the extra that installs oceanmesh."""
+    import importlib
+    import importlib.util
+
+    if importlib.util.find_spec("oceanmesh") is None:
+        raise MeshToolError(
+            "MESH_OCEANMESH_MISSING",
+            "the om2d mesher needs the oceanmesh library and it is not installed; "
+            "install the mesh extra: pip install -e '.[mesh]' (it builds against "
+            "libcgal-dev libgmp-dev libmpfr-dev libeigen3-dev)")
+    return importlib.import_module("trid3nt_server.tools.mesh.meshers.om2d_build")
+
+
+def _generate(config: dict[str, Any]) -> tuple[Any, Any, Any, dict[str, Any]]:
+    """One build -> ``(lon/lat points, cells, pfix, stats)``; the process's numpy generator is left as it was found."""
+    import numpy as np
+
+    driver = _driver()
+    state = np.random.get_state()
+    try:
+        points, cells, pfix, stats = driver.op_build(config)
+    except MeshToolError:
+        raise
+    except Exception as exc:  # noqa: BLE001
         raise MeshToolError(
             "MESH_BUILD_FAILED",
-            f"the om2d mesher {op} failed (rc={cp.returncode}):\n"
-            f"{cp.stdout[-2000:]}\n{cp.stderr[-2000:]}")
-
-
-def _refusal(rundir: Path) -> None:
-    """Re-raise the driver's own typed refusal, when it wrote one.
-
-    The refusals about the DOMAIN are only knowable where the library is."""
-    document = rundir / _REFUSAL_FILE
-    if not document.exists():
-        return
-    read = json.loads(document.read_text())
-    raise MeshToolError(str(read["code"]), str(read["message"]),
-                        escalation=read.get("escalation"))
-
-
-def _stats(rundir: Path) -> dict[str, Any]:
-    try:
-        return json.loads((rundir / "om2d_stats.json").read_text())
-    except Exception:  # noqa: BLE001 -- an unreadable report says so, never guesses
-        return {}
+            f"the om2d mesher build failed: {type(exc).__name__}: {exc}") from exc
+    finally:
+        np.random.set_state(state)
+    return points, cells, pfix, json.loads(json.dumps(stats))
 
 
 def _sizing_source(stats: Mapping[str, Any], domain: _Domain) -> str:

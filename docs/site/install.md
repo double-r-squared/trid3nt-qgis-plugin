@@ -183,7 +183,7 @@ make venv              # uv venv venvs/agent + uv pip install -e contracts -e .
 
 ### 3. Docker images
 
-Both are built locally from the worker Dockerfiles; the build is one-time and
+The image is built locally from the worker Dockerfile; the build is one-time and
 cached.
 
 **TELEMAC** -- the solver (opentelemac v9.0.0 conda env):
@@ -192,15 +192,13 @@ cached.
 sg docker -c 'docker build -t trid3nt-local/telemac:latest workers/telemac/'  # or: bash scripts/build_telemac_image.sh
 ```
 
-**Mesh** -- the GPL-isolated OceanMesh2D environment. It holds no code of ours:
-the mesh recipe bind-mounts its driver and a rundir into it.
+The mesher needs no image: oceanmesh is the `mesh` extra of the server venv. It builds C++
+extensions against CGAL, so install the build packages first:
 
 ```sh
-sg docker -c 'docker build -t trid3nt-local/mesh:latest workers/mesh/'
+sudo apt install libcgal-dev libgmp-dev libmpfr-dev libeigen3-dev
+venvs/agent/bin/python -m pip install -e '.[mesh]'    # or: uv pip install --python venvs/agent/bin/python -e '.[mesh]'
 ```
-
-These image names are what `.env.local` points at (`TRID3NT_TELEMAC_IMAGE`,
-`TRID3NT_MESH_IMAGE`).
 
 ### 4. MinIO
 

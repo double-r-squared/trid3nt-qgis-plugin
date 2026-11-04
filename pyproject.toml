@@ -176,6 +176,13 @@ dependencies = [
 # The suite runs against the installed package; the dev TOOLING that is not
 # product carries its own dev/requirements.txt.
 dev = ["pytest>=7"]
+# mesh: the CHLNDDEV oceanmesh port the om2d mesher runs. It is not on PyPI and its C++ extensions build
+# against CGAL, so the build box needs libcgal-dev libgmp-dev libmpfr-dev libeigen3-dev.
+mesh = [
+    "oceanmesh @ git+https://github.com/CHLNDDEV/oceanmesh.git@v1.0.0",
+    "meshio==5.3.5",
+    "scikit-fmm==2025.6.23",
+]
 
 [project.scripts]
 trid3nt-server = "trid3nt_server.main:run"
