@@ -7,6 +7,7 @@ Every mesh product is a dataset group of the run's one UGRID display file, value
 
 from __future__ import annotations
 
+import math
 import re
 from functools import cached_property
 from pathlib import Path
@@ -676,6 +677,20 @@ def _observed_units(solved: Solved, kind: str | None) -> str:
 _BUDGET_HEAD = re.compile(r"^ +([A-Z][A-Z0-9_ ]*?) BUDGET FOR ENTIRE MODEL AT END OF TIME STEP", re.M)
 _DISCREPANCY = re.compile(r"PERCENT DISCREPANCY = +(\S+)")
 
+#: A package's own budget discrepancy under this percent is quiet in the run's notes; at or over it the
+#: listing's printed value is journalled with the remedy. USGS evaluation guidance: an acceptable global
+#: mass balance has "less than 0.5 percent error" (Reilly and Harbaugh 2004, SIR 2004-5038, p. 23).
+_PACKAGE_BUDGET_OK_PERCENT = 0.5
+
+
+def _outside_budget(value: str) -> bool:
+    """A printed percent discrepancy at or over the threshold in magnitude - or not a number at all - is outside it."""
+    try:
+        percent = float(value)
+    except ValueError:
+        return True
+    return not math.isfinite(percent) or abs(percent) >= _PACKAGE_BUDGET_OK_PERCENT
+
 
 def _package_budgets(listing: str) -> dict[str, str]:
     """Each stress package's (and the water mover's) own percent discrepancy at its last printed step, as the listing words it.
@@ -703,10 +718,13 @@ def read_mass_balance(primitive: Primitive, solved: Solved) -> Series:
     finally:
         Path(path).unlink(missing_ok=True)
     if held:
-        from trid3nt_server.inputs.run_notes import journal_note
+        off = {name: value for name, value in held.items() if _outside_budget(value)}
+        if off:
+            from trid3nt_server.inputs.run_notes import journal_note
 
-        journal_note("package budgets at the last step, percent discrepancy as the listing prints it: "
-                     + ", ".join(f"{name} {value}" for name, value in held.items()) + ".")
+            journal_note("package budgets outside 0.5 percent at the last step: "
+                         + ", ".join(f"{name} {value}" for name, value in off.items())
+                         + "; a tighter IMS_OUTER_DVCLOSE closes it.")
     if not len(incremental):
         raise OutputEmpty(f"{solved.listing_name} prints no volumetric budget.")
     times = solved.seconds(incremental.index.to_numpy())

@@ -209,7 +209,30 @@ def test_the_budget_read_journals_each_package_s_own_discrepancy(solved, monkeyp
     token = bind_notes()
     GWF.READS["mass_balance"](P.mass_balance(), run)
 
-    assert any("LAK_0 -70.83" in note for note in drain_notes(token))
+    notes = [note for note in drain_notes(token) if "package budgets" in note]
+    assert len(notes) == 1
+    assert "LAK_0" in notes[0] and "-70.83" in notes[0] and "IMS_OUTER_DVCLOSE" in notes[0]
+
+
+def test_the_budget_read_is_quiet_when_every_package_is_within_the_threshold(solved, monkeypatch, tmp_path):
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+
+    def download(run_id, basename):
+        dest = tmp_path / f"quiet_{basename}"
+        text = (_FIXTURE / basename).read_text()
+        dest.write_text(
+            "  LAK_0 BUDGET FOR ENTIRE MODEL AT END OF TIME STEP    1, STRESS PERIOD   1\n"
+            " PERCENT DISCREPANCY =         -0.11     PERCENT DISCREPANCY =         -0.11\n"
+            "  WATER MOVER BUDGET FOR ENTIRE MODEL AT END OF TIME STEP    1, STRESS PERIOD   1\n"
+            " PERCENT DISCREPANCY =          0.00     PERCENT DISCREPANCY =          0.00\n" + text)
+        return str(dest)
+
+    run = solved()
+    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result", download)
+    token = bind_notes()
+    GWF.READS["mass_balance"](P.mass_balance(), run)
+
+    assert not [note for note in drain_notes(token) if "package budgets" in note]
 
 
 def test_saturation_and_discharge_read_off_the_budget_file(solved):
