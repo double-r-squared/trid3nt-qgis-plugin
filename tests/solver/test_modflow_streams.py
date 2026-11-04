@@ -16,7 +16,7 @@ from pyproj import Transformer
 from trid3nt_server.tools.mesh.artifact import MeshArtifact
 from trid3nt_server.workflows.modflow.authoring import mesh_files as MF
 from trid3nt_server.workflows.modflow.authoring.simulation import serialize
-from trid3nt_server.workflows.modflow.authoring.stress import place_streams
+from trid3nt_server.workflows.modflow.authoring.stress import cells_of, place_streams
 from trid3nt_server.workflows.modflow.authoring.validate import validate_authored_simulation
 from trid3nt_server.workflows.modflow.errors import ModflowError
 from trid3nt_server.workflows.modflow.modules import GWF
@@ -109,6 +109,15 @@ def test_a_straight_line_across_the_grid_is_three_reaches_of_hand_computed_lengt
     assert [row[10] for row in packagedata] == [1, 2, 1]
     assert packagedata[0][4:10] == [5.0, 0.001, 9.0, 1.0, 1.0e-5, 0.03]
     assert [row[11:] for row in packagedata] == [[1.0, 0]] * 3
+
+
+def test_a_line_through_a_cell_corner_leaves_no_reach_in_the_diagonal_neighbour():
+    corner = _line((5.0, 5.0), (15.0, 15.0))
+
+    packagedata, _ = _place([_statement(corner)])
+
+    assert [(row[1], row[2]) for row in packagedata] == [(0, 0), (0, 4)]
+    assert cells_of(corner, name="Drains", points=_POINTS, cells=_CELLS, utm_epsg=32617) == [0, 4]
 
 
 def test_a_reach_s_length_is_on_the_model_s_length_unit():

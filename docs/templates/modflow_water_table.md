@@ -6,7 +6,7 @@ The STEADY WATER TABLE of an unconfined aquifer under recharge, drained by its s
 
 |  |  |
 |---|---|
-| module | `gwf` - 511 keywords in its dictionary, of which this template states 17 |
+| module | `gwf` - 511 keywords in its dictionary, of which this template states 19 |
 | solves | `trid3nt_server.workflows.modflow.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 

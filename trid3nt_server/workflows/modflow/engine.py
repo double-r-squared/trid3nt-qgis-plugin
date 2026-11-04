@@ -25,7 +25,7 @@ from trid3nt_server.workflows.solver.solver import (
 )
 from trid3nt_server.workflows.solver.diagnostics import register_diagnostics_parser
 
-from .diagnostics import parse_modflow
+from .diagnostics import convergence_failure, parse_modflow
 from .errors import ModflowError
 
 logger = logging.getLogger("trid3nt_server.workflows.modflow.engine")
@@ -100,6 +100,13 @@ def classify_exit(rundir: Path, exit_code: int
     if exit_code != 0:
         said = str(metrics.get("error")
                    or f"{label} exited with non-zero code {exit_code}")
+        try:
+            stalled = convergence_failure(
+                (rundir / "mfsim.lst").read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            stalled = None
+        if stalled:
+            said = f"{said}: {stalled}"
         return ("error", exit_code, said, metrics)
     if metrics and not bool(metrics.get("correct_end")):
         said = str(metrics.get("error")

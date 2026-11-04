@@ -311,6 +311,17 @@ def test_a_parser_that_refuses_the_directory_carries_its_own_words(
     assert "mesh.disv" in str(caught.value)
 
 
+def test_the_refusal_leads_with_mf6_s_error_report_not_its_banner(monkeypatch, tmp_path):
+    from trid3nt_server.workflows.modflow.authoring import validate as V
+
+    banner = "MODFLOW 6 banner line\n" * 100
+    report = "ERROR REPORT:\n\n  1. RIV BOUNDARY (1) RIVER STAGE ( 5.6) IS LESS THAN RIVER BOTTOM ( 30.5)\n"
+    monkeypatch.setattr(V, "run_image_script", lambda **_: _cp(2, stdout=banner + report))
+    with pytest.raises(ModflowError) as caught:
+        V.validate_authored_simulation(tmp_path)
+    assert "RIVER STAGE" in str(caught.value)[:400]
+
+
 def test_a_clean_exit_that_never_finished_refuses(monkeypatch, tmp_path):
     from trid3nt_server.workflows.modflow.authoring import validate as V
 

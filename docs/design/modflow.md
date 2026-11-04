@@ -51,6 +51,9 @@ the accepted mesh artifact's `engine_files`, keyed by the layering's digest;
 the sheet states the layering (`DISV_NLAY`, `DISV_TOP`, `DISV_BOTM`) and no
 sheet states the mesh's tables.
 
+A gridgen build with a width that is not a round number writes the same corner twice, a few float spacings apart, and the two cells then do not share it;
+the read-back merges vertices closer than sqrt(2) x (columns + rows) spacings of the largest coordinate and refuses a merge that would collapse a cell.
+
 A structured example reaches the DISV through `gridgen` with no ops: `build` states
 `delr` and `delc` (a number or one width per column and row) with `xoff` and `yoff`,
 and with both spacings stated the recipe needs no `resolution_m` - its finest edge is
@@ -637,9 +640,18 @@ and `slope` the reach's. A lake no line leaves has no outlet; two lines leaving 
 `mark_lake_outlets` tagged: untagged streams (the fetched layer) route no lake, and the journal says so. A transport body beside a flow
 model that moves water carries the `MVT` package, which mf6 requires.
 
-A canary run with the COMPLEX preset closes the head change at 0.1 m, and a lake discharging 117 m3/d through a Manning outlet at its invert stands at one
-centimetre, which that closure cannot see: the lake budget stays open by the whole outflow. At `IMS_OUTER_DVCLOSE` 0.001 the routed solve needs 136
-outer iterations against the preset's 100 (`IMS_OUTER_MAXIMUM`), so the twins that route a lake state both.
+Both templates state `IMS_OUTER_DVCLOSE` 1e-4 and `IMS_OUTER_MAXIMUM` 2000 on the flow body, the closure of the published complex-preset stream model
+ex-gwf-sfr-p01b. The preset's 0.1 m closure leaves a placed lake's budget open (LAK_0 71 percent short on the Des Moines run); at 1e-4 the drains
+twin's LAK_0 reads -0.14 percent and the routed twin's SFR_0, LAK_0 and WATER MOVER read 0.00, -0.11 and 0.00, while 1e-3 left -2.10 and 1e-6 over 500
+outer iterations does not converge the routed twin. The stated values apply to every run of the template; a run's own keywords beat them. The mass
+balance read journals each package's own percent discrepancy as the listing prints it, with no threshold: mf6 states none.
+
+A solve that does not converge refuses with mf6's own sentence: the stress period, the time step, the period's opening step length in the model's
+time unit, the outer DVCLOSE, and where the IMS print option wrote its outer iteration table the packages (lake, reach or well number) the last outer
+iteration still reports (`diagnostics.py::convergence_failure`, read from `mfsim.lst` in the run directory).
+
+A stream line is cut by the mesh cells it crosses; a piece no longer than the rounding of the drawn lon/lat vertices as projected, twice over (a line
+through a cell corner), is not a reach, and `cells_of` drops the same piece for a line it places as drains.
 
 ## Rivers in the two templates
 

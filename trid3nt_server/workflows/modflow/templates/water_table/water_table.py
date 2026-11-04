@@ -113,6 +113,10 @@ class STEERING(GWF):
     # steady water table dries whole; Newton-Raphson over measured terrain converges only under the complex solver preset
     NAM_NEWTONOPTIONS = "NEWTON"
     IMS_COMPLEXITY = "COMPLEX"
+    # the preset's 0.1 m outer closure leaves a placed lake's budget open (71 percent short on the Des Moines lake); the
+    # published complex-preset stream model closes at 1e-4 over up to 2000 outer iterations (ex-gwf-sfr-p01b)
+    IMS_OUTER_DVCLOSE = 1.0e-4
+    IMS_OUTER_MAXIMUM = 2000
 
     OC_HEAD_FILERECORD = "gwf.hds"
     OC_BUDGET_FILERECORD = "gwf.cbc"

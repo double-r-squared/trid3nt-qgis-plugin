@@ -283,6 +283,37 @@ def test_a_ragged_readback_is_cells_of_their_own_lengths(monkeypatch, tmp_path):
     assert [len(cell) for cell in mesh.cells] == [3, 3, 3, 3]
 
 
+def _twinned_pair(noise):
+    """Two unit squares sharing an edge whose two corners gridgen wrote once per cell."""
+    points = np.array([[500000.0, 4000000.0], [500100.0, 4000000.0], [500100.0, 4000100.0],
+                       [500000.0, 4000100.0], [500100.0 + noise, 4000000.0],
+                       [500200.0, 4000000.0], [500200.0, 4000100.0],
+                       [500100.0 + noise, 4000100.0]])
+    return points, [np.array([0, 1, 2, 3]), np.array([4, 5, 6, 7])]
+
+
+def test_a_corner_gridgen_wrote_twice_is_one_vertex_the_two_cells_share():
+    points, cells, merged = FLOPY._merge_twins(*_twinned_pair(1.4e-9), lines=4)
+
+    assert merged == 2
+    assert points.shape[0] == 6
+    assert set(cells[0]) & set(cells[1]) == {1, 2}
+
+
+def test_vertices_further_apart_than_the_rounding_of_their_sums_stay_two():
+    points, cells, merged = FLOPY._merge_twins(*_twinned_pair(1.0e-3), lines=4)
+
+    assert merged == 0 and points.shape[0] == 8
+
+
+def test_a_merge_that_would_collapse_a_cell_refuses():
+    points = np.array([[500000.0, 4000000.0], [500000.0 + 1e-9, 4000000.0], [500100.0, 4000100.0]])
+
+    with pytest.raises(MeshToolError) as excinfo:
+        FLOPY._merge_twins(points, [np.array([0, 1, 2])], lines=4)
+    assert excinfo.value.error_code == "MESH_GRIDGEN_VERTICES_COLLAPSE"
+
+
 def test_the_drivers_own_refusal_reaches_the_caller_with_its_escalation(tmp_path):
     (tmp_path / "flopy_refusal.json").write_text(json.dumps({
         "code": "MESH_HOLE_HAS_NO_INTERIOR",

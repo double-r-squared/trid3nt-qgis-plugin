@@ -7,6 +7,7 @@ Every mesh product is a dataset group of the run's one UGRID display file, value
 
 from __future__ import annotations
 
+import re
 from functools import cached_property
 from pathlib import Path
 from typing import Any, Mapping
@@ -672,6 +673,23 @@ def _observed_units(solved: Solved, kind: str | None) -> str:
     return ""
 
 
+_BUDGET_HEAD = re.compile(r"^ +([A-Z][A-Z0-9_ ]*?) BUDGET FOR ENTIRE MODEL AT END OF TIME STEP", re.M)
+_DISCREPANCY = re.compile(r"PERCENT DISCREPANCY = +(\S+)")
+
+
+def _package_budgets(listing: str) -> dict[str, str]:
+    """Each stress package's (and the water mover's) own percent discrepancy at its last printed step, as the listing words it.
+
+    The whole-model block (VOLUME) is the budget the chart carries; a package's own block is the one a lake or stream that never closed shows."""
+    heads = list(_BUDGET_HEAD.finditer(listing))
+    last: dict[str, str] = {}
+    for hit, following in zip(heads, heads[1:] + [None]):
+        value = _DISCREPANCY.search(listing, hit.end(), following.start() if following else len(listing))
+        if hit.group(1) != "VOLUME" and value:
+            last[hit.group(1)] = value.group(1)
+    return last
+
+
 def read_mass_balance(primitive: Primitive, solved: Solved) -> Series:
     """``mass_balance()``: the percent discrepancy the model listing prints, per listed step, with one net line per budget term."""
     import flopy
@@ -681,8 +699,14 @@ def read_mass_balance(primitive: Primitive, solved: Solved) -> Series:
     try:
         incremental, _cumulative = flopy.utils.Mf6ListBudget(path).get_dataframes(
             start_datetime=None)
+        held = _package_budgets(Path(path).read_text(encoding="utf-8", errors="replace"))
     finally:
         Path(path).unlink(missing_ok=True)
+    if held:
+        from trid3nt_server.inputs.run_notes import journal_note
+
+        journal_note("package budgets at the last step, percent discrepancy as the listing prints it: "
+                     + ", ".join(f"{name} {value}" for name, value in held.items()) + ".")
     if not len(incremental):
         raise OutputEmpty(f"{solved.listing_name} prints no volumetric budget.")
     times = solved.seconds(incremental.index.to_numpy())

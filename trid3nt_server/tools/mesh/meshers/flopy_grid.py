@@ -100,7 +100,9 @@ def build(recipe: Any) -> Mesh:
     _run_op(rundir, "build", "flopy_config.json", "flopy_mesh.npz")
 
     mesh = _read_built(rundir, epsg, edge, source,
-                       stated=recipe.resolution_m not in (None, ""), ops=ops)
+                       stated=recipe.resolution_m not in (None, ""), ops=ops,
+                       base_lines=(len(config["delr"]) + len(config["delc"])
+                                   if mesher.name == "gridgen" else 0))
     for op in ops:
         if op.phase == POST:
             mesh = op.fn(mesh, **{name: op_input(value)
@@ -311,8 +313,46 @@ def _project_geojson(value: Any, epsg: int) -> Any:
     return walk(value)
 
 
+def _merge_twins(points: Any, cells: Any, lines: int) -> tuple[Any, Any, int]:
+    """``(points, cells, merged)`` with every vertex gridgen wrote twice at one position made one.
+
+    A gridgen vertex is a sum of up to ``lines`` widths from the origin, so the two writings of one corner
+    differ by the rounding of those sums: at most ``lines`` spacings of the largest coordinate on each axis.
+    Vertices that close are one corner (a cell that would collapse onto fewer than three corners refuses)."""
+    import numpy as np
+    from scipy.spatial import cKDTree
+
+    tolerance = float(np.sqrt(2.0) * lines * np.spacing(np.abs(points).max()))
+    leader = np.arange(points.shape[0])
+    for a, b in sorted(cKDTree(points).query_pairs(tolerance)):
+        while leader[a] != a:
+            a = leader[a]
+        while leader[b] != b:
+            b = leader[b]
+        leader[max(a, b)] = min(a, b)
+    for node in range(leader.size):
+        leader[node] = leader[leader[node]]
+    merged = int(np.count_nonzero(leader != np.arange(leader.size)))
+    if not merged:
+        return points, cells, 0
+    walks = [leader[np.asarray(row, dtype=np.int64)] for row in cells]
+    for number, walk in enumerate(walks):
+        if len(set(walk.tolist())) < len(walk):
+            raise MeshToolError(
+                "MESH_GRIDGEN_VERTICES_COLLAPSE",
+                f"gridgen wrote cell {number} with corners closer than {tolerance:.3g} m, the rounding of its "
+                "own coordinates, so merging its duplicated vertices would leave it fewer than its corners; "
+                "state a base width with fewer digits (a round number of metres)")
+    kept = np.unique(leader)
+    renumber = np.full(points.shape[0], -1, dtype=np.int64)
+    renumber[kept] = np.arange(kept.size)
+    walks = [renumber[walk] for walk in walks]
+    cells = np.asarray(walks, dtype=np.int64) if isinstance(cells, np.ndarray) else walks
+    return points[kept], cells, merged
+
+
 def _read_built(rundir: Path, epsg: int, edge: float, source: str,
-                stated: bool, ops: tuple[BoundOp, ...]) -> Mesh:
+                stated: bool, ops: tuple[BoundOp, ...], base_lines: int = 0) -> Mesh:
     """The container's arrays as the neutral mesh, in the zone they were built."""
     import numpy as np
 
@@ -329,6 +369,9 @@ def _read_built(rundir: Path, epsg: int, edge: float, source: str,
                                     dtype=np.int64))
             cursor += int(count)
     stats = json.loads((rundir / "flopy_stats.json").read_text())
+    merged = 0
+    if base_lines:
+        points, cells, merged = _merge_twins(points, cells, base_lines)
     from pyproj import Transformer
 
     # The acceptance places a mesh on the map by its lon/lat extent, which a mesh built in UTM states itself.
@@ -355,7 +398,8 @@ def _read_built(rundir: Path, epsg: int, edge: float, source: str,
                        if "maximum_area" in stats else {}),
                     **({"build_sources": stats["sources"]}
                        if "sources" in stats else {}),
-                    "op_notes": [op.note for op in ops if op.note],
+                    "op_notes": [op.note for op in ops if op.note]
+                    + ([f"{merged} vertices gridgen wrote twice at one corner were merged"] if merged else []),
                 },
             },
             "synthetic_inputs": [

@@ -101,6 +101,45 @@ def test_a_nonzero_exit_is_an_error_naming_the_worker_s_sentence(tmp_path):
     assert error == "mf6 exited with code 1"
 
 
+_STALLED_LISTING = """\
+    SIMULATION TIME UNIT IS DAYS
+ OUTER ITERATION CONVERGENCE CRITERION    (DVCLOSE) =    0.100000E+00
+ STRESS PERIOD NO. 1, LENGTH =   21488.50
+ ------------------------------------------
+ NUMBER OF TIME STEPS = 472
+ MULTIPLIER FOR DELT =     1.000
+ INITIAL TIME STEP SIZE =   45.52648
+
+ SLN_1 OUTER ITERATION SUMMARY
+ Model                              1         34     1.3750949        1_GWF-(1,1878)
+ Package                            1                -0.3955       1_GWF-LAK_0-(32)-gwf
+ Model                              2         34     0.0549        1_GWF-(1,1878)
+ Package                            2                 0.1278       1_GWF-LAK_0-(11)-residual
+
+ Solution 1 did not converge for stress period 1 and time step 3
+"""
+
+
+def test_a_stalled_lake_is_named_with_its_package_and_step_length(tmp_path):
+    (tmp_path / "modflow_metrics.json").write_text(json.dumps({
+        "module": "gwf", "correct_end": False,
+        "error": "mf6 exited with code 1"}))
+    (tmp_path / "mfsim.lst").write_text(_STALLED_LISTING)
+    _, _, error, _ = classify_exit(tmp_path, 1)
+    assert error.startswith("mf6 exited with code 1: ")
+    for said in ("stress period 1, time step 3", "45.52648 days",
+                 "LAK_0 lake 11 (residual 0.1278)"):
+        assert said in error
+    assert "lake 32" not in error
+
+
+def test_a_listing_with_no_unconverged_solution_adds_nothing(tmp_path):
+    (tmp_path / "modflow_metrics.json").write_text(json.dumps({
+        "module": "gwf", "correct_end": False, "error": "mf6 exited with code 1"}))
+    (tmp_path / "mfsim.lst").write_text("ERROR REPORT:\n  1.  bad input\n")
+    assert classify_exit(tmp_path, 1)[2] == "mf6 exited with code 1"
+
+
 def test_a_clean_exit_that_never_finished_is_an_error(tmp_path):
     (tmp_path / "modflow_metrics.json").write_text(json.dumps({
         "module": "gwf", "correct_end": False, "normal_termination": False,

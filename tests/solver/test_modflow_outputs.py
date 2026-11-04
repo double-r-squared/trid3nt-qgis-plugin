@@ -182,6 +182,36 @@ def test_the_budget_discrepancy_is_the_listings_own(solved):
     assert read.measures["total_in"] == pytest.approx(read.measures["total_out"], rel=1e-3)
 
 
+def test_a_package_that_never_closed_is_named_with_the_discrepancy_its_own_budget_prints():
+    from trid3nt_server.workflows.modflow.modules.outputs import _package_budgets
+
+    block = ("  {} BUDGET FOR ENTIRE MODEL AT END OF TIME STEP    1, STRESS PERIOD   1\n  ----\n"
+             "            TOTAL IN =        1095.9405\n PERCENT DISCREPANCY =  {}     PERCENT DISCREPANCY =  {}\n\n")
+    listing = (block.format("LAK_0", "-70.83", "-70.83") + block.format("WATER MOVER", "0.00", "0.00")
+               + block.format("VOLUME", "-0.06", "-0.06"))
+
+    assert _package_budgets(listing) == {"LAK_0": "-70.83", "WATER MOVER": "0.00"}
+
+
+def test_the_budget_read_journals_each_package_s_own_discrepancy(solved, monkeypatch, tmp_path):
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+
+    def download(run_id, basename):
+        dest = tmp_path / f"own_{basename}"
+        text = (_FIXTURE / basename).read_text()
+        dest.write_text(
+            "  LAK_0 BUDGET FOR ENTIRE MODEL AT END OF TIME STEP    1, STRESS PERIOD   1\n"
+            " PERCENT DISCREPANCY =         -70.83     PERCENT DISCREPANCY =         -70.83\n" + text)
+        return str(dest)
+
+    run = solved()
+    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result", download)
+    token = bind_notes()
+    GWF.READS["mass_balance"](P.mass_balance(), run)
+
+    assert any("LAK_0 -70.83" in note for note in drain_notes(token))
+
+
 def test_saturation_and_discharge_read_off_the_budget_file(solved):
     saturation = GWF.READS["field"](P.field("SATURATION", t=-1, plane=1), solved())
     assert saturation.values[0, :7].tolist() == [1.0] * 7

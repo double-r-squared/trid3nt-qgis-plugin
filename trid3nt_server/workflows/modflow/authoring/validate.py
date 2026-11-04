@@ -37,9 +37,11 @@ def validate_authored_simulation(rundir: Path | str) -> dict[str, Any]:
         rundir=Path(rundir), argv=[], timeout_s=_TIMEOUT_S)
     out = f"{cp.stdout}\n{cp.stderr}"
     if cp.returncode != 0 or "Normal termination of simulation." not in out:
+        # mf6 prints its banner first and its refusal last; a message cut from the front must still hold the refusal.
+        said = out[out.find("ERROR REPORT"):] if "ERROR REPORT" in out else out
         raise ModflowError(
             f"mf6 does not accept this run directory (rc={cp.returncode}); its own "
-            f"parser refuses what the solve would stop on:\n{out[-2000:]}",
+            f"parser refuses what the solve would stop on:\n{said[-2000:]}",
             error_code="MODFLOW_VALIDATE_FAILED")
     logger.info("modflow mf6 validate ok over %s", rundir)
     return {"rc": int(cp.returncode)}

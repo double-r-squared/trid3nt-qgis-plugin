@@ -252,12 +252,13 @@ def place_streams(statements: list[Mapping[str, Any]], *, points: Any, cells: An
         first = len(reaches)
         for number, (part, properties) in enumerate(
                 flatten_features(shape(statement["geometry"], label="Streams").features), start=1):
-            line = transform(to_utm, geo(part))
+            source = geo(part)
+            line = transform(to_utm, source)
             if line.geom_type not in ("LineString", "MultiLineString"):
                 raise ModflowError(f"Streams places lines; got a {line.geom_type}.",
                                    error_code="MODFLOW_STRESS_UNSTATED")
             for one in (line.geoms if line.geom_type == "MultiLineString" else [line]):
-                cut = _cut(one, tree, polygons, cells, lines=lines, metres=metres,
+                cut = _cut(one, _sliver(source, to_utm), tree, polygons, cells, lines=lines, metres=metres,
                            layer=statement.get("layer"), nlay=nlay, active=active, leave_out=leave_out, dropped=dropped)
                 for reach in cut:
                     reach["owner"] = (f"feature {number} of the geometry", properties)
@@ -305,7 +306,25 @@ def _reaches(reaches: list[dict[str, Any]]) -> list[dict[str, Any]]:
             for rank, reach in enumerate(reaches)]
 
 
-def _cut(line: Any, tree: Any, polygons: Any, cells: Any, *, lines: Any, metres: float,
+def _sliver(source: Any, to_utm: Any) -> float:
+    """The length at or below which a piece of a line cut by a cell is the rounding of a cut through a cell corner.
+
+    Rounding moves a vertex of the drawn lon/lat line by at most one spacing of each coordinate, so the line
+    passes a corner it was drawn through by at most that step as projected, plus the spacing of the projected
+    coordinate; a line crossing a corner at 45 degrees leaves twice that offset in the diagonal cell."""
+    import numpy as np
+    import shapely
+
+    step = 0.0
+    for x, y in shapely.get_coordinates(source):
+        east, north = to_utm(x, y)
+        moved_east, moved_north = to_utm(x + np.spacing(x), y + np.spacing(y))
+        step = max(step, float(np.hypot(moved_east - east, moved_north - north)
+                               + np.hypot(np.spacing(east), np.spacing(north))))
+    return 2.0 * step
+
+
+def _cut(line: Any, sliver: float, tree: Any, polygons: Any, cells: Any, *, lines: Any, metres: float,
          layer: Any, nlay: int, active: Any, leave_out: Mapping[int, str] = MappingProxyType({}),
          dropped: dict[str, int] | None = None) -> list[dict[str, Any]]:
     import shapely
@@ -315,7 +334,7 @@ def _cut(line: Any, tree: Any, polygons: Any, cells: Any, *, lines: Any, metres:
     for cell in tree.query(line, predicate="intersects"):
         cut = line.intersection(polygons[cell])
         for piece in getattr(cut, "geoms", [cut]):
-            if piece.geom_type == "LineString" and piece.length > 0.0:
+            if piece.geom_type == "LineString" and piece.length > sliver:
                 pieces.append((line.project(piece.interpolate(0.5, normalized=True)),
                                int(cell), piece.length, piece))
     if sum(length for _, _, length, _ in pieces) > line.length * (1.0 + 1e-9):
@@ -1345,7 +1364,10 @@ def cells_of(geometry: Any, *, name: str, points: Any, cells: Any,
             continue
         projected = transform(to_utm, geo(part))
         areal = projected.geom_type in ("Polygon", "MultiPolygon")
+        sliver = 0.0 if areal else _sliver(geo(part), to_utm)
         for row in finder.intersect(projected, contains_centroid=areal, geo_dataframe=False):
+            if not areal and float(row["lengths"]) <= sliver:
+                continue
             cellid = row["cellids"]
             found.add(int(cellid[0] if hasattr(cellid, "__len__") else cellid))
     if not found:
