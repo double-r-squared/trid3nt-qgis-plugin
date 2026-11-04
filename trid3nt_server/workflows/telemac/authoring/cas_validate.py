@@ -9,18 +9,20 @@ from __future__ import annotations
 import json
 import logging
 import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Mapping
 
-from trid3nt_server.workflows.solver.image_script import run_image_script
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.cas_validate")
 
-__all__ = ["CasParseError", "run_cas_driver", "validate_authored_steering"]
+__all__ = ["CasParseError", "EngineHomeMissing", "engine_home", "run_cas_driver",
+           "run_engine_script", "validate_authored_steering"]
 
-_TELEMAC_IMAGE_DEFAULT = "trid3nt-local/telemac:latest"
-_INCONTAINER_SCRIPT = "cas.py"
-_CONTAINER_TIMEOUT_S = 300
+_SCRIPTS = Path(__file__).resolve().parent / "engine_scripts"
+_REPO_HOME = Path(__file__).resolve().parents[4] / "third_party" / "opentelemac"
+_TIMEOUT_S = 300
 
 
 class CasParseError(RuntimeError):
@@ -29,19 +31,38 @@ class CasParseError(RuntimeError):
     error_code = "TELEMAC_CAS_PARSE_FAILED"
 
 
+class EngineHomeMissing(CasParseError):
+    """The opentelemac tree the steering scripts read is not installed."""
+
+    error_code = "TELEMAC_ENGINE_HOME_MISSING"
+
+
+def engine_home() -> Path:
+    """The opentelemac tree (``TRID3NT_OPENTELEMAC_HOME``, else ``third_party/opentelemac``), or the refusal naming the script that installs it."""
+    home = Path(os.environ.get("TRID3NT_OPENTELEMAC_HOME") or _REPO_HOME)
+    if not (home / "scripts" / "python3" / "execution" / "telemac_cas.py").is_file():
+        raise EngineHomeMissing(
+            f"the opentelemac steering tree is not at {home}; run scripts/fetch_opentelemac.sh "
+            "to install it, or set TRID3NT_OPENTELEMAC_HOME to where it lives")
+    return home
+
+
+def run_engine_script(script: str, rundir: Path | str, config_name: str, *,
+                      timeout_s: float) -> subprocess.CompletedProcess:
+    """Run ``engine_scripts/<script>`` over ``rundir`` in its own interpreter, HOMETEL set to the engine tree."""
+    env = {**os.environ, "HOMETEL": str(engine_home())}
+    return subprocess.run(
+        [sys.executable, "-I", str(_SCRIPTS / script),
+         str(Path(rundir) / config_name), str(rundir)],
+        capture_output=True, text=True, timeout=timeout_s, env=env)
+
+
 def run_cas_driver(rundir: Path | str, config: Mapping[str, Any], *,
                    what: str) -> None:
-    """Shell the steering driver over ``rundir``. The one door to the image.
-
-    A refusal carries the container's words.
-    """
-    image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or _TELEMAC_IMAGE_DEFAULT
+    """Run the steering driver over ``rundir``. A refusal carries the driver's words."""
     name = "telemac_cas_config.json"
     (Path(rundir) / name).write_text(json.dumps(dict(config)))
-    cp = run_image_script(
-        image=image, engine="telemac", script=_INCONTAINER_SCRIPT,
-        rundir=Path(rundir), argv=[f"/data/{name}", "/data"],
-        timeout_s=_CONTAINER_TIMEOUT_S)
+    cp = run_engine_script("cas.py", rundir, name, timeout_s=_TIMEOUT_S)
     if cp.returncode != 0:
         raise CasParseError(
             f"could not {what} (rc={cp.returncode}):\n"
@@ -53,7 +74,7 @@ def validate_authored_steering(rundir: Path | str,
                                steering: Mapping[str, str]) -> dict[str, dict]:
     """Parse every ``{basename: module}`` file in ``rundir`` -> what was read.
 
-    One container round trip for the whole authoring.
+    One driver run for the whole authoring.
     """
     rundir = Path(rundir)
     present = {name: module for name, module in steering.items()

@@ -1057,7 +1057,7 @@ def test_an_open_slot_under_the_fold_says_the_dictionary_answers_it_for_nobody()
 #: sheet into decks, and the in-image script hands each keyword to telapy.
 _STEERING_WRITERS = (
     "trid3nt_server/workflows/telemac/authoring/serializer.py",
-    "workers/telemac/scripts/cas.py",
+    "trid3nt_server/workflows/telemac/authoring/engine_scripts/cas.py",
 )
 
 

@@ -544,9 +544,9 @@ package MeshSeam {
     part telemacCasDriver : ShippedDriver {
         doc /*
         The steering file read and written by the library's own TelemacCas
-        against the module dictionary, inside the engine image.
+        against the module dictionary, in its own interpreter over the opentelemac tree.
 
-        code: workers/telemac/scripts/cas.py
+        code: trid3nt_server/workflows/telemac/authoring/engine_scripts/cas.py
         */
     }
 
@@ -858,8 +858,7 @@ package MeshSeam {
 
         forbid: workers.mesh.scripts -> trid3nt_server
         forbid: workers.mesh.scripts -> trid3nt_contracts
-        forbid: workers.telemac.scripts -> trid3nt_server
-        forbid: workers.telemac.scripts -> trid3nt_contracts
+        forbid: trid3nt_server.workflows.telemac.authoring.engine_scripts -> trid3nt_contracts
         */
     }
 

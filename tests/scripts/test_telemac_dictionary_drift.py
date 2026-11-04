@@ -64,9 +64,9 @@ def test_the_help_carries_no_markup_into_the_surface():
 
 def test_the_committed_dictionary_is_what_the_image_says_today(tmp_path):
     extractor = _extractor()
-    if not extractor.image_present():
-        pytest.skip(f"{extractor.IMAGE} is not on this machine: the dictionaries "
-                    "the dictionary is extracted from are only in that image")
+    if not extractor.engine_present():
+        pytest.skip(f"the opentelemac tree is not installed: the dictionaries "
+                    "are extracted from it (scripts/fetch_opentelemac.sh)")
     extractor.extract_dictionaries(tmp_path)
     for module in extractor.MODULES:
         committed = (extractor.module_input_dir() / f"{module}.json").read_text()

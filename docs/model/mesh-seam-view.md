@@ -22,7 +22,7 @@ flowchart LR
     regGridAdapter["MesherAdapter<br/>trid3nt_server/tools/mesh/meshers/reg_grid.py"]
     selafinIo["SelafinIo<br/>trid3nt_server/workflows/telemac/authoring/selafin_io.py"]
     sharedPrimitives["SharedPrimitives<br/>trid3nt_server/tools/mesh/shared/primitives.py"]
-    telemacCasDriver["ShippedDriver<br/>workers/telemac/scripts/cas.py"]
+    telemacCasDriver["ShippedDriver<br/>trid3nt_server/workflows/telemac/authoring/engine_scripts/cas.py"]
     telemacMeshFiles["EngineMeshFiles<br/>trid3nt_server/workflows/telemac/authoring/mesh_files.py"]
     topologyWriter["TopologyWriter<br/>trid3nt_server/workflows/telemac/authoring/topology.py"]
     meshSession -- "MeshArtifactRecord" --> meshArtifactStore

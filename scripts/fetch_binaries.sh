@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # fetch_binaries.sh -- idempotent downloader for mf6, triangle, gridgen, minio, mc
+# (the TELEMAC steering tree is scripts/fetch_opentelemac.sh)
 # usage: bash scripts/fetch_binaries.sh
 set -e
 

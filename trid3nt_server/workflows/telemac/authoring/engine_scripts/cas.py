@@ -1,15 +1,16 @@
 """In-container writer and parser for the TELEMAC steering files.
 
-Runs INSIDE the image where the engine's own dictionaries, its DAMOCLES reader
-and telapy live, importing nothing from trid3nt. ``TelemacCas`` is the only
+Runs in its own interpreter against the opentelemac tree ``HOMETEL`` names (the
+engine's own dictionaries and steering reader), importing nothing from trid3nt. ``TelemacCas`` is the only
 writer of the steering format; only the spelling of a value is ours."""
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 
-sys.path.insert(0, "/opt/conda/opentelemac/scripts/python3")
+sys.path.insert(0, os.environ["HOMETEL"] + "/scripts/python3")
 
 from execution.telemac_cas import TelemacCas, get_dico  # noqa: E402
 
@@ -85,7 +86,7 @@ def parse_steering(cfg: dict) -> dict:
 
 def main() -> int:
     # Contract (host <-> container over the mounted authoring dir):
-    #   python cas.py /data/config.json /data
+    #   python cas.py <rundir>/config.json <rundir>
     #
     #   write     {basename: {"module": ..., "values": {KEYWORD: value}}} -
     #             telapy writes each file from the values given. Emits

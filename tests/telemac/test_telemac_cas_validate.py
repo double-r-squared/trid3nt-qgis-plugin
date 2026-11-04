@@ -1,17 +1,17 @@
-"""The authored-steering parse gate: what it hands the container, and how it refuses.
+"""The authored-steering parse gate: what it hands the driver, and how it refuses.
 
-The parse itself runs inside the image against the engine's own dictionaries and
-is proved there. Proved here is everything on this side of the mount: which files
+The parse itself runs against the engine's own dictionaries in the opentelemac tree.
+Proved here is everything around it: which files
 are submitted under which dictionary, that a file the authoring did not write is
 not submitted, and that a parse failure names the file and the keyword."""
 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.solver import image_script
 from trid3nt_server.workflows.telemac.authoring import cas_validate as V
 
 class _Completed:
@@ -24,8 +24,9 @@ def _driver(monkeypatch, rows, *, returncode=0):
     seen: dict = {}
 
     def _run(argv, **_kw):
-        rundir = next(a.split(":")[0] for a in argv if a.endswith(":/data"))
         from pathlib import Path
+
+        rundir = argv[-1]
 
         config = json.loads(
             (Path(rundir) / "telemac_cas_config.json").read_text())
@@ -34,13 +35,14 @@ def _driver(monkeypatch, rows, *, returncode=0):
         (Path(rundir) / "telemac_cas_stats.json").write_text(json.dumps(rows))
         return _Completed(returncode)
 
-    monkeypatch.setattr(image_script.subprocess, "run", _run)
+    monkeypatch.setattr(V.subprocess, "run", _run)
+    monkeypatch.setattr(V, "engine_home", lambda: Path("."))
     return seen
 
 
 def test_nothing_written_means_nothing_to_parse(tmp_path, monkeypatch):
-    """The container is not started for a file that was never authored."""
-    monkeypatch.setattr(image_script.subprocess, "run",
+    """The driver is not started for a file that was never authored."""
+    monkeypatch.setattr(V.subprocess, "run",
                         lambda *_a, **_k: pytest.fail("launched with nothing"))
     assert V.validate_authored_steering(tmp_path, {"absent.cas": "telemac2d"}) == {}
 
@@ -55,7 +57,7 @@ def test_only_the_files_that_exist_are_submitted(tmp_path, monkeypatch):
         tmp_path, {"t2d_river.cas": "telemac2d", "t2d_river.waqtel": "waqtel"})
     assert seen["steering"] == {"t2d_river.cas": "telemac2d"}
     assert rows["t2d_river.cas"]["keywords"] == 40
-    assert "--network" in seen["argv"] and "none" in seen["argv"]
+    assert seen["argv"][-1] == str(tmp_path)
 
 
 def test_a_file_that_does_not_parse_refuses_naming_the_keyword(tmp_path,
@@ -179,3 +181,24 @@ def test_a_coupled_steering_names_the_hosts_partitioned_files(tmp_path,
     coupled = decks["t2d_river.waqtel"]
     assert coupled["GEOMETRY FILE"] == "river.slf"
     assert coupled["BOUNDARY CONDITIONS FILE"] == "river.cli"
+
+
+def test_a_missing_engine_tree_is_refused_by_name_with_the_script_that_installs_it(
+        tmp_path, monkeypatch):
+    monkeypatch.setenv("TRID3NT_OPENTELEMAC_HOME", str(tmp_path / "absent"))
+    with pytest.raises(V.EngineHomeMissing) as excinfo:
+        V.engine_home()
+    assert excinfo.value.error_code == "TELEMAC_ENGINE_HOME_MISSING"
+    assert "fetch_opentelemac.sh" in str(excinfo.value)
+
+
+def test_the_installed_engine_tree_writes_and_reads_a_steering_file(tmp_path):
+    try:
+        V.engine_home()
+    except V.EngineHomeMissing:
+        pytest.skip("scripts/fetch_opentelemac.sh has not installed the engine tree")
+    V.run_cas_driver(tmp_path, {"write": {"t2d.cas": {
+        "module": "telemac2d", "values": {"TIME STEP": 10.0, "TITLE": "x"}}}},
+        what="write")
+    rows = V.validate_authored_steering(tmp_path, {"t2d.cas": "telemac2d"})
+    assert rows["t2d.cas"]["ok"] and rows["t2d.cas"]["keywords"] >= 2

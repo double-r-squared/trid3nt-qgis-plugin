@@ -476,14 +476,10 @@ def test_the_scripts_live_in_the_worker_tree_beside_their_dockerfiles():
 
     mesh_names = {p.name for p in scripts_dir("mesh").glob("*.py")
                   if p.name != "__init__.py"}
-    telemac_names = {p.name for p in scripts_dir("telemac").glob("*.py")
-                      if p.name != "__init__.py"}
-    # Only what the image DOES lives there: meshing and the steering files. The
-    # SELAFIN pair and the result read are the daemon's own.
+    # Only what the image DOES lives there.
     assert mesh_names == {"flopy_grid.py", "om2d.py"}
-    assert telemac_names == {"cas.py", "dico.py"}
+    assert not scripts_dir("telemac").exists()
     assert "sandbox" not in str(scripts_dir("mesh"))
-    assert "sandbox" not in str(scripts_dir("telemac"))
 
 
 def test_the_box_mounts_the_product_scripts_dir():

@@ -18,7 +18,8 @@ from pathlib import Path
 #: a letter. A deck whose variable table does not fit the 72 columns DAMOCLES
 #: reads a line to has no other spelling, so the gate is taught the wildcard its
 #: own solver answers to.
-GATE = Path("/opt/conda/opentelemac/scripts/python3/execution/telemac_cas.py")
+GATE = Path(sys.argv[1] if len(sys.argv) > 1
+            else "/opt/conda/opentelemac/scripts/python3/execution/telemac_cas.py")
 
 EXPECTED = """                    for val in list_val:
                         tmp_val = str(val.strip(' 0123456789*'))

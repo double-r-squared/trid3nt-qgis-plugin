@@ -349,7 +349,7 @@ package SteeringSurface {
 
     part dictionaryExtractor : Dictionary {
         doc /*
-        code: workers/telemac/scripts/dico.py
+        code: trid3nt_server/workflows/telemac/authoring/engine_scripts/dico.py
         */
         port dictionaryOut : DictionaryOut;
     }
@@ -481,7 +481,7 @@ package SteeringSurface {
 
     part steeringDriver : SteeringDriver {
         doc /*
-        code: workers/telemac/scripts/cas.py
+        code: trid3nt_server/workflows/telemac/authoring/engine_scripts/cas.py
         */
         port writeIn : WriteIn;
         port parseOut : ParseOut;

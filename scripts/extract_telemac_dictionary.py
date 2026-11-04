@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Extract every exposed TELEMAC module's keyword dictionary out of the image.
+"""Extract every exposed TELEMAC module's keyword dictionary out of the opentelemac tree.
 
-Keyword rows are generated data the image owns and are never hand-edited; the
+Keyword rows are generated data the engine owns and are never hand-edited; the
 authored ``inputs`` section a template's values read their schema off is written
 back beside the fresh rows, so regeneration never clobbers it.
 """
@@ -9,20 +9,19 @@ back beside the fresh rows, so regeneration never clobbers it.
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from trid3nt_server.workflows.solver.image_script import run_image_script  # noqa: E402
+from trid3nt_server.workflows.telemac.authoring.cas_validate import (  # noqa: E402
+    engine_home, run_engine_script)
 
 #: The modules the wrapper layer exposes. TOMAWAC rides along because its
 #: dictionary is in the same image and the extraction costs nothing extra.
 MODULES: tuple[str, ...] = ("telemac2d", "telemac3d", "artemis", "tomawac",
                             "waqtel", "gaia", "khione")
 
-IMAGE = "trid3nt-local/telemac:latest"
 _SCRIPT = "dico.py"
 _TIMEOUT_S = 600
 
@@ -33,11 +32,13 @@ def module_input_dir() -> Path:
             / "telemac" / "modules" / "module_input")
 
 
-def image_present() -> bool:
-    """Whether the TELEMAC image this reads the dictionaries out of is here."""
-    cp = subprocess.run(["docker", "image", "inspect", IMAGE],
-                        capture_output=True, text=True)
-    return cp.returncode == 0
+def engine_present() -> bool:
+    """Whether the opentelemac tree this reads the dictionaries out of is installed."""
+    try:
+        engine_home()
+    except RuntimeError:
+        return False
+    return True
 
 
 def extract_dictionaries(dest: Path, modules: tuple[str, ...] = MODULES) -> dict[str, int]:
@@ -53,9 +54,7 @@ def extract_dictionaries(dest: Path, modules: tuple[str, ...] = MODULES) -> dict
             committed[module] = json.loads(path.read_text())
     dest.mkdir(parents=True, exist_ok=True)
     (dest / "config.json").write_text(json.dumps({"modules": list(modules)}))
-    cp = run_image_script(
-        image=IMAGE, engine="telemac", script=_SCRIPT, rundir=dest,
-        argv=["/data/config.json", "/data"], timeout_s=_TIMEOUT_S)
+    cp = run_engine_script(_SCRIPT, dest, "config.json", timeout_s=_TIMEOUT_S)
     if cp.returncode != 0:
         raise RuntimeError("the TELEMAC dictionaries could not be read "
                            f"(rc={cp.returncode}):\n{cp.stdout[-2000:]}\n"

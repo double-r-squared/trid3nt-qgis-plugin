@@ -158,7 +158,16 @@ Idempotent downloader. Installs:
   runtime deps)
 - **MinIO server** -> `bin/minio` and **mc client** -> `bin/mc` (from dl.min.io)
 
+- **triangle** and **gridgen** (MODFLOW-ORG executables release 29.0, sha256-pinned) -> `bin/triangle`, `bin/gridgen`
+
 Each binary is version-verified after download.
+
+The TELEMAC steering tree (the opentelemac v9.0.0 python scripts and keyword dictionaries; about
+1.2 GB downloaded once, 8 MB kept) is a separate step:
+
+```sh
+bash scripts/fetch_opentelemac.sh    # -> third_party/opentelemac, sha256-pinned
+```
 
 ### 2. Python venvs
 

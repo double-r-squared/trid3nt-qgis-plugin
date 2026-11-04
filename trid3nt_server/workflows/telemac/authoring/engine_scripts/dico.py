@@ -1,7 +1,7 @@
 """In-container extractor for the TELEMAC keyword dictionaries.
 
-Runs INSIDE the image where the engine's own dictionaries and their DAMOCLES
-reader live, importing nothing from trid3nt. The table is TRIMMED to what a slot
+Runs in its own interpreter against the opentelemac tree ``HOMETEL`` names (the
+engine's own dictionaries), importing nothing from trid3nt. The table is TRIMMED to what a slot
 is filled and refused by: nothing the eficas GUI needs, every spelling resolved."""
 
 from __future__ import annotations
@@ -9,10 +9,11 @@ from __future__ import annotations
 import importlib
 import json
 import re
+import os
 import sys
 
-sys.path.insert(0, "/opt/conda/opentelemac/scripts/python3")
-sys.path.insert(0, "/opt/conda/opentelemac/scripts/python3/eficas")
+sys.path.insert(0, os.environ["HOMETEL"] + "/scripts/python3")
+sys.path.insert(0, os.environ["HOMETEL"] + "/scripts/python3/eficas")
 
 from execution.telemac_cas import SPECIAL, get_dico  # noqa: E402
 from execution.telemac_dico import TelemacDico  # noqa: E402
@@ -141,7 +142,7 @@ def extract(module: str) -> dict:
 
 def main() -> int:
     # Contract (host <-> container over the mounted output dir):
-    #   python dico.py /data/config.json /data
+    #   python dico.py <rundir>/config.json <rundir>
     #
     #   modules  the module names whose dictionary is read. Emits one
     #            <module>.json per module, keywords ORDERED AS THE DICTIONARY,
