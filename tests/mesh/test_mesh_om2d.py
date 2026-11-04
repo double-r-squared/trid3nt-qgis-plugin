@@ -477,7 +477,7 @@ def test_the_scripts_live_in_the_worker_tree_beside_their_dockerfiles():
     mesh_names = {p.name for p in scripts_dir("mesh").glob("*.py")
                   if p.name != "__init__.py"}
     # Only what the image DOES lives there.
-    assert mesh_names == {"flopy_grid.py", "om2d.py"}
+    assert mesh_names == {"om2d.py"}
     assert not scripts_dir("telemac").exists()
     assert "sandbox" not in str(scripts_dir("mesh"))
 

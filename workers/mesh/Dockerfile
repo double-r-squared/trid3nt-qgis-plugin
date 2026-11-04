@@ -1,8 +1,7 @@
-# TRID3NT mesh environment -- the box OceanMesh2D and FloPy live in.
+# TRID3NT mesh environment -- the box OceanMesh2D lives in.
 #
 # This image is an ENVIRONMENT, not a worker: it carries the CHLNDDEV
-# `oceanmesh` port, FloPy, and the two executables the FloPy meshers drive
-# (triangle, gridgen) and nothing of ours. The mesh recipe path
+# `oceanmesh` port and nothing of ours. The om2d mesher
 # (trid3nt_server/tools/mesh/meshers/) bind-mounts its driver at
 # /drivers and a rundir at /data, overrides the entrypoint with `python`, and
 # runs the driver here; the libraries are the only things this image supplies.
@@ -45,43 +44,12 @@ ARG OCEANMESH_REF=v1.0.0
 RUN pip install --no-cache-dir "numpy<2" \
     && pip install --no-cache-dir "git+https://github.com/CHLNDDEV/oceanmesh.git@${OCEANMESH_REF}" meshio
 
-# FloPy (MIT) composes the triangle / voronoi / gridgen meshers IN THE DRIVER,
-# and pyproj gives the planar grid its CRS words. pyshp is how Gridgen writes
-# its refinement/active-domain features as shapefiles (flopy's optional dep).
-# Pinned exactly as the host venv pins them: a version skew here is a
-# deliberate, IaC-visible bump.
-ARG FLOPY_VERSION=3.10.0
-ARG PYPROJ_VERSION=3.7.2
-ARG PYSHP_VERSION=3.1.4
-RUN pip install --no-cache-dir "flopy==${FLOPY_VERSION}" \
-    "pyproj==${PYPROJ_VERSION}" "pyshp==${PYSHP_VERSION}"
-
-# triangle + gridgen: two of the 28 binaries in the MODFLOW-ORG executables
-# release, sha256-pinned, extracted ALONE into a bin dir the runtime copies -
-# the mesh box takes only what its meshers drive. stdlib zipfile and urllib
-# because slim has neither unzip nor curl.
-ARG EXEC_RELEASE=29.0
-ARG EXEC_SHA256=ab17192a3531dec61d4f4eab3da10f618e85d1f792d5edc71306a3e06e0e22c3
-RUN mkdir -p /opt/mesh/bin \
-    && python -c "\
-import urllib.request;\
-urllib.request.urlretrieve('https://github.com/MODFLOW-ORG/executables/releases/download/${EXEC_RELEASE}/linux.zip', '/tmp/linux.zip')" \
-    && echo "${EXEC_SHA256}  /tmp/linux.zip" | sha256sum -c - \
-    && python -c "\
-import zipfile;\
-z = zipfile.ZipFile('/tmp/linux.zip');\
-names = [n for n in z.namelist() if n.rsplit('/', 1)[-1] in ('triangle', 'gridgen')];\
-assert len(names) == 2, names;\
-[open('/opt/mesh/bin/' + n.rsplit('/', 1)[-1], 'wb').write(z.read(n)) for n in names]" \
-    && chmod +x /opt/mesh/bin/triangle /opt/mesh/bin/gridgen \
-    && rm -f /tmp/linux.zip
-
 # --------------------------------------------------------------------------- #
 # Stage 2: slim runtime -- the venv and nothing else.
 # --------------------------------------------------------------------------- #
 FROM python:3.11-slim AS runtime
 LABEL org.opencontainers.image.title="trid3nt-mesh" \
-      org.opencontainers.image.description="The GPL-isolated mesh environment: the CHLNDDEV oceanmesh port plus FloPy with triangle and gridgen on python 3.11, run with a driver and a rundir bind-mounted in." \
+      org.opencontainers.image.description="The mesh environment: the CHLNDDEV oceanmesh port on python 3.11, run with a driver and a rundir bind-mounted in." \
       org.opencontainers.image.licenses="GPL-3.0-or-later"
 
 # Runtime shared libs the CGAL-linked oceanmesh C++ extensions dlopen (GMP +
@@ -93,14 +61,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /opt/mesh/.venv /opt/mesh/.venv
-COPY --from=build /opt/mesh/bin/ /usr/local/bin/
 ENV PATH="/opt/mesh/.venv/bin:$PATH" \
     OCEANMESH_INPOLY_ACCEL=1
 
-# Build-time smoke: both executables answer and the libraries import, so a pin
-# or extract mistake surfaces at BUILD time instead of mid-build. Each help
-# path exits 0 on its own; the grep is what proves the RIGHT binary ran.
-RUN triangle -h 2>&1 | grep -qi "delaunay" \
-    && gridgen 2>&1 | grep -q "GRIDGEN Version" \
-    && python -c "import flopy, pyproj, shapely, shapefile" \
-    && echo "mesh environment OK: triangle + gridgen + flopy present"
+# Build-time smoke: the library and its compiled extensions import.
+RUN python -c "import oceanmesh, _delaunay_class, _HamiltonJacobi, _fast_geometry" \
+    && echo "mesh environment OK: oceanmesh present"
