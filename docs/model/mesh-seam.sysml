@@ -514,11 +514,12 @@ package MeshSeam {
     part flopyAdapter : MesherAdapter {
         doc /*
         The FloPy facade: three registrations - triangle, voronoi and gridgen -
-        declared in one module over one in-image driver. Its namespaces are the
+        declared in one module over one in-process build. Its namespaces are the
         libraries' OWN method rosters with the phase derived, so ops are
-        code-as-data bound against signatures only the image can hold.
+        code-as-data bound against the library's signatures at build time.
 
         code: trid3nt_server/tools/mesh/meshers/flopy_grid.py
+        code: trid3nt_server/tools/mesh/meshers/flopy_build.py
         */
         port registrationOut : RegistrationOut;
         port namespaceOut : NamespaceOut;

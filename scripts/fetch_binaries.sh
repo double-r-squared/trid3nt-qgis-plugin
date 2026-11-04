@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fetch_binaries.sh -- idempotent downloader for mf6, minio, mc
+# fetch_binaries.sh -- idempotent downloader for mf6, triangle, gridgen, minio, mc
 # usage: bash scripts/fetch_binaries.sh
 set -e
 
@@ -45,6 +45,37 @@ fi
 
 echo "[fetch_binaries] verifying mf6..."
 "$MF6_BIN" --version
+
+# ---- triangle + gridgen: two of the MODFLOW-ORG executables release's binaries ----
+EXEC_RELEASE="29.0"
+EXEC_SHA256="ab17192a3531dec61d4f4eab3da10f618e85d1f792d5edc71306a3e06e0e22c3"
+EXEC_ZIP="$THIRD_PARTY_DIR/executables_${EXEC_RELEASE}_linux.zip"
+
+if [ ! -f "$BIN_DIR/triangle" ] || [ ! -f "$BIN_DIR/gridgen" ]; then
+  echo "[fetch_binaries] downloading triangle + gridgen (executables ${EXEC_RELEASE})..."
+  curl -L --progress-bar \
+    "https://github.com/MODFLOW-ORG/executables/releases/download/${EXEC_RELEASE}/linux.zip" \
+    -o "$EXEC_ZIP"
+  echo "${EXEC_SHA256}  ${EXEC_ZIP}" | sha256sum -c - || {
+    echo "[fetch_binaries] ERROR: executables zip checksum mismatch" >&2
+    exit 1
+  }
+  python3 - "$EXEC_ZIP" "$BIN_DIR" <<'PY'
+import sys, zipfile
+z = zipfile.ZipFile(sys.argv[1])
+names = [n for n in z.namelist() if n.rsplit("/", 1)[-1] in ("triangle", "gridgen")]
+assert len(names) == 2, names
+for n in names:
+    open(sys.argv[2] + "/" + n.rsplit("/", 1)[-1], "wb").write(z.read(n))
+PY
+  chmod +x "$BIN_DIR/triangle" "$BIN_DIR/gridgen"
+else
+  echo "[fetch_binaries] triangle + gridgen already present, skipping download"
+fi
+
+echo "[fetch_binaries] verifying triangle + gridgen..."
+"$BIN_DIR/triangle" -h 2>&1 | grep -qi "delaunay"
+"$BIN_DIR/gridgen" 2>&1 | grep -q "GRIDGEN Version"
 
 # ---- MinIO server binary ----
 MINIO_BIN="$BIN_DIR/minio"

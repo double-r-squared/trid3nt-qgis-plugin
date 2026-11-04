@@ -68,7 +68,7 @@ def test_the_triangle_names_are_triangles_own_and_phase_derived():
     for name in ("add_polygon", "add_hole", "add_region"):
         space, fn = resolve_op(get_mesher("triangle"), name)
         assert (space.origin, space.phase) == ("triangle", PRE)
-        assert fn is None, "the library lives in the image, not in this process"
+        assert fn is None, "the library runs in the build, not as a registered op"
         space, _ = resolve_op(get_mesher("voronoi"), name)
         assert (space.origin, space.phase) == ("triangle", PRE)
 
@@ -122,25 +122,20 @@ def test_a_build_word_the_constructor_never_took_is_refused():
 
 
 def _stub(monkeypatch, tmp_path, *, stats=None, ragged=False):
-    """Answer the container calls with a known mesh, and record what was sent."""
+    """Answer the build with a known mesh, and record what was sent and what was staged beside it."""
     sent: dict[str, object] = {}
 
-    def fake_run_op(rundir, op, config_name, produces):
-        config = json.loads(Path(rundir, config_name).read_text())
+    def fake_build_arrays(config, out):
         sent["config"] = config
-        if ragged:
-            np.savez(Path(rundir, "flopy_mesh.npz"), points=_POINTS,
-                     cells_flat=np.array([0, 1, 2, 1, 3, 2, 0, 2, 3, 1, 2, 0],
-                                         dtype=np.int64),
-                     cell_counts=np.array([3, 3, 3, 3], dtype=np.int64))
-        else:
-            np.savez(Path(rundir, "flopy_mesh.npz"), points=_POINTS,
-                     cells=_CELLS)
-        Path(rundir, "flopy_stats.json").write_text(
-            json.dumps(stats if stats is not None else _STATS))
+        sent["files"] = {path.name: path.read_text()
+                         for path in Path(out).iterdir()}
+        sent["out"] = out
+        cells = ([np.array([0, 1, 2]), np.array([1, 3, 2]),
+                  np.array([0, 2, 3]), np.array([1, 2, 0])]
+                 if ragged else _CELLS)
+        return _POINTS, cells, dict(stats if stats is not None else _STATS)
 
-    monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
-    monkeypatch.setattr(FLOPY, "_run_op", fake_run_op)
+    monkeypatch.setattr(FLOPY, "build_arrays", fake_build_arrays)
     return sent
 
 
@@ -195,10 +190,9 @@ def test_a_geometry_valued_op_kwarg_is_staged_projected_beside_the_domain(
                                      maximum_area=900.0)]))
     entry, = sent["config"]["ops"]
     assert entry["fn"] == "add_region"
-    assert entry["kwargs"]["point"] == "/data/op0_point.geojson"
+    assert entry["kwargs"]["point"] == str(Path(sent["out"]) / "op0_point.geojson")
     assert entry["kwargs"]["maximum_area"] == 900.0
-    staged, = tmp_path.rglob("op0_point.geojson")
-    ring = json.loads(staged.read_text())["coordinates"][0]
+    ring = json.loads(sent["files"]["op0_point.geojson"])["coordinates"][0]
     easting, northing = ring[0]
     assert 100_000 < easting < 900_000 and northing > 3_000_000
 
@@ -314,17 +308,6 @@ def test_a_merge_that_would_collapse_a_cell_refuses():
     assert excinfo.value.error_code == "MESH_GRIDGEN_VERTICES_COLLAPSE"
 
 
-def test_the_drivers_own_refusal_reaches_the_caller_with_its_escalation(tmp_path):
-    (tmp_path / "flopy_refusal.json").write_text(json.dumps({
-        "code": "MESH_HOLE_HAS_NO_INTERIOR",
-        "message": "this hole ring encloses no unmeshed area of its own ...",
-        "escalation": {"tool": "draw_extent"}}))
-    with pytest.raises(MeshToolError) as excinfo:
-        FLOPY._refusal(tmp_path)
-    assert excinfo.value.error_code == "MESH_HOLE_HAS_NO_INTERIOR"
-    assert excinfo.value.escalation["tool"] == "draw_extent"
-
-
 def test_a_recipe_with_no_extent_refuses_before_anything_is_staged():
     with pytest.raises(MeshToolError) as excinfo:
         FLOPY.build(_recipe(extent=None))
@@ -360,52 +343,6 @@ def test_no_size_word_and_no_raster_is_asked_for_by_name():
     assert excinfo.value.error_code == "MESH_EDGE_UNSTATED"
 
 
-def test_the_scripts_live_in_the_worker_tree_beside_their_dockerfiles():
-    from trid3nt_server.workflows.solver.image_script import scripts_dir
-
-    assert FLOPY._INCONTAINER_SCRIPT == "flopy_grid.py"
-    assert (scripts_dir("mesh") / "flopy_grid.py").exists()
-
-
-def test_the_box_is_shelled_with_a_named_op(monkeypatch, tmp_path):
-    from trid3nt_server.workflows.solver import image_script
-
-    seen: dict[str, object] = {}
-
-    class _Done:
-        returncode = 0
-        stdout = ""
-        stderr = ""
-
-    def fake_run(argv, **kwargs):
-        seen["argv"] = list(argv)
-        Path(tmp_path, "flopy_mesh.npz").write_text("{}")
-        return _Done()
-
-    monkeypatch.setattr(image_script.subprocess, "run", fake_run)
-    FLOPY._run_op(tmp_path, "build", "flopy_config.json", "flopy_mesh.npz")
-    argv = seen["argv"]
-    assert argv[-4:] == ["/drivers/flopy_grid.py", "build",
-                         "/data/flopy_config.json", "/data"]
-    assert "--network" in argv and argv[argv.index("--network") + 1] == "none"
-
-
-def test_a_failed_box_without_a_refusal_document_is_a_build_failure(
-        monkeypatch, tmp_path):
-    import subprocess
-
-    from trid3nt_server.workflows.solver import image_script
-
-    def fake_run(argv, **kw):
-        return subprocess.CompletedProcess(argv, 9, "", "exec not found")
-
-    monkeypatch.setattr(image_script.subprocess, "run", fake_run)
-    with pytest.raises(MeshToolError) as excinfo:
-        FLOPY._run_op(tmp_path, "build", "flopy_config.json", "flopy_mesh.npz")
-    assert excinfo.value.error_code == "MESH_BUILD_FAILED"
-    assert "flopy_grid mesher build failed" in str(excinfo.value)
-
-
 def _post_bed(monkeypatch, value=-4.0):
     import dataclasses
 
@@ -425,27 +362,46 @@ def test_a_primitive_after_the_build_runs_over_the_mesh_that_came_back(
 
 
 def _driver():
-    """The in-container driver, imported here - it needs only numpy and shapely."""
-    import importlib.util
+    from trid3nt_server.tools.mesh.meshers import flopy_build
 
-    from trid3nt_server.workflows.solver.image_script import scripts_dir
-
-    spec = importlib.util.spec_from_file_location(
-        "_flopy_driver_under_test", scripts_dir("mesh") / "flopy_grid.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return flopy_build
 
 
 @pytest.fixture
 def _exes_on_path(monkeypatch, tmp_path):
-    """Executable stand-ins on PATH: FloPy resolves the exe name at CONSTRUCTION
+    """Executable stand-ins named by the env: FloPy resolves the exe at CONSTRUCTION
     and never runs it in the tests that only register rings."""
     for name in ("triangle", "gridgen"):
         stub = tmp_path / name
         stub.write_text("#!/bin/sh\nexit 0\n")
         stub.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+        monkeypatch.setenv(f"TRID3NT_{name.upper()}_BIN", str(stub))
+
+
+def test_a_missing_executable_is_refused_by_name_with_the_script_that_installs_it(
+        monkeypatch, tmp_path):
+    monkeypatch.setenv("TRID3NT_TRIANGLE_BIN", str(tmp_path / "absent"))
+    with pytest.raises(MeshToolError) as excinfo:
+        _driver()._exe("triangle")
+    assert excinfo.value.error_code == "MESH_EXECUTABLE_MISSING"
+    assert "fetch_binaries.sh" in str(excinfo.value)
+
+
+def test_a_failure_inside_the_library_is_a_build_failure_naming_it(monkeypatch):
+    def breaks(config, out):
+        raise ValueError("add_region: got an unexpected keyword argument 'bogus'")
+
+    monkeypatch.setattr(FLOPY, "build_arrays", breaks)
+    with pytest.raises(MeshToolError) as excinfo:
+        FLOPY.build(_recipe())
+    assert excinfo.value.error_code == "MESH_BUILD_FAILED"
+    assert "bogus" in str(excinfo.value)
+
+
+def test_the_staging_directory_is_gone_when_the_build_returns(monkeypatch):
+    sent = _stub(monkeypatch, None)
+    FLOPY.build(_recipe())
+    assert not Path(sent["out"]).exists()
 
 
 def test_the_driver_flips_clockwise_cells_and_drops_the_closing_vertex():
@@ -473,18 +429,18 @@ def test_the_driver_normalises_one_based_indices_and_says_so():
 
 def test_an_index_that_is_neither_base_refuses_with_the_extent_of_the_error():
     driver = _driver()
-    with pytest.raises(driver._Refusal) as excinfo:
+    with pytest.raises(MeshToolError) as excinfo:
         driver._neutenize([[0.0, 0.0], [10.0, 0.0]], [[0, 9]])
-    assert excinfo.value.document["code"] == "MESH_CELL_INDEX_OUT_OF_RANGE"
+    assert excinfo.value.error_code == "MESH_CELL_INDEX_OUT_OF_RANGE"
 
 
 def test_a_build_where_every_cell_is_degenerate_refuses_as_empty():
     driver = _driver()
-    with pytest.raises(driver._Refusal) as excinfo:
+    with pytest.raises(MeshToolError) as excinfo:
         driver._neutenize([[0.0, 0.0], [10.0, 0.0], [5.0, 0.0]],
                           [[0, 1, 2]])
-    assert excinfo.value.document["code"] == "MESH_BUILD_EMPTY"
-    assert "no usable cells" in excinfo.value.document["message"]
+    assert excinfo.value.error_code == "MESH_BUILD_EMPTY"
+    assert "no usable cells" in str(excinfo.value)
 
 
 def test_an_unreferenced_node_drops_from_the_mesh_without_a_count():
@@ -518,15 +474,15 @@ def test_a_kwarg_the_librarys_method_never_took_refuses_by_signature():
 def test_a_staged_geometry_that_is_empty_or_unreadable_is_refused(tmp_path):
     driver = _driver()
     missing = str(tmp_path / "nope.geojson")
-    with pytest.raises(driver._Refusal) as excinfo:
+    with pytest.raises(MeshToolError) as excinfo:
         driver._load_geoms(missing)
-    assert excinfo.value.document["code"] == "MESH_OP_GEOMETRY_EMPTY"
+    assert excinfo.value.error_code == "MESH_OP_GEOMETRY_EMPTY"
 
     empty = tmp_path / "empty.geojson"
     empty.write_text(json.dumps({"type": "FeatureCollection", "features": []}))
-    with pytest.raises(driver._Refusal) as excinfo:
+    with pytest.raises(MeshToolError) as excinfo:
         driver._load_geoms(str(empty))
-    assert excinfo.value.document["code"] == "MESH_OP_GEOMETRY_EMPTY"
+    assert excinfo.value.error_code == "MESH_OP_GEOMETRY_EMPTY"
 
 
 def test_the_driver_reads_a_bare_geometry_as_well_as_a_feature_collection(tmp_path):
@@ -549,9 +505,9 @@ def test_a_hole_staged_as_a_bare_point_refuses_by_explaining_the_flood(
         {"outer_rings": [[[500000.0, 3880000.0], [500100.0, 3880000.0],
                           [500100.0, 3880100.0], [500000.0, 3880100.0]]],
          "holes": []}, str(tmp_path))
-    with pytest.raises(driver._Refusal) as excinfo:
+    with pytest.raises(MeshToolError) as excinfo:
         builder.entry({"fn": "add_hole", "kwargs": {"hole": str(point)}})
-    assert excinfo.value.document["code"] == "MESH_OP_HOLE_NOT_ENCLOSING"
+    assert excinfo.value.error_code == "MESH_OP_HOLE_NOT_ENCLOSING"
 
 
 def test_a_hole_that_encloses_no_interior_of_its_own_refuses(
@@ -561,9 +517,9 @@ def test_a_hole_that_encloses_no_interior_of_its_own_refuses(
             [500100.0, 3880100.0], [500000.0, 3880100.0]]
     builder = driver._TriangleBuild(
         {"outer_rings": [ring], "holes": [ring]}, str(tmp_path))
-    with pytest.raises(driver._Refusal) as excinfo:
+    with pytest.raises(MeshToolError) as excinfo:
         builder.build()
-    assert excinfo.value.document["code"] == "MESH_HOLE_HAS_NO_INTERIOR"
+    assert excinfo.value.error_code == "MESH_HOLE_HAS_NO_INTERIOR"
 
 
 def test_an_island_inside_a_hole_is_ground_not_pocket(tmp_path, _exes_on_path):
@@ -601,23 +557,6 @@ def test_the_driver_refuses_an_op_the_mesher_does_not_have(tmp_path,
     assert "smooth_mesh" in str(excinfo.value)
 
 
-def test_a_refusal_in_the_box_writes_the_document_and_exits_three(
-        monkeypatch, tmp_path):
-    driver = _driver()
-
-    def refuses(cfg, out):
-        raise driver._Refusal("MESH_BUILD_EMPTY", "every cell was degenerate")
-
-    (tmp_path / "cfg.json").write_text(json.dumps({"mesher": "triangle"}))
-    monkeypatch.setitem(driver._OPS, "build", refuses)
-    monkeypatch.setattr(sys, "argv", ["flopy_grid.py", "build",
-                                      str(tmp_path / "cfg.json"),
-                                      str(tmp_path)])
-    assert driver.main() == 3
-    document = json.loads((tmp_path / "flopy_refusal.json").read_text())
-    assert document["code"] == "MESH_BUILD_EMPTY"
-
-
 def test_gridgen_whose_layers_mesh_apart_refuse_with_the_stated_layers(
         monkeypatch, tmp_path, _exes_on_path):
     """A DISV cell is a prism over every layer, so a partial-layer refinement
@@ -643,11 +582,10 @@ def test_gridgen_whose_layers_mesh_apart_refuse_with_the_stated_layers(
                             "level": 1, "layers": [1]}}],
         "sources": {},
     }
-    with pytest.raises(driver._Refusal) as excinfo:
+    with pytest.raises(MeshToolError) as excinfo:
         driver._gridgen(cfg, str(tmp_path))
-    doc = excinfo.value.document
-    assert doc["code"] == "MESH_GRIDGEN_DISV_NOT_UNIFORM"
-    assert doc["escalation"] == {"layers": [0, 1]}
+    assert excinfo.value.error_code == "MESH_GRIDGEN_DISV_NOT_UNIFORM"
+    assert excinfo.value.escalation == {"layers": [0, 1]}
 
 
 def test_the_gridgen_config_words_are_derived_in_one_place():
@@ -711,9 +649,9 @@ def test_a_refine_layer_is_staged_projected_with_its_edge(monkeypatch, tmp_path)
                                      edge_length_m=15.0)]))
     entry, = sent["config"]["ops"]
     assert entry == {"fn": "set_region_size", "kwargs": {
-        "geometry": "/data/op0_geometry.geojson", "edge_length_m": 15.0}}
-    staged, = tmp_path.rglob("op0_geometry.geojson")
-    easting, northing = json.loads(staged.read_text())[
+        "geometry": str(Path(sent["out"]) / "op0_geometry.geojson"),
+        "edge_length_m": 15.0}}
+    easting, northing = json.loads(sent["files"]["op0_geometry.geojson"])[
         "features"][0]["geometry"]["coordinates"][0][0]
     assert 100_000 < easting < 900_000 and northing > 3_000_000
 
@@ -806,17 +744,17 @@ def test_a_refine_without_an_edge_or_a_polygon_refuses_by_name(
     with pytest.raises(ValueError) as excinfo:
         builder.entry({"fn": "set_region_size", "kwargs": {"geometry": layer}})
     assert "edge_length_m" in str(excinfo.value)
-    with pytest.raises(driver._Refusal) as excinfo:
+    with pytest.raises(MeshToolError) as excinfo:
         builder.entry({"fn": "set_region_size", "kwargs": {
             "geometry": layer, "edge_length_m": 0}})
-    assert excinfo.value.document["code"] == "MESH_OP_REGION_SIZE"
+    assert excinfo.value.error_code == "MESH_OP_REGION_SIZE"
     line = tmp_path / "line.geojson"
     line.write_text(json.dumps({"type": "LineString",
                                 "coordinates": [[0.0, 0.0], [5.0, 5.0]]}))
-    with pytest.raises(driver._Refusal) as excinfo:
+    with pytest.raises(MeshToolError) as excinfo:
         builder.entry({"fn": "set_region_size", "kwargs": {
             "geometry": str(line), "edge_length_m": 20.0}})
-    assert excinfo.value.document["code"] == "MESH_OP_GEOMETRY_EMPTY"
+    assert excinfo.value.error_code == "MESH_OP_GEOMETRY_EMPTY"
 
 
 def _gridgen_refine(monkeypatch, tmp_path, edge, delr=100.0, layers=None,
@@ -862,8 +800,8 @@ def test_gridgen_refines_every_layer_the_grid_spans(
 def test_gridgen_refuses_an_edge_the_base_cell_already_meets(
         monkeypatch, tmp_path, _exes_on_path):
     driver = _driver()
-    with pytest.raises(driver._Refusal) as excinfo:
+    with pytest.raises(MeshToolError) as excinfo:
         _gridgen_refine(monkeypatch, tmp_path, edge=100.0, driver=driver)
-    doc = excinfo.value.document
+    doc = {"code": excinfo.value.error_code, "escalation": excinfo.value.escalation}
     assert doc["code"] == "MESH_OP_REGION_NOT_FINER"
     assert doc["escalation"] == {"edge_length_m": 50.0}

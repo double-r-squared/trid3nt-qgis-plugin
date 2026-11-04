@@ -1,9 +1,8 @@
 """The FloPy meshers: ``triangle``, ``voronoi`` and ``gridgen``, one facade.
 
 Three registrations and nothing else: op rosters, constructor build params and
-the config each box is handed. FloPy and the two executables live in the mesh
-image beside the oceanmesh ones; this file composes the ask in the domain's
-own UTM metres, shells the box, and reads back the one neutral mesh - so a
+the config the build is handed. This file composes the ask in the domain's own
+UTM metres, runs ``flopy_build`` over it, and reads back the one neutral mesh - so a
 triangle mesh is equally a TELEMAC mesh and a quadtree one is a DISV waiting
 for its layers."""
 
@@ -11,11 +10,9 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import os
+import tempfile
 from pathlib import Path
 from typing import Any, Mapping
-
-from trid3nt_contracts import new_ulid
 
 from trid3nt_server.tools.mesh.inputs import finest_edge, op_geometry, op_input
 from trid3nt_server.tools.mesh.meshers import (
@@ -28,18 +25,9 @@ from trid3nt_server.tools.mesh.meshers import (
     bind_ops,
     register_mesher,
 )
-from trid3nt_server.workflows.solver.image_script import run_image_script
+from trid3nt_server.tools.mesh.meshers.flopy_build import build_arrays
 
 __all__ = ["GRIDGEN", "TRIANGLE", "VORONOI", "build"]
-
-#: The mesh image (an ENVIRONMENT: oceanmesh plus FloPy plus the two
-#: executables) and the script mounted into it.
-_MESH_IMAGE_DEFAULT = "trid3nt-local/mesh:latest"
-_INCONTAINER_SCRIPT = "flopy_grid.py"
-#: What the driver writes when it refuses in its own words: code, reason, and
-#: the call that DOES what the refused ask could not.
-_REFUSAL_FILE = "flopy_refusal.json"
-_CONTAINER_TIMEOUT_S = 600
 
 #: Triangle's own methods, VERBATIM, all pre-build: they write the .poly file
 #: the executable reads. The DOMAIN rings are config, not an op - the extent is
@@ -64,7 +52,6 @@ def build(recipe: Any) -> Mesh:
 
     mesher = get_mesher(recipe.mesher)
     ops = bind_ops(mesher, recipe.ops)
-    rundir = _rundir()
     outer, holes, source, bbox = _domain(recipe.extent, mesher.name)
     spacing = _stated_edge(recipe.build) if mesher.name == "gridgen" else None
     edge, edge_note = ((spacing, None) if spacing and recipe.resolution_m in (None, "")
@@ -73,33 +60,41 @@ def build(recipe: Any) -> Mesh:
     outer_m, holes_m = rings_m[:len(outer)], rings_m[len(outer):]
     bounds_m = _bounds(rings_m)
 
-    config: dict[str, Any] = {
-        "mesher": mesher.name,
-        "outer_rings": outer_m,
-        "holes": holes_m,
-        "crs_epsg": epsg,
-        "resolution_m": edge,
-        "domain_source": source,
-        "ops": [_staged(op, rundir, index, epsg)
-                for index, op in enumerate(ops) if op.phase == PRE],
-    }
-    if mesher.name in ("triangle", "voronoi"):
-        stated = recipe.build.get("maximum_area")
-        config.update({
-            "maximum_area": float(edge * edge) if stated is None
-            else float(stated),
-            "maximum_area_source": "resolution_m squared" if stated is None
-            else "stated",
-            **{key: recipe.build[key] for key in ("angle", "nodes",
-                                                   "additional_args")
-               if key in recipe.build},
-        })
-    else:
-        config.update(_gridgen_base(recipe.build, bounds_m, edge))
-    (rundir / "flopy_config.json").write_text(json.dumps(config))
-    _run_op(rundir, "build", "flopy_config.json", "flopy_mesh.npz")
+    with tempfile.TemporaryDirectory(prefix="mesh-") as scratch:
+        rundir = Path(scratch)
+        config: dict[str, Any] = {
+            "mesher": mesher.name,
+            "outer_rings": outer_m,
+            "holes": holes_m,
+            "crs_epsg": epsg,
+            "resolution_m": edge,
+            "domain_source": source,
+            "ops": [_staged(op, rundir, index, epsg)
+                    for index, op in enumerate(ops) if op.phase == PRE],
+        }
+        if mesher.name in ("triangle", "voronoi"):
+            stated = recipe.build.get("maximum_area")
+            config.update({
+                "maximum_area": float(edge * edge) if stated is None
+                else float(stated),
+                "maximum_area_source": "resolution_m squared" if stated is None
+                else "stated",
+                **{key: recipe.build[key] for key in ("angle", "nodes",
+                                                       "additional_args")
+                   if key in recipe.build},
+            })
+        else:
+            config.update(_gridgen_base(recipe.build, bounds_m, edge))
+        try:
+            points, cells, stats = build_arrays(config, str(rundir))
+        except MeshToolError:
+            raise
+        except Exception as exc:
+            raise MeshToolError(
+                "MESH_BUILD_FAILED",
+                f"the flopy_grid mesher build failed: {type(exc).__name__}: {exc}") from exc
 
-    mesh = _read_built(rundir, epsg, edge, source,
+    mesh = _read_built(points, cells, stats, epsg, edge, source,
                        stated=recipe.resolution_m not in (None, ""), ops=ops,
                        base_lines=(len(config["delr"]) + len(config["delc"])
                                    if mesher.name == "gridgen" else 0))
@@ -280,7 +275,7 @@ def _staged(op: BoundOp, rundir: Path, index: int, epsg: int) -> dict[str, Any]:
             projected = _project_geojson(converted, epsg)
             local = rundir / f"op{index}_{name}.geojson"
             local.write_text(json.dumps(projected))
-            kwargs[name] = f"/data/{local.name}"
+            kwargs[name] = str(local)
         else:
             kwargs[name] = converted
     return {"fn": op.name, "kwargs": kwargs}
@@ -351,24 +346,12 @@ def _merge_twins(points: Any, cells: Any, lines: int) -> tuple[Any, Any, int]:
     return points[kept], cells, merged
 
 
-def _read_built(rundir: Path, epsg: int, edge: float, source: str,
-                stated: bool, ops: tuple[BoundOp, ...], base_lines: int = 0) -> Mesh:
-    """The container's arrays as the neutral mesh, in the zone they were built."""
+def _read_built(points: Any, cells: Any, stats: Mapping[str, Any], epsg: int,
+                edge: float, source: str, stated: bool,
+                ops: tuple[BoundOp, ...], base_lines: int = 0) -> Mesh:
+    """The build's arrays as the neutral mesh, in the zone they were built."""
     import numpy as np
 
-    npz = np.load(rundir / "flopy_mesh.npz")
-    points = np.asarray(npz["points"], dtype=float)
-    if "cells" in npz.files:
-        cells: Any = np.asarray(npz["cells"], dtype=np.int64)
-    else:
-        counts = np.asarray(npz["cell_counts"], dtype=np.int64)
-        flat = np.asarray(npz["cells_flat"], dtype=np.int64)
-        cells, cursor = [], 0
-        for count in counts:
-            cells.append(np.asarray(flat[cursor:cursor + int(count)],
-                                    dtype=np.int64))
-            cursor += int(count)
-    stats = json.loads((rundir / "flopy_stats.json").read_text())
     merged = 0
     if base_lines:
         points, cells, merged = _merge_twins(points, cells, base_lines)
@@ -412,40 +395,6 @@ def _read_built(rundir: Path, epsg: int, edge: float, source: str,
                  "real_source_if_any": source},
             ],
         })
-
-
-def _rundir() -> Path:
-    rundir = (Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp"))
-              / f"mesh-{new_ulid()}")
-    rundir.mkdir(parents=True, exist_ok=True)
-    return rundir
-
-
-def _run_op(rundir: Path, op: str, config_name: str, produces: str) -> None:
-    """One script op in the mesh box, or a typed refusal carrying its output."""
-    image = os.environ.get("TRID3NT_MESH_IMAGE") or _MESH_IMAGE_DEFAULT
-    cp = run_image_script(
-        image=image, engine="mesh", script=_INCONTAINER_SCRIPT,
-        rundir=rundir, argv=[op, f"/data/{config_name}", "/data"],
-        timeout_s=_CONTAINER_TIMEOUT_S, entrypoint_override=True)
-    if cp.returncode != 0 or not (rundir / produces).exists():
-        _refusal(rundir)
-        raise MeshToolError(
-            "MESH_BUILD_FAILED",
-            f"the flopy_grid mesher {op} failed (rc={cp.returncode}):\n"
-            f"{cp.stdout[-2000:]}\n{cp.stderr[-2000:]}")
-
-
-def _refusal(rundir: Path) -> None:
-    """Re-raise the driver's own typed refusal, when it wrote one.
-
-    The refusals about the DOMAIN are only knowable where the library is."""
-    document = rundir / _REFUSAL_FILE
-    if not document.exists():
-        return
-    read = json.loads(document.read_text())
-    raise MeshToolError(str(read["code"]), str(read["message"]),
-                        escalation=read.get("escalation"))
 
 
 TRIANGLE = register_mesher(
