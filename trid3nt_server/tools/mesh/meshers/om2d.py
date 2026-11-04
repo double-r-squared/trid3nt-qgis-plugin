@@ -11,6 +11,7 @@ import json
 import logging
 import math
 import tempfile
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -546,22 +547,27 @@ def _driver() -> Any:
     return importlib.import_module("trid3nt_server.tools.mesh.meshers.om2d_build")
 
 
+#: The driver seeds numpy's process-wide generator; builds run in worker threads, so one at a time keeps a seed its own.
+_BUILD_LOCK = threading.Lock()
+
+
 def _generate(config: dict[str, Any]) -> tuple[Any, Any, Any, dict[str, Any]]:
     """One build -> ``(lon/lat points, cells, pfix, stats)``; the process's numpy generator is left as it was found."""
     import numpy as np
 
     driver = _driver()
-    state = np.random.get_state()
-    try:
-        points, cells, pfix, stats = driver.op_build(config)
-    except MeshToolError:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        raise MeshToolError(
-            "MESH_BUILD_FAILED",
-            f"the om2d mesher build failed: {type(exc).__name__}: {exc}") from exc
-    finally:
-        np.random.set_state(state)
+    with _BUILD_LOCK:
+        state = np.random.get_state()
+        try:
+            points, cells, pfix, stats = driver.op_build(config)
+        except MeshToolError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise MeshToolError(
+                "MESH_BUILD_FAILED",
+                f"the om2d mesher build failed: {type(exc).__name__}: {exc}") from exc
+        finally:
+            np.random.set_state(state)
     return points, cells, pfix, json.loads(json.dumps(stats))
 
 
