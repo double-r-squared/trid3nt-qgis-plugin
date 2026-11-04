@@ -75,8 +75,12 @@ def array_to_tempfile(
     )
     if nodata is not None:
         profile["nodata"] = nodata
-    with rasterio.open(path, "w", **profile) as dst:
-        dst.write(arr)
+    try:
+        with rasterio.open(path, "w", **profile) as dst:
+            dst.write(arr)
+    except Exception:
+        os.unlink(path)
+        raise
     return path
 
 

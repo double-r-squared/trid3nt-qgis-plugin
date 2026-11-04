@@ -11,11 +11,10 @@ import json
 import logging
 import math
 import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
-
-from trid3nt_contracts import new_ulid
 
 from trid3nt_server.tools.mesh.inputs import finest_edge, op_geometry
 from trid3nt_server.tools.mesh.meshers import (
@@ -113,8 +112,12 @@ _DEFAULT_OPS = (
 
 def build(recipe: Any) -> Mesh:
     """Mesh the water side of the shoreline, or the interior of a supplied polygon."""
+    with tempfile.TemporaryDirectory(prefix="mesh-") as scratch:
+        return _build(recipe, Path(scratch))
+
+
+def _build(recipe: Any, rundir: Path) -> Mesh:
     ops = bind_ops(OM2D, recipe.ops)
-    rundir = _rundir()
     notes: list[str] = []
     domain = _domain(recipe.extent, rundir)
     resolution_m, edge_note = finest_edge(recipe.resolution_m, recipe.ops,
@@ -540,13 +543,6 @@ def _geometry_bounds(geometries: list[dict[str, Any]]
 
     minx, miny, maxx, maxy = unary_union([_shape(g) for g in geometries]).bounds
     return (float(minx), float(miny), float(maxx), float(maxy))
-
-
-def _rundir() -> Path:
-    rundir = (Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp"))
-              / f"mesh-{new_ulid()}")
-    rundir.mkdir(parents=True, exist_ok=True)
-    return rundir
 
 
 def _run_op(rundir: Path, op: str, config_name: str, produces: str) -> None:

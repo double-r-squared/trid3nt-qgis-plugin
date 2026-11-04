@@ -7,6 +7,8 @@ which numbers reach which read."""
 
 from __future__ import annotations
 
+import tempfile
+
 import asyncio
 from typing import Any
 
@@ -28,6 +30,9 @@ from trid3nt_server.workflows.telemac.modules import (
 from trid3nt_server.workflows.runtime.primitives import OutputEmpty
 from trid3nt_server.workflows.telemac.modules.outputs import Solved
 from seated import value_inputs
+
+
+_SCRATCH = tempfile.TemporaryDirectory(prefix="telemac-outputs-test-")
 
 
 def _reach(telemac_result, *, tracer_name: str = "DYE") -> dict[str, Any]:
@@ -340,7 +345,7 @@ def _listing(monkeypatch) -> str:
     import tempfile
     from pathlib import Path
 
-    path = Path(tempfile.mkdtemp()) / "full_listing.log"
+    path = Path(tempfile.mkdtemp(dir=_SCRATCH.name)) / "full_listing.log"
     path.write_text("BALANCE OF WATER VOLUME\n FLUX BOUNDARY 1 : 3.0\n"
                     " RELATIVE ERROR IN VOLUME AT T = 600.0 S : -1.2E-07\n")
     return str(path)
@@ -560,7 +565,7 @@ def _line(coupled, *, reverse: bool = False):
     coords = [[float(lon[0]), float(lat[0])], [float(lon[-1]), float(lat[-1])]]
     if reverse:
         coords.reverse()
-    path = Path(tempfile.mkdtemp()) / "centerline.geojson"
+    path = Path(tempfile.mkdtemp(dir=_SCRATCH.name)) / "centerline.geojson"
     path.write_text(json.dumps({"type": "Feature", "properties": {},
                                 "geometry": {"type": "LineString",
                                              "coordinates": coords}}))
@@ -682,7 +687,7 @@ def test_the_drogues_are_the_track_at_three_written_instants(monkeypatch, couple
 
     from trid3nt_server.workflows.runtime.primitives import Track
 
-    track = Path(tempfile.mkdtemp()) / "drogues.txt"
+    track = Path(tempfile.mkdtemp(dir=_SCRATCH.name)) / "drogues.txt"
     track.write_text(
         "TITLE = drogues\nVARIABLES = ID, X, Y\n"
         "ZONE T=\"t\", SOLUTIONTIME= 0.0\n1, 500000.0, 4400000.0\n2, 500000.0, 4400010.0\n"
@@ -784,7 +789,7 @@ def _catchment_listing(monkeypatch) -> str:
     import tempfile
     from pathlib import Path
 
-    path = Path(tempfile.mkdtemp()) / "full_listing.log"
+    path = Path(tempfile.mkdtemp(dir=_SCRATCH.name)) / "full_listing.log"
     path.write_text(
         "      RUNOFF_SCS_CN : ACCUMULATED RAINFALL :    0.1000000     M\n"
         "BALANCE OF WATER VOLUME\n FLUX BOUNDARY 1 : -2.0\n FLUX BOUNDARY 2 : 8.0\n"

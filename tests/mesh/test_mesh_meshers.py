@@ -119,7 +119,7 @@ def test_an_op_a_mesher_never_registered_is_refused_by_name():
     assert "open_boundary_side" in str(excinfo.value)
 
 
-def test_2dm_round_trip():
+def test_2dm_round_trip(tmp_path):
     # two triangles in UTM metres.
     pts = np.array([[500000.0, 3880000.0], [500100.0, 3880000.0],
                     [500000.0, 3880100.0], [500100.0, 3880100.0]])
@@ -131,10 +131,7 @@ def test_2dm_round_trip():
     assert "ND 1 500000.000000 3880000.000000 610.000000" in text
 
     # write to a temp file and read back.
-    import tempfile
-    from pathlib import Path
-
-    p = Path(tempfile.mkdtemp()) / "m.2dm"
+    p = tmp_path / "m.2dm"
     p.write_text(text)
     rp, rc, rz = read_2dm_mesh(str(p))
     assert rp.shape == (4, 2) and rc.shape == (2, 3)
@@ -195,11 +192,8 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced(tmp_p
     assert after.meta["artifact"]["provenance"]["mesher"] == "om2d"
 
 
-def test_read_2dm_rejects_empty():
-    import tempfile
-    from pathlib import Path
-
-    p = Path(tempfile.mkdtemp()) / "empty.2dm"
+def test_read_2dm_rejects_empty(tmp_path):
+    p = tmp_path / "empty.2dm"
     p.write_text("MESH2D\n")
     with pytest.raises(MeshNodeError):
         read_2dm_mesh(str(p))

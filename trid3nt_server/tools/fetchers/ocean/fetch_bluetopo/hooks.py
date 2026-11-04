@@ -19,6 +19,7 @@ land DEM with no vertical transformation."""
 
 from __future__ import annotations
 
+import atexit
 import logging
 import math
 import os
@@ -124,6 +125,17 @@ _MAX_TILES = 64
 _scheme_memo: tuple[float, str] | None = None
 
 
+def _drop_scheme() -> None:
+    if _scheme_memo is not None:
+        try:
+            os.unlink(_scheme_memo[1])
+        except OSError:
+            pass
+
+
+atexit.register(_drop_scheme)
+
+
 
 
 def latest_tile_scheme_key(*, timeout_s: float = 60.0) -> str:
@@ -169,9 +181,11 @@ def _tile_scheme_path(*, timeout_s: float) -> str:
     try:
         client.download_file(BLUETOPO_BUCKET, key, path)
     except Exception as exc:  # noqa: BLE001
+        os.unlink(path)
         raise BlueTopoUpstreamError(
             f"could not download the BlueTopo tile scheme {key}: {exc}"
         ) from exc
+    _drop_scheme()
     _scheme_memo = (now, path)
     logger.info("fetch_bluetopo: tile scheme %s staged at %s", key, path)
     return path

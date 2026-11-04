@@ -10,10 +10,13 @@ import logging
 import os
 import re
 import tempfile
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from ..errors import TelemacError
+
+_SCRATCH: ContextVar[Path] = ContextVar("staged_check_scratch")
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.staged_check")
 
@@ -87,14 +90,15 @@ def _staged_here(rundir: Path, inputs: Sequence[Mapping[str, str]]
 
 
 def _read(found: Path | str) -> Path:
+    """A staged object as a local file: a path as it is, an object-store address copied into this check's scratch directory."""
     if isinstance(found, Path):
         return found
     from trid3nt_server.tools.cache import read_object_bytes_s3
 
-    handle = tempfile.NamedTemporaryFile(suffix=Path(found).suffix, delete=False)
-    handle.write(read_object_bytes_s3(found))
-    handle.close()
-    return Path(handle.name)
+    handle, name = tempfile.mkstemp(dir=_SCRATCH.get(), suffix=Path(found).suffix)
+    with os.fdopen(handle, "wb") as out:
+        out.write(read_object_bytes_s3(found))
+    return Path(name)
 
 
 def _files_are_present(decks: Mapping[str, dict[str, list[str]]],
@@ -264,6 +268,21 @@ def check_staged_run(rundir: Path | str, *, steering: str,
 
     A run that would die in the solve's first second refuses here by name.
     """
+    with tempfile.TemporaryDirectory(prefix="trid3nt_staged_check_") as scratch:
+        token = _SCRATCH.set(Path(scratch))
+        try:
+            return _check_staged_run(
+                rundir, steering=steering, inputs=inputs,
+                written_by_the_engine=written_by_the_engine,
+                duration_s=duration_s, cores=cores)
+        finally:
+            _SCRATCH.reset(token)
+
+
+def _check_staged_run(rundir: Path | str, *, steering: str,
+                     inputs: Sequence[Mapping[str, str]],
+                     written_by_the_engine: Sequence[str],
+                     duration_s: float | None, cores: int) -> dict[str, Any]:
     rundir = Path(rundir)
     decks = {p.name: read_steering(p) for p in sorted(rundir.rglob("*.cas"))}
     top = decks.get(steering)

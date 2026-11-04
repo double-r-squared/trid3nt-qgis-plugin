@@ -47,7 +47,8 @@ def _stub_om2d(monkeypatch, tmp_path, *, stats=None):
 
     def fake_run_op(rundir, op, config_name, produces):
         sent["config"] = json.loads(Path(rundir, config_name).read_text())
-        sent["rundir"] = str(rundir)
+        sent["staged"] = {path.name: path.read_text()
+                          for path in Path(rundir).glob("*.geojson")}
         np.savez(Path(rundir, "om2d_mesh.npz"), points=_POINTS, cells=_CELLS,
                  pfix=np.empty((0, 2)))
         Path(rundir, "om2d_stats.json").write_text(json.dumps(
@@ -78,7 +79,7 @@ def test_the_polygon_is_staged_and_nothing_else_is_mounted(monkeypatch, tmp_path
     config = sent["config"]
     assert config["domain_geojson"] == "/data/domain.geojson"
     assert config["open_runs_geojson"] is None
-    staged = json.loads(Path(sent["rundir"], "domain.geojson").read_text())
+    staged = json.loads(sent["staged"]["domain.geojson"])
     assert staged["geometries"] == [_BASIN]
 
 
@@ -99,7 +100,7 @@ def test_a_domains_own_runs_travel_as_the_edge_the_water_crosses(
                       "coordinates": [[-75.72, 36.12], [-75.72, 36.18]]}}]})
     OM2D.build(_recipe(extent=reach))
     assert sent["config"]["open_runs_geojson"] == "/data/open_runs.geojson"
-    staged = json.loads(Path(sent["rundir"], "open_runs.geojson").read_text())
+    staged = json.loads(sent["staged"]["open_runs.geojson"])
     assert [f["properties"]["type"] for f in staged["features"]] == [
         "inflow", "outflow"]
 
@@ -173,7 +174,7 @@ def test_the_layer_a_chained_row_produced_enters_as_the_geometry_it_carries(
     sent = _stub_om2d(monkeypatch, tmp_path)
     OM2D.build(_recipe(extent=layer))
     assert sent["config"]["domain_geojson"] == "/data/domain.geojson"
-    staged = json.loads(Path(sent["rundir"], "domain.geojson").read_text())
+    staged = json.loads(sent["staged"]["domain.geojson"])
     assert staged["geometries"] == [_BASIN]
 
 
@@ -264,7 +265,7 @@ def test_a_stretch_the_domain_slot_cut_meshes_as_the_domain(monkeypatch, tmp_pat
     path.write_text(json.dumps(geom))
     OM2D.build(_recipe(extent=str(path)))
     assert sent["config"]["domain_geojson"] == "/data/domain.geojson"
-    staged = json.loads(Path(sent["rundir"], "domain.geojson").read_text())
+    staged = json.loads(sent["staged"]["domain.geojson"])
     assert staged["geometries"][0]["type"] == "Polygon"
 
 
@@ -423,7 +424,7 @@ def test_the_box_a_cut_leaves_behind_is_open_edge_rather_than_shoreline(
     sent = _stub_om2d(monkeypatch, tmp_path)
     OM2D.build(_recipe(extent=str(_cut_water(tmp_path))))
     assert sent["config"]["open_runs_geojson"] == "/data/open_runs.geojson"
-    staged = json.loads(Path(sent["rundir"], "open_runs.geojson").read_text())
+    staged = json.loads(sent["staged"]["open_runs.geojson"])
     faces = [f["geometry"]["coordinates"] for f in staged["features"]]
     assert {f["properties"]["type"] for f in staged["features"]} == {"open"}
     assert len(faces) == 3, "the south, east and north edges of the box"
@@ -453,7 +454,7 @@ def test_an_island_hole_does_not_make_the_cut_boxs_edges_shore(
     path = tmp_path / "island_water.geojson"
     path.write_text(json.dumps(_with_island(water_polygon(_COAST, _CUT_BOX))))
     OM2D.build(_recipe(extent=str(path)))
-    staged = json.loads(Path(sent["rundir"], "open_runs.geojson").read_text())
+    staged = json.loads(sent["staged"]["open_runs.geojson"])
     assert len(staged["features"]) == 3, "the south, east and north edges"
 
 
@@ -475,9 +476,9 @@ def test_the_shoreline_sizing_is_coarse_on_the_box_and_fine_on_the_coast(
     open edges and a stone's throw along the coast."""
     sent = _stub_om2d(monkeypatch, tmp_path)
     OM2D.build(_recipe(extent=str(_cut_water(tmp_path))))
-    staged = json.loads(Path(sent["rundir"], "open_runs.geojson").read_text())
+    staged = json.loads(sent["staged"]["open_runs.geojson"])
     faces = [f["geometry"]["coordinates"] for f in staged["features"]]
-    rings = json.loads(Path(sent["rundir"], "domain.geojson").read_text())
+    rings = json.loads(sent["staged"]["domain.geojson"])
     ring = rings["geometries"][0]["coordinates"]
 
     bbox = (_CUT_BOX[0], _CUT_BOX[2], _CUT_BOX[1], _CUT_BOX[3])

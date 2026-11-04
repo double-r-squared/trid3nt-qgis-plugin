@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import math
-import os
+import tempfile
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -97,7 +97,7 @@ def op_raster(source: Any) -> Path:
     if uri.startswith("s3://"):
         from trid3nt_contracts import new_ulid
 
-        local = _scratch() / f"raster-{new_ulid()}{Path(uri).suffix or '.tif'}"
+        local = _rasters_dir() / f"raster-{new_ulid()}{Path(uri).suffix or '.tif'}"
         local.write_bytes(read_object_bytes_s3(uri))
         return local
     path = Path(uri)
@@ -136,15 +136,20 @@ def op_geometry(source: Any) -> dict[str, Any]:
         suffix = Path(text).suffix.lower()
         if suffix in (".geojson", ".json"):
             return json.loads(raw.decode("utf-8"))
-        local = _scratch() / f"geom-{new_ulid()}{suffix}"
-        local.write_bytes(raw)
-        text = str(local)
+        with tempfile.TemporaryDirectory(prefix="mesh-geometry-") as scratch:
+            local = Path(scratch) / f"geom-{new_ulid()}{suffix}"
+            local.write_bytes(raw)
+            return _read_vector(local)
     path = Path(text)
     if not path.exists():
         raise MeshToolError(
             "MESH_OP_INPUT_UNREADABLE",
             f"the geometry {source!r} could not be read: it is neither inline "
             "GeoJSON, an object-store uri, nor a file on disk.")
+    return _read_vector(path)
+
+
+def _read_vector(path: Path) -> dict[str, Any]:
     if path.suffix.lower() in (".geojson", ".json"):
         return json.loads(path.read_text())
     import geopandas as gpd
@@ -152,5 +157,12 @@ def op_geometry(source: Any) -> dict[str, Any]:
     return json.loads(gpd.read_file(path).to_crs(4326).to_json())
 
 
-def _scratch() -> Path:
-    return Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp"))
+_RASTER_DIR: tempfile.TemporaryDirectory | None = None
+
+
+def _rasters_dir() -> Path:
+    """The one directory this process downloads op rasters into; it is removed when the process exits."""
+    global _RASTER_DIR
+    if _RASTER_DIR is None:
+        _RASTER_DIR = tempfile.TemporaryDirectory(prefix="mesh-rasters-")
+    return Path(_RASTER_DIR.name)

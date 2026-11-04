@@ -338,3 +338,23 @@ def test_a_cell_the_child_does_not_number_refuses_in_the_child_s_file(tmp_path):
 
     assert refusal.error_code == "MODFLOW_STAGED_CELLID_OUTSIDE"
     assert "child.chd" in str(refusal) and "cell id 5" in str(refusal) and "of child numbers 4" in str(refusal)
+
+
+def test_an_object_store_object_is_read_into_a_scratch_directory_the_check_removes(
+        monkeypatch, tmp_path):
+    from pathlib import Path
+
+    monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3",
+                        lambda uri: b"bytes")
+    seen = {}
+
+    def reads(*args, **kwargs):
+        seen["path"] = C._read("s3://bucket/key/mesh.slf")
+        seen["during"] = seen["path"].read_bytes()
+        return {}
+
+    monkeypatch.setattr(C, "_check_staged_run", reads)
+    C.check_staged_run(tmp_path, steering="a", inputs=[], written_by_the_engine=[],
+                       duration_s=None, cores=1)
+    assert seen["during"] == b"bytes"
+    assert not Path(seen["path"]).exists() and not Path(seen["path"]).parent.exists()

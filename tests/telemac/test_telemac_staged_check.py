@@ -279,3 +279,23 @@ def test_a_supplied_mesh_with_no_pair_is_taken_and_the_run_refuses_by_name(tmp_p
     refusal = _refusal(tmp_path)
     assert refusal.error_code == "TELEMAC_STAGED_FILE_MISSING"
     assert "GEOMETRY FILE" in str(refusal) and "mesh.slf" in str(refusal)
+
+
+def test_an_object_store_object_is_read_into_a_scratch_directory_the_check_removes(
+        monkeypatch, tmp_path):
+    from pathlib import Path
+
+    monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3",
+                        lambda uri: b"bytes")
+    seen = {}
+
+    def reads(*args, **kwargs):
+        seen["path"] = C._read("s3://bucket/key/mesh.slf")
+        seen["during"] = seen["path"].read_bytes()
+        return {}
+
+    monkeypatch.setattr(C, "_check_staged_run", reads)
+    C.check_staged_run(tmp_path, steering="a", inputs=[], written_by_the_engine=[],
+                       duration_s=None, cores=1)
+    assert seen["during"] == b"bytes"
+    assert not Path(seen["path"]).exists() and not Path(seen["path"]).parent.exists()

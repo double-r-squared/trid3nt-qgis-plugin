@@ -1013,13 +1013,14 @@ def download_result(run_id: str, basename: str) -> str:
 
     The caller owns the temp file: read it, then unlink it."""
     bucket = storage.runs_bucket()
-    local = str(Path(tempfile.mkdtemp(prefix=f"run-{run_id}-")) / basename)
+    handle, local = tempfile.mkstemp(prefix=f"run-{run_id}-", suffix=f"-{basename}")
     try:
         body = storage.client().get_object(
             Bucket=bucket, Key=f"{run_id}/{basename}")["Body"].read()
-        with open(local, "wb") as fh:
+        with os.fdopen(handle, "wb") as fh:
             fh.write(body)
     except Exception as exc:  # noqa: BLE001
+        Path(local).unlink(missing_ok=True)
         raise RunOutputMissing(
             f"run {run_id} completed but s3://{bucket}/{run_id}/{basename} was "
             f"not downloadable: {exc}") from exc

@@ -52,7 +52,6 @@ class _Stage:
         for name in names:
             local = Path(download_result(self.run_id, name))
             shutil.move(str(local), str(self.work / name))
-            local.parent.rmdir()
 
 
 class Solved:

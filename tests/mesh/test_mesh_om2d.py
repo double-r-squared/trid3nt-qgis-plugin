@@ -172,10 +172,13 @@ def test_the_journal_states_no_caveat_a_measurement_does_not_stand_behind(tmp_pa
 def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None,
                points=None, cells=None, results=None):
     """Answer the container calls with a known mesh, and record what was sent."""
-    sent: dict[str, object] = {"configs": []}
+    sent: dict[str, object] = {"configs": [], "staged": {}}
 
     def fake_run_op(rundir, op, config_name, produces):
         config = json.loads(Path(rundir, config_name).read_text())
+        sent["rundir"] = str(rundir)
+        sent["staged"].update({path.name: path.read_text()
+                               for path in Path(rundir).glob("*.geojson")})
         sent["configs"].append((op, config))
         if op == "build":
             sent["config"] = config
@@ -301,12 +304,11 @@ def _line(lon_span: float) -> dict:
             "coordinates": [[-75.78, 36.12], [-75.78 + lon_span, 36.12]]}
 
 
-def _staged_lines(sent, tmp_path) -> list:
+def _staged_lines(sent) -> list:
     """The line geometries the box was actually handed."""
     name = Path(sent["config"]["pre_ops"][0]["kwargs"]["line_file"]).name
-    staged, = tmp_path.rglob(name)
-    return [feature["geometry"] for feature in json.loads(staged.read_text())
-            ["features"]]
+    return [feature["geometry"]
+            for feature in json.loads(sent["staged"][name])["features"]]
 
 
 def test_a_line_shorter_than_the_declared_edge_drops_with_a_measured_note(
@@ -327,7 +329,7 @@ def test_a_line_shorter_than_the_declared_edge_drops_with_a_measured_note(
     mesh = OM2D.build(_recipe(resolution_m=60.0, ops=[
         mesh_op("distance_sizing_from_line_function", line_file=str(lines))]))
 
-    assert _staged_lines(sent, tmp_path) == [_line(0.010)]
+    assert _staged_lines(sent) == [_line(0.010)]
     note, = [n for n in mesh.meta["artifact"]["provenance"]["op_notes"]
              if "sizing resolution" in n]
     assert "1 of 2 lines" in note and "60 m edge" in note
@@ -748,3 +750,9 @@ def test_a_mesh_that_carries_no_build_state_still_takes_a_primitive():
 
     adopted = Mesh(points=_POINTS, cells=_CELLS, crs_authid="EPSG:4326")
     assert set_boundary_roles(adopted) is adopted
+
+
+def test_the_build_directory_is_gone_when_the_build_returns(monkeypatch, tmp_path):
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    OM2D.build(_recipe(resolution_m=60.0))
+    assert not Path(sent["rundir"]).exists()
