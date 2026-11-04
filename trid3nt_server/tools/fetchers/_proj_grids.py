@@ -1,21 +1,18 @@
 """The offline vertical seam: NGVD 29, NAVD88 and EGM2008 heights converted per point on PROJ's grids.
 
-A grid PROJ names for the ground a call stands over is downloaded WHOLE, once, into PROJ's
-user-writable directory, and every later conversion reads it from disk. A point no grid covers
-refuses by name: PROJ's ballpark steps answer such a point with a zero or with an unshifted
+The grids are files scripts/fetch_proj_grids.sh installs (TRID3NT_PROJ_GRIDS, else third_party/proj);
+a conversion never reaches the network and a missing grid refuses naming that script. A point no grid
+covers refuses by name: PROJ's ballpark steps answer such a point with a zero or with an unshifted
 height, so they are switched off.
 """
 
 from __future__ import annotations
 
-import logging
+import os
 from functools import lru_cache
 from typing import Any
 
 from ._fetch_common import FetchError
-from ._router.transport import TransportError, get_bytes, get_client
-
-logger = logging.getLogger(__name__)
 
 __all__ = ["FRAMES", "DatumGridError", "DatumGridUnavailable", "NoGridCoverage",
            "geodetic_offset", "grids_used", "served_pairs"]
@@ -47,7 +44,7 @@ class NoGridCoverage(DatumGridError):
 
 
 class DatumGridUnavailable(DatumGridError):
-    """A grid the point needs could not be fetched from the PROJ CDN."""
+    """A grid the point needs is not installed."""
 
     error_code = "DATUM_GRID_UNAVAILABLE"
 
@@ -79,7 +76,7 @@ def served_pairs(lon: float, lat: float) -> tuple[tuple[str, str], ...] | None:
     """The pairs of :data:`FRAMES`' geodetic set the grids convert between at this point, as ``(from, to)``.
 
     Message context for a refusal: a pair no grid covers is left out, and a
-    grid the PROJ CDN could not give leaves the whole answer ``None``, so a
+    grid that is not installed leaves the whole answer ``None``, so a
     reader never reads an outage as "nothing is served here"."""
     geodetic = (("NGVD29", "NAVD88"), ("NAVD88", "EGM2008"), ("NGVD29", "EGM2008"))
     served: list[tuple[str, str]] = []
@@ -151,38 +148,29 @@ def _group(pair: tuple[str, str], bounds: tuple[float, float, float, float]) -> 
                             area_of_interest=AreaOfInterest(*bounds))
 
 
-def _ensure(pair: tuple[str, str], bounds: tuple[float, float, float, float]) -> None:
-    """Download, once, the grids of the best operation PROJ lacks for this pair over ``bounds``."""
-    for _ in range(len(_HOPS) * 4):
-        group = _group(pair, bounds)
-        if group.best_available or not group.unavailable_operations:
-            return
-        missing = [g for g in group.unavailable_operations[0].grids if not g.available]
-        if not missing:
-            return
-        for grid in missing:
-            _download(grid.short_name, grid.url)
-
-
-def _download(name: str, url: str) -> None:
-    import os
+def _grid_dir() -> Any:
     from pathlib import Path
 
-    from pyproj.datadir import get_user_data_dir
+    return Path(os.environ.get("TRID3NT_PROJ_GRIDS") or Path(__file__).resolve().parents[3] / "third_party" / "proj")
 
-    if not url or not url.startswith("https://"):
-        raise DatumGridUnavailable(f"PROJ names no download for the grid {name!r}")
-    target = Path(get_user_data_dir(True)) / name
-    logger.info("proj grid: fetching %s once into %s", url, target.parent)
-    try:
-        body, _type, _final = get_bytes(get_client(), url)
-    except TransportError as exc:
+
+def _register_grids() -> None:
+    """Put the grid directory on PROJ's search path, once per directory."""
+    from pyproj.datadir import append_data_dir, get_data_dir
+
+    folder = str(_grid_dir())
+    if _grid_dir().is_dir() and folder not in get_data_dir().split(os.pathsep):
+        append_data_dir(folder)
+
+
+def _ensure(pair: tuple[str, str], bounds: tuple[float, float, float, float]) -> None:
+    """Refuse, naming the installing script, when the best operation PROJ has for this pair lacks a grid file."""
+    _register_grids()
+    group = _group(pair, bounds)
+    if group.best_available or not group.unavailable_operations:
+        return
+    missing = [g.short_name for g in group.unavailable_operations[0].grids if not g.available]
+    if missing:
         raise DatumGridUnavailable(
-            f"the PROJ grid {name} could not be fetched from {url}: {exc}") from exc
-    partial = target.with_name(target.name + ".part")
-    partial.write_bytes(body)
-    os.replace(partial, target)
-    # PROJ remembers a grid it failed to find; resetting the search path makes it look again.
-    from pyproj.datadir import get_data_dir, set_data_dir
-
-    set_data_dir(get_data_dir())
+            f"the PROJ grid(s) {', '.join(missing)} are not installed in {_grid_dir()}; "
+            "run scripts/fetch_proj_grids.sh")

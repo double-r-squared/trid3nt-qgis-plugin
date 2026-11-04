@@ -286,8 +286,7 @@ def head_column(zf: zipfile.ZipFile, arch: dict[str, Any]) -> tuple[Any, Any, An
 
 
 def shift_to_navd88(spec: SourceSpec, bbox: tuple[float, ...], frame: str):
-    """The offset onto NAVD88 at each measured cell centre, from PROJ's local grids (no network call
-    after the grids are cached). A measured cell no grid covers refuses by name; the offsets are asked
+    """The offset onto NAVD88 at each measured cell centre, from PROJ's installed grids (no network call). A measured cell no grid covers refuses by name; the offsets are asked
     when the shift is first applied, so a frame with no active cell never asks."""
     import numpy as np
 

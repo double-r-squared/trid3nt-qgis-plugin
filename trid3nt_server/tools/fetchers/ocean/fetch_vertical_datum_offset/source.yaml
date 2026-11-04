@@ -122,7 +122,7 @@ docstring: |-
         ``fetch_dem``, ``fetch_copernicus_dem``, ``fetch_usgs_nwis_gauges``,
         ``fetch_noaa_coops_tides``.
       - Upstream data sources: NGS GEOID18/GEOID12B/VERTCON and NGA EGM2008 grids
-        through the PROJ CDN; NOAA VDatum (https://vdatum.noaa.gov/).
+        read from disk (installed by ``scripts/fetch_proj_grids.sh``); NOAA VDatum (https://vdatum.noaa.gov/).
 
   Cache: ``ttl_class="semi-static-7d"``.
 
@@ -134,6 +134,6 @@ docstring: |-
       - ``VDATUM_NO_COVERAGE``: the region's grids do not reach this point,
         named alongside the local grids' served pairs there.
       - ``VDATUM_UPSTREAM_ERROR``: VDatum failed or answered with something that
-        is not its conversion record, or a PROJ grid could not be downloaded.
+        is not its conversion record, or a PROJ grid is not installed (the message names ``scripts/fetch_proj_grids.sh``).
 
   Tier-1 free. No API key.

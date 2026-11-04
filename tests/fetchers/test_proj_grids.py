@@ -90,37 +90,12 @@ def test_a_frame_the_seam_does_not_convert_is_a_value_error(proj_grids):
         seam.geodetic_offset("MHW", "NAVD88", *_JBCC_SW)
 
 
-def test_a_missing_grid_is_fetched_once_and_read_from_disk_after(tmp_path, monkeypatch):
-    import pathlib
-    from types import SimpleNamespace
+def test_a_grid_that_is_not_installed_refuses_naming_the_script(monkeypatch, tmp_path):
+    from types import SimpleNamespace as NS
 
-    import pyproj
-
-    from trid3nt_server.tools.fetchers import _proj_grids
-
-    fixture = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "proj_grids" / "capecod"
-    url = "https://cdn.proj.org/us_noaa_vertcone.tif"
-    monkeypatch.setattr(pyproj.datadir, "get_user_data_dir", lambda create=False: str(tmp_path))
-    asked: list[str] = []
-
-    def served(client, asked_url, **kw):
-        asked.append(asked_url)
-        return (fixture / "us_noaa_vertcone.tif").read_bytes(), "image/tiff", asked_url
-
-    def group(pair, bounds):
-        present = (tmp_path / "us_noaa_vertcone.tif").exists()
-        grid = SimpleNamespace(short_name="us_noaa_vertcone.tif", url=url, available=present)
-        return SimpleNamespace(best_available=present,
-                               unavailable_operations=[] if present else [SimpleNamespace(grids=[grid])])
-
-    monkeypatch.setattr(_proj_grids, "get_bytes", served)
-    monkeypatch.setattr(_proj_grids, "_group", group)
-    original = pyproj.datadir.get_data_dir()
-    try:
-        for _ in range(2):
-            _proj_grids._ensure(("EPSG:4269+7968", "EPSG:4269+5703"), (-70.62, 41.59, -70.5, 41.68))
-    finally:
-        pyproj.datadir.set_data_dir(original)
-    assert asked == [url]
-    assert (tmp_path / "us_noaa_vertcone.tif").read_bytes() == (fixture / "us_noaa_vertcone.tif").read_bytes()
-    assert not list(tmp_path.glob("*.part"))
+    monkeypatch.setenv("TRID3NT_PROJ_GRIDS", str(tmp_path))
+    grid = NS(short_name="us_noaa_g2018u0.tif", available=False)
+    absent = NS(best_available=False, unavailable_operations=[NS(grids=[grid])])
+    monkeypatch.setattr(seam, "_group", lambda pair, bounds: absent)
+    with pytest.raises(seam.DatumGridUnavailable, match=r"us_noaa_g2018u0.tif.*fetch_proj_grids.sh"):
+        seam.geodetic_offset("NAVD88", "EGM2008", -70.0, 41.7)

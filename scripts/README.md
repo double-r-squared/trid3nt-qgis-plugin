@@ -8,6 +8,7 @@ a dev tool and lives under `dev/`, which git does not carry.
 
 | file | what it is |
 | --- | --- |
+| `fetch_proj_grids.sh` | Install the sha256-pinned PROJ vertical grids the offline datum seam reads into `third_party/proj` (`TRID3NT_PROJ_GRIDS`). |
 | `build_telemac_image.sh` | Build the local TELEMAC worker image. |
 | `extract_telemac_dictionary.py` | Regenerate the committed TELEMAC keyword dictionaries from the opentelemac tree (`scripts/fetch_opentelemac.sh`); the drift test imports it. |
 | `extract_modflow_dictionary.py` | Regenerate the committed MODFLOW body dictionaries from the mf6 definition files at the release the worker carries. |

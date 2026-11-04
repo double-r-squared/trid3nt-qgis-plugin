@@ -169,6 +169,13 @@ The TELEMAC steering tree (the opentelemac v9.0.0 python scripts and keyword dic
 bash scripts/fetch_opentelemac.sh    # -> third_party/opentelemac, sha256-pinned
 ```
 
+The vertical-datum seam converts NGVD 29, NAVD88 and EGM2008 heights on PROJ grids (GEOID18, GEOID12B,
+VERTCON 2, EGM2008; about 110 MB) it reads from disk and never fetches at run time:
+
+```sh
+bash scripts/fetch_proj_grids.sh     # -> third_party/proj (TRID3NT_PROJ_GRIDS overrides), sha256-pinned
+```
+
 ### 2. Python venvs
 
 Agent venv (installs the contracts + server packages editable):
