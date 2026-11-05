@@ -405,7 +405,7 @@ def _derived_group(read: Field, solved: Any, *, caption: str, quantity: str,
 def _rasters(read: Rasters, solved: Any, *, caption: str, quantity: str, style: Any) -> Raster:
     """A raster read -> its COGs under the run prefix and the Raster that carries them.
 
-    A frame holds the map from its instant to the next frame's, the last to ``until``; an instant is the run's reference
+    A frame holds the map from its instant to the next frame's, the last to ``until``, or one cadence past itself when ``until`` leaves it no window; an instant is the run's reference
     time plus the frame's seconds, and a run stating none refuses.
     """
     from datetime import datetime, timedelta, timezone
@@ -449,7 +449,11 @@ def _rasters(read: Rasters, solved: Any, *, caption: str, quantity: str, style: 
                   value_range=presets.measured_range(values, style))
     if not read.times:
         return Raster(uri=uris[0], **common)
-    ends = [*read.times[1:], read.times[-1] if read.until is None else max(read.until, read.times[-1])]
+    last = read.times[-1]
+    closing = last if read.until is None else max(read.until, last)
+    if closing == last and len(read.times) > 1:
+        closing = last + (last - read.times[-2])
+    ends = [*read.times[1:], closing]
     return Raster(frames=tuple(RasterFrame(uri=uri, t=float(t), valid_from=_at(t), valid_to=_at(end))
                                for uri, t, end in zip(uris, read.times, ends)), **common)
 

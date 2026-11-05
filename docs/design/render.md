@@ -5,7 +5,7 @@ exactly what QGIS opens and nothing else:
 
 | kind | what arrives | what the map gets |
 |---|---|---|
-| raster | a COG in the object store, EPSG:4326; or the timed COGs of one quantity | a raster layer, styled from the declared row resolved against its own band; a timed group is one layer per frame, each carrying its `valid_from`/`valid_to` window and the group's one legend range |
+| raster | a COG in the object store, EPSG:4326; or the timed COGs of one quantity | a raster layer, styled from the declared row resolved against its own band; a timed group is one layer per frame, each carrying its `valid_from`/`valid_to` window and the group's one legend, resolved once from the first COG and set on every layer so it rides the case row |
 | vector | a GeoJSON FeatureCollection in lon/lat | a vector layer written under the run prefix |
 | mesh | an MDAL file (SELAFIN, 2dm, UGRID, HEC-RAS 2D HDF) plus the dataset files written beside it | a mesh layer with ONE dataset group selected, under the temporal controller |
 | chart | a payload already built | the chart the dock renders, persisted under the run |

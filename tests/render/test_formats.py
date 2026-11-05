@@ -226,3 +226,23 @@ def test_a_raster_is_one_uri_or_its_frames() -> None:
         Raster()
     with pytest.raises(ValueError):
         Raster(uri="s3://cache/a.tif", frames=_frames(0.0))
+
+
+def test_a_timed_group_resolves_one_legend_on_the_fixed_range_for_every_frame(tmp_path) -> None:
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    frames = []
+    for i, peak in enumerate((0.99, 3.96)):
+        path = tmp_path / f"f{i}.tif"
+        with rasterio.open(path, "w", driver="GTiff", height=4, width=4, count=1, dtype="float32",
+                           crs="EPSG:4326", transform=from_origin(0, 4, 1, 1)) as dst:
+            dst.write(np.linspace(0.0, peak, 16, dtype="float32").reshape(4, 4), 1)
+        frames.append(RasterFrame(uri=str(path), t=600.0 * i, valid_from=f"2010-02-27T00:{10 * i:02d}:00Z",
+                                  valid_to=f"2010-02-27T00:{10 * i + 10:02d}:00Z"))
+    layers = _publish([Deliverable(
+        product=Raster(frames=tuple(frames), units="m", value_range=(0.0, 5.0)),
+        caption="water depth", style={"kind": "continuous"})]).layers
+    assert all(layer.legend is not None and layer.legend.qml for layer in layers)
+    assert {(layer.legend.vmin, layer.legend.vmax) for layer in layers} == {(0.0, 5.0)}

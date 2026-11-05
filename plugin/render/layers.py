@@ -298,6 +298,42 @@ def stamp_raster_temporal(layer, event: LayerEvent) -> Optional[str]:
     )
 
 
+def play_declared_windows(controller, events: List[LayerEvent]) -> Optional[str]:
+    """Point the canvas Temporal Controller at the windows the rows DECLARED: Animated over the project's temporal
+    range, one frame the length of the earliest row's window. No row declaring a window leaves the controller alone;
+    never raises."""
+    windows = []
+    for event in events:
+        raw = event.raw or {}
+        begin, end = _temporal_qdt(raw.get("valid_from")), _temporal_qdt(raw.get("valid_to"))
+        if begin is not None and end is not None and begin.secsTo(end) > 0:
+            windows.append((begin, end))
+    if controller is None or not windows:
+        return None
+    try:
+        from qgis.core import QgsInterval
+
+        first = min(windows, key=lambda w: w[0].toSecsSinceEpoch())
+        extent = QgsProject.instance().timeSettings().temporalRange()
+        controller.setNavigationMode(_animated_mode(controller))
+        controller.setTemporalExtents(extent)
+        controller.setFrameDuration(QgsInterval(float(first[0].secsTo(first[1]))))
+        controller.setCurrentFrameNumber(0)
+    except Exception as exc:  # noqa: BLE001 -- honest note, never a lost layer
+        return f"temporal controller not set ({type(exc).__name__}: {exc})"
+    return (
+        f"Temporal Controller set to Animated, one frame per {first[0].secsTo(first[1])} s window"
+    )
+
+
+def _animated_mode(controller):
+    """The Animated navigation mode enum, across QGIS API generations."""
+    try:
+        return type(controller).NavigationMode.Animated
+    except AttributeError:
+        return controller.Animated
+
+
 def stamp_mesh_temporal(layer, event: LayerEvent) -> Optional[str]:
     """Point a mesh layer's time axis at the instant its row DECLARES as zero.
     The row decides and this only applies it: the stated instant replaces whatever

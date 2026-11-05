@@ -58,6 +58,14 @@ def _import_layers():
         def isValid(self):
             return self._valid
 
+        def toSecsSinceEpoch(self):
+            import datetime as _dt
+
+            return int(_dt.datetime.fromisoformat(self.text.replace("Z", "+00:00")).timestamp())
+
+        def secsTo(self, other):
+            return other.toSecsSinceEpoch() - self.toSecsSinceEpoch()
+
         def toString(self, fmt=None):
             return self.text
 
@@ -558,6 +566,64 @@ class TestDeclaredTemporalWindow(unittest.TestCase):
         span = fakes.Project.instance().timeSettings().temporalRange()
         self.assertEqual(span.begin().toString(), "2026-06-22T18:00:00Z")
         self.assertEqual(span.end().toString(), "2026-06-22T18:10:00Z")
+
+    def _controller(self):
+        class _Controller:
+            Animated = "animated"
+
+            def __init__(self):
+                self.calls = {}
+
+            def setNavigationMode(self, mode):
+                self.calls["mode"] = mode
+
+            def setTemporalExtents(self, rng):
+                self.calls["extents"] = rng
+
+            def setFrameDuration(self, interval):
+                self.calls["duration"] = interval.seconds
+
+            def setCurrentFrameNumber(self, n):
+                self.calls["frame"] = n
+
+        return _Controller()
+
+    def _play(self, layers, controller, rows):
+        core = types.ModuleType("qgis.core")
+        core.QgsInterval = type("QgsInterval", (), {"__init__": lambda self, s: setattr(self, "seconds", s)})
+        saved = sys.modules.get("qgis.core")
+        sys.modules["qgis.core"] = core
+        try:
+            return layers.play_declared_windows(controller, [_event(layers, r) for r in rows])
+        finally:
+            if saved is None:
+                sys.modules.pop("qgis.core", None)
+            else:
+                sys.modules["qgis.core"] = saved
+
+    def test_declared_windows_set_the_controller_animated_on_the_first_frames_window(self):
+        layers, fakes = _import_layers()
+        m = layers.LayerMaterializer(settings=_Settings())
+        rows = []
+        for i in (1, 0):
+            row = dict(RASTER_LAYER_ROW, layer_id=f"f{i}")
+            row["valid_from"] = f"2026-06-22T18:{5 * i:02d}:00Z"
+            row["valid_to"] = f"2026-06-22T18:{5 * i + 5:02d}:00Z"
+            rows.append(row)
+        m.materialize([_event(layers, r) for r in rows])
+        controller = self._controller()
+        note = self._play(layers, controller, rows)
+        self.assertEqual(controller.calls["mode"], "animated")
+        self.assertEqual(controller.calls["duration"], 300.0)
+        self.assertEqual(controller.calls["extents"].begin().toString(), "2026-06-22T18:00:00Z")
+        self.assertEqual(controller.calls["extents"].end().toString(), "2026-06-22T18:10:00Z")
+        self.assertIn("Animated", note)
+
+    def test_rows_declaring_no_window_leave_the_controller_alone(self):
+        layers, fakes = _import_layers()
+        controller = self._controller()
+        self.assertIsNone(self._play(layers, controller, [RASTER_LAYER_ROW]))
+        self.assertEqual(controller.calls, {})
 
     def test_a_row_that_declares_no_window_is_left_alone(self):
         """A still is not a frame. It gets no invented clock and no stamp."""

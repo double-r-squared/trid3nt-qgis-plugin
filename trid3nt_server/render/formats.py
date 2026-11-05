@@ -135,9 +135,9 @@ async def publish(*, run_id: str, engine: str, name: str,
             layers.append(_mesh_layer(item, run_id=run_id, engine=engine,
                                       name=name, value_range=shared.get(quantity)))
         elif isinstance(item.product, Raster):
-            layers.extend(_raster_layers(item, run_id=run_id, engine=engine,
-                                         name=name,
-                                         value_range=shared.get(quantity)))
+            layers.extend(await _with_one_legend(_raster_layers(
+                item, run_id=run_id, engine=engine, name=name,
+                value_range=shared.get(quantity))))
         elif isinstance(item.product, Vector):
             layers.append(await asyncio.to_thread(
                 _vector_layer, item, run_id=run_id, engine=engine, name=name))
@@ -254,6 +254,19 @@ def _mesh_layer(item: Deliverable, *, run_id: str, engine: str, name: str,
         quantity=quantity, tracer=item.tracer, role="primary", units=mesh.units,
         bbox=mesh.bbox, crs_authid=f"EPSG:{int(mesh.epsg)}",
         reference_time=mesh.reference_time)
+
+
+async def _with_one_legend(layers: list[LayerURI]) -> list[LayerURI]:
+    """The legend resolved once from the group's first COG and set on every layer, so frames share one range and it rides the case row."""
+    from trid3nt_server.render.publish import legend_for_published_layer
+
+    first = layers[0]
+    legend = await asyncio.to_thread(
+        legend_for_published_layer, first.style, first.uri or "",
+        units=first.units)
+    if legend is None:
+        return layers
+    return [layer.model_copy(update={"legend": legend}) for layer in layers]
 
 
 def _raster_layers(item: Deliverable, *, run_id: str, engine: str, name: str,

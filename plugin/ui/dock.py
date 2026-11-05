@@ -83,6 +83,7 @@ from ..render.layers import (
     LayerMaterializer,
     configure_store_access,
     ensure_basemap,
+    play_declared_windows,
     reproject,
     sweep_stale_session_dirs,
     zoom_to_bbox4326,
@@ -1408,11 +1409,21 @@ class Trid3ntDock(QDockWidget):
         self._ensure_pending().render_tool_card(inner_rows, meta_lines)
         self._scroll_to_bottom()
 
+    def _play_added(self, events) -> list:
+        """Set the canvas Temporal Controller from the layers the last materialize added -> its note, if any."""
+        added = {layer.customProperty("trid3nt/layer_id")
+                 for layer in self.materializer.last_added_layers}
+        note = play_declared_windows(
+            self.iface.mapCanvas().temporalController(),
+            [event for event in events if event.layer_id in added])
+        return [note] if note else []
+
     def _on_session_state(self, data: dict) -> None:
         """Materialize this frame's published layers into the case's group."""
         layers = data.get("layers") or []
         if layers and self._case_id:
             notes = self.materializer.materialize(layers)
+            notes.extend(self._play_added(layers))
             if notes:
                 # Errors stay visible outside the collapse.
                 self._ensure_pending().add_layer_notes(notes)
@@ -1470,6 +1481,7 @@ class Trid3ntDock(QDockWidget):
         # Layer restore rides the same gesture: the by-URI materializer reads the store directly.
         if info.layers:
             notes = self.materializer.materialize(info.layers)
+            notes.extend(self._play_added(info.layers))
             if notes:
                 # Fold the batch rather than one chat line per layer; errors stay visible.
                 self._ensure_pending().add_layer_notes(notes)

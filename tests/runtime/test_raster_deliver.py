@@ -71,6 +71,12 @@ def test_a_timed_read_on_a_run_with_no_reference_time_refuses_by_name(held) -> N
     assert caught.value.error_code == "RASTER_UNANCHORED" and P.OutputEmpty.error_code == "TELEMAC_OUTPUT_EMPTY"
 
 
-def test_a_last_frame_at_the_run_s_end_holds_its_own_instant(held) -> None:
-    frames = _deliver(_read(2, times=(0.0, 600.0), until=600.0)).product.frames
-    assert frames[-1].valid_from == frames[-1].valid_to
+def test_a_last_frame_at_the_run_s_end_holds_one_cadence_past_itself(held) -> None:
+    frames = _deliver(_read(3, times=(0.0, 600.0, 1200.0), until=1200.0)).product.frames
+    assert frames[-1].valid_from == "2010-02-27T06:54:00Z"
+    assert frames[-1].valid_to == "2010-02-27T07:04:00Z"
+
+
+def test_a_lone_frame_has_no_cadence_to_read(held) -> None:
+    frames = _deliver(_read(1, times=(600.0,), until=600.0)).product.frames
+    assert frames[0].valid_from == frames[0].valid_to
