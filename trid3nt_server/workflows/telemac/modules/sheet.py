@@ -291,7 +291,7 @@ def _arm(body: type, filled: dict[str, Filled],
                                 provenance=Provenance(Origin.PRODUCER, name))
 
 
-async def stage(sheet: TelemacSheet, *, run_tag: str,
+async def stage(sheet: TelemacSheet, *, run_id: str,
                 mesh_inputs: Sequence[Mapping[str, str]],
                 outputs: Sequence[str], results: Sequence[str], prefix: str,
                 server_facts: Mapping[str, Any], steering: str | None = None,
@@ -299,7 +299,7 @@ async def stage(sheet: TelemacSheet, *, run_tag: str,
                 continue_from: str | None = None) -> dict[str, Any]:
     """A complete sheet: serialize it and stage the directory, checked against itself -> the staged run.
 
-    ``run_tag`` names the run's one directory and prefix; a second staging replaces the first.
+    ``run_id`` names the run's one directory and prefix; a second staging replaces the first.
     Nothing is handed to the box here."""
     from ..authoring.serializer import serialize
     from ..authoring.staged_check import check_staged_run
@@ -307,12 +307,12 @@ async def stage(sheet: TelemacSheet, *, run_tag: str,
     complete(sheet.body, sheet.filled)
     # Files the decks name past the one read from are declared so the worker's success convention checks each landed.
     kept = [name for name in sheet.kept() if name not in results]
-    rundir = new_rundir(run_tag, stem="telemac")
+    rundir = new_rundir(run_id, stem="telemac")
     partition = solve_cores(sheet.body, sheet.filled)
     # The serialization is a container round trip, so it runs off the loop.
     written = await asyncio.to_thread(serialize, sheet, rundir, steering=steering)
     return await stage_run(
-        rundir, run_tag, module=sheet.module, steering=written["steering"],
+        rundir, run_id, module=sheet.module, steering=written["steering"],
         results=[*results, *kept], outputs=[*outputs, *kept],
         mesh_inputs=list(mesh_inputs), prefix=prefix, sheet=sheet.state(),
         result_basename=list(results)[0], server_facts=server_facts,

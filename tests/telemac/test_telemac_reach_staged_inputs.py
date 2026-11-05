@@ -238,7 +238,7 @@ def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):
     monkeypatch.setattr(storage, "client", lambda: fake)
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
     uri = stage_manifest(
-        section="agitation", config={"name": "harbour"}, run_tag="RUNTAG",
+        section="agitation", config={"name": "harbour"}, run_id="RUNTAG",
         outputs=["res.slf"], prefix="artemis")
     assert uri == "s3://test-cache/artemis/RUNTAG/manifest.json"
     doc = json.loads(fake.put["Body"])

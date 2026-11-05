@@ -346,7 +346,7 @@ def run_bodies(steering: type) -> list[type]:
 fill_sheet = partial(fill_sheet, engine="telemac", floor=_floor)
 
 
-async def stage_sheet(*, sheet: TelemacSheet, run_tag: str, settled: Mapping[str, Any],
+async def stage_sheet(*, sheet: TelemacSheet, run_id: str, settled: Mapping[str, Any],
                       results: Sequence[str], steering: str,
                       prefix: str) -> dict[str, Any]:
     """A complete sheet, serialized and staged with the directory checked -> the staged run.
@@ -355,7 +355,7 @@ async def stage_sheet(*, sheet: TelemacSheet, run_tag: str, settled: Mapping[str
     outputs = [*results, *(row["dest"] for row in settled["mesh_inputs"]),
                steering, *_ALWAYS_READABLE, *sorted(sheet.files)]
     return await stage_sheet_(
-        sheet, run_tag=run_tag, mesh_inputs=settled["mesh_inputs"],
+        sheet, run_id=run_id, mesh_inputs=settled["mesh_inputs"],
         outputs=outputs, results=list(results), prefix=prefix,
         server_facts=settled["server_facts"], steering=steering,
         coupling=None if not coupled else str(coupled).split(";")[0].lower(),
@@ -584,14 +584,14 @@ class TelemacWorkflow(Workflow):
         listed = tuple(self._states("RESULTS", ()))
         staged: dict[str, Any] = {}
         # One tag for the run: every card edit re-stages into the same directory and prefix.
-        run_tag = new_ulid()
+        run_id = new_ulid()
         prefix = self._states("PREFIX", "telemac")
 
         async def write(sheet: TelemacSheet) -> None:
             # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
             staged.clear()
             staged.update(await stage_sheet(
-                sheet=sheet, run_tag=run_tag, settled=run[_SETTLED],
+                sheet=sheet, run_id=run_id, settled=run[_SETTLED],
                 results=list(listed or (self._result(),)),
                 steering=(self._states("STEERING_FILE", "") or f"{self.steering.MODULE}_{self.name}.cas"),
                 prefix=prefix))
@@ -612,7 +612,7 @@ class TelemacWorkflow(Workflow):
                               if verdict.origin is Origin.USER])
         except BaseException:
             # A run that does not reach the box leaves no staged copy behind.
-            await asyncio.to_thread(discard_run, run_tag, prefix,
+            await asyncio.to_thread(discard_run, run_id, prefix,
                                     stem=self.engine)
             raise
         solved = await stage(

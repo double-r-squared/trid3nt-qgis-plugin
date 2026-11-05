@@ -304,7 +304,7 @@ def test_a_composite_the_wrapper_never_registered_refuses_by_name():
 
 def test_run_refuses_an_incomplete_sheet_naming_the_required_file():
     with pytest.raises(SheetIncomplete, match="GEOMETRY FILE"):
-        asyncio.run(stage(fill(T2D), run_tag="TAG", mesh_inputs=(), outputs=(),
+        asyncio.run(stage(fill(T2D), run_id="TAG", mesh_inputs=(), outputs=(),
                           results=("r2d.slf",), prefix="telemac", server_facts={}))
 
 
@@ -314,7 +314,7 @@ def test_run_refuses_a_deck_that_states_no_cadence():
     would write an animation nobody sized."""
     sheet = fill(T2D, GEOMETRY_FILE="geo.slf", BOUNDARY_CONDITIONS_FILE="geo.cli")
     with pytest.raises(SheetIncomplete, match="GRAPHIC PRINTOUT PERIOD"):
-        asyncio.run(stage(sheet, run_tag="TAG", mesh_inputs=(), outputs=(),
+        asyncio.run(stage(sheet, run_id="TAG", mesh_inputs=(), outputs=(),
                           results=("r2d.slf",), prefix="telemac", server_facts={}))
 
 
@@ -337,9 +337,9 @@ def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
         order.append("serialize")
         return {"steering": steering or "t2d.cas"}
 
-    async def _stage(rundir, run_tag, **kwargs):
+    async def _stage(rundir, run_id, **kwargs):
         order.append("stage")
-        return {"run_tag": run_tag, "manifest_uri": "s3://b/m.json", "case": {}}
+        return {"run_id": run_id, "manifest_uri": "s3://b/m.json", "case": {}}
 
     async def _dispatch(*, run, cores):
         order.append("dispatch")
@@ -347,12 +347,12 @@ def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
 
     monkeypatch.setattr(serializer, "serialize", _serialize)
     monkeypatch.setattr(staging, "stage_run", _stage)
-    monkeypatch.setattr(staging, "new_rundir", lambda run_tag, **_: tmp_path)
+    monkeypatch.setattr(staging, "new_rundir", lambda run_id, **_: tmp_path)
 
     sheet = fill(T2D, GEOMETRY_FILE="river.slf",
                  BOUNDARY_CONDITIONS_FILE="river.cli",
                  LAW_OF_BOTTOM_FRICTION=3, GRAPHIC_PRINTOUT_PERIOD=100)
-    staged = asyncio.run(stage(sheet, run_tag="TAG", mesh_inputs=(),
+    staged = asyncio.run(stage(sheet, run_id="TAG", mesh_inputs=(),
                                outputs=("r2d.slf",), results=("r2d.slf",),
                                prefix="telemac", server_facts={},
                                steering="t2d_river.cas"))

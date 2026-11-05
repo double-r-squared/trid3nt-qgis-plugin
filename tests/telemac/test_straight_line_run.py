@@ -75,7 +75,7 @@ def test_the_solve_is_handed_the_run_the_sheet_stage_staged(monkeypatch):
 
     async def staged(**kwargs):
         calls.append(("staged", kwargs))
-        return {"run_tag": "T"}
+        return {"run_id": "T"}
 
     async def sheet(*, write, **_kwargs):
         await write("the sheet")
@@ -88,7 +88,7 @@ def test_the_solve_is_handed_the_run_the_sheet_stage_staged(monkeypatch):
     state = Fill(workflow=workflow, carried={"restart_clean": False},
                  inputs=asyncio.run(resolve_params(value_inputs(workflow), {})))
     asyncio.run(workflow.launch(state))
-    assert dict(calls)["solve"]["staged"] == {"run_tag": "T"}
+    assert dict(calls)["solve"]["staged"] == {"run_id": "T"}
     assert "results" not in dict(calls)["solve"]
     assert dict(calls)["staged"]["sheet"] == "the sheet"
 
@@ -271,11 +271,11 @@ def _card_edited(monkeypatch, tmp_path, *, cancel):
     calls: list = []
     _faked(monkeypatch, calls)
 
-    async def staged(*, sheet, run_tag, prefix, **_kwargs):
-        rundir = staging.new_rundir(run_tag, stem="telemac")
+    async def staged(*, sheet, run_id, prefix, **_kwargs):
+        rundir = staging.new_rundir(run_id, stem="telemac")
         (rundir / f"deck-{sheet}.cas").write_text(sheet)
         return await staging.stage_run(
-            rundir, run_tag, module="telemac2d", steering=f"deck-{sheet}.cas",
+            rundir, run_id, module="telemac2d", steering=f"deck-{sheet}.cas",
             results=["r.slf"], outputs=[], mesh_inputs=[], prefix=prefix,
             sheet={}, server_facts={}, result_basename="r.slf",
             check=lambda *_a, **_k: None)
@@ -308,7 +308,7 @@ def _card_edited(monkeypatch, tmp_path, *, cancel):
 def test_card_edits_restage_into_the_one_prefix_and_directory(
         monkeypatch, tmp_path):
     store, solved = _card_edited(monkeypatch, tmp_path, cancel=False)
-    tag = solved[0]["run_tag"]
+    tag = solved[0]["run_id"]
     assert [path.name for path in tmp_path.iterdir()] == [f"telemac-{tag}"]
     assert [path.name for path in (tmp_path / f"telemac-{tag}").iterdir()] \
         == ["deck-last.cas"]

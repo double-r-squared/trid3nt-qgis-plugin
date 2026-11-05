@@ -92,7 +92,7 @@ def _results(sheet: Sheet) -> list[str]:
     return found
 
 
-async def stage_sheet(*, sheet: Sheet, run_tag: str, prefix: str, name: str,
+async def stage_sheet(*, sheet: Sheet, run_id: str, prefix: str, name: str,
                       previous: Previous | None = None, cores: int = 1,
                       threads: int | None = None) -> dict[str, Any]:
     """A filled sheet written as the run directory, checked against itself and staged -> the staged run.
@@ -101,7 +101,7 @@ async def stage_sheet(*, sheet: Sheet, run_tag: str, prefix: str, name: str,
     is held to the set that checkpoint was cut on, and the checkpoint and the records it appends to are staged with it."""
     from ..solver.staging import new_rundir, stage_run
 
-    rundir = new_rundir(run_tag, stem="geoclaw")
+    rundir = new_rundir(run_id, stem="geoclaw")
     written = await asyncio.to_thread(serialize, sheet, rundir)
     results = _results(sheet)
     if previous is not None:
@@ -111,7 +111,7 @@ async def stage_sheet(*, sheet: Sheet, run_tag: str, prefix: str, name: str,
         return check_staged_run(directory, sheet=sheet, written=written["written"])
 
     staged = await stage_run(
-        rundir, run_tag, module=sheet.module, steering="claw.data", results=results,
+        rundir, run_id, module=sheet.module, steering="claw.data", results=results,
         outputs=[*_OUTPUTS, *checkpoint_outputs(sheet.stated())],
         mesh_inputs=list(previous.inputs) if previous else [], prefix=prefix, sheet=sheet.state(), server_facts={"name": name},
         result_basename=results[0], check=check,
@@ -414,8 +414,8 @@ class GeoclawWorkflow(Workflow):
                         name=await read(env, domain), input_mode=env.input_mode,
                         fresh=bool(state.carried.get("restart_clean")))
         await keep_mesh(run["mesh"])
-        run_tag = new_ulid()
-        await publish_grid(art=run["mesh"]["artifact"], run_id=run_tag, name=str(getattr(await read(env, domain), "name", None) or "domain"))
+        run_id = new_ulid()
+        await publish_grid(art=run["mesh"]["artifact"], run_id=run_id, name=str(getattr(await read(env, domain), "name", None) or "domain"))
         for name in self.named_rows(run):
             await read(env, name)
         art = run["mesh"]["artifact"]
@@ -432,7 +432,7 @@ class GeoclawWorkflow(Workflow):
         async def write(sheet: Sheet) -> None:
             # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
             staged.clear()
-            staged.update(await stage_sheet(sheet=sheet, run_tag=run_tag, prefix=prefix, name=name, previous=previous,
+            staged.update(await stage_sheet(sheet=sheet, run_id=run_id, prefix=prefix, name=name, previous=previous,
                                             cores=int(run.get(_CORES.name) or 1),
                                             threads=int(run[_THREADS.name]) if run.get(_THREADS.name) is not None else None))
 
@@ -445,9 +445,9 @@ class GeoclawWorkflow(Workflow):
                         user=[key for key, verdict in env.inputs.items() if verdict.origin is Origin.USER])
         except BaseException:
             # A run that does not reach the box leaves no staged copy behind.
-            await asyncio.to_thread(discard_run, run_tag, prefix, stem=self.engine)
+            await asyncio.to_thread(discard_run, run_id, prefix, stem=self.engine)
             raise
-        await publish_rupture(sheet=run["sheet"], rundir=staged["rundir"], run_id=run_tag, name=name)
+        await publish_rupture(sheet=run["sheet"], rundir=staged["rundir"], run_id=run_id, name=name)
         solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=staged, mesh=run["mesh"], name=name,
                              moment=run.get(EVENT_TIME.name), frame=run.get(_FRAME.name) or _FRAME.default)
         await keep_mesh(run["mesh"], solved.get("run_id"))

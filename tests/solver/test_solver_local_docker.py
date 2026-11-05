@@ -29,6 +29,7 @@ from trid3nt_server.workflows.solver.solver import (
     set_emitter_binding,
     wait_for_completion,
 )
+from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import ExecutionHandle, RunResult
 
 #: The one registered local-docker solver, which is its engine's own name; the
@@ -301,6 +302,27 @@ def test_local_run_solver_stages_manifest_and_launches_docker(
         f"run --network none --rm --name {handle.run_id} -v {rundir}:/data "
         "-w /data fake/telemac:test"
     ), run_calls[0]
+
+
+def test_a_run_staged_under_an_id_launches_under_that_id(
+    reset_seams, local_env: Path, docker_shim: Path
+) -> None:
+    s3 = FakeS3Client()
+    storage.set_client(s3)
+    uri = _seed_manifest(s3)
+    staged = new_ulid()
+
+    handle = solver_mod.submit_solver(_SOLVER, uri, 1, staged)
+
+    assert handle.run_id == staged and (local_env / staged).is_dir()
+    _wait_for_completion_object(s3, staged)
+
+
+def test_the_model_facing_run_solver_takes_no_run_id() -> None:
+    import inspect
+
+    params = inspect.signature(run_solver).parameters
+    assert "run_id" not in params
 
 
 def test_local_manifest_gs_uri_field_with_gs_scheme_rejected(

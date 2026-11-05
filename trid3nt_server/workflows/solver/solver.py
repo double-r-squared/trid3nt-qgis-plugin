@@ -582,7 +582,7 @@ def launch_local_solver(
 
 
 def _run_solver_local_docker(
-    solver: str, model_setup_uri: str, cores: int
+    solver: str, model_setup_uri: str, cores: int, run_id: str | None = None
 ) -> ExecutionHandle:
     """``run_solver`` body on the local backend. Every solver is looked up in
     ``LOCAL_SOLVER_SPEC_REGISTRY``, and one with no entry RAISES rather than
@@ -596,7 +596,7 @@ def _run_solver_local_docker(
                 f"local-docker spec factory for solver {solver!r} raised "
                 f"{type(exc).__name__}: {exc}"
             ) from exc
-        return launch_local_solver(spec, model_setup_uri, cores=cores)
+        return launch_local_solver(spec, model_setup_uri, run_id=run_id, cores=cores)
     raise SolverDispatchError(
         f"solver {solver!r} has no LOCAL_SOLVER_SPEC_REGISTRY entry -- its "
         "workflow module must call register_local_solver_spec() (never a "
@@ -851,6 +851,12 @@ def run_solver(
     whose ``run_id`` is what a cancel terminates. An unregistered solver raises
     ``SolverNotRegisteredError``; a failed dispatch ``SolverDispatchError``.
     """
+    return submit_solver(solver, model_setup_uri, cores)
+
+
+def submit_solver(solver: str, model_setup_uri: str, cores: int,
+                  run_id: str | None = None) -> ExecutionHandle:
+    """``run_solver``'s body; ``run_id`` is the id the run was staged under, minted here when absent."""
     if not isinstance(solver, str) or not solver.strip():
         raise SolverNotRegisteredError(
             f"solver must be a non-empty string; got {solver!r}"
@@ -870,9 +876,8 @@ def run_solver(
         solver=solver,
         model_setup_uri=model_setup_uri,
         cores=cores,
+        run_id=run_id,
     )
-
-
 
 
 _WAIT_FOR_COMPLETION_METADATA = AtomicToolMetadata(
@@ -961,6 +966,7 @@ async def wait_for_completion(
 
 async def dispatch_and_wait(*, solver: str, manifest_uri: str, cores: int,
                             module: str, label: str, timeout_s: float,
+                            run_id: str | None = None,
                             grid_resolution_m: float | None = None,
                             active_cell_count: int | None = None
                             ) -> tuple[Any, str]:
@@ -976,8 +982,7 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, cores: int,
     )
 
     emitter = current_emitter()
-    handle = run_solver(solver=solver, model_setup_uri=manifest_uri,
-                        cores=cores)
+    handle = submit_solver(solver, manifest_uri, cores, run_id)
     run_id = handle.run_id
     logger.info("%s dispatching %s -> %s", solver, label, manifest_uri)
     sim_step_id = await mint_dispatch_and_sim_cards(

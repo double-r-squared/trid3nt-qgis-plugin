@@ -159,7 +159,8 @@ async def solve_case(*, run: dict[str, Any], cores: int) -> dict[str, Any]:
     run_result, batch_run_id = await dispatch_and_wait(
         solver=GEOCLAW_SOLVER_NAME, manifest_uri=run["manifest_uri"],
         cores=cores, module=str(run["case"]["module"]),
-        label=str(run["name"]), timeout_s=_WAIT_CEILING_S)
+        label=str(run["name"]), timeout_s=_WAIT_CEILING_S,
+        run_id=run["run_id"])
     if run_result is None or run_result.status != "complete":
         raise GeoclawError(
             f"the {run['name']} solve did not complete "

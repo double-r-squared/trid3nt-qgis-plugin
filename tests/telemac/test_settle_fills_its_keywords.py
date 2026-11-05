@@ -78,5 +78,5 @@ def test_a_required_slot_left_empty_refuses_by_name_before_writing(monkeypatch):
     monkeypatch.setattr(staging, "new_rundir", _written)
     sheet = fill(T2D, settled=_SETTLED, BOUNDARY_CONDITIONS_FILE="geo.cli")
     with pytest.raises(SheetIncomplete, match="GEOMETRY FILE"):
-        asyncio.run(stage(sheet, run_tag="TAG", mesh_inputs=(), outputs=(),
+        asyncio.run(stage(sheet, run_id="TAG", mesh_inputs=(), outputs=(),
                           results=("r2d.slf",), prefix="telemac", server_facts={}))

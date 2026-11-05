@@ -91,3 +91,26 @@ def test_progress_estimator_is_wall_clock_linear_clamped() -> None:
     # Determinism: negative elapsed (clock skew) clamps to 0.
     early = submitted - timedelta(seconds=10)
     assert _progress_percent(submitted, early) == 0
+
+
+@pytest.mark.parametrize("engine", ["geoclaw", "telemac", "modflow"])
+def test_every_engine_solves_under_the_id_its_run_was_staged_with(engine, monkeypatch):
+    import asyncio
+    import importlib
+    from types import SimpleNamespace
+
+    mod = importlib.import_module(f"trid3nt_server.workflows.{engine}.engine")
+    seen = {}
+
+    async def _dispatch(**kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(status="complete", started_at=None, run_id=kwargs["run_id"]), kwargs["run_id"]
+
+    monkeypatch.setattr(mod, "dispatch_and_wait", _dispatch)
+    monkeypatch.setattr(mod, "read_run_metrics", lambda run_id: {})
+    facts = {"name": "x", "duration_s": 1, "utm_epsg": 32616, "mesh_size_m": None, "nelem": None, "ncells": None}
+    run = {"run_id": "STAGED", "manifest_uri": "s3://b/m.json", "name": "x", "result_basename": "r",
+           "case": {"module": "m", "cores": 1, "server_facts": facts}}
+    out = asyncio.run(mod.solve_case(run=run, cores=1))
+
+    assert seen["run_id"] == "STAGED" and out["run_id"] == "STAGED"

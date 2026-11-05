@@ -217,7 +217,7 @@ def test_the_staged_case_is_the_one_section_the_worker_reads(tmp_path):
 
     captured = {}
 
-    async def fake_stage_run(rundir, run_tag, **kwargs):
+    async def fake_stage_run(rundir, run_id, **kwargs):
         captured.update(kwargs)
         return {"case": kwargs["case"], "manifest_uri": "s3://x"}
 
@@ -234,7 +234,7 @@ def test_the_staged_case_is_the_one_section_the_worker_reads(tmp_path):
     try:
         async def go():
             workflow.serialize = lambda sheet, rundir: {"written": []}
-            return await workflow.stage_sheet(sheet=sheet, run_tag="tagtagtag", prefix="geoclaw", name="x")
+            return await workflow.stage_sheet(sheet=sheet, run_id="tagtagtag", prefix="geoclaw", name="x")
         original_serialize = workflow.serialize
         try:
             staged = asyncio.run(go())

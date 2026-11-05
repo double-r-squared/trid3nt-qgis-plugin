@@ -170,7 +170,7 @@ async def solve_case(*, run: dict[str, Any], cores: int) -> dict[str, Any]:
         solver=MODFLOW_SOLVER_NAME, manifest_uri=run["manifest_uri"],
         cores=cores, module=str(run["case"]["module"]),
         label=str(facts["name"]), timeout_s=_WAIT_CEILING_S,
-        grid_resolution_m=facts.get("mesh_size_m"),
+        run_id=run["run_id"], grid_resolution_m=facts.get("mesh_size_m"),
         active_cell_count=facts.get("ncells"))
     if run_result is None or run_result.status != "complete":
         raise ModflowError(

@@ -37,7 +37,7 @@ def case_section(*, module: str, steering: str, results: list[str],
 
 # ``inputs`` rows are ``{gs_uri, dest}``, staged into the run directory before the container starts (the worker has no network).
 def stage_manifest(*, section: str, config: Mapping[str, Any],
-                   run_tag: str, outputs: list[str],
+                   run_id: str, outputs: list[str],
                    inputs: list[dict[str, str]] | None = None,
                    prefix: str | None = None,
                    extra: Mapping[str, Any] | None = None) -> str:
@@ -53,10 +53,10 @@ def stage_manifest(*, section: str, config: Mapping[str, Any],
             "TRID3NT_CACHE_BUCKET must be set to stage a run's manifest.")
     from trid3nt_server.store import objects as storage
 
-    manifest = {section: dict(config), "run_id": run_tag,
+    manifest = {section: dict(config), "run_id": run_id,
                 "inputs": list(inputs or []),
                 "outputs": list(outputs), **dict(extra or {})}
-    key = f"{prefix or section}/{run_tag}/manifest.json"
+    key = f"{prefix or section}/{run_id}/manifest.json"
     storage.client().put_object(
         Bucket=cache_bucket, Key=key,
         Body=json.dumps(manifest, indent=2).encode("utf-8"),
@@ -64,8 +64,8 @@ def stage_manifest(*, section: str, config: Mapping[str, Any],
     return f"s3://{cache_bucket}/{key}"
 
 
-def _run_directory(run_tag: str, *, stem: str) -> Path:
-    return Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"{stem}-{run_tag}"
+def _run_directory(run_id: str, *, stem: str) -> Path:
+    return Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"{stem}-{run_id}"
 
 
 def _cache_bucket() -> str:
@@ -78,13 +78,13 @@ def _cache_bucket() -> str:
     return bucket
 
 
-def _clear_prefix(run_tag: str, prefix: str) -> None:
+def _clear_prefix(run_id: str, prefix: str) -> None:
     from trid3nt_server.store import objects as storage
 
-    storage.delete_prefix(_cache_bucket(), f"{prefix}/{run_tag}/")
+    storage.delete_prefix(_cache_bucket(), f"{prefix}/{run_id}/")
 
 
-def _upload_authored(rundir: Path, run_tag: str, names: Sequence[str],
+def _upload_authored(rundir: Path, run_id: str, names: Sequence[str],
                      prefix: str) -> list[dict[str, str]]:
     from trid3nt_server.store import objects as storage
 
@@ -92,40 +92,40 @@ def _upload_authored(rundir: Path, run_tag: str, names: Sequence[str],
     s3 = storage.client()
     rows: list[dict[str, str]] = []
     for name in names:
-        key = f"{prefix}/{run_tag}/{name}"
+        key = f"{prefix}/{run_id}/{name}"
         s3.put_object(Bucket=bucket, Key=key, Body=(rundir / name).read_bytes())
         rows.append({"gs_uri": f"s3://{bucket}/{key}", "dest": name})
     return rows
 
 
-def _write_manifest(case: Mapping[str, Any], run_tag: str, *, outputs: list[str],
+def _write_manifest(case: Mapping[str, Any], run_id: str, *, outputs: list[str],
                     inputs: list[dict[str, str]], prefix: str) -> str:
     """Write the worker manifest for an authored case -> its ``s3://`` URI.
 
     Written under the ``case`` dispatch key.
     """
     return stage_manifest(
-        section="case", config=case, run_tag=run_tag, outputs=outputs,
+        section="case", config=case, run_id=run_id, outputs=outputs,
         inputs=inputs, prefix=prefix)
 
 
-def new_rundir(run_tag: str, *, stem: str) -> Path:
+def new_rundir(run_id: str, *, stem: str) -> Path:
     """The run's directory, emptied: a re-authoring replaces what the last one wrote."""
-    rundir = _run_directory(run_tag, stem=stem)
+    rundir = _run_directory(run_id, stem=stem)
     shutil.rmtree(rundir, ignore_errors=True)
     rundir.mkdir(parents=True)
     return rundir
 
 
-def discard_run(run_tag: str, prefix: str, *, stem: str) -> None:
+def discard_run(run_id: str, prefix: str, *, stem: str) -> None:
     """Remove a run's directory and its staged prefix; a run that does not proceed leaves neither."""
-    shutil.rmtree(_run_directory(run_tag, stem=stem), ignore_errors=True)
+    shutil.rmtree(_run_directory(run_id, stem=stem), ignore_errors=True)
     # With no cache bucket stated, staging refused and nothing was uploaded.
     if (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip():
-        _clear_prefix(run_tag, prefix)
+        _clear_prefix(run_id, prefix)
 
 
-async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
+async def stage_run(rundir: Path, run_id: str, *, module: str, steering: str,
                     results: list[str], outputs: list[str],
                     mesh_inputs: list[dict[str, str]], prefix: str,
                     sheet: Mapping[str, Any], server_facts: Mapping[str, Any],
@@ -146,9 +146,9 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
     authored = sorted(str(p.relative_to(rundir))
                       for p in rundir.rglob("*") if p.is_file())
     # A re-staging replaces the prefix whole: a file the last deck wrote and this one does not must not remain.
-    await asyncio.to_thread(_clear_prefix, run_tag, prefix)
+    await asyncio.to_thread(_clear_prefix, run_id, prefix)
     inputs = [*mesh_inputs,
-              *await asyncio.to_thread(_upload_authored, rundir, run_tag,
+              *await asyncio.to_thread(_upload_authored, rundir, run_id,
                                        authored, prefix)]
     case = dict(case) if case is not None else case_section(
         module=module, steering=steering, results=results,
@@ -160,9 +160,9 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
         written_by_the_engine=[*results, *outputs],
         duration_s=server_facts.get("duration_s"), cores=cores)
     manifest_uri = await asyncio.to_thread(
-        _write_manifest, case, run_tag, outputs=outputs, inputs=inputs,
+        _write_manifest, case, run_id, outputs=outputs, inputs=inputs,
         prefix=prefix)
-    return {"run_tag": run_tag, "rundir": str(rundir), "sheet": dict(sheet),
+    return {"run_id": run_id, "rundir": str(rundir), "sheet": dict(sheet),
             "case": case, "manifest_uri": manifest_uri, "authored": authored,
             "outputs": outputs, "inputs": inputs,
             "result_basename": result_basename}

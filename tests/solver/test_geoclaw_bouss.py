@@ -167,7 +167,7 @@ def test_the_staged_case_names_the_module_and_carries_cores_only_past_one(tmp_pa
 
     captured = []
 
-    async def fake_stage_run(rundir, run_tag, **kwargs):
+    async def fake_stage_run(rundir, run_id, **kwargs):
         captured.append(kwargs["case"])
         return {"case": kwargs["case"], "manifest_uri": "s3://x"}
 
@@ -176,7 +176,7 @@ def test_the_staged_case_names_the_module_and_carries_cores_only_past_one(tmp_pa
     staging.stage_run, workflow.serialize = fake_stage_run, lambda sheet, rundir: {"written": []}
     try:
         for cores, threads in ((1, None), (3, 2)):
-            asyncio.run(workflow.stage_sheet(sheet=sheet, run_tag="tagtagtag", prefix="geoclaw", name="x", cores=cores,
+            asyncio.run(workflow.stage_sheet(sheet=sheet, run_id="tagtagtag", prefix="geoclaw", name="x", cores=cores,
                                              threads=threads))
     finally:
         staging.stage_run, workflow.serialize = original, original_serialize

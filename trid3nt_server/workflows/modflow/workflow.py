@@ -173,7 +173,7 @@ def answering(sheet: Sheet) -> str:
     return str(coupling[0]["module"]) if coupling else sheet.module
 
 
-async def stage_sheet(*, sheet: Sheet, run_tag: str, mesh: Mapping[str, Any],
+async def stage_sheet(*, sheet: Sheet, run_id: str, mesh: Mapping[str, Any],
                            prefix: str, server_facts: Mapping[str, Any]
                            ) -> dict[str, Any]:
     """A filled sheet written as the simulation directory, validated by mf6 and staged with the directory checked -> the staged run.
@@ -184,7 +184,7 @@ async def stage_sheet(*, sheet: Sheet, run_tag: str, mesh: Mapping[str, Any],
     from .authoring.staged_check import check_staged_run
     from ..solver.staging import new_rundir, stage_run
 
-    rundir = new_rundir(run_tag, stem="modflow")
+    rundir = new_rundir(run_id, stem="modflow")
     disv = (await modflow_mesh_files(sheet=sheet, mesh=mesh))["disv"]
     await asyncio.to_thread(serialize, sheet, rundir, mesh)
     if disv is not None:
@@ -195,7 +195,7 @@ async def stage_sheet(*, sheet: Sheet, run_tag: str, mesh: Mapping[str, Any],
     listings = _listings(sheet)
     module = answering(sheet)
     return await stage_run(
-        rundir, run_tag, module=module, steering=MFSIM_FILE,
+        rundir, run_id, module=module, steering=MFSIM_FILE,
         results=results, outputs=[*results, *listings, _SIM_LISTING, _METRICS],
         mesh_inputs=[{"gs_uri": disv, "dest": DISV_FILE}] if disv is not None else [], prefix=prefix,
         sheet=sheet.state(), server_facts=server_facts,
@@ -441,14 +441,14 @@ class ModflowWorkflow(Workflow):
         declared = {row.name for row in self.inputs if not row.is_row}
         staged: dict[str, Any] = {}
         # One tag for the run: every card edit re-stages into the same directory and prefix.
-        run_tag = new_ulid()
+        run_id = new_ulid()
         prefix = self.engine
 
         async def write(sheet: Sheet) -> None:
             # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
             staged.clear()
             staged.update(await stage_sheet(
-                sheet=sheet, run_tag=run_tag, mesh=run["mesh"], prefix=prefix,
+                sheet=sheet, run_id=run_id, mesh=run["mesh"], prefix=prefix,
                 server_facts={"name": name, "utm_epsg": int(art.utm_epsg),
                               "mesh_size_m": run["mesh"].get("min_edge_m")}))
 
@@ -465,7 +465,7 @@ class ModflowWorkflow(Workflow):
                               if verdict.origin is Origin.USER])
         except BaseException:
             # A run that does not reach the box leaves no staged copy behind.
-            await asyncio.to_thread(discard_run, run_tag, prefix, stem=self.engine)
+            await asyncio.to_thread(discard_run, run_id, prefix, stem=self.engine)
             raise
         solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=staged,
                              mesh=run["mesh"], name=name,
