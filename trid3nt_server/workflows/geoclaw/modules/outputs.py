@@ -382,7 +382,7 @@ def read_outline(primitive: Primitive, solved: Solved) -> Track:
     from rasterio.transform import from_bounds
 
     _flat(primitive)
-    solved.output(primitive.variable, "outline")
+    _key, row = solved.output(primitive.variable, "outline")
     depth = read_max_over_time(replace(primitive, kind="max_over_time", variable="MAX_OVERLAND_DEPTH"), solved)
     wet = np.isfinite(depth.values[0]) & (depth.values[0] > solved.dry_tolerance)
     if not wet.any():
@@ -396,7 +396,7 @@ def read_outline(primitive: Primitive, solved: Solved) -> Track:
     edge = shapely.geometry.box(west, south, east, north)
     lines = shapely.union_all([shapely.boundary(g) for g in shapes]).intersection(edge.buffer(-min(dx, dy) / 4))
     drawn = shapely.geometry.mapping(lines)
-    return Track(features={"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {
+    return Track(name=row.name, features={"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {
         "dry_tolerance_m": solved.dry_tolerance}, "geometry": drawn}]},
         measures={"wet_cells": int(wet.sum())})
 
@@ -410,7 +410,7 @@ def read_peak(primitive: Primitive, solved: Solved) -> Track:
     import numpy as np
 
     _flat(primitive)
-    key, _row = solved.output(primitive.variable, "peak")
+    key, row = solved.output(primitive.variable, "peak")
     sea = solved.stated("GEO_SEA_LEVEL")
     sea = float(solved.body.slot("GEO_SEA_LEVEL").engine_default if sea is None else sea)
     with solved.staged() as stage:
@@ -426,7 +426,7 @@ def read_peak(primitive: Primitive, solved: Solved) -> Track:
     top = float(surface[iy, ix])
     lon, lat = float(x[ix]), float(y[iy])
     properties = {"surface_m": top, "bed_m": float(bed[iy, ix]), "above_initial_sea_m": top - sea, "initial_sea_m": sea}
-    return Track(features={"type": "FeatureCollection", "features": [{
+    return Track(name=row.name, features={"type": "FeatureCollection", "features": [{
         "type": "Feature", "properties": properties, "geometry": {"type": "Point", "coordinates": [lon, lat]}}]},
         measures=properties)
 

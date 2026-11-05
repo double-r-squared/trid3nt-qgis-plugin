@@ -356,6 +356,7 @@ def test_the_maximum_runup_is_the_highest_surface_on_a_wet_cell_with_a_bed_above
     iy, ix = np.unravel_index(np.argmax(np.where(reached, h + bed, -np.inf)), h.shape)
     read = _read(_solved(GEO_SEA_LEVEL=sea), peak("MAX_RUNUP"))
     (feature,) = read.features["features"]
+    assert read.name == "maximum runup"
     assert feature["geometry"]["coordinates"] == [float(grid.x[ix]), float(grid.y[iy])]
     assert feature["properties"]["surface_m"] == pytest.approx(float(h[iy, ix] + bed[iy, ix]))
     assert feature["properties"]["bed_m"] == pytest.approx(float(bed[iy, ix]))
@@ -376,6 +377,7 @@ def test_the_inundation_line_is_the_edge_of_the_overland_depth_and_never_the_gri
     depth = _read(solved, max_over_time("MAX_OVERLAND_DEPTH"))
     read = _read(solved, outline("INUNDATION_LINE"))
     (feature,) = read.features["features"]
+    assert read.name == "inundation limit"
     west, south, east, north = depth.bounds
     line = shapely.geometry.shape(feature["geometry"])
     assert not line.is_empty and read.measures["wet_cells"] == int(np.isfinite(depth.values[0]).sum())

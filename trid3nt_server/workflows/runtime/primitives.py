@@ -142,9 +142,10 @@ class Spectrum(Read):
 
 @dataclass(frozen=True, kw_only=True)
 class Track(Read):
-    """Positions at written instants, as a GeoJSON FeatureCollection in lon/lat."""
+    """Positions at written instants, as a GeoJSON FeatureCollection in lon/lat; ``name`` captions a module-table row."""
 
     features: Mapping[str, Any]
+    name: str = ""
 
 
 @dataclass(frozen=True, kw_only=True)

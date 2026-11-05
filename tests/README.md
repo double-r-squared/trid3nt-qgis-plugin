@@ -49,7 +49,7 @@ Six slices by subsystem, each its own foreground invocation, from the repo root:
     make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      2728
     make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1159
     make test-model-surface   # tests/adapters tests/tools                                                                   613
-    make test-packages        # tests/contracts tests/plugin                                                                  760
+    make test-packages        # tests/contracts tests/plugin                                                                  762
 
 The source-text guards - history markers, dead references, the package maps,
 the template pages, banner comments, import walls, wiring pins, retired names,
