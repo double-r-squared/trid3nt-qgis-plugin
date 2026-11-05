@@ -4,7 +4,10 @@ A pair of two geodetic frames is answered from PROJ's grids where they cover the
 frames, Great Lakes frames and a point the grids do not cover go to VDatum, which couples each vertical frame to
 the horizontal frame and the geoid model it is served under and answers a mismatched pairing with a number that
 reads plausible and is not the offset, so the pairing is PINNED rather than searched. The height sent is zero, so
-the height that comes back is the offset; the service's regional grid is chosen here from the point."""
+the height that comes back is the offset; the service's regional grid is chosen here from the point. A
+geodetic-by-tidal pair VDatum refuses falls back to the station tie the resolve phase resolved onto
+``params["tie"]`` - the grids' step to NAVD88 plus the CO-OPS station's published height - and a frame asked
+on both sides is one zero, answering 0.0 with no call."""
 
 from __future__ import annotations
 
@@ -18,6 +21,7 @@ from trid3nt_contracts.source_spec import SourceSpec
 from ... import _proj_grids
 from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
 from ..._router.hooks import RequestPlan, register_hook
+from ..._router.hooks.station_tie import search_note
 
 logger = logging.getLogger(__name__)
 
@@ -153,10 +157,12 @@ def _answered_locally(spec: SourceSpec, params: dict[str, Any]):
 @register_hook("vdatum.build_request")
 def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]:
     """The one conversion request: a zero height on the source frame at the point; none where PROJ's grids answer."""
-    if _answered_locally(spec, params) is not None:
-        return []
     source = _frame(spec, params, "from_frame")
     target = _frame(spec, params, "to_frame")
+    if source == target:
+        return []
+    if _answered_locally(spec, params) is not None:
+        return []
     lon, lat = (float(v) for v in params["point"])
     region = _region(spec, lon, lat)
     s_h, s_geoid = _SERVED_AS[source]
@@ -178,16 +184,28 @@ def record(spec: SourceSpec, params: dict[str, Any],
     """The offset the conversion states, or the typed refusal it amounts to.
 
     VDatum answers a rejected request with HTTP 200 and an error envelope, and an
-    uncovered point with its own sentinel height, so both are read here."""
+    uncovered point with its own sentinel height, so both are read here. A
+    geodetic-by-tidal pair it refuses falls to the station tie resolved onto
+    ``params["tie"]``, composing the grids' step to NAVD88 with the station's
+    published heights; a refusal with no tie to fall to names the stations the
+    search checked."""
     sc = spec.error_code_prefix
+    source = _frame(spec, params, "from_frame")
+    target = _frame(spec, params, "to_frame")
+    lon, lat = (float(v) for v in params["point"])
+    if source == target:
+        return {
+            "lon": lon, "lat": lat, "region": "identity",
+            "from_frame": source, "to_frame": target,
+            "offset_m": 0.0, "uncertainty_m": None,
+            "source": "the same frame on both sides: one zero, nothing to convert",
+        }
     local = _answered_locally(spec, params)
     if local is not None:
-        lon, lat = (float(v) for v in params["point"])
         offset, grids = local
         return {
             "lon": lon, "lat": lat, "region": "proj-grids",
-            "from_frame": _frame(spec, params, "from_frame"),
-            "to_frame": _frame(spec, params, "to_frame"),
+            "from_frame": source, "to_frame": target,
             "offset_m": round(offset, 4), "uncertainty_m": None,
             "source": f"PROJ grids ({', '.join(grids)})",
         }
@@ -198,16 +216,17 @@ def record(spec: SourceSpec, params: dict[str, Any],
     if not isinstance(answer, dict):
         raise router_upstream_error(
             sc, f"NOAA VDatum's answer is not a record: {type(answer).__name__}")
-    source = _frame(spec, params, "from_frame")
-    target = _frame(spec, params, "to_frame")
-    lon, lat = (float(v) for v in params["point"])
-    region = _region(spec, lon, lat)
     if "errorCode" in answer:
+        composed = _from_tie(spec, params, source, target, lon, lat)
+        if composed is not None:
+            return composed
+        region = _region(spec, lon, lat)
+        note = search_note(params, _tidal_of(source, target))
         raise router_input_error(
             sc,
             f"NOAA VDatum refused {source} -> {target} in region {region!r}, "
             f"the grid that stands over ({lon}, {lat}): {answer.get('message')!r}. "
-            f"{_served_note(lon, lat)}.",
+            f"{_served_note(lon, lat)}{_joined(note)}.",
             spec.input_error_suffix,
         )
     try:
@@ -216,13 +235,19 @@ def record(spec: SourceSpec, params: dict[str, Any],
         raise router_upstream_error(
             sc, f"NOAA VDatum's answer carries no converted height: {answer!r}")
     if offset == _NO_COVERAGE:
+        composed = _from_tie(spec, params, source, target, lon, lat)
+        if composed is not None:
+            return composed
+        region = _region(spec, lon, lat)
+        note = search_note(params, _tidal_of(source, target))
         raise router_empty_error(
             sc,
             f"NOAA VDatum's {region} grids do not reach ({lon}, {lat}), so the "
             f"offset between {source} and {target} there is not published; "
-            f"{_served_note(lon, lat)}.",
+            f"{_served_note(lon, lat)}{_joined(note)}.",
             spec.empty_error_suffix,
         )
+    region = _region(spec, lon, lat)
     uncertainty = _metres(answer.get("uncertainty"))
     logger.info("vdatum: %s -> %s at (%.5f, %.5f) in %s = %+.3f m",
                 source, target, lon, lat, region, offset)
@@ -232,6 +257,85 @@ def record(spec: SourceSpec, params: dict[str, Any],
         "offset_m": round(offset, 4),
         "uncertainty_m": uncertainty,
         "source": "NOAA VDatum",
+    }
+
+
+def _tidal_of(source: str, target: str) -> str:
+    """The tidal frame of a pair, or ``""`` where the pair carries none to search a tie for."""
+    if source in _TIDAL:
+        return source
+    return target if target in _TIDAL else ""
+
+
+def _joined(note: str) -> str:
+    """The station-search clause beside what the grids convert, or ``""`` where no search ran."""
+    return f"; {note}" if note else ""
+
+
+def _seam_to_navd88(spec: SourceSpec, frame: str, lon: float, lat: float) -> tuple[float, list[str]]:
+    """The local grids' step from ``frame`` to NAVD88 at the point, and the grid files read; NAVD88 is its own seam.
+
+    The station tie alone is not the conversion: where the grids cannot step to
+    NAVD88 the composition refuses by naming that gap rather than answering with
+    the station's half of it."""
+    if frame == "NAVD88":
+        return 0.0, []
+    try:
+        found = _local(frame, "NAVD88", lon, lat)
+    except _proj_grids.DatumGridUnavailable as exc:
+        raise router_upstream_error(spec.error_code_prefix, str(exc)) from exc
+    if found is None:
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"a NOAA CO-OPS station tie reaches ({lon}, {lat}), but the local "
+            f"PROJ grids do not convert {frame} -> NAVD88 there, so the step the "
+            f"tie needs is not published; {_served_note(lon, lat)}.",
+            spec.empty_error_suffix)
+    return found
+
+
+def _from_tie(spec: SourceSpec, params: dict[str, Any], source: str, target: str,
+              lon: float, lat: float) -> dict[str, Any] | None:
+    """The station-tie offset for a pair VDatum refused, or ``None`` where no tie reached this ask.
+
+    Composes the grids' step to NAVD88 with the station's published NAVD88 and
+    tidal heights: geodetic -> tidal is seam + (NAVD88 - tidal), tidal ->
+    geodetic is its inverse. A tie missing the pair asked for answers nothing."""
+    tie = params.get("tie")
+    if not isinstance(tie, dict):
+        return None
+    if source in _GEODETIC and target in _TIDAL:
+        geodetic, tidal = source, target
+    elif target in _GEODETIC and source in _TIDAL:
+        geodetic, tidal = target, source
+    else:
+        return None
+    datums = tie.get("datums") or {}
+    try:
+        navd88 = float(datums["NAVD88"])
+        tidal_height = float(datums[tidal])
+    except (KeyError, TypeError, ValueError):
+        return None
+    seam, grids = _seam_to_navd88(spec, geodetic, lon, lat)
+    offset = seam + (navd88 - tidal_height) if source == geodetic \
+        else (tidal_height - navd88) - seam
+    station_id = str(tie.get("station_id") or "")
+    station_name = str(tie.get("station_name") or "")
+    distance = tie.get("distance_km")
+    if grids:
+        provenance = (f"PROJ grids ({', '.join(grids)}) + NOAA CO-OPS station "
+                      f"{station_id} ({station_name}, {distance} km)")
+    else:
+        provenance = f"NOAA CO-OPS station {station_id} ({station_name}, {distance} km)"
+    logger.info("station_tie: %s -> %s at (%.5f, %.5f) = %+.4f m via %s",
+                source, target, lon, lat, offset, provenance)
+    return {
+        "lon": lon, "lat": lat, "region": "station-tie",
+        "from_frame": source, "to_frame": target,
+        "offset_m": round(offset, 4), "uncertainty_m": None,
+        "source": provenance,
+        "tie_station_id": station_id,
+        "tie_distance_km": distance,
     }
 
 

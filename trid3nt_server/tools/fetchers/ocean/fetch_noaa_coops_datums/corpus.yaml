@@ -1,0 +1,9 @@
+fetch_noaa_coops_datums:
+- what is MHW above NAVD88 at the nearest tide station
+- station datum tie between MHW and NAVD88 near this point
+- NOAA CO-OPS station datums for a point on the coast
+- how far above NAVD88 is mean high water at the nearest gauge
+- give me the tide station datum heights near this lon lat
+- find a station publishing both NAVD88 and MHW close to here
+- the water level datum offset published on the CO-OPS station metadata
+- mean high water minus NAVD88 at the nearest station

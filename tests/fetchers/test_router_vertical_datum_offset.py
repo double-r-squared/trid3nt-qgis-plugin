@@ -7,7 +7,11 @@ the declared frame set matching the pinned table, the sentinel an uncovered poin
 comes back as, VDatum's own error envelope arriving under HTTP 200, an
 unreportable uncertainty, a frame the table does not serve, and the region the
 point itself chooses - which the service will not look up and answers wrongly
-under the wrong grid."""
+under the wrong grid. Beside the service: a frame asked on both sides is one
+zero and answers without a call, and a geodetic-by-tidal pair it refuses falls
+to the station tie - the grids' step to NAVD88 composed with the CO-OPS station
+that measures the pair - with a refusal that never reached a tie left exactly
+as it always read."""
 
 from __future__ import annotations
 
@@ -20,6 +24,7 @@ from trid3nt_server.tools.fetchers._router.errors import (
     RouterInputError,
     RouterUpstreamError,
 )
+from trid3nt_server.tools.fetchers._router.hooks import station_tie
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 from trid3nt_server.tools.fetchers.ocean.fetch_vertical_datum_offset import hooks as vd
 
@@ -28,6 +33,15 @@ _GAUGE = [-122.6691667, 45.5175]
 #: point in the west-coast grids and one in the contiguous grids.
 _LA_JOLLA = [-117.25714, 32.86689]
 _DUCK = [-75.7467, 36.1833]
+#: The Chignik seed, under VDatum's Alaska region where its tidal grids leave
+#: the geodetic-by-tidal pair as their sentinel.
+_SEED = [-160.505, 55.333]
+#: King Cove's published heights, the station the tie search resolves at the
+#: seed: 119.5 km out, MHW standing 1.704 m above NAVD88 there.
+_TIE = {"station_id": "9459881", "station_name": "King Cove",
+        "lon": -162.32611, "lat": 55.05989, "distance_km": 119.5,
+        "datums": {"NAVD88": 1.385, "MHW": 3.089, "MSL": 2.342},
+        "epoch": "1983-2001", "units": "meters"}
 
 
 @pytest.fixture(scope="module")
@@ -291,3 +305,163 @@ def test_the_record_executor_runs_the_hook_when_no_request_is_planned(spec, proj
     proj_grids("capecod")
     body = record_executor.execute(spec, _params(point=[-70.62, 41.59]))
     assert json.loads(body)["offset_m"] == pytest.approx(-0.2605, abs=5e-4)
+
+
+def test_a_frame_asked_on_both_sides_plans_nothing_and_records_one_zero(spec):
+    # The two names are one zero: nothing is measured, no service is reached,
+    # and the answer is the number a reader would otherwise have to know.
+    assert vd.build_request(spec, _params(from_frame="mhw", to_frame="mhw")) == []
+    found = vd.record(spec, _params(from_frame="mhw", to_frame="mhw"), [])
+    assert found["offset_m"] == 0.0
+    assert found["region"] == "identity"
+    assert found["uncertainty_m"] is None
+
+
+def test_a_geodetic_frame_asked_on_both_sides_is_the_same_identity(spec):
+    # The grids would answer a geodetic pair, but a frame equal to itself is
+    # never a pair: identity stands ahead of every other path.
+    assert vd.build_request(spec, _params(from_frame="navd88",
+                                          to_frame="navd88")) == []
+    found = vd.record(spec, _params(from_frame="navd88", to_frame="navd88"), [])
+    assert found["offset_m"] == 0.0 and found["region"] == "identity"
+
+
+def test_the_offset_row_searches_for_a_tie_only_after_its_guards(spec, monkeypatch):
+    def boom(*args, **kwargs):
+        raise AssertionError("the station catalog was read for a pair that "
+                             "cannot carry a tie")
+
+    monkeypatch.setattr(station_tie, "get_bytes", boom)
+    assert station_tie.tie_for_offset(
+        spec, _params(from_frame="mhw", to_frame="mhw")) == {}
+    assert station_tie.tie_for_offset(
+        spec, _params(from_frame="navd88", to_frame="egm2008")) == {}
+
+
+def test_the_station_tie_composes_the_offset_vdatum_refused(spec, proj_grids):
+    # The live Chignik shape: VDatum refuses the pair by name, the grids step
+    # EGM2008 to NAVD88, and King Cove's published heights carry the rest.
+    proj_grids("alaska")
+    vd._local.cache_clear()
+    body = [json.dumps({"errorCode": 412,
+                        "message": "GEOID18 only cover Contiguous, "
+                                   "Chesapeak_delaware, West Coast and PRVI"}).encode()]
+    asked = _params(point=_SEED, from_frame="egm2008", to_frame="mhw", tie=_TIE)
+    found = vd.record(spec, asked, body)
+    assert found["offset_m"] == -0.9456
+    assert found["region"] == "station-tie"
+    assert found["tie_station_id"] == "9459881"
+    assert found["tie_distance_km"] == 119.5
+    assert found["uncertainty_m"] is None
+    assert "PROJ grids" in found["source"] and "King Cove" in found["source"]
+
+
+def test_the_reverse_tie_offset_is_the_exact_inverse(spec, proj_grids):
+    proj_grids("alaska")
+    vd._local.cache_clear()
+    body = [json.dumps({"errorCode": 412, "message": "Uncaught error"}).encode()]
+    asked = _params(point=_SEED, from_frame="mhw", to_frame="egm2008", tie=_TIE)
+    found = vd.record(spec, asked, body)
+    assert found["offset_m"] == 0.9456
+    assert found["region"] == "station-tie"
+
+
+def test_navd88_to_the_tidal_zero_is_the_stations_height_alone(spec, proj_grids):
+    # The grids' step from NAVD88 to NAVD88 is identity, so the station is the
+    # whole provenance rather than half of it.
+    proj_grids("alaska")
+    vd._local.cache_clear()
+    body = [json.dumps({"errorCode": 412, "message": "Uncaught error"}).encode()]
+    asked = _params(point=_SEED, from_frame="navd88", to_frame="mhw", tie=_TIE)
+    found = vd.record(spec, asked, body)
+    assert found["offset_m"] == -1.704
+    assert "PROJ grids" not in found["source"]
+    assert "King Cove" in found["source"]
+
+
+def test_vdatum_still_wins_over_a_tie_when_it_answers(spec, proj_grids):
+    # The tie is what a refusal falls back to, never a competing answer: the
+    # service's own number is the offset whenever it gives one.
+    proj_grids("alaska")
+    vd._local.cache_clear()
+    asked = _params(point=_SEED, from_frame="egm2008", to_frame="mhw", tie=_TIE)
+    found = vd.record(spec, asked, _answered(t_z="0.42"))
+    assert found["offset_m"] == 0.42
+    assert found["source"] == "NOAA VDatum"
+    assert found["region"] == "ak"
+    assert "tie_station_id" not in found
+
+
+def test_a_refusal_reached_without_a_tie_search_names_no_station(spec, proj_grids):
+    # A direct call with no resolve phase carries neither tie nor candidates,
+    # and its refusal must read exactly as it always has.
+    proj_grids("alaska")
+    vd._local.cache_clear()
+    body = [json.dumps({"errorCode": 412, "message": "Uncaught error"}).encode()]
+    asked = _params(point=_SEED, from_frame="egm2008", to_frame="mhw")
+    with pytest.raises(RouterInputError) as caught:
+        vd.record(spec, asked, body)
+    message = str(caught.value)
+    assert "CO-OPS" not in message and "9459881" not in message
+    assert "MSL standing" not in message
+
+
+def test_a_refusal_after_the_search_names_the_stations_it_checked(spec, proj_grids):
+    proj_grids("alaska")
+    vd._local.cache_clear()
+    body = [json.dumps({"errorCode": 412, "message": "Uncaught error"}).encode()]
+    asked = _params(point=_SEED, from_frame="egm2008", to_frame="mhw",
+                    tie_candidates=["9459450", "9463502"])
+    with pytest.raises(RouterInputError) as caught:
+        vd.record(spec, asked, body)
+    message = str(caught.value)
+    assert "9459450" in message and "9463502" in message
+    assert "MHW and NAVD88" in message
+    # The MSL approximation is named where the pair was searched for and not
+    # found, and never taken by this fetch.
+    assert "MSL standing in for the geoid" in message
+    assert "this fetch does not take it" in message
+
+
+def test_a_sentinel_refusal_after_the_search_names_the_stations_too(spec, proj_grids):
+    proj_grids("alaska")
+    vd._local.cache_clear()
+    asked = _params(point=_SEED, from_frame="egm2008", to_frame="mhw",
+                    tie_candidates=[])
+    with pytest.raises(RouterEmptyError) as caught:
+        vd.record(spec, asked, _answered(t_z="-999999"))
+    message = str(caught.value)
+    # No station stands in reach, so there is no station MSL to name either.
+    assert "within 500 km" in message
+    assert "MSL standing" not in message
+
+
+def test_a_tie_the_grids_cannot_step_with_refuses_naming_the_gap(spec, monkeypatch):
+    # The station alone is not the conversion: where the grids carry no step
+    # to NAVD88 the composition refuses rather than answering half a number.
+    def no_seam(*args):
+        return None
+
+    monkeypatch.setattr(vd, "_local", no_seam)
+    body = [json.dumps({"errorCode": 412, "message": "Uncaught error"}).encode()]
+    asked = _params(point=_SEED, from_frame="egm2008", to_frame="mhw", tie=_TIE)
+    with pytest.raises(RouterEmptyError) as caught:
+        vd.record(spec, asked, body)
+    assert caught.value.error_code == "VDATUM_NO_COVERAGE"
+    assert "do not convert EGM2008 -> NAVD88" in str(caught.value)
+
+
+def test_a_grid_outage_during_the_tie_seam_is_a_retryable_upstream_error(spec, monkeypatch):
+    from trid3nt_server.tools.fetchers import _proj_grids
+
+    def down(*args):
+        raise _proj_grids.DatumGridUnavailable("cdn down")
+
+    monkeypatch.setattr(vd, "_local", down)
+    body = [json.dumps({"errorCode": 412, "message": "Uncaught error"}).encode()]
+    asked = _params(point=_SEED, from_frame="egm2008", to_frame="mhw", tie=_TIE)
+    with pytest.raises(RouterUpstreamError) as caught:
+        vd.record(spec, asked, body)
+    assert caught.value.error_code == "VDATUM_UPSTREAM_ERROR"
+    assert caught.value.retryable
+

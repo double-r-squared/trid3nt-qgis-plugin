@@ -178,6 +178,8 @@ _RECALL_FIXTURE = [
     ("strike dip rake and centroid depth of a real earthquake by event id", "fetch_moment_tensor"),
     ("where did the 2025 Kamchatka earthquake start, its catalogue epicentre", "fetch_earthquake_epicentre"),
     ("hypocentre depth and origin time of a real earthquake by ComCat event id", "fetch_earthquake_epicentre"),
+    ("what is mean high water above NAVD88 at the nearest tide station", "fetch_noaa_coops_datums"),
+    ("find a CO-OPS station publishing both NAVD88 and MHW near this point", "fetch_noaa_coops_datums"),
     ("what are the depth, strike and dip of the Cascadia subduction interface", "fetch_slab_geometry"),
     ("how deep is the subduction slab under this point for a hypothetical megathrust earthquake", "fetch_slab_geometry"),
     ("compute the slope from the DEM on the map", "run_qgis_algorithm"),

@@ -2,7 +2,9 @@
 # converted on PROJ's local NGS/NGA grids where they cover the point (no call); every
 # other pair is NOAA VDatum's one REST call, sent with a source height of ZERO so the
 # height that comes back IS the offset: the number a bed and a water level are put on
-# one axis with.
+# one axis with. A geodetic-by-tidal pair VDatum refuses falls back to the station tie:
+# the local grids' step to NAVD88 plus the nearest CO-OPS station's published height.
+# A frame asked on both sides is one zero and answers 0.0 with no call.
 schema_version: v1
 
 name: fetch_vertical_datum_offset
@@ -16,6 +18,14 @@ supports_global_query: false
 endpoints:
   convert:
     url: "https://vdatum.noaa.gov/vdatumweb/api/convert"
+  # The station-tie fallback: the same CO-OPS metadata the datums row reads,
+  # reached here when VDatum refuses a geodetic-by-tidal pair.
+  stations_catalog:
+    url: "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json"
+    query: {type: waterlevels, units: metric}
+  station_datums:
+    url_template: "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/{station}/datums.json"
+    query: {units: metric}
 auth:
   mode: none
   user_agent: trid3nt_default
@@ -38,6 +48,7 @@ params:
 hooks:
   build_request: vdatum.build_request
   record: vdatum.record
+  pre_resolve: station_tie.tie_for_offset
 
 normalize:
   crs: "EPSG:4326"
@@ -63,7 +74,10 @@ payload_estimate:
 caveats:
   - "model-callable, not matched: the offset between two zeros reconciles a matched source and is never one a slot matches, so it carries no coverage row"
   - "the offset is the height a ZERO on the source frame reads at on the target frame: add it to a source-frame elevation to read that elevation on the target frame"
+  - "a frame asked on both sides answers offset_m 0.0 with no call: the two names are one zero, so nothing is measured and no service is reached"
   - "a pair of NGVD29, NAVD88 and EGM2008 is answered from PROJ's grids (GEOID18 over CONUS, GEOID12B over Alaska, VERTCON 2 over CONUS, EGM2008 at 2.5 arcminutes joined to NAD83(2011) by the WGS 84 (G1674) Helmert step), downloaded once from the PROJ CDN and read from disk after; the record's source names the grid files, its region reads proj-grids and its uncertainty_m is null because the grids state none. A point the grids do not cover (Hawaii, the territories, NGVD29 in Alaska) falls to VDatum, and every tidal or Great Lakes frame is VDatum's"
+  - "where VDatum refuses a geodetic-by-tidal pair - its Alaska tidal sentinel, a pairing it will not serve - the station tie composes the answer: the local grids' step to NAVD88 plus the height of NAVD88 below the tidal zero at the nearest CO-OPS station within 500 km publishing BOTH frames. The station id, name and distance ride the record's source, tie_station_id and tie_distance_km; the search runs before the cache key and is best-effort, so a catalog it cannot read leaves VDatum's refusal alone"
+  - "a refusal after that search names the stations checked, or that none stand within 500 km; where stations stood but none carried the pair it also names the approximation it will not take - MSL standing in for the geoid with a station's MHW above MSL - because a run never takes that silently. A tie whose grids cannot step to NAVD88 at the point refuses naming that too, because the station alone is not the conversion"
   - "a total refusal at a point - no region stands over it, VDatum's error envelope, its sentinel - names the frame pairs the local grids convert THERE, so a run can state a frame whose offset is measured; nothing chooses one for it, and a grid fetch that failed is named as unchecked rather than as nothing served"
   - "on Cape Cod VERTCON 2 sits 0.06 to 0.11 m from VDatum's NGVD29 answer (VDatum states 0.05 to 0.07) and EGM2008 to NAVD88 sits 0.07 to 0.09 m above VDatum's, inside the 0.165 m VDatum states for NAVD88 to EGM2008, and VDatum's own two directions differ by 0.025 to 0.046 m"
   - "VDatum serves the US and its territories only, and each region is its own grid: the region that stands over the point is chosen for you and named on the record, and a point no region stands over refuses by name"
@@ -81,6 +95,11 @@ docstring: |-
       number IS the offset between the two frames there: ADD it to an elevation
       on ``from_frame`` to read the same elevation on ``to_frame``. VDatum's
       frame pairing and geoid model are its own coupling and are sent for you.
+      A pair VDatum refuses - a tidal frame over Alaska, a pairing it will not
+      serve there - falls back to the nearest CO-OPS station within 500 km
+      publishing BOTH NAVD88 and the tidal frame: the grids' step to NAVD88
+      plus the station's published height, the station named on the record. A
+      frame asked on both sides is one zero and answers 0.0 with no call.
 
   When to use:
       - A gauge publishes its datum on NGVD29 and the bed is painted on NAVD88,
@@ -114,8 +133,10 @@ docstring: |-
   Returns:
       a JSON-compatible dict with ``offset_m`` (metres, positive up),
       ``uncertainty_m`` (VDatum's own, or null where it reports none),
-      ``from_frame``, ``to_frame``, ``lon``, ``lat``, ``region`` (the grid that
-      answered) and ``source``.
+      ``from_frame``, ``to_frame``, ``lon``, ``lat``, ``region`` (the grid,
+      VDatum region, ``station-tie`` or ``identity`` that answered) and
+      ``source``. A station-tie answer carries ``tie_station_id`` and
+      ``tie_distance_km`` beside its provenance.
 
   Cross-tool dependencies:
       - Composes WITH: ``fetch_ehydro_surveys``,
@@ -130,7 +151,11 @@ docstring: |-
       - ``VDATUM_INPUT_INVALID``: a frame outside the set above, a malformed
         point, a point no VDatum region stands over, or a request VDatum
         rejects as a frame pairing it does not serve there; each of the last
-        three names the frame pairs the local grids convert at that point.
+        three names the frame pairs the local grids convert at that point, and
+        a refusal after a station search also names the stations checked (or
+        that none stand within 500 km) plus - where stations stood and none
+        carried the pair - the MSL-for-geoid approximation it refuses to take
+        silently.
       - ``VDATUM_NO_COVERAGE``: the region's grids do not reach this point,
         named alongside the local grids' served pairs there.
       - ``VDATUM_UPSTREAM_ERROR``: VDatum failed or answered with something that

@@ -377,6 +377,23 @@ pairs the local grids convert AT that point, so a run can state a
 frame whose offset is measured; nothing states it for the run, and a
 template names no fallback frame order.
 
+Three answers, in this order. The same frame asked on both sides is one
+zero and answers offset 0.0 with no call. A pair of NGVD29, NAVD88 and
+EGM2008 is answered from the local PROJ grids where they cover the
+point. Every other pair goes to NOAA VDatum - and a geodetic-by-tidal
+pair VDatum refuses (its Alaska tidal grids, a pairing it will not
+serve) falls to the STATION TIE: the nearest CO-OPS water-level station
+within 500 km publishing BOTH NAVD88 and the tidal frame, composed with
+the grids' step to NAVD88, the station's id, name and distance riding
+the record's provenance. The tie is resolved before the cache key, so a
+refused ask and a tied one never share an entry; where the search finds
+no pair, the refusal names the stations checked - or that none stand in
+reach - and the approximation it will not take (MSL standing in for the
+geoid with the station's tidal height above MSL), because a run never
+takes that silently and the fetch does not take it at all. The tie
+itself is `fetch_noaa_coops_datums`, a record row over the same CO-OPS
+metadata, which refuses rather than answer with half the pair.
+
 ## Degrading between sources
 
 A row declares no fallback of its own. The MATCH ranks every source that
@@ -653,7 +670,7 @@ fgmax and fgout grids on the finest cells that cover the `domain`, on the same n
 
 The bed is the fetched finest surface at the `domain` (the BED row) over a deep rung over the whole grid (ETOPO 2022, or
 `deep_bed`), two topofiles, nothing merged; the deep rung's zero reaches the run's frame by the offset the workflow asks at the seed (`fetch_vertical_datum_offset`:
-PROJ's local geoid grids for NAVD88, NGVD 29 and EGM2008 over CONUS and Alaska, VDatum elsewhere and for every tidal frame). `GEO_SEA_LEVEL` is the offset of the template's tidal datum (`SEA_LEVEL_DATUM`, MHW, as in the tutorial) on that
+PROJ's local geoid grids for NAVD88, NGVD 29 and EGM2008 over CONUS and Alaska, VDatum elsewhere and for every tidal frame - a geodetic-by-tidal pair VDatum refuses falls to the nearest CO-OPS station's published tie). `GEO_SEA_LEVEL` is the offset of the template's tidal datum (`SEA_LEVEL_DATUM`, MHW, as in the tutorial) on that
 frame, measured by the same row at the seed and never moved, unless the run states it. The rupture is the `SiftFault`
 composite: NOAA PMEL SIFT unit sources (`fetch_sift_unit_sources`) slipped by the tutorial's ASCE_SIFT_Region2 slips, each a
 Fault subfault, the dtopo grid being the one Clawpack's `create_dtopo_xy` lays (10 arcsec, 1 degree margin); no slip anywhere is

@@ -1,0 +1,120 @@
+# The nearest NOAA CO-OPS water-level station that publishes BOTH MHW and NAVD88,
+# with how far MHW sits above NAVD88 there: the measured station tie a tidal zero
+# and a geoid frame are put on one axis with, where VDatum refuses the pair.
+schema_version: v1
+
+name: fetch_noaa_coops_datums
+source_class: noaa_coops_datums   # cache prefix
+error_prefix: COOPS_DATUMS        # error token, distinct from the cache prefix
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_TIE
+shape: record
+supports_global_query: false
+
+endpoints:
+  stations_catalog:
+    url: "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json"
+    query: {type: waterlevels, units: metric}
+  station_datums:
+    url_template: "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/{station}/datums.json"
+    query: {units: metric}
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  point: {type: point, required: true}
+
+hooks:
+  pre_resolve: station_tie.tie_at
+  record: noaa_coops_datums.record
+
+normalize:
+  crs: "EPSG:4326"
+  units: m
+
+output:
+  layer_type: record
+  ext: json
+  emit_bbox: false
+
+cache:
+  # A station's published datums are republished on the order of years, and the
+  # tie at a fixed point does not move between them.
+  ttl_class: semi-static-7d
+
+# One small JSON object per call, whatever the point.
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.001
+  floor_mb: 0.001
+  ceil_mb: 0.01
+
+caveats:
+  - "model-callable, not matched: a station tie reconciles two zeros and is never one a slot matches, so it carries no coverage row"
+  - "the station's own datums are heights above its STND (Station Datum); NAVD88 and MHW are both read off that one page, and mhw_above_navd88_m is MHW minus NAVD88 there"
+  - "the nearest station within 500 km of the ask point that publishes BOTH MHW and NAVD88 answers; a nearer station publishing only one is passed over and the stations checked are named in the refusal, and at most the 10 nearest in-reach stations are read"
+  - "distance_km is the great-circle distance from the ask point to the station (mean Earth radius 6371.0088 km); the station's own lon and lat ride the record"
+  - "CO-OPS states no uncertainty for a published datum height, so the record carries none; the station's datum epoch rides it instead"
+  - "a NO_TIE refusal names the stations checked and the approximation it will not answer with - MSL standing in for the geoid with a station's MHW above MSL - because that stand-in is a user-gated choice a fetch never makes silently"
+  - "the station catalog is read whole on every ask before the cache is consulted, so a tie that changed under a cached answer is the one a reader gets"
+
+docstring: |-
+  Nearest NOAA CO-OPS tide station publishing BOTH MHW and NAVD88, with the tie between them.
+
+  What it does:
+      Reads CO-OPS's water-level station catalog, keeps the stations within
+      500 km of ``point``, and reads their datum pages nearest-first until one
+      publishes both MHW and NAVD88. That station's heights above its own
+      Station Datum come back as a record, with ``mhw_above_navd88_m`` (MHW
+      minus NAVD88, the tie), the station's id, name, position and its
+      great-circle distance from the ask point. A station that publishes only
+      one of the two is passed over, never substituted.
+
+  When to use:
+      - Put a tidal zero (MHW) on NAVD88 where NOAA VDatum refuses the pair -
+        its Alaska tidal grids leave the conversion unserved - so a run can
+        state a frame whose offset is measured rather than guessed.
+      - "how far above NAVD88 is mean high water at the nearest gauge",
+        "the station tie between MHW and NAVD88 near this point".
+      - Provenance for a datum composition: which station measured the tie and
+        how far away it stands.
+
+  When NOT to use:
+      - DO NOT use to CONVERT a height between frames - that is
+        ``fetch_vertical_datum_offset``, which composes this tie with the
+        local geoid grids into the offset the conversion needs.
+      - DO NOT use for a water-level TIME SERIES - that is
+        ``fetch_noaa_coops_tides``.
+      - DO NOT use for the Great Lakes datums (IGLD85, LWD) or outside the US
+        CO-OPS network; no station there publishes this pair.
+
+  Parameters:
+      point: ``[lon, lat]`` in EPSG:4326, the place the tie is asked about.
+          The nearest carrying station within 500 km answers; its distance
+          from this point rides the record.
+
+  Returns:
+      a JSON-compatible dict with ``station_id``, ``station_name``, ``lon``
+      and ``lat`` (the station's own position), ``distance_km``, ``datums``
+      (every height the station publishes, metres above its STND),
+      ``mhw_above_navd88_m`` (the tie), ``epoch``, ``units`` and ``source``.
+
+  Cross-tool dependencies:
+      - Composes WITH: ``fetch_vertical_datum_offset`` (the offset row reads
+        the same tie as its VDatum fallback).
+      - Upstream data sources: NOAA CO-OPS metadata API
+        (https://api.tidesandcurrents.noaa.gov/mdapi/).
+
+  Cache: ``ttl_class="semi-static-7d"``.
+
+  Errors:
+      - ``COOPS_DATUMS_INPUT_INVALID``: no CO-OPS water-level station stands
+        within 500 km of the point, so no tie is published for it.
+      - ``COOPS_DATUMS_NO_TIE``: stations stand in reach but none publishes
+        MHW and NAVD88 together; the message names the stations checked and
+        the MSL-for-geoid approximation this row refuses to answer with.
+      - ``COOPS_DATUMS_UPSTREAM_ERROR``: the catalog or a station's datums
+        page failed to read (retryable).
+
+  Tier-1 free. No API key.
