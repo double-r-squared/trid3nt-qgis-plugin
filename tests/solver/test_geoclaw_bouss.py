@@ -154,6 +154,8 @@ def test_a_run_names_its_module_and_its_process_count_and_a_wrong_one_refuses_by
                       ({"threads": 2}, "GEOCLAW_THREADS_UNUSED"),
                       ({"module": "geoclaw_bouss", "threads": 0}, "GEOCLAW_THREADS_OUT_OF_RANGE"),
                       ({"module": "geoclaw_bouss", "threads": (os.cpu_count() or 1) + 1}, "GEOCLAW_THREADS_OUT_OF_RANGE"),
+                      ({"module": "geoclaw_bouss", "cores": 2, "threads": (os.cpu_count() or 1) // 2 + 1},
+                       "GEOCLAW_THREADS_OUT_OF_RANGE"),
                       ({"module": "geoclaw_bouss", "cores": 0}, "GEOCLAW_CORES_OUT_OF_RANGE"),
                       ({"module": "geoclaw_bouss", "cores": (os.cpu_count() or 1) + 1}, "GEOCLAW_CORES_OUT_OF_RANGE")]:
         with pytest.raises(GeoclawError) as caught:
@@ -183,3 +185,11 @@ def test_the_staged_case_names_the_module_and_carries_cores_only_past_one(tmp_pa
 
     assert captured == [{"module": "geoclaw_bouss", "results": ["gauge00007.txt"]},
                         {"module": "geoclaw_bouss", "cores": 3, "threads": 2, "results": ["gauge00007.txt"]}]
+
+
+def test_an_unstated_thread_count_stages_one_per_boussinesq_process_and_none_for_shallow_water():
+    from trid3nt_server.workflows.geoclaw.workflow import _threads
+
+    assert _threads({"cores": 3}, "geoclaw_bouss") == 1
+    assert _threads({"cores": 3, "threads": 2}, "geoclaw_bouss") == 2
+    assert _threads({}, "geoclaw") is None

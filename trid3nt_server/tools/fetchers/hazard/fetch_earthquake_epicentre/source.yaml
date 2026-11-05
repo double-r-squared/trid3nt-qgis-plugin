@@ -1,0 +1,88 @@
+# USGS ComCat catalogue location of one earthquake: the event's preferred origin (epicentre and
+# hypocentral depth) as the event record states it, beside the products it carries.
+schema_version: v1
+
+name: fetch_earthquake_epicentre
+source_class: earthquake_epicentre
+error_prefix: EARTHQUAKE_EPICENTRE
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_ORIGIN
+shape: record
+supports_global_query: false
+
+endpoints:
+  event:
+    url: "https://earthquake.usgs.gov/fdsnws/event/1/query"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  event_id:
+    type: str
+    required: true
+
+hooks:
+  build_request: earthquake_epicentre.build_request
+  record: earthquake_epicentre.record
+
+normalize:
+  crs: "EPSG:4326"
+  units: km
+
+output:
+  layer_type: record
+  ext: json
+  emit_bbox: false
+
+cache:
+  ttl_class: static-30d
+
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.001
+  floor_mb: 0.001
+  ceil_mb: 0.01
+
+caveats:
+  - "model-callable, not matched: an epicentre is one event's catalogue location and never a measurement a slot matches, so it carries no coverage row"
+  - "the location is the event's PREFERRED origin as ComCat publishes it (the record's own point); other contributing networks' origins are not returned"
+  - "the epicentre is where the rupture started, never the centroid of slip or of a moment tensor"
+
+docstring: |-
+  USGS catalogue epicentre of one real earthquake by ComCat event id -> its preferred origin: longitude, latitude, depth, time and magnitude.
+
+  What it does:
+      Reads the event record from ComCat and returns the location the catalogue prefers for it:
+      the epicentre (longitude, latitude), the hypocentral depth in km, the origin time and the
+      magnitude with its type. This is where the rupture STARTED - not the centre of slip, and
+      not a moment tensor's centroid.
+
+  When to use:
+      - The epicentre or hypocentre of a real earthquake ("where did the 2025 Kamchatka earthquake
+        start", "hypocentre depth of the Tohoku earthquake").
+      - Marking a real event's start beside a rupture the run models.
+
+  When NOT to use:
+      - Many events in an area or a window: use fetch_usgs_earthquakes.
+      - The slip distribution: use fetch_finite_fault. The mechanism or centroid: use fetch_moment_tensor.
+
+  Parameters:
+      event_id: the ComCat event id, such as ``us6000qw60``.
+
+  Returns:
+      a JSON-compatible dict with ``event_id``, ``longitude``, ``latitude``, ``depth_km``,
+      ``time`` (ISO 8601 UTC), ``magnitude``, ``magnitude_type``, ``title`` and ``status``.
+
+  Cross-tool dependencies:
+      - Composes WITH: the GeoClaw templates' ``catalogue_epicentre``.
+      - Upstream data source: USGS ComCat (https://earthquake.usgs.gov/).
+
+  Cache: ``ttl_class="static-30d"``.
+
+  Errors:
+      - ``EARTHQUAKE_EPICENTRE_INPUT_INVALID``: no event id.
+      - ``EARTHQUAKE_EPICENTRE_NO_ORIGIN``: the event record states no usable location.
+      - ``EARTHQUAKE_EPICENTRE_UPSTREAM_ERROR``: ComCat could not be read.
+
+  Tier-1 free. No API key.

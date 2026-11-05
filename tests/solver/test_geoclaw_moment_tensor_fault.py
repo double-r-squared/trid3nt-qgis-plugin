@@ -147,3 +147,9 @@ def test_the_thingbaijam_interface_relation_pins_its_coefficients_and_refuses_ou
     for mw in (5.3, 9.3):
         with pytest.raises(GeoclawError, match=r"outside the thingbaijam_2017_interface length regression's fitted range 5.4 to 9.2"):
             rupture_dimensions("thingbaijam_2017_interface", mw)
+
+
+def test_a_moment_tensor_rupture_states_its_centroid_as_its_one_point():
+    expanded, files = GEO.COMPOSITES["MomentTensorFault"].apply(_stated(), _RUN)
+
+    assert files[expanded["DTOPO_DTOPOFILES"][0][1]]["dtopo"]["point"] == {"kind": "centroid", "subfault": 1}

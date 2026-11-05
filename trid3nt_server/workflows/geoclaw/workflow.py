@@ -68,9 +68,50 @@ _CORES = Input(name="cores", type=int, desc=(
     "The MPI process count the Boussinesq executable runs under (PETSc's linear solves use them); a whole number from 1 "
     "to this box's cores, unstated 1. Shallow-water runs take none.")).stated()
 _THREADS = Input(name="threads", type=int, desc=(
-    "The OpenMP thread count of each process of the Boussinesq executable (OMP_NUM_THREADS); a whole number from 1 to this "
-    "box's cores, unstated the executable's own default (every core per process, so several processes oversubscribe the box). "
+    "The OpenMP thread count of each process of the Boussinesq executable (OMP_NUM_THREADS); a whole number of at least 1 "
+    "whose product with cores is at most this box's cores, unstated 1, so the run holds the cores it declares. "
     "Shallow-water runs take none.")).stated()
+
+
+#: The keyword a run states its own refinement under, in the engine's record shape; it replaces the recipe's flagregion ops.
+_FLAGREGIONS = "FLAGREGION_FLAGREGIONS"
+
+
+def _stated_regions(keywords: dict[str, Any], steering: type) -> list[dict[str, Any]] | None:
+    """The run's FLAGREGION_FLAGREGIONS taken off its keywords -> the flagregion ops that replace the recipe's; None when unstated.
+    Each record is Clawpack's (name, minlevel, maxlevel, t1, t2, spatial_region_type, spatial_region): type 1 a box
+    [x1, x2, y1, y2], type 2 a ruled rectangle by its fields; the grid checks each as it checks the recipe's own."""
+    raw = next((raw for raw in keywords if identify_on([steering], raw) == (steering, _FLAGREGIONS)), None)
+    if raw is None:
+        return None
+    records = keywords.pop(raw)
+    if not isinstance(records, (list, tuple)):
+        raise GeoclawError(f"{_FLAGREGIONS} is a list of flagregion records, not {records!r}.", error_code="GEOCLAW_FLAGREGION_RECORD")
+    ops = []
+    for number, record in enumerate(records, 1):
+        kind = record[5] if isinstance(record, (list, tuple)) and len(record) == 7 else None
+        spatial = record[6] if kind is not None else None
+        box = kind == 1 and isinstance(spatial, (list, tuple)) and len(spatial) == 4
+        if not (box or (kind == 2 and isinstance(spatial, Mapping))):
+            raise GeoclawError(f"{_FLAGREGIONS} record {number} is not (name, minlevel, maxlevel, t1, t2, spatial_region_type, "
+                               "spatial_region) with type 1 and a box [x1, x2, y1, y2] or type 2 and a ruled rectangle's fields: "
+                               f"{record!r}.", error_code="GEOCLAW_FLAGREGION_RECORD")
+        where = {"extent": [spatial[0], spatial[2], spatial[1], spatial[3]]} if box else {"ruled": dict(spatial)}
+        ops.append({"op": "flagregion", "kwargs": dict(zip(("name", "minlevel", "maxlevel", "t1", "t2"), record[:5]), **where)})
+    return ops
+
+
+def _threads(run: Mapping[str, Any], module: str) -> int | None:
+    """The OpenMP thread count each Boussinesq process is staged with: the run's own, else one; none for shallow water."""
+    if module != "geoclaw_bouss":
+        return None
+    return int(run[_THREADS.name]) if run.get(_THREADS.name) is not None else 1
+
+#: Whether the real event's catalogue epicentre is drawn beside the rupture: 'fetch' reads it, unstated or 'none' draws none.
+_CATALOGUE = Input(name="catalogue_epicentre", type=str, desc=(
+    "'fetch' marks the real event's USGS catalogue epicentre (its preferred origin, read by fetch_earthquake_epicentre for the "
+    "ComCat event the run's FiniteFault or MomentTensorFault names) beside the rupture; unstated or 'none', no catalogue "
+    "point is drawn.")).stated()
 
 
 def _floor(steering: type, keywords: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
@@ -214,8 +255,17 @@ async def publish_grid(*, art: Any, run_id: str, name: str) -> None:
         style={"kind": "reference", "geometry": "polygon"})])
 
 
+def _point_item(feature: Mapping[str, Any], stem: str, caption: str) -> Any:
+    """One labelled point of the rupture as a context deliverable."""
+    from trid3nt_server.render.formats import Deliverable, Vector
+
+    return Deliverable(product=Vector(features={"type": "FeatureCollection", "features": [dict(feature)]}, stem=stem),
+                       caption=caption, role="context", style={"kind": "reference", "geometry": "point"})
+
+
 def _rupture_items(shown: Mapping[str, Any], run_id: str, name: str) -> list[Any]:
-    """Each dtopo's subfault outlines and final uplift as deliverables, the uplift on a diverging ramp centred on 0."""
+    """Each dtopo's subfault outlines, the one point its source states (labelled by kind) and its final uplift as deliverables,
+    the uplift on a diverging ramp centred on 0."""
     from dataclasses import replace
     from types import SimpleNamespace
 
@@ -231,6 +281,9 @@ def _rupture_items(shown: Mapping[str, Any], run_id: str, name: str) -> list[Any
         items.append(Deliverable(product=Vector(features=drawn["features"], stem=f"rupture-subfaults{number}"),
                                  caption=f"rupture subfaults{suffix}", role="context",
                                  style={"kind": "reference", "geometry": "polygon"}))
+        if drawn.get("point"):
+            kind = drawn["point"]["properties"]["kind"]
+            items.append(_point_item(drawn["point"], f"rupture-{kind}{number}", f"rupture {kind}{suffix}"))
         read = Rasters(name="vertical seafloor displacement", units="m", values=np.stack([drawn["uplift"]]),
                        bounds=drawn["bounds"])
         items.append(replace(deliver(Primitive("max_over_time", style=style), read, SimpleNamespace(run_id=run_id, run={}),
@@ -238,8 +291,9 @@ def _rupture_items(shown: Mapping[str, Any], run_id: str, name: str) -> list[Any
     return items
 
 
-async def publish_rupture(*, sheet: Sheet, rundir: Any, run_id: str, name: str) -> None:
-    """The rupture the run solves: its subfault outlines and its final uplift, surfaced as context beside the products."""
+async def publish_rupture(*, sheet: Sheet, rundir: Any, run_id: str, name: str, catalogue: Mapping[str, Any] | None = None) -> None:
+    """The rupture the run solves: its subfault outlines, the point its source states and its final uplift, surfaced as context
+    beside the products, with the real event's ``catalogue`` epicentre when the run fetched it."""
     from pathlib import Path
 
     from trid3nt_server.render.formats import publish
@@ -247,8 +301,10 @@ async def publish_rupture(*, sheet: Sheet, rundir: Any, run_id: str, name: str) 
     from .authoring.dtopo import rupture_on_map
 
     shown = await asyncio.to_thread(rupture_on_map, sheet, Path(rundir))
-    if shown:
-        items = await asyncio.to_thread(_rupture_items, shown, run_id, name)
+    items = await asyncio.to_thread(_rupture_items, shown, run_id, name) if shown else []
+    if catalogue is not None:
+        items.append(_point_item(catalogue, "catalogue-epicentre", "catalogue epicentre"))
+    if items:
         await publish(run_id=run_id, engine="geoclaw", name=name, items=items)
 
 
@@ -286,7 +342,7 @@ class GeoclawWorkflow(Workflow):
         from trid3nt_server.tools.mesh import recipe as asks
 
         named = set(asks.input_names(self.template.MESH))
-        return (tuple(row for row in asks.INPUTS if row.name in named) + (EVENT_TIME, _MODULE, _CORES, _THREADS) + super().seated())
+        return (tuple(row for row in asks.INPUTS if row.name in named) + (EVENT_TIME, _MODULE, _CORES, _THREADS, _CATALOGUE) + super().seated())
 
     def input(self, name: str) -> Any:
         """The template's own inputs first, then the keyword a name spells on the module."""
@@ -305,7 +361,8 @@ class GeoclawWorkflow(Workflow):
 
         return {"deep_bed_fetch": self.template.DEEP_BED, "deep_bed_offset": OFFSET_FETCH,
                 "sea_level_offset": OFFSET_FETCH, "sift_unit_sources_fetch": "fetch_sift_unit_sources",
-                "finite_fault_fetch": "fetch_finite_fault", "storm_tracks_fetch": "fetch_storm_tracks"}
+                "finite_fault_fetch": "fetch_finite_fault", "storm_tracks_fetch": "fetch_storm_tracks",
+                "catalogue_epicentre_fetch": "fetch_earthquake_epicentre"}
 
     def check(self) -> None:
         """Refuse at import what this template cannot run on: one domain, one bed, a mesh ask."""
@@ -356,9 +413,10 @@ class GeoclawWorkflow(Workflow):
             if module != "geoclaw_bouss":
                 raise GeoclawError(f"{_THREADS.name} is stated for the module {module}, whose executable is not compiled for "
                                    "OpenMP: only geoclaw_bouss takes threads.", error_code="GEOCLAW_THREADS_UNUSED")
-            if not 1 <= int(threads) <= (os.cpu_count() or 1):
-                raise GeoclawError(f"{_THREADS.name} {threads!r} is outside 1 to this box's {os.cpu_count()} cores.",
-                                   error_code="GEOCLAW_THREADS_OUT_OF_RANGE")
+            processes = int(stated or 1)
+            if int(threads) < 1 or int(threads) * processes > (os.cpu_count() or 1):
+                raise GeoclawError(f"{_THREADS.name} {threads!r} on {processes} process(es) is outside 1 thread to this box's "
+                                   f"{os.cpu_count()} cores in all.", error_code="GEOCLAW_THREADS_OUT_OF_RANGE")
         return steering
 
     def _restarted(self, keywords: dict[str, Any], steering: type) -> Previous | None:
@@ -400,6 +458,7 @@ class GeoclawWorkflow(Workflow):
         steering = self._steered(run)
         keywords = self._rise_shaped(dict(state.keywords), steering)
         previous = await asyncio.to_thread(self._restarted, keywords, steering)
+        regions = _stated_regions(keywords, steering)
         own, _ = _floor(steering, keywords)
         emitter = current_emitter()
         begin_substeps(emitter, 4 + ("mesh" not in run))
@@ -410,7 +469,8 @@ class GeoclawWorkflow(Workflow):
             return run[label]
 
         if "mesh" not in run:
-            await stage("mesh", build_declared_mesh, mesh=await self._recipe(env, self.template.MESH, set()),
+            asked = await self._recipe(env, self.template.MESH, set())
+            await stage("mesh", build_declared_mesh, mesh={**asked, "ops": asked["ops"] if regions is None else regions},
                         name=await read(env, domain), input_mode=env.input_mode,
                         fresh=bool(state.carried.get("restart_clean")))
         await keep_mesh(run["mesh"])
@@ -422,6 +482,7 @@ class GeoclawWorkflow(Workflow):
         name = str(getattr(await read(env, domain), "name", None) or "domain")
         async with substep(emitter, "data"):
             await self._data(env, own, steering)
+            catalogue = await self._catalogue(env, own, steering)
         ends = [rupture_end(composite, own[composite] if composite in own else steering.ASSERTED.get(composite), run)
                 for composite in ("Fault", "SiftFault", "FiniteFault", "SlabFault", "MomentTensorFault")]
         grid = grid_keywords(art, set(own) | set(steering.ASSERTED), max((end for end in ends if end is not None), default=None))
@@ -434,7 +495,7 @@ class GeoclawWorkflow(Workflow):
             staged.clear()
             staged.update(await stage_sheet(sheet=sheet, run_id=run_id, prefix=prefix, name=name, previous=previous,
                                             cores=int(run.get(_CORES.name) or 1),
-                                            threads=int(run[_THREADS.name]) if run.get(_THREADS.name) is not None else None))
+                                            threads=_threads(run, steering.MODULE)))
 
         try:
             await stage("sheet", fill_sheet, steering=steering,
@@ -447,7 +508,7 @@ class GeoclawWorkflow(Workflow):
             # A run that does not reach the box leaves no staged copy behind.
             await asyncio.to_thread(discard_run, run_id, prefix, stem=self.engine)
             raise
-        await publish_rupture(sheet=run["sheet"], rundir=staged["rundir"], run_id=run_id, name=name)
+        await publish_rupture(sheet=run["sheet"], rundir=staged["rundir"], run_id=run_id, name=name, catalogue=catalogue)
         solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=staged, mesh=run["mesh"], name=name,
                              moment=run.get(EVENT_TIME.name), frame=run.get(_FRAME.name) or _FRAME.default)
         await keep_mesh(run["mesh"], solved.get("run_id"))
@@ -518,6 +579,25 @@ class GeoclawWorkflow(Workflow):
             run[finite["finite_fault"]] = await _fetch(env, "finite_fault_fetch", "fetch_finite_fault",
                                                        event_id=finite["event_id"])
 
+    async def _catalogue(self, env: Any, own: Mapping[str, Any], steering: type) -> dict[str, Any] | None:
+        """The real event's catalogue epicentre as a point feature when the run asks for it with 'fetch'; None for 'none' or unstated.
+        The event is the one the run's FiniteFault or MomentTensorFault names; a run that names none refuses rather than guess one."""
+        choice = env.run.get(_CATALOGUE.name) or "none"
+        if choice not in ("none", "fetch"):
+            raise GeoclawError(f"{_CATALOGUE.name} {choice!r} is neither 'none' nor 'fetch'.", error_code="GEOCLAW_EPICENTRE_CHOICE")
+        if choice == "none":
+            return None
+        event = _event_of(env.run, own, steering)
+        if event is None:
+            raise GeoclawError(f"{_CATALOGUE.name} 'fetch' reads the epicentre of a real event, and the run's rupture names none: "
+                               "state a FiniteFault or MomentTensorFault of a ComCat event, or catalogue_epicentre 'none'.",
+                               error_code="GEOCLAW_EPICENTRE_NO_EVENT")
+        record = await _fetch(env, "catalogue_epicentre_fetch", "fetch_earthquake_epicentre", event_id=event)
+        return {"type": "Feature", "properties": {
+                    "kind": "catalogue epicentre", "event_id": record["event_id"], "depth_m": record["depth_km"] * 1000.0,
+                    "time": record["time"], "magnitude": record["magnitude"], "magnitude_type": record["magnitude_type"]},
+                "geometry": {"type": "Point", "coordinates": [record["longitude"], record["latitude"]]}}
+
     async def _storm(self, env: Any, statement: Mapping[str, Any]) -> None:
         """The points of the storm a Storm statement names (its name and season, over the level-1 grid), read into the run.
 
@@ -542,6 +622,20 @@ class GeoclawWorkflow(Workflow):
             run[EVENT_TIME.name] = moment
             journal_note(f"reference time is the storm's last landfall fix, {moment} (IBTrACS USA_RECORD L): the run states no "
                          "event_time its seconds are counted from.")
+
+
+def _event_of(run: Mapping[str, Any], own: Mapping[str, Any], steering: type) -> str | None:
+    """The ComCat event the run's rupture names: a FiniteFault's event_id, else the event of the record it or a MomentTensorFault reads."""
+    for composite, field in (("FiniteFault", "finite_fault"), ("MomentTensorFault", "moment_tensor")):
+        value = own[composite] if composite in own else steering.ASSERTED.get(composite)
+        if not isinstance(value, Mapping):
+            continue
+        if value.get("event_id"):
+            return str(value["event_id"])
+        record = run.get(value[field]) if isinstance(value.get(field), str) else value.get(field)
+        if isinstance(record, Mapping) and record.get("event_id"):
+            return str(record["event_id"])
+    return None
 
 
 async def _fetch(env: Any, row: str, runner: str, **kwargs: Any) -> Any:

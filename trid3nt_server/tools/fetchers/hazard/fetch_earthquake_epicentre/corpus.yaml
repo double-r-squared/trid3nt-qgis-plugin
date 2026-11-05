@@ -1,0 +1,6 @@
+fetch_earthquake_epicentre:
+- USGS catalogue epicentre of the 2025 Kamchatka earthquake by event id
+- where did a real earthquake start its hypocentre latitude longitude and depth
+- epicentre and origin time of the Tohoku 2011 earthquake from ComCat
+- the catalogue location of an earthquake to mark where its rupture began
+- hypocentre depth and preferred origin of a USGS event

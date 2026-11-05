@@ -328,3 +328,34 @@ def test_a_flagregion_states_exactly_one_of_extent_and_ruled(tmp_path):
         _accepted(tmp_path, mesh_op("flagregion", **_COAST, ruled=_DIAGONAL))
 
     assert caught.value.error_code == "MESH_FLAGREGION_EXTENT"
+
+
+def test_a_run_states_its_own_flagregions_in_the_engines_record_shape_and_they_replace_the_recipes(tmp_path):
+    from trid3nt_server.workflows.geoclaw.workflow import _stated_regions
+
+    ruled = {"ixy": 1, "s": [-80.0, -70.0], "lower": [-40.0, -35.0], "upper": [-30.0, -25.0], "method": 1,
+             "filename": "RuledRectangle_coast.data"}
+    stated = [["coast", 2, 3, 0.0, 10000.0, 1, [-77.0, -67.0, -40.0, -30.0]],
+              ["ruled", 1, 2, 0.0, 5.0, 2, ruled]]
+    keywords = {"FLAGREGION_FLAGREGIONS": stated, "CLAW_TFINAL": 60.0}
+    ops = _stated_regions(keywords, GEO)
+
+    assert keywords == {"CLAW_TFINAL": 60.0}
+    assert _stated_regions({"CLAW_TFINAL": 60.0}, GEO) is None
+    replaced = grid_keywords(_accepted(tmp_path, *(mesh_op("flagregion", **op["kwargs"]) for op in ops)))
+    assert replaced["FLAGREGION_FLAGREGIONS"][0] == stated[0]
+    assert replaced["FLAGREGION_FLAGREGIONS"][1][:6] == stated[1][:6]
+    assert replaced["FLAGREGION_FLAGREGIONS"][1][6]["s"] == ruled["s"]
+
+
+@pytest.mark.parametrize("records", [
+    "coast",
+    [["coast", 2, 3, 0.0, 10.0, 1, [-77.0, -67.0, -40.0]]],
+    [["coast", 2, 3, 0.0, 10.0, 3, [-77.0, -67.0, -40.0, -30.0]]],
+    [["coast", 2, 3, 0.0, 10.0, 2, "RuledRectangle_coast.data"]]])
+def test_a_flagregion_record_the_engine_cannot_hold_refuses_by_name(records):
+    from trid3nt_server.workflows.geoclaw.workflow import _stated_regions
+
+    with pytest.raises(GeoclawError) as caught:
+        _stated_regions({"FLAGREGION_FLAGREGIONS": records}, GEO)
+    assert caught.value.error_code == "GEOCLAW_FLAGREGION_RECORD"

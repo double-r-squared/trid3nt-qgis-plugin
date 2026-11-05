@@ -18,7 +18,7 @@ from ..errors import GeoclawError
 
 logger = logging.getLogger("trid3nt_server.workflows.geoclaw.authoring.dtopo")
 
-__all__ = ["DTOPO", "KINEMATIC_FIELDS", "PLACEMENTS", "SUBFAULT_FIELDS", "dtopo_axes", "finite_fault_subfaults", "moment_tensor_subfaults", "rupture_on_map", "sift_subfaults", "write_dtopofiles"]
+__all__ = ["DTOPO", "KINEMATIC_FIELDS", "PLACEMENTS", "SUBFAULT_FIELDS", "dtopo_axes", "epicentre", "finite_fault_subfaults", "moment_tensor_subfaults", "rupture_on_map", "sift_subfaults", "write_dtopofiles"]
 
 #: The key a composite's file entry carries its fault under.
 DTOPO = "dtopo"
@@ -71,6 +71,15 @@ def finite_fault_subfaults(record: Mapping[str, Any], kinematic: bool = False) -
                     if kinematic else {})} for row in rows]
     except (KeyError, TypeError) as exc:
         _refuse("FINITE_FAULT_UNSTATED", f"a finite-fault subfault states no usable {exc}.")
+
+
+def epicentre(rupture_times: list[Any]) -> int | None:
+    """The one subfault (counted from 1) whose rupture time is 0, where the rupture starts; None when every subfault breaks
+    at the same instant, when none or several break at 0, or when a time is unstated, since then the source names no start."""
+    if any(t is None for t in rupture_times) or len(set(rupture_times)) < 2:
+        return None
+    starts = [number for number, t in enumerate(rupture_times, 1) if t == 0]
+    return starts[0] if len(starts) == 1 else None
 
 
 #: Where a moment-tensor rupture sits: the solution's published centroid, or on the Slab2 interface at that centroid.
@@ -285,7 +294,8 @@ def rupture_on_map(sheet: Any, work: Path) -> dict[str, dict[str, Any]]:
 
     ``features`` is a lon/lat FeatureCollection with one surface-projection polygon per subfault (slip m, depth m, strike, dip, rake,
     and rupture_time s on a kinematic rupture); ``uplift`` is the file's last instant of vertical displacement as north-up rows
-    on ``bounds`` (west, south, east, north cell edges), read back from the file the engine reads."""
+    on ``bounds`` (west, south, east, north cell edges), read back from the file the engine reads; ``point`` is the one point the
+    source states (a moment tensor's "centroid", a timed rupture's "epicentre"), or None."""
     from clawpack.geoclaw import dtopotools
 
     shown: dict[str, dict[str, Any]] = {}
@@ -294,17 +304,28 @@ def rupture_on_map(sheet: Any, work: Path) -> dict[str, dict[str, Any]]:
             continue
         spec = content[DTOPO]
         kinematic = spec.get("rupture_type") == "kinematic"
+        subs = _subfaults(spec)
         features = [{"type": "Feature",
                      "properties": {"subfault": number, "slip_m": float(sub.slip), "depth_m": float(sub.depth),
                                     "strike": float(sub.strike), "dip": float(sub.dip), "rake": float(sub.rake),
                                     **({"rupture_time_s": float(sub.rupture_time)} if kinematic else {})},
                      "geometry": {"type": "Polygon",
                                   "coordinates": [[[float(c[0]), float(c[1])] for c in sub.corners] + [[float(sub.corners[0][0]), float(sub.corners[0][1])]]]}}
-                    for number, sub in enumerate(_subfaults(spec), 1)]
+                    for number, sub in enumerate(subs, 1)]
         dtopo = dtopotools.DTopography()
         dtopo.read(str(work / name), dtopo_type=3)
         x, y = dtopo.x, dtopo.y
         dx, dy = (x[-1] - x[0]) / (len(x) - 1), (y[-1] - y[0]) / (len(y) - 1)
         shown[name] = {"features": {"type": "FeatureCollection", "features": features},
-                       "uplift": dtopo.dZ[-1][::-1], "bounds": (float(x[0] - dx / 2), float(y[0] - dy / 2), float(x[-1] + dx / 2), float(y[-1] + dy / 2))}
+                       "uplift": dtopo.dZ[-1][::-1], "bounds": (float(x[0] - dx / 2), float(y[0] - dy / 2), float(x[-1] + dx / 2), float(y[-1] + dy / 2)),
+                       "point": _point(spec.get("point"), subs)}
     return shown
+
+
+def _point(point: Mapping[str, Any] | None, subs: list[Any]) -> dict[str, Any] | None:
+    """The one point the source states, at its subfault's centroid as Clawpack places it, labelled by kind; None when it states none."""
+    if not point:
+        return None
+    lon, lat, depth = subs[int(point["subfault"]) - 1].centers[1]
+    return {"type": "Feature", "properties": {"kind": str(point["kind"]), "subfault": int(point["subfault"]), "depth_m": float(depth)},
+            "geometry": {"type": "Point", "coordinates": [float(lon), float(lat)]}}

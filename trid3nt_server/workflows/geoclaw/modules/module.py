@@ -198,6 +198,11 @@ def fault(value: Any, *, run: Mapping[str, Any]
                     f"{end:g} s (the largest rupture_time + rise_time): the engine holds the last frame, so the "
                     "seafloor would freeze half risen. Extend times.")
         kind = {"rupture_type": "kinematic", "rise_shape": shape}
+        from ..authoring.dtopo import epicentre
+
+        start = epicentre([item["rupture_time"] for item in stated])
+        if start is not None:
+            kind["point"] = {"kind": "epicentre", "subfault": start}
     name = "dtopo_01.tt3"
     return ({"DTOPO_DTOPOFILES": [[3, name]]},
             {name: {"dtopo": {"subfaults": stated, **grid, "times": [float(t) for t in times], **kind}}})
@@ -284,8 +289,21 @@ def finite_fault(value: Any, *, run: Mapping[str, Any]
             _refuse("FINITE_FAULT_UNSTATED", f"FiniteFault interval {times!r} is no positive number of seconds.")
         end = max(sub["rupture_time"] + sub["rise_time"] for sub in subfaults)
         times = [step * float(times) for step in range(math.ceil(end / float(times) - 1e-9) + 1)]
-    return fault({"subfaults": subfaults, "x": x, "y": y, "times": times,
-                  **({"rupture_type": "kinematic", "rise_shape": shape} if kinematic else {})}, run=run)
+    from ..authoring.dtopo import epicentre
+
+    keywords, files = fault({"subfaults": subfaults, "x": x, "y": y, "times": times,
+                             **({"rupture_type": "kinematic", "rise_shape": shape} if kinematic else {})}, run=run)
+    # The inversion states its rupture times whether or not the run plays them, so a static run still shows where it starts.
+    start = epicentre([row.get("rupture_time_s") for row in value["finite_fault"]["subfaults"]])
+    return keywords, _pointed(files, None if start is None else {"kind": "epicentre", "subfault": start})
+
+
+def _pointed(files: Mapping[str, Any], point: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The dtopo files with the one point the source states set on each, or cleared when it states none."""
+    from ..authoring.dtopo import DTOPO
+
+    return {name: {**content, DTOPO: {**{k: v for k, v in content[DTOPO].items() if k != "point"}, **({"point": dict(point)} if point else {})}}
+            for name, content in files.items()}
 
 
 #: What one SlabFault statement carries: the slab record read, the rectangle and the point it is anchored at, the subfault size,
@@ -368,7 +386,8 @@ def moment_tensor_fault(value: Any, *, run: Mapping[str, Any]
     subfaults = moment_tensor_subfaults(value["moment_tensor"], solution=value["solution"], plane=value["plane"],
                                         relation=value["relation"], placement=value["placement"], slab=value.get("slab"))
     x, y = dtopo_axes(subfaults, float(value["spacing"]), float(value["buffer"]))
-    return fault({"subfaults": subfaults, "x": x, "y": y, "times": value["times"]}, run=run)
+    keywords, files = fault({"subfaults": subfaults, "x": x, "y": y, "times": value["times"]}, run=run)
+    return keywords, _pointed(files, {"kind": "centroid", "subfault": 1})
 
 
 #: What one Storm statement carries: the points fetch_storm_tracks returns, and the name and season of the storm the workflow fetches them for.

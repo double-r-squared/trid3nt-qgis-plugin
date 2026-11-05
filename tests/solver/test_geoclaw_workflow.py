@@ -440,3 +440,33 @@ def test_the_domain_is_the_level_one_box_and_one_polygon_per_flagregion():
     assert drawn[0]["properties"] == {"name": "Copalis", "level": 1, "levels": 3}
     assert drawn[1]["properties"] == {"name": "coast", "minlevel": 2, "maxlevel": 3, "t1_s": 0.0, "t2_s": 1.0e9}
     assert all(f["geometry"]["type"] == "Polygon" for f in drawn)
+
+
+def test_the_catalogue_epicentre_is_drawn_only_when_asked_and_only_for_a_named_event(monkeypatch):
+    from trid3nt_server.workflows.geoclaw import workflow as gw
+
+    me = gw.GeoclawWorkflow.__new__(gw.GeoclawWorkflow)
+    fetched = []
+
+    async def fake_fetch(env, row, runner, **kwargs):
+        fetched.append((row, runner, kwargs))
+        return {"event_id": kwargs["event_id"], "longitude": 160.2395, "latitude": 52.4948, "depth_km": 35.0,
+                "time": "2025-07-29T23:24:52.483000Z", "magnitude": 8.8, "magnitude_type": "mww"}
+
+    monkeypatch.setattr(gw, "_fetch", fake_fetch)
+
+    def ask(run, own):
+        return asyncio.run(me._catalogue(SimpleNamespace(run=run), own, template.STEERING))
+
+    assert ask({}, {}) is None and ask({"catalogue_epicentre": "none"}, {"FiniteFault": {"event_id": "us6000qw60"}}) is None
+    drawn = ask({"catalogue_epicentre": "fetch"}, {"FiniteFault": {"event_id": "us6000qw60"}})
+    assert drawn["geometry"]["coordinates"] == [160.2395, 52.4948]
+    assert drawn["properties"]["kind"] == "catalogue epicentre" and drawn["properties"]["depth_m"] == 35000.0
+    by_record = ask({"catalogue_epicentre": "fetch", "tensor": {"event_id": "us20005j32"}}, {"MomentTensorFault": {"moment_tensor": "tensor"}})
+    assert by_record["properties"]["event_id"] == "us20005j32"
+    assert [f[2] for f in fetched] == [{"event_id": "us6000qw60"}, {"event_id": "us20005j32"}]
+    for run, code in [({"catalogue_epicentre": "maybe"}, "GEOCLAW_EPICENTRE_CHOICE"),
+                      ({"catalogue_epicentre": "fetch"}, "GEOCLAW_EPICENTRE_NO_EVENT")]:
+        with pytest.raises(GeoclawError) as caught:
+            ask(run, {})
+        assert caught.value.error_code == code

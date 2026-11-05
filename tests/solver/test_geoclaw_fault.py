@@ -252,3 +252,49 @@ def test_the_rupture_publishes_its_subfaults_and_uplift_as_context(tmp_path, fak
     assert {"RID/rupture-subfaults1.geojson", "RID/rupture_uplift.tif"} <= set(fake_s3.store)
     uplift = next(l for l in layers if l["layer_type"] == "raster")
     assert uplift["units"] == "m"
+
+
+def _timed(times):
+    second = {**_SUBFAULT, "longitude": -73.5, "latitude": -37.5}
+    return {"subfaults": [{**sub, "rupture_time": t, "rise_time": 10.0} for sub, t in zip((_SUBFAULT, second), times)],
+            **_GRID, "times": [0.0, 40.0], "rupture_type": "kinematic", "rise_shape": "linear"}
+
+
+def test_a_timed_rupture_draws_its_epicentre_at_the_breaking_subfaults_centroid_and_a_static_one_draws_none(tmp_path):
+    from clawpack.geoclaw import dtopotools
+
+    from trid3nt_server.workflows.geoclaw.authoring.dtopo import rupture_on_map
+
+    for case in ("timed", "together", "static"):
+        (tmp_path / case).mkdir()
+    rundir, sheet, _ = _written(tmp_path / "timed", _timed([20.0, 0.0]))
+    point = rupture_on_map(sheet, rundir)["dtopo_01.tt3"]["point"]
+    sub = dtopotools.SubFault()
+    for key, value in {**_SUBFAULT, "longitude": -73.5, "latitude": -37.5}.items():
+        setattr(sub, key, value)
+    sub.calculate_geometry()
+    assert point["properties"] == {"kind": "epicentre", "subfault": 2, "depth_m": pytest.approx(sub.centers[1][2])}
+    assert point["geometry"]["coordinates"] == pytest.approx([sub.centers[1][0], sub.centers[1][1]])
+    assert point["geometry"]["coordinates"] != pytest.approx([-73.5, -37.5])
+    rundir, sheet, _ = _written(tmp_path / "together", _timed([0.0, 0.0]))
+    assert rupture_on_map(sheet, rundir)["dtopo_01.tt3"]["point"] is None
+    rundir, sheet, _ = _written(tmp_path / "static", _fault())
+    assert rupture_on_map(sheet, rundir)["dtopo_01.tt3"]["point"] is None
+
+
+def test_the_epicentre_and_a_fetched_catalogue_epicentre_publish_beside_the_rupture(tmp_path, fake_s3):
+    import asyncio
+
+    from trid3nt_server.workflows.geoclaw.workflow import publish_rupture
+    from trid3nt_server.workflows.runtime.journal import bind_outputs, drain_outputs
+
+    rundir, sheet, _ = _written(tmp_path, _timed([0.0, 20.0]))
+    catalogue = {"type": "Feature", "properties": {"kind": "catalogue epicentre", "event_id": "e"},
+                 "geometry": {"type": "Point", "coordinates": [-72.7, -35.8]}}
+    token = bind_outputs()
+    asyncio.run(publish_rupture(sheet=sheet, rundir=rundir, run_id="RID", name="coast", catalogue=catalogue))
+    layers = drain_outputs(token)
+    assert [(l["layer_type"], l["quantity"]) for l in layers] == [
+        ("vector", "rupture_subfaults"), ("vector", "rupture_epicentre"), ("raster", "rupture_uplift"),
+        ("vector", "catalogue_epicentre")]
+    assert {"RID/rupture-epicentre1.geojson", "RID/catalogue-epicentre.geojson"} <= set(fake_s3.store)

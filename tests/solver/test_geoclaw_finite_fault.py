@@ -166,3 +166,21 @@ def test_a_record_without_rupture_times_refuses_a_kinematic_statement():
              "times": 30.0}, _RUN)
 
     assert caught.value.error_code == "GEOCLAW_FINITE_FAULT_UNSTATED" and "rise_time_s" in str(caught.value)
+
+
+@pytest.mark.parametrize("times, start", [([5.0, 0.0, 3.0], 2), ([0.0, 0.0, 0.0], None), ([0.0, 0.0, 4.0], None),
+                                          ([1.0, 2.0], None), ([None, 0.0], None), ([2.0, 2.0], None)])
+def test_the_epicentre_is_the_one_subfault_breaking_at_zero_and_none_otherwise(times, start):
+    from trid3nt_server.workflows.geoclaw.authoring.dtopo import epicentre
+
+    assert epicentre(times) == start
+
+
+@pytest.mark.parametrize("name, start", [("kamchatka_2025", 254), ("tohoku_2011", 62), ("chignik_2021", None)])
+@pytest.mark.parametrize("kinematic", [False, True])
+def test_a_finite_fault_states_its_epicentre_whether_or_not_the_run_plays_its_times(name, start, kinematic):
+    over = {"rupture_type": "kinematic", "rise_shape": "quadratic", "times": 30.0} if kinematic else {}
+    expanded, files = GEO.COMPOSITES["FiniteFault"].apply(_stated(name, **over), _RUN)
+    spec = files[expanded["DTOPO_DTOPOFILES"][0][1]]["dtopo"]
+
+    assert spec.get("point") == (None if start is None else {"kind": "epicentre", "subfault": start})
