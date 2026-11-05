@@ -300,7 +300,10 @@ def _s3_client() -> Any:
 
 def _build(mesher: Mesher, recipe: MeshRecipe) -> Mesh:
     """The whole mesh, from the whole recipe. There is no incremental path."""
-    return mesher.build(recipe)
+    from trid3nt_server.tools.mesh.inputs import raster_scope
+
+    with raster_scope():
+        return mesher.build(recipe)
 
 
 def replay_recipe(source: str | os.PathLike[str] | Sequence[Mapping[str, Any]]

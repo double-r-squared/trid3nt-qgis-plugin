@@ -8,13 +8,15 @@ from __future__ import annotations
 import json
 import math
 import tempfile
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Iterator, Mapping
 
 from trid3nt_server.tools.mesh.meshers import MeshToolError
 
 __all__ = ["finest_edge", "op_geometry", "op_input", "op_raster",
-           "raster_cell_m"]
+           "raster_cell_m", "raster_scope"]
 
 #: Metres per degree of latitude, for a geographic raster's cell.
 _M_PER_DEG = 111_320.0
@@ -157,12 +159,24 @@ def _read_vector(path: Path) -> dict[str, Any]:
     return json.loads(gpd.read_file(path).to_crs(4326).to_json())
 
 
-_RASTER_DIR: tempfile.TemporaryDirectory | None = None
+_RASTER_DIR: ContextVar[Path | None] = ContextVar("mesh_raster_dir", default=None)
+
+
+@contextmanager
+def raster_scope() -> Iterator[Path]:
+    """The directory one mesh build downloads its op rasters into; it is removed when the build returns."""
+    with tempfile.TemporaryDirectory(prefix="mesh-rasters-") as scratch:
+        token = _RASTER_DIR.set(Path(scratch))
+        try:
+            yield Path(scratch)
+        finally:
+            _RASTER_DIR.reset(token)
 
 
 def _rasters_dir() -> Path:
-    """The one directory this process downloads op rasters into; it is removed when the process exits."""
-    global _RASTER_DIR
-    if _RASTER_DIR is None:
-        _RASTER_DIR = tempfile.TemporaryDirectory(prefix="mesh-rasters-")
-    return Path(_RASTER_DIR.name)
+    scope = _RASTER_DIR.get()
+    if scope is None:
+        raise MeshToolError(
+            "MESH_OP_INPUT_UNREADABLE",
+            "an object-store raster was read outside a mesh build, which owns the directory it lands in.")
+    return scope

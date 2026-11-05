@@ -536,3 +536,17 @@ def test_reading_an_accepted_mesh_or_a_stored_layer_leaves_no_directory_behind(
     assert bed.tolist() == [-1.0, -2.0, -3.0]
     assert np.allclose(values, -18.0)
     assert list(scratch.iterdir()) == []
+
+
+def test_an_object_store_raster_lives_only_as_long_as_its_build(tmp_path, monkeypatch):
+    from trid3nt_server.tools import cache
+    from trid3nt_server.tools.mesh import inputs
+
+    raster = _bed_raster(tmp_path)
+    monkeypatch.setattr(cache, "read_object_bytes_s3", lambda uri: raster.read_bytes())
+    with inputs.raster_scope() as scope:
+        local = inputs.op_raster("s3://bucket/bed.tif")
+        assert local.exists() and local.parent == scope
+    assert not local.exists() and not scope.exists()
+    with pytest.raises(MeshToolError):
+        inputs.op_raster("s3://bucket/bed.tif")
