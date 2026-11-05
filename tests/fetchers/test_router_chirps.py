@@ -107,7 +107,7 @@ def test_the_uri_carries_the_object_the_date_resolved_to(spec):
     params = {"date": "2023-07", "period": "monthly"}
     params.update(ch.pre_resolve(spec, params))
     assert qp.build_uri(spec, params) == (
-        "/vsigzip//vsicurl/https://data.chc.ucsb.edu/products/CHIRPS-2.0"
+        "/vsigzip//vsicurl/https://data.chc.ucsb.edu/products/CHIRPS/v2.0"
         "/global_monthly/tifs/chirps-v2.0.2023.07.tif.gz")
 
 

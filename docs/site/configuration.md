@@ -159,9 +159,9 @@ QGIS profile when the daemon's MinIO uses different ones.
 
 ## Not in the file, but related
 
-- **Per-tool API keys** for the `KEY`-earmarked fetchers (`TRID3NT_AIRNOW_API_KEY`,
-  `TRID3NT_EBIRD_API_KEY`, `TRID3NT_COPERNICUS_CDS_API_KEY`, `TRID3NT_IUCN_RED_LIST_API_KEY`,
-  `TRID3NT_OPENAQ_API_KEY`, `TRID3NT_FIRMS_MAP_KEY`, `TRID3NT_CAMA_FLOOD_BASE_URL`) -- see the
-  [Tool Support Matrix](tool-support.md#key-earmarked-tools) for which tool needs what.
+- **Per-source API keys** (`TRID3NT_AIRNOW_API_KEY`, `TRID3NT_COPERNICUS_CDS_API_KEY`,
+  `TRID3NT_OPENAQ_API_KEY`, `TRID3NT_FIRMS_MAP_KEY`) may be set here; otherwise the dock asks for the key
+  on the input card and keeps it in QGIS's authentication manager (Settings -> Keys). Each source's
+  catalog row states whether it needs one.
 - `VITE_TRID3NT_*` web vars are deliberately **absent**: with no overrides the SPA derives
   `ws://<hostname>:8765` and `http://<hostname>:8766` and works against the local agent.

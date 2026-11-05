@@ -12,7 +12,7 @@ supports_global_query: true
 
 endpoints:
   data:
-    url: "https://data.chc.ucsb.edu/products/CHIRPS-2.0"
+    url: "https://data.chc.ucsb.edu/products/CHIRPS/v2.0"
 auth:
   mode: none
   user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"

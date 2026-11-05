@@ -12,7 +12,6 @@ upstream sync.
 
 !!! note "Where this section is edited"
     The canonical source for these pages is `trid3nt-local/docs/site/`.
-    The tool-support page is generated -- see [Tool Support Matrix](tool-support.md).
 
 ---
 
@@ -92,5 +91,4 @@ Only the substrate under each seam changes.
 | [Configuration](configuration.md) | The full `.env.local` reference -- every variable, default, and why it matters |
 | [Models](models.md) | Local model matrix, tool retrieval top-K, routing benchmark results |
 | [Engines](engines.md) | Per-engine local execution matrix (binary / docker / subprocess) + runtimes |
-| [Tool Support Matrix](tool-support.md) | Generated sweep status for all tools (PASS/KEY/FAIL/TIMEOUT/SKIP-ARGS) |
 | [Troubleshooting](troubleshooting.md) | The greatest hits: symptoms, root causes, fixes |
