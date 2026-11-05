@@ -275,7 +275,6 @@ package DataSeam {
         */
         item name : String;
         item label : String;
-        item signup_url : String [0..1];
         item env_var : String;
     }
 
@@ -727,19 +726,22 @@ package DataSeam {
     requirement def AKeyedSourceStatesTheKeyItNeeds {
         doc /*
         The key a source needs is a fact ABOUT THE SOURCE, so it is stated on
-        the source's own row and nowhere else - name, label, signup url and the
-        env var the source's own hook reads. Everything downstream is a reader
+        the source's own row and nowhere else - name, label and the env var the
+        source's own hook reads; no signup link is kept on a row, and one is
+        shown only when the provider's own answer carries it. Everything downstream is a reader
         of those rows: the resolver takes the session's pushed key first and the
         row's env var behind it, the catalog projects the rows for a
-        key-entering surface, and the keys form shows one field per credential
+        key-entering surface, and the keys list shows one entry per credential
         NAME rather than per source, so two sources served by one upstream
         account take one entered key.
 
-        A keyed call with no key REFUSES before it dispatches, naming the
-        credential and the one place a key is entered. The chat is never that
-        place: a key pasted into a conversation is a key in the model's context
-        and in the history, so the refusal points at the form and the form is
-        the only surface that takes a value.
+        A keyed call with no key stored, or one the provider refuses, is asked
+        of the person on a card and runs once more with the key the card
+        stored; the refusal names the credential and the source and never a
+        value. The chat is never the place a key is entered: a key pasted into
+        a conversation is a key in the model's context and in the history, so
+        the card and the settings list are the only surfaces that take a value
+        and the model reads no argument that could carry one.
         */
     }
 
@@ -1372,7 +1374,7 @@ package DataSeam {
     verify requirement AKeyedSourceStatesTheKeyItNeeds by
         "tests/credentials/test_credential_resolver.py::test_one_pushed_key_serves_every_row_naming_it";
     verify requirement AKeyedSourceStatesTheKeyItNeeds by
-        "tests/credentials/test_credential_resolver.py::test_refusal_names_the_credential_and_the_form";
+        "tests/fetchers/test_router_cds.py::test_no_stored_key_asks_before_cdsapi_is_touched";
     verify requirement AKeyedSourceStatesTheKeyItNeeds by
         "tests/fetchers/test_router_stations.py::test_keyed_missing_key_refuses_pre_network";
     verify requirement AKeyedSourceStatesTheKeyItNeeds by

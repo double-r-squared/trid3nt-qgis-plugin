@@ -1914,11 +1914,13 @@ class FormCard(QFrame):
     an empty edit set approves rather than revises."""
 
     def __init__(self, warning: gate.PayloadWarning, sheet: gate.ParamSheetRequest,
-                 on_decide, parent=None):
+                 on_decide, on_secret=None, parent=None):
         super().__init__(parent)
         self._warning = warning
         self._sheet = sheet
         self._on_decide = on_decide
+        # ``on_secret(name, value)`` takes a typed key to the credential store; the reply never carries it.
+        self._on_secret = on_secret
         self._decided: Optional[str] = None
         self._editors: Dict[str, QWidget] = {}
         self.setObjectName("formcard")  # scope the fill to the frame
@@ -2023,6 +2025,11 @@ class FormCard(QFrame):
     def _editor(row: gate.ParamRow) -> QWidget:
         """A dropdown of exactly what the row accepts, blank until picked; a typed row's line
         edit otherwise."""
+        if row.secret:
+            editor = QLineEdit()
+            editor.setEchoMode(QLineEdit.EchoMode.Password)
+            editor.setPlaceholderText("paste the key")
+            return editor
         if row.options is None:
             editor = QLineEdit(row.display())
             if row.bounds is not None:
@@ -2087,10 +2094,22 @@ class FormCard(QFrame):
         if self._decided is not None:
             return  # locked -- a gate is answered exactly once
         revised = self._edits()
+        self._store_keys()
         self._decided = "narrow_scope" if revised else "proceed"
         # A sheet with no edits is an APPROVAL: an empty revised_args would claim the user re-supplied every value.
         self._commit(self._decided, revised or None,
                      gate.param_sheet_summary(self._sheet, revised))
+
+    def _store_keys(self) -> None:
+        """Hand each typed key to the credential store, before the reply that lets the server read it."""
+        for row in self._sheet.rows:
+            editor = self._editors.get(row.name)
+            if not row.secret or editor is None or self._on_secret is None:
+                continue
+            value = editor.text().strip()
+            editor.clear()
+            if value:
+                self._on_secret(row.name, value)
 
     def _cancel(self) -> None:
         if self._decided is not None:

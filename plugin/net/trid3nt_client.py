@@ -511,7 +511,6 @@ def fetch_keyed_sources(base_url: str, timeout: float = 8.0) -> list:
             by_name[name] = {
                 "name": name,
                 "label": str(credential.get("label") or name),
-                "signup_url": credential.get("signup_url") or None,
                 "env_var": str(credential.get("env_var") or ""),
             }
     return [by_name[k] for k in sorted(by_name)]

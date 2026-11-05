@@ -17,10 +17,11 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
+from qgis.PyQt.QtCore import Qt  # noqa: E402
 from qgis.PyQt.QtWidgets import QApplication, QLineEdit, QWidget  # noqa: E402
 
+from plugin.net.auth_broker import LANGUAGE_MODEL_CREDENTIAL  # noqa: E402
 from plugin.ui.settings_dialog import (  # noqa: E402
-    LANGUAGE_MODEL_CREDENTIAL,
     PROVIDER_PRESETS,
     SettingsDialog,
 )
@@ -98,6 +99,9 @@ class _Broker:
         self.stored[name] = value
         return True
 
+    def forget(self, name):
+        return self.stored.pop(name, None) is not None
+
 
 class _Bridge:
     running = True
@@ -158,23 +162,22 @@ def main() -> int:
         return 1
     print("MODEL_REPOPULATE_OK")
 
-    # 2) ONE key entry replaces the list of asked-for keys: it names the
-    #    language model first, gains the daemon's declared credentials, and the
-    #    dialog carries no other key field.
-    if not _wait(app, lambda: dlg.key_for_combo.count() == 2):
-        print("KEY_ENTRY_FAIL choices", dlg.key_for_combo.count())
+    # 2) ONE scroll list of keys: the language model and the daemon's declared credentials, each
+    #    with a state, and one masked field for the clicked entry.
+    if not _wait(app, lambda: dlg.keys_list.count() == 2):
+        print("KEY_ENTRY_FAIL choices", dlg.keys_list.count())
         return 1
-    choices = [dlg.key_for_combo.itemData(i) for i in range(dlg.key_for_combo.count())]
+    choices = [dlg.keys_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(dlg.keys_list.count())]
     secret_fields = [e for e in dlg.findChildren(QLineEdit)
                      if e.echoMode() == QLineEdit.EchoMode.Password]
-    if (choices != [LANGUAGE_MODEL_CREDENTIAL, "airnow"]
+    if (sorted(choices) != sorted([LANGUAGE_MODEL_CREDENTIAL, "airnow"])
             or secret_fields != [dlg.token_edit, dlg.key_edit]
             or hasattr(dlg, "provider_key_edit") or hasattr(dlg, "keys_group")
             or hasattr(settings, "openrouter_api_key")):
         print("KEY_ENTRY_FAIL", choices, len(secret_fields))
         return 1
     print("ONE_KEY_ENTRY_OK")
-    dlg.key_for_combo.setCurrentIndex(0)
+    dlg.keys_list.setCurrentRow(choices.index(LANGUAGE_MODEL_CREDENTIAL))
     dlg.key_edit.setText(_API_KEY)
 
     # 3) Save -> off-thread POST with the preset payload shape, and the key to

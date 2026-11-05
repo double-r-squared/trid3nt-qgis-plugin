@@ -1,6 +1,5 @@
-# EPA AirNow current-hour AQI observations, a single keyed GET. The key resolves in
-# build_request -- kwarg, then secret_ref, then env -- and its absence raises
-# MISSING_KEY pre-network.
+# EPA AirNow current-hour AQI observations, a single keyed GET. build_request reads the
+# row's declared credential; with none stored the call asks for the key before the network.
 schema_version: v1
 name: fetch_airnow_air_quality
 source_class: airnow_air_quality
@@ -15,7 +14,6 @@ auth:
   credential:
     name: airnow
     label: EPA AirNow
-    signup_url: https://docs.airnowapi.org/account/request/
     env_var: TRID3NT_AIRNOW_API_KEY
   user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
     agent@trid3nt.dev)
@@ -32,14 +30,6 @@ params:
     type: int
     required: false
     default: 0
-  api_key:
-    type: str
-    required: false
-    schema_optional: true
-  secret_ref:
-    type: str
-    required: false
-    schema_optional: true
 hooks:
   build_request: airnow_air_quality.build_request
   parse_response: airnow_air_quality.parse_response
@@ -100,29 +90,25 @@ payload_estimate:
   kb_per_feature: 0.41
   floor_mb: 0.001
 caveats:
-- 'EPA AirNow current-hour AQI monitor observations (keyed: api_key -> secret_ref -> TRID3NT_AIRNOW_API_KEY
-  env). One point per monitor-parameter (latest in a 3h window). US/Canada/Mexico. No key -> AIRNOW_MISSING_KEY,
-  refused pre-network toward the plugin''s keys form; empty bbox -> honest header-only FGB.'
+- 'EPA AirNow current-hour AQI monitor observations (keyed: the person''s AirNow key). One point per
+  monitor-parameter (latest in a 3h window). US/Canada/Mexico. No key -> KEY_REQUIRED before the network,
+  a key AirNow refuses -> KEY_REJECTED; empty bbox -> honest header-only FGB.'
 - "model-callable, not matched: air quality is not one of the seventeen data classes, so it carries no coverage row"
 docstring: |-
   EPA AirNow current-hour air-quality / AQI / PM2.5 monitor observations as points.
 
   Use this (not fetch_openaq_measurements) when the user names EPA AirNow or
-  wants US/Canada/Mexico current-hour AQI. Call it even if no key is set: with
-  no key it refuses by name and says where the key goes (see below), which is
-  NOT a reason to route elsewhere.
+  wants US/Canada/Mexico current-hour AQI. Call it even if no key is stored: the
+  person is asked for the key on a card, which is NOT a reason to route elsewhere.
 
   What it does:
       Fetches the U.S. EPA AirNow current-hour air-quality observations for
       every reporting monitor within ``bbox`` as point features. Each point
       carries the reporting parameter (PM2.5 / Ozone / PM10 / NO2 / SO2 /
       CO), the AQI value + AQI category band, the raw concentration + unit,
-      and the monitor / reporting-agency identity. AirNow uses an API key
-      (resolved kwarg -> the session's own ``secret_ref`` ->
-      ``TRID3NT_AIRNOW_API_KEY`` env). With NO key it raises
-      ``AirNowMissingKeyError``, which names the key and the plugin's
-      Settings -> Keys form -- it NEVER fabricates a layer (AirNow has no
-      public mirror).
+      and the monitor / reporting-agency identity. AirNow uses the
+      person's API key, asked for on a card when none is stored. It NEVER
+      fabricates a layer (AirNow has no public mirror).
 
   When to use:
       - User asks about current air quality / AQI / smoke exposure in a
@@ -159,12 +145,6 @@ docstring: |-
       monitor_type: AirNow ``monitorType``: ``0`` = permanent monitors
           (default), ``2`` = permanent + mobile. Other values are passed
           through to AirNow.
-      api_key: Optional explicit AirNow API key (highest-priority resolution
-          path; live-test / dev override).
-      secret_ref: The session's own key, threaded in before dispatch from
-          what the keys form stored (the production path). A key that
-          resolves but is rejected by AirNow raises ``AirNowAuthError``; no
-          key on any path raises ``AirNowMissingKeyError``.
 
   Returns:
       A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket

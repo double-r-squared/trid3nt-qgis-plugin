@@ -75,6 +75,7 @@ from ..net.trid3nt_client import (
 from ..net.run_invocation import USAGE as _RUN_USAGE_HINT, parse_run_invocation
 from ..net.ws_bridge import AgentBridge
 from ..plugin_settings import PluginSettings
+from ..net.auth_broker import AuthBroker
 from ..render import probe
 from ..render.layer_request import run_layer_request
 from ..render.processing import run_processing_request
@@ -1706,10 +1707,24 @@ class Trid3ntDock(QDockWidget):
         # provenance text.
         sheet = gate.parse_param_sheet(payload)
         if sheet is not None:
-            card = FormCard(warning, sheet, self._on_gate_decision)
+            self._note_key_asks(sheet)
+            card = FormCard(warning, sheet, self._on_gate_decision, self._on_card_key)
         else:
             card = GateCard(warning, self._on_gate_decision)
         self._present_card(card)
+
+    def _note_key_asks(self, sheet) -> None:
+        """Remember which sources asked for a key, and which were refused, for the Keys list."""
+        for row in sheet.rows:
+            if row.secret:
+                self.settings.note_key_ask(row.name, row.source_badge or row.name, rejected=row.secret == "rejected")
+
+    def _on_card_key(self, name: str, value: str) -> None:
+        """A key typed on a card goes to QgsAuthManager and ``secret-add``, never into the reply."""
+        AuthBroker().remember(name, value)
+        self.settings.clear_key_rejection(name)
+        if self.bridge.running:
+            self.bridge.push_secret(name, value)
 
     def _on_gate_decision(
         self, warning_id: str, decision: str, revised_args: Optional[dict]

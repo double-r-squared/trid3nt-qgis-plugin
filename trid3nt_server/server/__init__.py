@@ -83,7 +83,6 @@ __all__ = [
     "_emit_auto_case_open",
     "_prepare_user_turn",
     "_handle_secret_add",
-    "_inject_secret_ref",
     "_send_loop_exhausted",
     "CircuitBreakerError",
     "ToolCircuitBreaker",

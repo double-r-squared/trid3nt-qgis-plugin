@@ -4,9 +4,7 @@ The ``cdsapi`` client owns the request-poll-download socket, so both sources fol
 onto the library-delegate executor: these hooks own a ``retrieve`` call under a
 declared wall-clock timeout, plus a pure pre-cache validate hook per source."""
 
-# Key resolution: ``api_key`` kwarg, then a str ``secret_ref``, then ``TRID3NT_COPERNICUS_CDS_API_KEY``,
-# then None. None is NOT an error: cdsapi falls back to ``~/.cdsapirc`` and its own
-# missing-configuration error maps to the source's ``*_MISSING_KEY``. No key is registered here.
+# The key is the row's declared credential; with none stored the retrieve asks for it before the network.
 
 from __future__ import annotations
 
@@ -21,7 +19,9 @@ import zipfile
 from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
+from trid3nt_server.model.credentials.resolver import credential_value
 
+from ..._fetch_common import KeyRejectedError
 from ..errors import (
     RouterError,
     router_empty_error,
@@ -36,20 +36,6 @@ logger = logging.getLogger(
 
 
 _DEFAULT_CDS_URL = "https://cds.climate.copernicus.eu/api"
-_KEY_ENV = "TRID3NT_COPERNICUS_CDS_API_KEY"
-
-#: The cdsapi "Missing/incomplete configuration file" phrase family, without over-matching a transient upstream error.
-_MISSING_KEY_CDS_PHRASES: tuple[str, ...] = (
-    ".cdsapirc",
-    "missing/incomplete configuration",
-    "missing or incomplete configuration",
-    "incomplete configuration file",
-    "no api key configured",
-    "no api key found",
-    "credentials not configured",
-    "no credentials found",
-)
-
 
 _ERA5_DATASET = "reanalysis-era5-single-levels"
 _ERA5_CDS_VARIABLES: frozenset[str] = frozenset(
@@ -78,31 +64,16 @@ _GTSM_MAX_DATE_RANGE_DAYS = 366
 
 
 
-def _resolve_key(params: dict[str, Any]) -> str | None:
-    """Resolve the CDS key (kwarg, str ``secret_ref``, env var, else ``None``); None is NOT an error."""
-    api_key = params.get("api_key")
-    if api_key:
-        return str(api_key)
-    secret_ref = params.get("secret_ref")
-    if isinstance(secret_ref, str) and secret_ref:
-        return secret_ref
-    env_key = os.environ.get(_KEY_ENV)
-    if env_key:
-        return env_key
-    return None
-
-
 def _cds_retrieve_with_timeout(
     spec: SourceSpec,
     *,
     dataset: str,
     request: dict[str, Any],
     out_path: str,
-    api_key: str | None,
+    api_key: str,
     timeout_s: float,
-    missing_phrases: tuple[str, ...],
 ) -> None:
-    """Run ``cdsapi.Client.retrieve`` under a wall-clock watchdog (cdsapi has no timeout); failures classify missing key, auth, then retryable."""
+    """Run ``cdsapi.Client.retrieve`` under a wall-clock watchdog (cdsapi has no timeout); failures classify rejected key, then retryable."""
     import threading
 
     sc = spec.error_code_prefix
@@ -118,8 +89,7 @@ def _cds_retrieve_with_timeout(
             client_kwargs: dict[str, Any] = {"quiet": True}
             if _DEFAULT_CDS_URL:
                 client_kwargs["url"] = _DEFAULT_CDS_URL
-            if api_key:
-                client_kwargs["key"] = api_key
+            client_kwargs["key"] = api_key
             client = cdsapi.Client(**client_kwargs)
             client.retrieve(dataset, request, out_path)
         except BaseException as exc:  # noqa: BLE001 -- ferried to the caller thread
@@ -139,12 +109,8 @@ def _cds_retrieve_with_timeout(
     exc = err_box["err"]
     msg = str(exc)
     low = msg.lower()
-    if missing_phrases and any(phrase in low for phrase in missing_phrases):
-        raise router_input_error(sc, f"No Copernicus CDS API key is configured (cdsapi: {msg[:200]})", "MISSING_KEY")
     if any(tok in low for tok in ("401", "403", "authentication", "unauthorized")):
-        raise router_input_error(sc, f"CDS API rejected the key: {msg[:200]}", "AUTH_ERROR")
-    if "no api key" in low or ("missing" in low and "key" in low):
-        raise router_input_error(sc, f"CDS API key not available: {msg[:200]}", "MISSING_KEY")
+        raise KeyRejectedError(spec.name, spec.auth.credential.name, spec.auth.credential.label)
     raise router_upstream_error(sc, f"CDS retrieve failed: {msg[:200]}")
 
 
@@ -287,14 +253,14 @@ def era5_read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> 
     bbox = tuple(float(v) for v in params["bbox"])  # type: ignore[assignment]
     d0 = _dt.date.fromisoformat(str(params["start_date"]))
     d1 = _dt.date.fromisoformat(str(params["end_date"]))
-    api_key = _resolve_key(params)
+    api_key = credential_value(spec)
 
     def _retrieve(cds_var: str) -> str:
         fd, path = tempfile.mkstemp(suffix=".nc", prefix="trid3nt_era5_cds_")
         os.close(fd)
         _cds_retrieve_with_timeout(
             spec, dataset=_ERA5_DATASET, request=_era5_build_request(cds_var, bbox, d0, d1),
-            out_path=path, api_key=api_key, timeout_s=timeout_s, missing_phrases=_MISSING_KEY_CDS_PHRASES,
+            out_path=path, api_key=api_key, timeout_s=timeout_s,
         )
         return path
 
@@ -556,7 +522,7 @@ def gtsm_read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> 
     d0 = _dt.date.fromisoformat(str(params["start_date"]))
     d1 = _dt.date.fromisoformat(str(params["end_date"]))
     output = str(params.get("output", "water_level"))
-    api_key = _resolve_key(params)
+    api_key = credential_value(spec)
 
     zip_fd, zip_path = tempfile.mkstemp(suffix=".zip", prefix="trid3nt_gtsm_cds_")
     os.close(zip_fd)
@@ -564,7 +530,7 @@ def gtsm_read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> 
     try:
         _cds_retrieve_with_timeout(
             spec, dataset=_GTSM_DATASET, request=_gtsm_build_request(output, d0, d1),
-            out_path=zip_path, api_key=api_key, timeout_s=timeout_s, missing_phrases=(),
+            out_path=zip_path, api_key=api_key, timeout_s=timeout_s,
         )
         nc_paths = _gtsm_extract_netcdfs(spec, zip_path)
         records = _gtsm_netcdf_to_records(spec, nc_paths, bbox, output)

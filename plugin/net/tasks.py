@@ -134,7 +134,7 @@ class _LibrarySearchTask(QObject):
 class _KeyedSourcesTask(QObject):
     """GET /api/library, reduced to the credentials its keyed rows declare."""
 
-    finished = pyqtSignal(list)  # list[{name, label, signup_url, env_var}]
+    finished = pyqtSignal(list)  # list[{name, label, env_var}]
     errored = pyqtSignal(str)    # honest message
 
     def __init__(self, base_url: str, parent: Optional[QObject] = None):

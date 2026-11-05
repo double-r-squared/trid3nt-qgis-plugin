@@ -115,8 +115,6 @@ class CredentialSpec(ContractModel):
 
     name: str = Field(min_length=1, max_length=120)
     label: str = Field(min_length=1, max_length=120)
-    #: None when no public self-serve signup exists; a fabricated URL would pass for a real one.
-    signup_url: str | None = Field(default=None, max_length=512)
     #: Env var read when no session key was pushed; the same name the source's own hook reads.
     env_var: str = Field(min_length=1, max_length=200)
 

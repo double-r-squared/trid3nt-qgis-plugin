@@ -31,16 +31,16 @@ Every registered tool was executed directly against the local stack (MinIO + loc
 
 ## KEY-earmarked tools
 
-`KEY` tools work locally once the credential is provided -- each fetcher resolves its key from a per-call `api_key`/`secret_ref` argument or the env var below (set it in `.env.local`). They fail with a typed missing-key error, never a silent empty result.
+`KEY` tools work locally once the credential is provided -- each fetcher reads its key from the one the person stored (a card in the plugin asks, or Settings -> Keys), with the env var below as the development fallback (set it in `.env.local`). They fail with a typed `KEY_REQUIRED` / `KEY_REJECTED` error, never a silent empty result.
 
 | Tool | Env var | Where to get it |
 |------|---------|-----------------|
-| `fetch_airnow_air_quality` | `TRID3NT_AIRNOW_API_KEY` | free key from docs.airnowapi.org; also accepted per-call as `api_key`/`secret_ref` |
+| `fetch_airnow_air_quality` | `TRID3NT_AIRNOW_API_KEY` | AirNow key |
 | `fetch_cama_flood_discharge` | `TRID3NT_CAMA_FLOOD_BASE_URL` | upstream became registration-gated (U-Tokyo Google Form issues a password); point this at the credentialed mirror URL |
 | `fetch_ebird_observations` | `TRID3NT_EBIRD_API_KEY` | free key from ebird.org/api/keygen |
-| `fetch_era5_reanalysis` | `TRID3NT_COPERNICUS_CDS_API_KEY` | Copernicus CDS credentials (a `~/.cdsapirc` file also works via cdsapi) |
+| `fetch_era5_reanalysis` | `TRID3NT_COPERNICUS_CDS_API_KEY` | Copernicus CDS personal access token |
 | `fetch_iucn_red_list_range` | `TRID3NT_IUCN_RED_LIST_API_KEY` | IUCN Red List API token (apiv3.iucnredlist.org) |
-| `fetch_openaq_measurements` | `TRID3NT_OPENAQ_API_KEY` | free key from explore.openaq.org |
+| `fetch_openaq_measurements` | `TRID3NT_OPENAQ_API_KEY` | OpenAQ key |
 
 Two more tools are key-gated but surface it as a sweep `FAIL` further downstream:
 

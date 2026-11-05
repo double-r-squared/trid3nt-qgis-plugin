@@ -137,9 +137,13 @@ _ERA5_GOOD = dict(bbox=[-82.4, 26.3, -81.6, 26.9], variable="2m_temperature", st
 _GTSM_GOOD = dict(bbox=[-70, 10, -60, 20], output="water_level", start_date="2017-09-05", end_date="2017-09-05")
 
 
+@pytest.fixture(autouse=True)
+def _a_stored_key(monkeypatch):
+    monkeypatch.setenv("TRID3NT_COPERNICUS_CDS_API_KEY", "test-cds-key")
+
+
 @pytest.mark.parametrize("exc,code,retry", [
-    (Exception("Missing/incomplete configuration file: /root/.cdsapirc"), "ERA5_MISSING_KEY", False),
-    (Exception("403 Client Error: Forbidden - user not authenticated"), "ERA5_AUTH_ERROR", False),
+    (Exception("403 Client Error: Forbidden - user not authenticated"), "KEY_REJECTED", False),
     (Exception("503 queue backend unavailable"), "ERA5_UPSTREAM_ERROR", True),
 ])
 def test_era5_classify(monkeypatch, era5_spec, exc, code, retry):
@@ -151,11 +155,7 @@ def test_era5_classify(monkeypatch, era5_spec, exc, code, retry):
 
 
 @pytest.mark.parametrize("exc,code,retry", [
-    # GTSM's narrower classifier (twin parity): the .cdsapirc message lacks "key",
-    # so it classifies as UPSTREAM (the ADR-flagged pre-existing asymmetry, reproduced).
-    (Exception("Missing/incomplete configuration file: /root/.cdsapirc"), "GTSM_UPSTREAM_ERROR", True),
-    (Exception("no api key available"), "GTSM_MISSING_KEY", False),
-    (Exception("403 Forbidden authentication failed"), "GTSM_AUTH_ERROR", False),
+    (Exception("403 Forbidden authentication failed"), "KEY_REJECTED", False),
     (Exception("503 backend down"), "GTSM_UPSTREAM_ERROR", True),
 ])
 def test_gtsm_classify(monkeypatch, gtsm_spec, exc, code, retry):
@@ -166,6 +166,19 @@ def test_gtsm_classify(monkeypatch, gtsm_spec, exc, code, retry):
     assert ei.value.retryable is retry
 
 
+@pytest.mark.parametrize("read,params,spec_fixture", [
+    ("era5.read", _ERA5_GOOD, "era5_spec"),
+    ("gtsm.read", _GTSM_GOOD, "gtsm_spec"),
+])
+def test_no_stored_key_asks_before_cdsapi_is_touched(monkeypatch, request, read, params, spec_fixture):
+    """The row's one credential name is read, so a key stored under it serves both CDS rows and none stored asks."""
+    monkeypatch.delenv("TRID3NT_COPERNICUS_CDS_API_KEY")
+    _install_fake_cdsapi(monkeypatch, on_construct=AssertionError("cdsapi must not be reached"))
+    with pytest.raises(Exception) as ei:
+        hooks.HOOK_REGISTRY[read](request.getfixturevalue(spec_fixture), params, timeout_s=10.0)
+    assert ei.value.error_code == "KEY_REQUIRED"
+    assert ei.value.credential == "ecmwf_cds"
+    assert "test-cds-key" not in str(ei.value)
 
 
 def test_era5_read_happy_path_array(monkeypatch, era5_spec):

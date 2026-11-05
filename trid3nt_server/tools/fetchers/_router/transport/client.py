@@ -8,6 +8,7 @@ elsewhere uses the un-retried :func:`get_once`."""
 from __future__ import annotations
 
 import email.utils
+import json
 import logging
 import random
 import threading
@@ -16,7 +17,7 @@ from typing import Any, Callable, TypeVar
 
 import httpx
 
-from .errors import TransportUpstreamError, classify_status
+from .errors import TransportAuthError, TransportUpstreamError, classify_status
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.transport.client"
@@ -117,9 +118,24 @@ def _send(client: httpx.Client, method: str, url: str, **kw: Any) -> httpx.Respo
                    label=f"{method} {url}")
 
 
+def _arcgis_token_code(content: bytes) -> int | None:
+    """The 498/499 an ArcGIS REST service spells a token it needs or refuses with, under a 200."""
+    if len(content) > 2048 or not content.lstrip().startswith(b'{"error"'):
+        return None
+    try:
+        code = json.loads(content).get("error", {}).get("code")
+    except (ValueError, AttributeError):
+        return None
+    return code if code in (498, 499) else None
+
+
 def _body(resp: httpx.Response, url: str) -> tuple[bytes, str, str]:
     if resp.status_code >= 400:
         raise classify_status(resp.status_code, resp.text, url)
+    token_code = _arcgis_token_code(resp.content)
+    if token_code is not None:
+        raise TransportAuthError(f"token needed (ArcGIS {token_code}) url={url}: {resp.text[:400]!r}",
+                                 status=token_code, body=resp.text)
     return resp.content, resp.headers.get("content-type", ""), str(resp.url)
 
 

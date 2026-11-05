@@ -14,7 +14,6 @@ from trid3nt_contracts.gate_spec import GateSpec
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload, PayloadWarningEnvelopePayload
 from trid3nt_contracts.processing_contracts import CodeExecRequestPayload
 from trid3nt_contracts.ws import SpatialInputResponsePayload
-from trid3nt_server.model.credentials.resolver import MissingCredentialError, credential_for_tool, resolve_credential
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.inputs.gate.cards import _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
 from trid3nt_server.inputs.gate.cards.estimate import call_provider
@@ -551,42 +550,6 @@ async def _gate_on_code_exec(
     approved["confirmed"] = True
     approved["code_exec_id"] = code_exec_id
     return True, approved
-
-# The credential path: a keyed tool's key is resolved onto its ``secret_ref``
-# before dispatch, and a keyed tool with no key REFUSES by name rather than
-# dispatching a call that cannot succeed.
-
-
-async def _inject_secret_ref(
-    state: SessionState,
-    tool_name: str,
-    params: dict,
-    case_id: str | None,
-) -> dict:
-    """Thread the resolved credential VALUE into a keyed tool's ``secret_ref``.
-
-    A no-op for a public tool or an explicit ref; a keyed tool with no key raises the refusal naming the keys form."""
-    # ``case_id`` is unused: the credential cache is session-scoped, not
-    # per-Case.
-    credential = credential_for_tool(tool_name)
-    if credential is None:
-        return params
-    # Respect an explicit override already on params (dev/test path).
-    if params.get("secret_ref") is not None:
-        return params
-    value = resolve_credential(state.session_id, tool_name)
-    if not value:
-        raise MissingCredentialError(credential)
-    params = dict(params)
-    # The raw value goes in as a plain ``str``, which every keyed fetcher accepts
-    # verbatim: no file vault and no persistence read on this path.
-    params["secret_ref"] = value
-    logger.info(
-        "secret_ref injected tool=%s credential=%s (session cache / env)",
-        tool_name,
-        credential.name,
-    )
-    return params
 
 # The LLM-facing tool returns a sentinel the turn loop replaces with the parsed drawn
 # geometry; the websocket pause/resume lives here, where the live socket and the session

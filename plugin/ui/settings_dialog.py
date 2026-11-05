@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -15,18 +16,22 @@ from qgis.PyQt.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QPushButton,
     QWidget,
 )
 
 from ..plugin_settings import PluginSettings
-from ..net.auth_broker import AuthBroker
+from ..net.auth_broker import LANGUAGE_MODEL_CREDENTIAL, AuthBroker, key_entries
 from ..net.tasks import _KeyedSourcesTask, _ModelListTask, _ProviderConfigTask
 
 
-#: The ``secret-add`` credential name of the language model's own key; other names come from data-source rows.
-LANGUAGE_MODEL_CREDENTIAL = "llm"
+#: What a Keys entry says and the colour it is drawn in: red the provider refused it, green stored, grey no key.
+_KEY_STATE_WORDS = {"rejected": "rejected", "stored": "stored", "none": "no key"}
+_KEY_STATE_COLOURS = {"rejected": "#c0392b", "stored": "#1e8449", "none": "#7f8c8d"}
 
 # Provider presets: label -> base_url, a model shortlist and the num_ctx the agent should set.
 # The model combo is EDITABLE; the shortlist sticks to ids known to honor tool-calling.
@@ -186,17 +191,30 @@ class SettingsDialog(QDialog):
         views_row.addWidget(self.library_entry_btn)
         form.addRow("Views", views_row)
 
-        # A stored key is reported as stored and NEVER read back.
-        self.key_for_combo = QComboBox()
-        self.key_for_combo.addItem("language model", LANGUAGE_MODEL_CREDENTIAL)
+        # One scroll list of every keyed source: refused keys first, stored keys next, sources with no key
+        # last. A stored key is reported as stored and NEVER read back.
+        self._declared: dict = {}
+        self.keys_list = QListWidget()
+        self.keys_list.setMaximumHeight(150)
+        self.keys_list.currentItemChanged.connect(self._show_key_entry)
+        form.addRow("Keys", self.keys_list)
+        self.key_state_lbl = QLabel("")
         self.key_edit = QLineEdit()
         self.key_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.key_for_combo.currentIndexChanged.connect(self._show_key_state)
-        self._show_key_state()
-        key_row = QHBoxLayout()
-        key_row.addWidget(self.key_for_combo)
-        key_row.addWidget(self.key_edit, 1)
-        form.addRow("Keys", key_row)
+        self.key_set_btn = QPushButton("Set key")
+        self.key_set_btn.clicked.connect(self._set_key)
+        self.key_remove_btn = QPushButton("Remove")
+        self.key_remove_btn.clicked.connect(self._remove_key)
+        self._key_detail = QWidget()
+        detail = QHBoxLayout(self._key_detail)
+        detail.setContentsMargins(0, 0, 0, 0)
+        detail.addWidget(self.key_state_lbl)
+        detail.addWidget(self.key_edit, 1)
+        detail.addWidget(self.key_set_btn)
+        detail.addWidget(self.key_remove_btn)
+        self._key_detail.setVisible(False)
+        form.addRow("", self._key_detail)
+        self._refresh_keys()
         self._load_keyed_sources()
 
         self._form = form
@@ -218,7 +236,7 @@ class SettingsDialog(QDialog):
         self._settings.provider = self.provider_combo.currentText()
         self._settings.model_id = self.model_combo.currentText()
         self._push_provider_config()
-        self._save_key()
+        self._set_key()
         super().accept()
 
     def _load_keyed_sources(self) -> None:
@@ -232,41 +250,77 @@ class SettingsDialog(QDialog):
 
     def _on_keyed_sources(self, rows: list) -> None:
         try:
-            for row in rows:
-                self.key_for_combo.addItem(row["label"], row["name"])
-                hint = f"the agent also reads {row['env_var']}"
-                if row["signup_url"]:
-                    hint += f"; a key is issued at {row['signup_url']}"
-                self.key_for_combo.setItemData(
-                    self.key_for_combo.count() - 1, hint, Qt.ItemDataRole.ToolTipRole)
+            self._declared = {row["name"]: row for row in rows}
+            self._refresh_keys()
         except RuntimeError:
             return  # the dialog closed mid-fetch
 
     def _on_keyed_sources_errored(self, message: str) -> None:
         try:
-            self.key_for_combo.setToolTip(
-                f"Data-source keys are not listed: {message}")
+            self.keys_list.setToolTip(f"Data-source keys are not listed: {message}")
         except RuntimeError:
             return
 
-    def _show_key_state(self, *_args) -> None:
-        stored = self.key_for_combo.currentData() in self._broker.stored_names()
-        self.key_edit.setPlaceholderText(
-            "stored - type to replace" if stored else "not set")
+    def _refresh_keys(self) -> None:
+        """Rebuild the list from what is stored, refused and asked for, keeping the selected entry."""
+        keep = self._selected_key()
+        entries = key_entries({name: row["label"] for name, row in self._declared.items()}, self._settings.asked_keys,
+                              self._broker.stored_names(), self._settings.rejected_keys)
+        self.keys_list.blockSignals(True)
+        self.keys_list.clear()
+        for entry in entries:
+            word = _KEY_STATE_WORDS[entry["state"]]
+            item = QListWidgetItem(f"{entry['label']} - {word}")
+            item.setData(Qt.ItemDataRole.UserRole, entry["name"])
+            item.setData(Qt.ItemDataRole.UserRole + 1, entry["state"])
+            item.setForeground(QColor(_KEY_STATE_COLOURS[entry["state"]]))
+            declared = self._declared.get(entry["name"])
+            if declared is not None:
+                item.setToolTip(f"a development run also reads {declared['env_var']}")
+            self.keys_list.addItem(item)
+            if entry["name"] == keep:
+                self.keys_list.setCurrentItem(item)
+        self.keys_list.blockSignals(False)
+        self._show_key_entry(self.keys_list.currentItem())
 
-    def _save_key(self) -> None:
-        """Store a typed key in QgsAuthManager and push it to the agent now; every later
-        connect pushes it again. SECURITY: the value goes to the auth manager and ``secret-
-        add`` only."""
-        value = self.key_edit.text().strip()
-        if not value:
+    def _selected_key(self) -> Optional[str]:
+        item = self.keys_list.currentItem()
+        return item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+
+    def _show_key_entry(self, item, *_previous) -> None:
+        """Click an entry: the key field, and Remove where a key is stored."""
+        self.key_edit.clear()
+        self._key_detail.setVisible(item is not None)
+        if item is None:
             return
-        name = self.key_for_combo.currentData()
+        state = item.data(Qt.ItemDataRole.UserRole + 1)
+        self.key_state_lbl.setText(_KEY_STATE_WORDS[state])
+        self.key_edit.setPlaceholderText("type to replace" if state != "none" else "paste the key")
+        self.key_remove_btn.setVisible(state != "none")
+
+    def _set_key(self) -> None:
+        """Store the typed key in QgsAuthManager and push it to the agent now; every later connect
+        pushes it again. SECURITY: the value goes to the auth manager and ``secret-add`` only."""
+        value = self.key_edit.text().strip()
+        name = self._selected_key()
+        if not value or name is None:
+            return
         self._broker.remember(name, value)
+        self._settings.clear_key_rejection(name)
         self.key_edit.clear()
         bridge = getattr(self.parent(), "bridge", None)
         if bridge is not None and bridge.running:
             bridge.push_secret(name, value)
+        self._refresh_keys()
+
+    def _remove_key(self) -> None:
+        """Delete the stored key from QgsAuthManager; the agent drops its copy when the session ends."""
+        name = self._selected_key()
+        if name is None:
+            return
+        self._broker.forget(name)
+        self._settings.clear_key_rejection(name)
+        self._refresh_keys()
 
     def _act_and_close(self, action) -> None:
         """Run one of the dock's actions, then close WITHOUT saving: an action is not a

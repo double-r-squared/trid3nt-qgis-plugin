@@ -235,6 +235,8 @@ class ParamSheetRow(ContractModel):
     choices: SourceChoice | None = None
     #: Exactly the values this input accepts, as the dropdown lists them; None on a typed row.
     options: list[ParamOption] | None = None
+    #: A key-ask row: the card draws a masked field whose value never rides the reply - the client keeps it in its own store.
+    secret: Literal["required", "rejected"] | None = None
 
     @model_validator(mode="after")
     def _validate_bounds(self) -> "ParamSheetRow":

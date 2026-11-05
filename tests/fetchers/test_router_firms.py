@@ -69,22 +69,29 @@ def test_spec_identity(spec):
     assert spec.output.role == "primary"
 
 
-def test_missing_key_is_input_error_pre_network(spec, monkeypatch):
+def test_missing_key_asks_pre_network(spec, monkeypatch):
     monkeypatch.delenv("TRID3NT_FIRMS_MAP_KEY", raising=False)
     with pytest.raises(Exception) as ei:
         fh.build_request(spec, {"bbox": [-122, 38, -119, 40], "source": "VIIRS_SNPP_NRT", "days_back": 1})
-    assert getattr(ei.value, "error_code", "") == "FIRMS_MISSING_KEY"
+    assert getattr(ei.value, "error_code", "") == "KEY_REQUIRED"
+    assert ei.value.credential == "firms"
     assert getattr(ei.value, "retryable", None) is False
 
 
-def test_key_kwarg_wins_over_env(spec, monkeypatch):
+def test_the_session_key_is_the_one_in_the_url(spec, monkeypatch):
+    from trid3nt_server.model.credentials import resolver
+
     monkeypatch.setenv("TRID3NT_FIRMS_MAP_KEY", "ENVKEY")
-    plans = fh.build_request(
-        spec, {"bbox": [-122.0, 38.0, -119.0, 40.0], "source": "VIIRS_SNPP_NRT", "days_back": 7, "map_key": "KW"}
-    )
-    assert len(plans) == 1
+    resolver.set_session_credential("s-firms", "firms", "SESSIONKEY")
+    token = resolver.bind_session("s-firms")
+    try:
+        plans = fh.build_request(
+            spec, {"bbox": [-122.0, 38.0, -119.0, 40.0], "source": "VIIRS_SNPP_NRT", "days_back": 7})
+    finally:
+        resolver.unbind_session(token)
+        resolver.clear_session("s-firms")
     assert plans[0].url == (
-        "https://firms.modaps.eosdis.nasa.gov/api/area/csv/KW/VIIRS_SNPP_NRT/"
+        "https://firms.modaps.eosdis.nasa.gov/api/area/csv/SESSIONKEY/VIIRS_SNPP_NRT/"
         "-122.0,38.0,-119.0,40.0/7"
     )
 
@@ -97,11 +104,12 @@ def test_env_key_and_rolling_url(spec, monkeypatch):
     assert plans[0].url.endswith("/ENVKEY/MODIS_NRT/-122.0,38.0,-119.0,40.0/3")
 
 
-def test_historical_date_forces_day_one(spec):
+def test_historical_date_forces_day_one(spec, monkeypatch):
+    monkeypatch.setenv("TRID3NT_FIRMS_MAP_KEY", "K")
     plans = fh.build_request(
         spec,
         {"bbox": [-113.346, 39.57, -111.765, 41.115], "source": "VIIRS_NOAA20_NRT",
-         "days_back": 5, "date": "2026-06-22", "map_key": "K"},
+         "days_back": 5, "date": "2026-06-22"},
     )
     # date forces the day-range to 1 and appends the trailing /<date> segment.
     assert plans[0].url.endswith(
@@ -137,11 +145,14 @@ def test_geography_correctness_california(spec):
         assert 32.5 <= geom.y <= 42.0
 
 
-@pytest.mark.parametrize("body", [b"Invalid MAP_KEY.", b"You have exceeded your transaction limit."])
-def test_auth_body_200_raises_auth_error(spec, body):
+@pytest.mark.parametrize("body,code", [
+    (b"Invalid MAP_KEY.", "FIRMS_AUTH_ERROR"),
+    (b"You have exceeded your transaction limit.", "FIRMS_RATE_LIMITED"),
+])
+def test_auth_body_200_raises_its_declared_code(spec, body, code):
     with pytest.raises(Exception) as ei:
         http_json._features(spec, {}, [body])
-    assert getattr(ei.value, "error_code", "") == "FIRMS_AUTH_ERROR"
+    assert getattr(ei.value, "error_code", "") == code
 
 
 def test_blank_body_raises_upstream(spec):

@@ -210,7 +210,8 @@ def test_snotel_no_stations_raises():
 
 
 
-def test_openaq_paging_and_sensor_join():
+def test_openaq_paging_and_sensor_join(monkeypatch):
+    monkeypatch.setenv("TRID3NT_OPENAQ_API_KEY", "test-openaq-key")
     spec = _spec("fetch_openaq_measurements")
     loc = json.dumps({"results": [
         {"id": 101, "name": "A", "country": {"code": "IN"}, "coordinates": {"longitude": 77.1, "latitude": 28.6},
@@ -226,7 +227,7 @@ def test_openaq_paging_and_sensor_join():
             return loc
         return latest
 
-    raw = {"bbox": [76.8, 28.4, 77.4, 28.9], "parameters": ["pm25"], "api_key": "DUMMY"}
+    raw = {"bbox": [76.8, 28.4, 77.4, 28.9], "parameters": ["pm25"]}
     params = router.validate_params(spec, raw)
     with patch.object(cr, "_get", fake_get), patch.object(http_json, "_get", fake_get):
         g = _gdf(cr.execute(spec, params))
@@ -241,8 +242,8 @@ def test_openaq_paging_and_sensor_join():
 @pytest.mark.parametrize(
     "name,env,code",
     [
-        ("fetch_airnow_air_quality", "TRID3NT_AIRNOW_API_KEY", "AIRNOW_MISSING_KEY"),
-        ("fetch_openaq_measurements", "TRID3NT_OPENAQ_API_KEY", "OPENAQ_KEY_REQUIRED"),
+        ("fetch_airnow_air_quality", "TRID3NT_AIRNOW_API_KEY", "KEY_REQUIRED"),
+        ("fetch_openaq_measurements", "TRID3NT_OPENAQ_API_KEY", "KEY_REQUIRED"),
     ],
 )
 def test_keyed_missing_key_refuses_pre_network(name, env, code, monkeypatch):

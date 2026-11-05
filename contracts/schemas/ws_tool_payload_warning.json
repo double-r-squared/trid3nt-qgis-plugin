@@ -273,6 +273,22 @@
           ],
           "default": null
         },
+        "secret": {
+          "anyOf": [
+            {
+              "enum": [
+                "required",
+                "rejected"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secret"
+        },
         "source_badge": {
           "default": "",
           "maxLength": 200,

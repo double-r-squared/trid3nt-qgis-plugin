@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._fetch_common import UpstreamAPIError
+from trid3nt_server.tools.fetchers._fetch_common import KeyAskError, UpstreamAPIError
 from trid3nt_server.tools.tool_arg_normalizer import autofill_missing_bbox, normalize_args
 from trid3nt_server.render.pipeline_emitter import PipelineEmitter, bind_turn_case
 from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry, get_uri_registry
@@ -18,7 +18,9 @@ from trid3nt_server.server.config import _env_flag
 from trid3nt_server.server.dispatch.aoi import pin_case_aoi_from_solve
 from trid3nt_server.server.dispatch.persist import _VALID_ERROR_CODES, _persist_chart_record, _persist_chat_turn, _persist_tool_card
 from trid3nt_server.server.dispatch.results import _run_to_completion_shielded
+from trid3nt_server.inputs.gate.cards.key_ask import ask_for_key
 from trid3nt_server.inputs.gate.cards.run_inputs import review_run_inputs
+from trid3nt_server.model.credentials.resolver import bind_session, unbind_session
 from trid3nt_server.inputs.gate.errors import CodeExecConfirmationCancelledError, GateConfirmationTimeoutError, PayloadWarningCancelledError, SolverConfirmationCancelledError, UserDeclinedError
 from trid3nt_server.server.errors import ToolNotFoundError
 from trid3nt_server.server.session.case_state import _persist_case_layer_handles, _persist_case_loaded_layers, _turn_case_bbox, _turn_case_id
@@ -265,7 +267,6 @@ async def _invoke_tool_via_emitter(
         _gate_on_code_exec,
         _gate_spec_for,
         _gate_with_turn_memory,
-        _inject_secret_ref,
         _maybe_gate_on_payload_warning,
     )
 
@@ -274,8 +275,8 @@ async def _invoke_tool_via_emitter(
         raise ToolNotFoundError(tool_name, list(TOOL_REGISTRY))
     entry = TOOL_REGISTRY[tool_name]
 
-    # Snapshot the ORIGINAL call args NOW, before normalization, gating, URI-resolve and
-    # secret-inject rewrite ``params``: the early input-only frame's args must equal the completion
+    # Snapshot the ORIGINAL call args NOW, before normalization, gating, URI-resolve
+    # rewrite ``params``: the early input-only frame's args must equal the completion
     # frame's, so the card shows the same input the model sent both live and at completion.
     _original_tool_args = dict(params)
 
@@ -408,11 +409,6 @@ async def _invoke_tool_via_emitter(
     uri_registry = get_uri_registry(state.session_id)
     params = uri_registry.resolve_params(tool_name, params)
 
-    # Thread the session's key into a keyed tool's ``secret_ref``. A no-op for a
-    # public tool; a keyed tool with no key anywhere refuses here by name rather
-    # than dispatching a call that cannot succeed.
-    params = await _inject_secret_ref(state, tool_name, params, turn_case_id)
-
     state.current_pipeline_id = state.emitter.start_pipeline()
     state.current_turn_pipeline_id = state.current_pipeline_id
     # Bind the registry as the ambient observation sink for the lifetime of the
@@ -485,18 +481,28 @@ async def _invoke_tool_via_emitter(
         # the emit machinery stays on the loop. A reuse short-circuit returns an already-produced
         # layer synchronously and is not covered by the startup emit-free scan, so it is excluded.
         # A tool mis-classified as sync returns a coroutine from the thread, awaited on the loop.
-        if (
-            not isinstance(entry, _ReuseEntry)
-            and not asyncio.iscoroutinefunction(entry.fn)
-        ):
-            out = await asyncio.to_thread(entry.fn, **params)
-            if asyncio.iscoroutine(out):
-                return _restamp(await out)
-            return _restamp(out)
-        out = entry.fn(**params)
-        if asyncio.iscoroutine(out):
-            return _restamp(await out)
-        return _restamp(out)
+        async def _call() -> Any:
+            if (
+                not isinstance(entry, _ReuseEntry)
+                and not asyncio.iscoroutinefunction(entry.fn)
+            ):
+                out = await asyncio.to_thread(entry.fn, **params)
+            else:
+                out = entry.fn(**params)
+            return _restamp(await out) if asyncio.iscoroutine(out) else _restamp(out)
+
+        # A keyed fetch reads the key of the session it runs for; one the provider asks for is asked of the
+        # person on a card and the call runs once more, never through the model.
+        session_token = bind_session(state.session_id)
+        try:
+            try:
+                return await _call()
+            except KeyAskError as asked:
+                if not await ask_for_key(tool_name, asked, emitter=state.emitter):
+                    raise
+                return await _call()
+        finally:
+            unbind_session(session_token)
 
     try:
         result = await state.emitter.emit_tool_call(

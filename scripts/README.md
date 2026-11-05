@@ -16,6 +16,7 @@ a dev tool and lives under `dev/`, which git does not carry.
 | `fetch_binaries.sh` | Idempotent downloader for `mf6`, `minio` and `mc`. |
 | `init_minio.sh` | Create the runs and cache buckets in the local MinIO. |
 | `install_plugin.sh` | THE plugin deploy step: sync the plugin into the live QGIS profile. |
+| `check_row_keys.py` | Refuse a source row that takes a key without declaring one, reading what the provider's own published description states; run when a row is added. |
 | `model_check.py` | The SysML model checker the suite runs, and the generator of every `<seam>-view.md`. |
 | `start_agent.sh` | Start the daemon for local dev, loading `.env.local`. |
 | `start_minio.sh` | Start MinIO, writing its pid and log under `run/` and `logs/`. |

@@ -1,8 +1,8 @@
 """Runtime credential resolver: in-memory session cache -> the row's env var.
 
 A source that needs a key STATES it on its own row (``auth.credential``), so the
-name a key is stored under, the env var it falls back to and the form that offers
-it all read one fact. The cache holds raw key material only in process memory for
+name a key is stored under, the env var it falls back to and the label the list that
+offers it shows all read one fact. A hook reads the key of the session whose dispatch is running. The cache holds raw key material only in process memory for
 the session's lifetime; it is never persisted, logged, or echoed on any envelope.
 """
 
@@ -10,16 +10,21 @@ from __future__ import annotations
 
 import logging
 import os
+import contextvars
 import threading
 from typing import Final
 
 from trid3nt_contracts.secrets import LANGUAGE_MODEL_CREDENTIAL
-from trid3nt_contracts.source_spec import CredentialSpec
+from trid3nt_contracts.source_spec import CredentialSpec, SourceSpec
+from trid3nt_server.tools.fetchers._fetch_common import KeyRequiredError
 
 logger = logging.getLogger("trid3nt_server.model.credentials.resolver")
 
 __all__ = [
-    "MissingCredentialError",
+    "bind_session",
+    "credential_value",
+    "unbind_session",
+    "stored_value",
     "credential_for_tool",
     "keyed_credentials",
     "resolve_credential",
@@ -29,30 +34,43 @@ __all__ = [
 ]
 
 
-class MissingCredentialError(RuntimeError):
-    """A keyed source was asked for with no key anywhere to serve it. The refusal names the
-    credential and the one place a key is entered; the chat is never that place, so it points at
-    the plugin's keys form."""
-
-    error_code: str = "CREDENTIAL_MISSING"
-    retryable: bool = False
-    actionability: str = "user"
-
-    def __init__(self, credential: CredentialSpec) -> None:
-        signup = f" A key is issued at {credential.signup_url}." if credential.signup_url else ""
-        super().__init__(
-            f"{credential.label} needs a key and none is stored. Open the "
-            f"plugin's Settings -> Keys and enter the {credential.label} key "
-            f"there (never in the chat).{signup}"
-        )
-        self.credential_name = credential.name
-
-
 # Guarded by a lock: ``secret-add`` handling and tool-dispatch resolution run on
 # the same asyncio loop today, but the lock keeps the module honest if a value
 # is ever written from a worker thread (offloaded fetcher path).
 _LOCK: Final[threading.Lock] = threading.Lock()
 _SESSION_CREDENTIALS: dict[str, dict[str, str]] = {}
+
+# The session whose tool dispatch is running; a worker thread started from it inherits the binding.
+_ACTIVE_SESSION: contextvars.ContextVar[str] = contextvars.ContextVar("trid3nt_active_session", default="")
+
+
+def bind_session(session_id: str) -> contextvars.Token:
+    return _ACTIVE_SESSION.set(session_id)
+
+
+def unbind_session(token: contextvars.Token) -> None:
+    _ACTIVE_SESSION.reset(token)
+
+
+def stored_value(name: str, env_var: str | None = None) -> str | None:
+    """The key held under ``name`` for the bound session, else the value of ``env_var`` where one is named; ``None`` when neither holds one."""
+    with _LOCK:
+        cached = _SESSION_CREDENTIALS.get(_ACTIVE_SESSION.get(), {}).get(name)
+    if cached:
+        return cached
+    env_value = os.environ.get(env_var) if env_var else None
+    return env_value.strip() if env_value and env_value.strip() else None
+
+
+def credential_value(spec: SourceSpec) -> str:
+    """The key the row's declared credential holds for the bound session (its env var behind it), else a ``KeyRequiredError``."""
+    credential = spec.auth.credential
+    if credential is None:
+        raise ValueError(f"row {spec.name!r} declares no credential")
+    value = stored_value(credential.name, credential.env_var)
+    if value is None:
+        raise KeyRequiredError(spec.name, credential.name, credential.label)
+    return value
 
 
 def credential_for_tool(tool_name: str) -> CredentialSpec | None:
@@ -64,7 +82,7 @@ def credential_for_tool(tool_name: str) -> CredentialSpec | None:
 
 
 def keyed_credentials() -> dict[str, CredentialSpec]:
-    """Every declared credential by name: the rows the keys form offers.
+    """Every declared credential by name, with the label the keys list shows and the env var behind it.
     Two rows served by one upstream account collapse to the single name both
     state, which is why one entered key serves both."""
     from trid3nt_server.tools.fetchers._router.registration import (

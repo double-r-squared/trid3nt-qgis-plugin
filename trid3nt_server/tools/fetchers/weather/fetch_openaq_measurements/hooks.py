@@ -5,9 +5,7 @@ station cap. PHASE E fans out one latest-reading request per station and EXPANDS
 one point per station and parameter."""
 
 # Each latest value is joined to its parameter and units through the station's own
-# sensor map, then bbox-hard-filtered. The key rides as a header, resolved from the
-# kwarg, then a str secret_ref, then the env var; with no key the build raises a
-# credential-shaped ``OPENAQ_KEY_REQUIRED``, recognized from its message text.
+# sensor map, then bbox-hard-filtered. The key rides as a header.
 
 from __future__ import annotations
 
@@ -17,6 +15,7 @@ import os
 from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
+from trid3nt_server.model.credentials.resolver import credential_value
 
 from ..._router import hooks as _hooks
 from ..._router.errors import router_input_error, router_upstream_error
@@ -25,7 +24,6 @@ __all__ = ["build_request", "next_page", "parse_response", "enrich_plan", "enric
 
 _OPENAQ_BASE = "https://api.openaq.org/v3"
 _LOCATIONS_URL = f"{_OPENAQ_BASE}/locations"
-_OPENAQ_KEY_ENV = "TRID3NT_OPENAQ_API_KEY"
 
 _VALID_PARAMETERS = frozenset({"pm25", "pm10", "pm1", "no2", "no", "nox", "o3", "so2", "co", "co2", "bc", "ch4", "nh3"})
 _DEFAULT_PARAMETERS = ("pm25", "pm10", "no2", "o3", "so2", "co")
@@ -36,25 +34,6 @@ _PRESERVED_PROPERTIES = (
     "location_id", "location_name", "country", "parameter", "display_name",
     "value", "unit", "datetime_utc", "datetime_local", "sensor_id",
 )
-
-
-def _resolve_api_key(sc: str, params: dict[str, Any]) -> str:
-    """kwarg -> str secret_ref -> env; credential-shaped OPENAQ_KEY_REQUIRED when none."""
-    api_key = params.get("api_key")
-    if api_key:
-        return str(api_key)
-    secret_ref = params.get("secret_ref")
-    if isinstance(secret_ref, str) and secret_ref:
-        return secret_ref
-    env_key = os.environ.get(_OPENAQ_KEY_ENV)
-    if env_key:
-        return env_key
-    raise router_input_error(
-        sc,
-        "no OpenAQ API key available. Add the key under Settings > Keys. Register a "
-        "free key at https://explore.openaq.org/ (account -> API keys).",
-        "KEY_REQUIRED",
-    )
 
 
 def _validate_parameters(sc: str, raw: Any) -> list[str]:
@@ -94,7 +73,7 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
     """Resolve the key + validate params, then build the locations page-1 request."""
     sc = spec.error_code_prefix
     _validate_parameters(sc, params.get("parameters"))
-    api_key = _resolve_api_key(sc, params)  # raises KEY_REQUIRED pre-network when absent
+    api_key = credential_value(spec)
     return [_locations_plan(spec, params, api_key, 1)]
 
 
@@ -116,7 +95,7 @@ def next_page(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> 
     total = sum(len(_results(b)) for b in bodies)
     if total >= _MAX_LOCATIONS:
         return None
-    api_key = _resolve_api_key(spec.error_code_prefix, params)
+    api_key = credential_value(spec)
     return _locations_plan(spec, params, api_key, len(bodies) + 1)
 
 
@@ -142,7 +121,7 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
 @_hooks.register_hook("openaq_measurements.enrich_plan")
 def enrich_plan(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]]) -> list[tuple[str, "_hooks.RequestPlan"]]:
     """One /locations/{id}/latest ref per station."""
-    api_key = _resolve_api_key(spec.error_code_prefix, params)
+    api_key = credential_value(spec)
     plans: list[tuple[str, "_hooks.RequestPlan"]] = []
     for feat in features:
         st = (feat.get("properties") or {}).get("_station") or {}

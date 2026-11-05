@@ -11,6 +11,9 @@ import math
 __all__ = [
     "FetchError",
     "UpstreamAPIError",
+    "KeyAskError",
+    "KeyRequiredError",
+    "KeyRejectedError",
     "BboxInvalidError",
     "PixelBudgetExceededError",
     "bbox_pixel_dims",
@@ -29,6 +32,46 @@ class FetchError(RuntimeError):
 class UpstreamAPIError(FetchError):
     error_code = "UPSTREAM_API_ERROR"
     retryable = True
+
+class KeyAskError(FetchError):
+    """A source needs a key from the person at the card: ``credential`` is the name a key is stored under and ``link`` the
+    one URL the provider's own answer carried, if any. The message never holds a key value."""
+
+    retryable = False
+    actionability = "user"
+
+    def __init__(self, source: str, credential: str, label: str = "", link: str | None = None) -> None:
+        self.source = source
+        self.credential = credential
+        self.label = label or credential
+        self.link = link
+        super().__init__(self._words())
+
+    def _words(self) -> str:
+        raise NotImplementedError
+
+
+class KeyRequiredError(KeyAskError):
+    """No key is stored for a source that takes one."""
+
+    error_code = "KEY_REQUIRED"
+
+    def _words(self) -> str:
+        words = (f"{self.source} needs a {self.label} key and none is stored. The person is asked for it on a card in the "
+                 "plugin; it never goes through the chat.")
+        return f"{words} The provider points to {self.link}." if self.link else words
+
+
+class KeyRejectedError(KeyAskError):
+    """The provider answered a stored key with a refusal."""
+
+    error_code = "KEY_REJECTED"
+
+    def _words(self) -> str:
+        words = (f"{self.source} was refused: the provider rejected the stored {self.label} key. The person is asked for a "
+                 "new one on a card in the plugin; it never goes through the chat.")
+        return f"{words} The provider points to {self.link}." if self.link else words
+
 
 class BboxInvalidError(FetchError):
     error_code = "BBOX_INVALID"

@@ -104,6 +104,19 @@ class ParamSheetParseTests(unittest.TestCase):
         self.assertIsNone(sheet.rows[0].bounds)
 
 
+class KeyAskRowTests(unittest.TestCase):
+    def test_a_secret_row_is_read_and_its_typed_value_never_becomes_an_edit(self) -> None:
+        sheet = gate.parse_param_sheet(_sheet_payload(rows=[
+            {"name": "airnow", "value": None, "secret": "rejected", "source_badge": "EPA AirNow"}]))
+        row = sheet.rows[0]
+        self.assertEqual(row.secret, "rejected")
+        self.assertEqual(gate.resolve_param_sheet_edits(sheet.rows, {"airnow": "typed-test-key"}), {})
+
+    def test_an_unknown_secret_word_is_no_secret_row(self) -> None:
+        sheet = gate.parse_param_sheet(_sheet_payload(rows=[{"name": "a", "value": 1.0, "secret": "yes"}]))
+        self.assertEqual(sheet.rows[0].secret, "")
+
+
 class ParamSheetEditTests(unittest.TestCase):
     def setUp(self) -> None:
         self.rows = gate.parse_param_sheet(_sheet_payload()).rows

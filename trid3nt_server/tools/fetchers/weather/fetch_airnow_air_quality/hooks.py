@@ -1,23 +1,21 @@
 """airnow_air_quality hooks: EPA AirNow current-hour AQI observations, keyed.
 
-``build_request`` resolves the API key, validates the pollutant filter and builds the
+``build_request`` reads the API key, validates the pollutant filter and builds the
 bounded-box query; ``parse_response`` keeps the LATEST row per (lat, lon, parameter). The
 declared ``column_map`` derives ``ParameterName`` / ``AQICategoryName`` off the raw
 ``Parameter`` / ``Category`` this hands it."""
 
-# With NO key the build raises a credential-shaped ``AIRNOW_MISSING_KEY``: the
-# ``_MISSING_KEY`` suffix is what the surface recognizes to show a name-only credential
-# card rather than an opaque failure. An empty result is an honest header-only FGB.
+# With no key stored the build asks for one before the network; an empty result is an honest header-only FGB.
 
 from __future__ import annotations
 
 import json
 import math
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
+from trid3nt_server.model.credentials.resolver import credential_value
 
 from ..._router import hooks as _hooks
 from ..._router.errors import router_input_error, router_upstream_error
@@ -25,7 +23,6 @@ from ..._router.errors import router_input_error, router_upstream_error
 __all__ = ["build_request", "parse_response"]
 
 _AIRNOW_BASE = "https://www.airnowapi.org/aq/data/"
-_AIRNOW_KEY_ENV = "TRID3NT_AIRNOW_API_KEY"
 _WINDOW_HOURS = 3
 
 _VALID_PARAMETERS: dict[str, str] = {
@@ -36,25 +33,6 @@ _PRESERVED_PROPERTIES = (
     "Latitude", "Longitude", "UTC", "Parameter", "Unit", "Value", "RawConcentration",
     "AQI", "Category", "SiteName", "AgencyName", "FullAQSCode", "IntlAQSCode",
 )
-
-
-def _resolve_api_key(sc: str, params: dict[str, Any]) -> str:
-    """kwarg -> str secret_ref -> env; credential-shaped MISSING_KEY when none (pre-network)."""
-    api_key = params.get("api_key")
-    if api_key:
-        return str(api_key)
-    secret_ref = params.get("secret_ref")
-    if isinstance(secret_ref, str) and secret_ref:
-        return secret_ref
-    env_key = os.environ.get(_AIRNOW_KEY_ENV)
-    if env_key:
-        return env_key
-    raise router_input_error(
-        sc,
-        "no AirNow API key available. Add the key under Settings > Keys. Register a "
-        "free key at https://docs.airnowapi.org/account/request/.",
-        "MISSING_KEY",
-    )
 
 
 def _validate_parameters(sc: str, raw: Any) -> list[str]:
@@ -86,14 +64,14 @@ def _current_hour_window() -> tuple[str, str]:
 
 @_hooks.register_hook("airnow_air_quality.build_request")
 def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.RequestPlan"]:
-    """Validate params + resolve the key, then build the aq/data bounded-box GET."""
+    """Validate params + read the key, then build the aq/data bounded-box GET."""
     sc = spec.error_code_prefix
     param_norm = _validate_parameters(sc, params.get("parameters"))
     try:
         mt = int(params.get("monitor_type", 0))
     except (TypeError, ValueError):
         mt = 0
-    api_key = _resolve_api_key(sc, params)  # raises MISSING_KEY pre-network when absent
+    api_key = credential_value(spec)
     start_date, end_date = _current_hour_window()
     w, s, e, n = (float(v) for v in params["bbox"])
     q = {

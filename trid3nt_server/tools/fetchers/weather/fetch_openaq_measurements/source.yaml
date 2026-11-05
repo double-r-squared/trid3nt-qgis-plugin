@@ -19,7 +19,6 @@ auth:
   credential:
     name: openaq
     label: OpenAQ
-    signup_url: https://explore.openaq.org/register
     env_var: TRID3NT_OPENAQ_API_KEY
   user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
     agent@trid3nt.dev)
@@ -30,14 +29,6 @@ params:
     quantize: round_6dp
   parameters:
     type: str_list
-    required: false
-    schema_optional: true
-  api_key:
-    type: str
-    required: false
-    schema_optional: true
-  secret_ref:
-    type: str
     required: false
     schema_optional: true
 hooks:
@@ -78,9 +69,9 @@ payload_estimate:
   kb_per_feature: 0.3125
   floor_mb: 0.001
 caveats:
-- 'OpenAQ v3 global air-quality LATEST measurements (keyed: api_key -> secret_ref -> TRID3NT_OPENAQ_API_KEY
-  env). Paginated /v3/locations sweep + per-location /latest fan-out + sensor->parameter join; one point
-  per (station, parameter). Worldwide. No key -> OPENAQ_KEY_REQUIRED, refused pre-network toward the plugin''s keys form;
+- 'OpenAQ v3 global air-quality LATEST measurements (keyed: the person''s OpenAQ key).
+  Paginated /v3/locations sweep + per-location /latest fan-out + sensor->parameter join; one point
+  per (station, parameter). Worldwide. No key -> KEY_REQUIRED before the network, a key OpenAQ refuses -> KEY_REJECTED;
   empty bbox -> honest header-only FGB.'
 - "model-callable, not matched: air quality is not one of the seventeen data classes, so it carries no coverage row"
 docstring: "OpenAQ global air-quality latest measurements as a FlatGeobuf point layer.\n\nWhat it does:\n\
@@ -108,24 +99,19 @@ docstring: "OpenAQ global air-quality latest measurements as a FlatGeobuf point 
   \ Optional pollutant filter -- a single name or a list,\n        case-insensitive, each one of ``pm25``\
   \ / ``pm10`` / ``pm1`` /\n        ``no2`` / ``no`` / ``nox`` / ``o3`` / ``so2`` / ``co`` / ``co2`` /\n\
   \        ``bc`` / ``ch4`` / ``nh3``. Defaults to the six core pollutants\n        (``pm25, pm10, no2,\
-  \ o3, so2, co``). Applied client-side after the\n        sensor->parameter join.\n    api_key: Optional\
-  \ explicit OpenAQ API key (highest-priority resolution\n        path). When set, used directly.\n  \
-  \  secret_ref: Optional ``SecretRecord`` (from the per-Case secrets panel)\n        -> resolved to the\
-  \ key via ``Persistence.get_secret_value`` at\n        invocation time (the production path).\n\nReturns:\n\
+  \ o3, so2, co``). Applied client-side after the\n        sensor->parameter join.\n\nReturns:\n\
   \    A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket\n    ``s3://<cache>/cache/dynamic-1h/openaq/<key>.fgb``\
   \ containing point\n    geometries (``Point`` in EPSG:4326) and the schema ``location_id``,\n    ``location_name``,\
   \ ``country``, ``parameter``, ``display_name``,\n    ``value``, ``unit``, ``datetime_utc``, ``datetime_local``,\n\
   \    ``sensor_id``. ``layer_type=\"vector\"``, ``role=\"primary\"``,\n    ``units=None`` (the per-feature\
-  \ ``unit`` column carries the pollutant\n    unit, which varies by parameter).\n\nRaises:\n    ``OpenAQMissingKeyError``\
-  \ (``OPENAQ_KEY_REQUIRED``): no API key resolved\n        from any of the three paths -- raised BEFORE\
-  \ any network call. The key is\n        entered in the plugin's Settings -> Keys (OpenAQ has no public\n  \
-  \      mirror, so this honest typed error IS the degrade).\n    ``OpenAQAuthError`` (``OPENAQ_AUTH_ERROR``):\
-  \ the API rejected the key\n        (401/403; revoked / invalid) -- replace it in Settings -> Keys.\n\
+  \ ``unit`` column carries the pollutant\n    unit, which varies by parameter).\n\nRaises:\n    ``KEY_REQUIRED``: no OpenAQ key is stored -- raised BEFORE\
+  \ any network call; the person is asked on a card (OpenAQ has no public\n        mirror, so this honest\
+  \ typed error IS the degrade).\n    ``KEY_REJECTED``: OpenAQ refused the stored key (401/403).\n\
   \    ``OpenAQInputError``: bad bbox or unknown parameter name.\n    ``OpenAQUpstreamError``: OpenAQ\
   \ 5xx / 422 / non-JSON / network failure\n        (retryable).\n\nCross-tool dependencies:\n    Consumes\
   \ optional bbox from ``fetch_administrative_boundaries`` /\n    ``geocode_location`` (geocode \"Delhi\"\
   \ -> derive bbox -> call this tool).\n    Pairs with ``fetch_hrrr_smoke`` / satellite aerosol layers\
   \ for\n    observed-vs-modeled air-quality comparison.\n\nCache: ``dynamic-1h`` (OpenAQ latest values refresh as new readings land;\nan hourly\
   \ window balances freshness against the API rate budget). Cache\nkey: SHA-256 of (bbox rounded-6dp,\
-  \ parameters) + the top-of-hour vintage.\nThe key intentionally omits the api_key -- the underlying\
+  \ parameters) + the top-of-hour vintage.\nThe key omits the person's API key -- the underlying\
   \ measurements do\nnot vary by caller."

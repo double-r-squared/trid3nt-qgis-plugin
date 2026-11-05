@@ -170,6 +170,8 @@ class ParamRow:
     choices: Optional[SourceChoiceRow] = None
     # EXACTLY what this input accepts, as ``(value, label)``; None where the value is typed.
     options: Optional[list] = None
+    # "required" or "rejected" on a key-ask row, whose value goes to the credential store and never to the server in a reply.
+    secret: str = ""
 
     @property
     def is_numeric(self) -> bool:
@@ -260,6 +262,7 @@ def _parse_param_row(raw: dict) -> Optional[ParamRow]:
         note=raw.get("note") if isinstance(raw.get("note"), str) else None,
         choices=_parse_source_choice(raw.get("choices")),
         options=_parse_options(raw.get("options")),
+        secret=raw.get("secret") if raw.get("secret") in ("required", "rejected") else "",
     )
 
 
@@ -302,7 +305,7 @@ def resolve_param_sheet_edits(rows: list, edited: dict) -> dict:
     revised = {}
     for name, text in (edited or {}).items():
         row = by_name.get(name)
-        if row is None or not row.editable:
+        if row is None or not row.editable or row.secret:
             continue
         if row.options is not None:
             if text != row.value and any(text == v for v, _l in row.options):

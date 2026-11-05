@@ -17,7 +17,6 @@ auth:
   credential:
     name: ecmwf_cds
     label: Copernicus Climate Data Store
-    signup_url: https://cds.climate.copernicus.eu/how-to-api
     env_var: TRID3NT_COPERNICUS_CDS_API_KEY
   user_agent: trid3nt_default
 
@@ -26,8 +25,6 @@ params:
   start_date: {type: str, required: true}
   end_date:   {type: str, required: true}
   output:     {type: enum, values: [water_level, surge_only], default: water_level}
-  api_key:    {type: str, schema_optional: true}
-  secret_ref: {type: str, schema_optional: true}
 
 ingest:
   delegate:
@@ -86,7 +83,7 @@ coverage:
 
 caveats:
   - "GTSM v3.0 is a reanalysis, a MODEL, not a gauge -- for CONUS use fetch_noaa_coops_tides"
-  - "keyed: a free Copernicus CDS key, entered in the plugin's keys form; with none the tool refuses by name on GTSM_MISSING_KEY; empty bbox -> GTSM_EMPTY (no gauges)"
+  - "keyed: the person's Copernicus CDS key, asked for on a card when none is stored (KEY_REQUIRED, or KEY_REJECTED when CDS refuses it); empty bbox -> GTSM_EMPTY (no gauges)"
   - "sparse global gauge network; composers interpolate to the hydraulic model grid"
 
 # corpus lifted from sibling corpus.yaml.
@@ -133,9 +130,6 @@ docstring: |-
   - ``end_date``: ISO YYYY-MM-DD inclusive. Hard cap 366 days from start.
   - ``output``: ``"water_level"`` (default, tide + surge; canonical
     hydraulic model input) or ``"surge_only"`` (meteorological residual only).
-  - ``api_key``: optional explicit CDS API key (overrides all other paths).
-  - ``secret_ref``: optional ``SecretRecord`` resolved via
-    ``Persistence.get_secret_value`` (per-Case production path).
 
   **Returns:**
 

@@ -36,6 +36,8 @@ the cache shim are the two seams they all pass through.
 | `fetchers/_router/router.py` | The router engine: a declared row plus the ask to a request, a response and a typed layer. |
 | `fetchers/_router/spec.py` | The source-spec loader - schema validation, co-located corpus pickup, tree walk. |
 | `fetchers/_router/registration.py` | Promotion: a row becomes a registered tool with a synthesized signature and schema. |
+| `fetchers/_router/key_answer.py` | A provider's 401/403/498/499 answer read in one place and turned into the typed `KEY_REQUIRED` / `KEY_REJECTED` ask. |
+| `fetchers/_router/key_statement.py` | What a provider states machine-readably about a key: ArcGIS service document, OGC capabilities, OpenAPI security. |
 | `fetchers/_router/emit_on_fetch.py` | Surfacing a fetched INPUT as a `role=context` layer through the emission seam. |
 | `fetchers/_router/errors.py` | The router's typed-error hierarchy over the shared fetch bases. |
 | `fetchers/_router/executors/` | How a request is actually run: HTTP JSON, raster COG, vector FlatGeobuf, zipped vector, station timeseries, library delegates, animation frames. |

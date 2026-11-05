@@ -48,6 +48,7 @@ from .errors import (
     router_upstream_error,
 )
 from .executors import qgis_provider, raster_cog, station_timeseries
+from .key_answer import key_error_from
 from .params import validated
 from .spec import record_shape
 from .transforms import tiled_mosaic
@@ -376,7 +377,20 @@ def route(
     spec: SourceSpec, raw_params: dict[str, Any]
 ) -> LayerURI | dict[str, Any] | list[LayerURI]:
     """The engine: validate, gate, dispatch, cache, emit. Returns a LayerURI, a record dict for
-    ``shape: record``, or an ordered ``list[LayerURI]`` for ``shape: animation_frames``."""
+    ``shape: record``, or an ordered ``list[LayerURI]`` for ``shape: animation_frames``.
+    A provider's 401/403/498/499 that asks for a key leaves as a ``KEY_REQUIRED`` / ``KEY_REJECTED``."""
+    try:
+        return _route(spec, raw_params)
+    except Exception as exc:
+        asked = key_error_from(spec, exc)
+        if asked is None:
+            raise
+        raise asked from exc
+
+
+def _route(
+    spec: SourceSpec, raw_params: dict[str, Any]
+) -> LayerURI | dict[str, Any] | list[LayerURI]:
     # Router-level control kwargs (``visualize``, ``purpose``) are popped so they never reach
     # validation or the cache key.
     raw_params = dict(raw_params)

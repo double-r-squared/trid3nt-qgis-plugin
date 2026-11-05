@@ -57,21 +57,24 @@ def test_keyed_credentials_are_the_rows_that_declare_one():
     creds = resolver.keyed_credentials()
     assert set(creds) == {"firms", "ecmwf_cds", "openaq", "airnow"}
     assert creds["airnow"].env_var == "TRID3NT_AIRNOW_API_KEY"
-    assert creds["firms"].signup_url is not None
+    assert not hasattr(creds["firms"], "signup_url")
 
 
 def test_credential_for_public_tool_is_none():
     assert resolver.credential_for_tool("fetch_usgs_water_gauges") is None
 
 
-def test_refusal_names_the_credential_and_the_form():
-    credential = resolver.credential_for_tool("fetch_firms_active_fire")
-    err = resolver.MissingCredentialError(credential)
-    assert err.credential_name == "firms"
-    assert err.actionability == "user"
-    assert err.retryable is False
-    assert "Settings -> Keys" in str(err)
-    assert credential.signup_url in str(err)
+def test_a_hook_reads_the_key_of_the_session_it_runs_for(monkeypatch):
+    resolver.set_session_credential("sess-1", "firms", "cache-key")
+    monkeypatch.delenv("TRID3NT_FIRMS_MAP_KEY", raising=False)
+    assert resolver.stored_value("firms") is None
+    token = resolver.bind_session("sess-1")
+    try:
+        assert resolver.stored_value("firms") == "cache-key"
+        assert resolver.stored_value("airnow", "TRID3NT_NO_SUCH_VAR") is None
+    finally:
+        resolver.unbind_session(token)
+    assert resolver.stored_value("firms") is None
 
 
 def test_non_keyed_tool_resolves_none():

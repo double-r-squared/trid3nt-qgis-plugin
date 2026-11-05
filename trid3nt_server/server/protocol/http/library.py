@@ -138,8 +138,7 @@ def _credentials() -> list[dict[str, Any]]:
     material: the keys form's one source of names."""
     from trid3nt_server.model.credentials.resolver import keyed_credentials
 
-    return [{"name": name, "label": cred.label, "signup_url": cred.signup_url,
-             "env_var": cred.env_var}
+    return [{"name": name, "label": cred.label, "env_var": cred.env_var}
             for name, cred in sorted(keyed_credentials().items())]
 
 

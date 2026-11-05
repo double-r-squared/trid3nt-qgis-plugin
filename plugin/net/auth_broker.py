@@ -30,6 +30,9 @@ class CredentialStore(Protocol):
     def names(self) -> frozenset:
         """Which credentials have an entry. Names only, no payload read."""
 
+    def forget(self, provider_id: str) -> bool:
+        """Delete a credential's entry; ``False`` when the store is unavailable or holds none."""
+
 
 class QgsAuthManagerStore:
     """``QgsAuthManager``-backed credential store, keyed by ``provider_id``.
@@ -110,6 +113,18 @@ class QgsAuthManagerStore:
                 result[provider_id] = value
         return result
 
+    def forget(self, provider_id: str) -> bool:
+        am = self._manager()
+        if am is None:
+            return False
+        cfg_id = self._config_ids_by_provider(am).get(provider_id)
+        if cfg_id is None:
+            return False
+        try:
+            return bool(am.removeAuthenticationConfig(cfg_id))  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001 -- locked DB / binding shape
+            return False
+
     def remember(self, provider_id: str, key_value: str) -> bool:
         if not provider_id or not key_value:
             return False
@@ -169,6 +184,13 @@ class AuthBroker:
         except Exception:  # noqa: BLE001
             return False
 
+    def forget(self, provider_id: str) -> bool:
+        """Remove a stored key from the credential store."""
+        try:
+            return self._store.forget(provider_id)
+        except Exception:  # noqa: BLE001
+            return False
+
     def config_id(self, provider_id: str) -> Optional[str]:
         """The stored config id for one credential, or ``None``. A row that
         names a credential nothing has stored refuses rather than opening a
@@ -185,3 +207,22 @@ class AuthBroker:
             return self._store.names()
         except Exception:  # noqa: BLE001
             return frozenset()
+
+
+#: The ``secret-add`` credential name of the language model's own key; other names come from data-source rows.
+LANGUAGE_MODEL_CREDENTIAL = "llm"
+
+#: The order of the Keys list: refused keys first, stored keys next, sources with no key last.
+KEY_STATE_ORDER = ("rejected", "stored", "none")
+
+
+def key_entries(declared: Dict[str, str], asked: Dict[str, str], stored: frozenset, rejected: frozenset) -> list:
+    """The Keys list as ``{name, label, state}`` rows: the language model, every declared credential and every source
+    that asked on a card, each ``rejected`` (the provider refused the stored key), ``stored`` or ``none``."""
+    labels: Dict[str, str] = {LANGUAGE_MODEL_CREDENTIAL: "language model", **asked, **declared}
+    rows = [
+        {"name": name, "label": label,
+         "state": "rejected" if name in rejected else "stored" if name in stored else "none"}
+        for name, label in labels.items()
+    ]
+    return sorted(rows, key=lambda r: (KEY_STATE_ORDER.index(r["state"]), r["label"].lower()))

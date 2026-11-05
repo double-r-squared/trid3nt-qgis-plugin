@@ -6,6 +6,8 @@ in QgsAuthManager."""
 
 from __future__ import annotations
 
+import json
+
 from qgis.PyQt.QtCore import QSettings
 
 GROUP = "trid3nt"
@@ -197,3 +199,31 @@ class PluginSettings:
     def effective_token(self) -> str:
         """The daemon's access token; empty is refused at the handshake."""
         return self.token
+
+    @property
+    def asked_keys(self) -> dict:
+        """``{credential name: label}`` for every source whose card asked for a key; names only."""
+        try:
+            value = json.loads(self._get("asked_keys", "{}"))
+        except ValueError:
+            return {}
+        return value if isinstance(value, dict) else {}
+
+    @property
+    def rejected_keys(self) -> frozenset:
+        """Credential names whose stored key a provider refused, until a new key is saved for each."""
+        try:
+            value = json.loads(self._get("rejected_keys", "[]"))
+        except ValueError:
+            return frozenset()
+        return frozenset(str(v) for v in value) if isinstance(value, list) else frozenset()
+
+    def note_key_ask(self, name: str, label: str, rejected: bool) -> None:
+        asked = self.asked_keys
+        asked[name] = label
+        self._set("asked_keys", json.dumps(asked))
+        if rejected:
+            self._set("rejected_keys", json.dumps(sorted(self.rejected_keys | {name})))
+
+    def clear_key_rejection(self, name: str) -> None:
+        self._set("rejected_keys", json.dumps(sorted(self.rejected_keys - {name})))

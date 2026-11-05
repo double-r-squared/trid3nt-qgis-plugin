@@ -29,13 +29,11 @@ CATALOG_BODY = {
     "classes": [],
     "credentials": [
         {"name": "ecmwf_cds", "label": "Copernicus Climate Data Store",
-         "signup_url": "https://cds.climate.copernicus.eu/how-to-api",
          "env_var": "TRID3NT_COPERNICUS_CDS_API_KEY"},
         {"name": "ecmwf_cds", "label": "Copernicus Climate Data Store",
-         "signup_url": "https://cds.climate.copernicus.eu/how-to-api",
          "env_var": "TRID3NT_COPERNICUS_CDS_API_KEY"},
         {"name": "airnow", "label": "EPA AirNow",
-         "signup_url": None, "env_var": "TRID3NT_AIRNOW_API_KEY"},
+         "env_var": "TRID3NT_AIRNOW_API_KEY"},
         None,
     ],
 }
@@ -77,9 +75,9 @@ class TestFetchKeyedSources(unittest.TestCase):
         self.assertEqual(rows[1]["label"], "Copernicus Climate Data Store")
         self.assertEqual(rows[0]["env_var"], "TRID3NT_AIRNOW_API_KEY")
 
-    def test_absent_signup_url_stays_none(self):
+    def test_a_row_carries_no_signup_link(self):
         rows = tc.fetch_keyed_sources(self._start(), timeout=10)
-        self.assertIsNone(rows[0]["signup_url"])
+        self.assertEqual(set(rows[0]), {"name", "label", "env_var"})
 
     def test_a_library_with_no_keyed_row_is_empty(self):
         body = {"tool_count": 1, "subsystems": [], "classes": [],
@@ -89,6 +87,30 @@ class TestFetchKeyedSources(unittest.TestCase):
     def test_unreachable_agent_raises_honest_error(self):
         with self.assertRaises(tc.KeyedSourcesRequestError):
             tc.fetch_keyed_sources("http://127.0.0.1:1", timeout=2)
+
+
+class TestKeyEntries(unittest.TestCase):
+    """The Keys list: refused keys first, stored keys next, sources with no key last."""
+
+    def test_red_then_green_then_grey_and_each_source_once(self):
+        from plugin.net.auth_broker import key_entries
+
+        rows = key_entries(
+            declared={"airnow": "EPA AirNow", "firms": "NASA FIRMS", "openaq": "OpenAQ"},
+            asked={"fetch_x": "fetch_x", "airnow": "stale label"},
+            stored=frozenset({"llm", "firms", "airnow"}),
+            rejected=frozenset({"airnow", "fetch_x"}))
+        self.assertEqual(
+            [(r["name"], r["state"]) for r in rows],
+            [("airnow", "rejected"), ("fetch_x", "rejected"), ("llm", "stored"),
+             ("firms", "stored"), ("openaq", "none")])
+        self.assertEqual(rows[0]["label"], "EPA AirNow")
+
+    def test_a_rejection_outranks_a_stored_key(self):
+        from plugin.net.auth_broker import key_entries
+
+        rows = key_entries({}, {}, frozenset({"llm"}), frozenset({"llm"}))
+        self.assertEqual(rows, [{"name": "llm", "label": "language model", "state": "rejected"}])
 
 
 class _FakeConfig:
@@ -170,6 +192,14 @@ class TestBrokerOverAFakeAuthManager(unittest.TestCase):
         self.assertTrue(self.broker.remember("airnow", "AIRNOW-KEY"))
         self.assertEqual(self.broker.stored_names(), frozenset({"airnow"}))
         self.assertIsNotNone(self.broker.config_id("airnow"))
+
+    def test_forget_removes_the_entry_and_only_that_one(self):
+        self.am.removeAuthenticationConfig = lambda cfg_id: bool(self.am.configs.pop(cfg_id, None))
+        self.broker.remember("airnow", "A")
+        self.broker.remember("firms", "F")
+        self.assertTrue(self.broker.forget("airnow"))
+        self.assertEqual(self.broker.stored_names(), frozenset({"firms"}))
+        self.assertFalse(self.broker.forget("airnow"))
 
     def test_config_id_is_none_for_an_unstored_credential(self):
         self.assertIsNone(self.broker.config_id("firms"))

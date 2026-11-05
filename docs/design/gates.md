@@ -45,6 +45,21 @@ ready refuses by name.
   its deadline expires as a timeout, never as a decline; six rounds without a
   ready Run refuse the run unlaunched.
 
+## The key card
+
+A keyed source the provider asks a key for - none stored, or the stored one refused (`KEY_REQUIRED`,
+`KEY_REJECTED`, read in one place off the provider's own 401/403/498/499 answer) - is asked of the person
+on a card (`cards/key_ask.py`) and the call runs once more.
+
+- One row, named by the credential, drawn masked (`ParamSheetRow.secret`: `required` or `rejected`).
+  A link shows only when the provider's own answer carried one.
+- The plugin keeps the typed key: QgsAuthManager, then `secret-add`, before the reply. The reply is a
+  decision with no value, so the key never rides the confirmation, the chat or the model.
+- READY is a key held that differs from the refused one; a proceed short of it redraws the card.
+- Cancel is a decline (`USER_INPUT_CANCELLED`), not an error. The retry is once: a key refused again
+  surfaces as `KEY_REJECTED` to the model, which relays it and never asks for the key in chat.
+- A fetch nested in a workflow re-runs under the whole tool call; the cache makes the repeat cheap.
+
 ## The mesh on the gate
 
 `tools/mesh/gate.py` builds the round's card for a mesh under construction and
@@ -65,5 +80,6 @@ re-presents, cancel refuses the run.
   narration says the card expired unanswered.
 - The rule that validates an input is the rule that fills its dropdown; nothing
   is listed per tool.
+- A key is entered on the key card or in Settings and nowhere else; no tool argument carries one.
 - The model never invents physics for an input nothing measures: such an input
   declares no default, and the fill refuses it unstated before any card opens.
