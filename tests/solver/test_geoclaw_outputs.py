@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import shapely.geometry
 
 from trid3nt_server.inputs import Point
 from trid3nt_server.inputs.point import PointNotViableError
@@ -22,7 +23,7 @@ from trid3nt_server.store import objects as storage
 from trid3nt_server.workflows.geoclaw.errors import GeoclawError
 from trid3nt_server.workflows.geoclaw.modules import GEO
 from trid3nt_server.workflows.geoclaw.modules.outputs import _READ_BY, Solved
-from trid3nt_server.workflows.runtime.primitives import Primitive, field, max_over_time, series
+from trid3nt_server.workflows.runtime.primitives import OutputEmpty, Primitive, field, max_over_time, outline, peak, series
 from trid3nt_server.workflows.runtime.sheet import fill
 from trid3nt_server.workflows.solver.solver import RunOutputMissing
 
@@ -318,8 +319,8 @@ def test_a_run_stating_two_grids_has_no_one_grid_to_read(store):
 
 def test_the_table_names_exactly_the_outputs_the_reads_know(store):
     assert set(GEO.MODULE_OUTPUT) == set(_READ_BY)
-    assert {row.unit for row in GEO.MODULE_OUTPUT.values()} == {"m", "m/s", "s"}
-    assert set(GEO.READS) == {"field", "max_over_time", "series"}
+    assert {row.unit for row in GEO.MODULE_OUTPUT.values()} == {"", "m", "m/s", "s"}
+    assert set(GEO.READS) == {"field", "max_over_time", "outline", "peak", "series"}
 
 
 
@@ -338,3 +339,48 @@ def test_a_run_whose_first_frame_holds_water_or_no_frame_at_its_start_passes(sto
     refuse_dry_start(_solved())
     refuse_dry_start(_solved(GEO_DRY_TOLERANCE=1.0e9, CLAW_T0=5.0))
     refuse_dry_start(_solved(GEO_DRY_TOLERANCE=1.0e9, FGOUT_FGOUT_GRIDS=None))
+
+
+def test_the_maximum_runup_is_the_highest_surface_on_a_wet_cell_with_a_bed_above_the_initial_sea(store):
+    from clawpack.geoclaw.fgmax_tools import FGmaxGrid
+
+    grid = FGmaxGrid()
+    grid.read_fgmax_grids_data(1, data_file=str(_FIXTURE / "fgmax_grids.data"))
+    grid.read_output(fgno=1, outdir=str(_FIXTURE), verbose=False, indexing="xy")
+    h, bed = np.ma.filled(grid.h.astype("float64"), np.nan), np.ma.filled(grid.B.astype("float64"), np.nan)
+    wet = np.isfinite(h) & (h > 0.001)
+    # SYNTHETIC: the fixture's wet cells are all sea, so the initial sea is stated at the median wet bed to leave some land.
+    sea = float(np.median(bed[wet]))
+    reached = wet & (bed > sea)
+    assert reached.any()
+    iy, ix = np.unravel_index(np.argmax(np.where(reached, h + bed, -np.inf)), h.shape)
+    read = _read(_solved(GEO_SEA_LEVEL=sea), peak("MAX_RUNUP"))
+    (feature,) = read.features["features"]
+    assert feature["geometry"]["coordinates"] == [float(grid.x[ix]), float(grid.y[iy])]
+    assert feature["properties"]["surface_m"] == pytest.approx(float(h[iy, ix] + bed[iy, ix]))
+    assert feature["properties"]["bed_m"] == pytest.approx(float(bed[iy, ix]))
+    assert feature["properties"]["above_initial_sea_m"] == pytest.approx(feature["properties"]["surface_m"] - sea)
+
+
+def test_a_run_whose_water_never_reached_land_has_no_runup(store):
+    with pytest.raises(OutputEmpty):
+        _read(_solved(GEO_SEA_LEVEL=1.0e9), peak("MAX_RUNUP"))
+
+
+def test_the_inundation_line_is_the_edge_of_the_overland_depth_and_never_the_grids_border(store):
+    grid, frames, h = _synthetic_fgmax_on_the_fgout_nodes(store)
+    sheet = {"FGMAX_FGMAX_GRIDS": [[1, 10.0, 1.0e10, 60.0, 3, 1.0e-2, 0, 2,
+                                    {"x1": grid.x[0], "y1": grid.y[0], "x2": grid.x[-1], "y2": grid.y[-1],
+                                     "nx": grid.nx, "ny": grid.ny}]]}
+    solved = _solved(**sheet)
+    depth = _read(solved, max_over_time("MAX_OVERLAND_DEPTH"))
+    read = _read(solved, outline("INUNDATION_LINE"))
+    (feature,) = read.features["features"]
+    west, south, east, north = depth.bounds
+    line = shapely.geometry.shape(feature["geometry"])
+    assert not line.is_empty and read.measures["wet_cells"] == int(np.isfinite(depth.values[0]).sum())
+    on_border = line.intersection(shapely.geometry.box(west, south, east, north).boundary)
+    assert on_border.length < 1.0e-6
+    unwet = _solved(**sheet, GEO_DRY_TOLERANCE=1.0e9)
+    with pytest.raises(OutputEmpty):
+        _read(unwet, outline("INUNDATION_LINE"))

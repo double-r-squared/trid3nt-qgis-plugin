@@ -426,3 +426,17 @@ def test_the_templates_rise_shape_fills_a_kinematic_statement_that_names_none_an
     assert filled["FiniteFault"]["rise_shape"] == "quadratic" and filled["CLAW_TFINAL"] == 60.0
     assert kept["FiniteFault"]["rise_shape"] == "linear"
     assert "rise_shape" not in static["FiniteFault"]
+
+
+def test_the_domain_is_the_level_one_box_and_one_polygon_per_flagregion():
+    from trid3nt_server.workflows.geoclaw.workflow import _domain_features
+
+    facts = {"lower": [-125.0, 46.0], "upper": [-124.0, 47.0], "levels": 3, "flagregions": [
+        {"name": "coast", "minlevel": 2, "maxlevel": 3, "t1": 0.0, "t2": 1.0e9, "extent": (-124.6, 46.8, -124.5, 46.9)},
+        {"name": "ruled", "minlevel": 1, "maxlevel": 2, "t1": 0.0, "t2": 5.0, "extent": (-124.9, 46.1, -124.7, 46.3),
+         "polygon": [(-124.9, 46.1), (-124.7, 46.1), (-124.7, 46.3), (-124.9, 46.3)]}]}
+    drawn = _domain_features(facts, "Copalis")["features"]
+    assert [f["properties"]["name"] for f in drawn] == ["Copalis", "coast", "ruled"]
+    assert drawn[0]["properties"] == {"name": "Copalis", "level": 1, "levels": 3}
+    assert drawn[1]["properties"] == {"name": "coast", "minlevel": 2, "maxlevel": 3, "t1_s": 0.0, "t2_s": 1.0e9}
+    assert all(f["geometry"]["type"] == "Polygon" for f in drawn)

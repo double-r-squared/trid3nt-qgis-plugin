@@ -634,7 +634,7 @@ the cells wet in fgout frame 0, which must be written at t = 0 - never the cells
 zero elevation; the fgmax one needs the fgout nodes on the fgmax nodes and refuses
 otherwise. A series is read at the run's one gauge, a gauge number, or a Point standing on
 a gauge (a Point off every gauge refuses with the nearest). A run stating more than one
-grid of a kind has no one grid to read and refuses. A template's own `OUTPUTS` and `CAPTIONS` publish beside
+grid of a kind has no one grid to read and refuses. `INUNDATION_LINE` (`outline`) is the edge of the maximum overland depth above the dry tolerance as a line, drawn nowhere along the grid's own border (the grid cut the water there); `MAX_RUNUP` (`peak`) is a point at the fgmax node of the wet cell whose bed stands above the initial sea (`GEO_SEA_LEVEL`) and whose maximum surface is highest, carrying that surface, the bed and the surface above the initial sea. Beside the products the workflow surfaces what the run was solved on, before the solve: the level-1 box and one polygon per flagregion (role input; levels and time window as properties), and for a Fault-family rupture one polygon per subfault (slip, depth, strike, dip, rake, rupture time) and the last dtopo instant's vertical displacement as a raster on a diverging ramp centred on 0 (role context); these are stored under the staged run's tag. No epicentre is drawn, as no source states one. A template's own `OUTPUTS` and `CAPTIONS` publish beside
 the module table through the same `publish_outputs` shape as MODFLOW's: a placed read is a
 `series` at a gauge, a `field` over the fgout grid or a `max_over_time` over the fgmax grid.
 

@@ -39,6 +39,8 @@ __all__ = [
     "mass_balance",
     "max_over_time",
     "mesh",
+    "outline",
+    "peak",
     "profile",
     "publish_reads",
     "series",
@@ -257,6 +259,16 @@ def field(name: str, t: Any = -1, *, plane: int | None = None,
           module: str | None = None) -> Primitive:
     """A variable over the domain at an instant, or over every instant."""
     return Primitive("field", variable=name, t=t, plane=plane, module=module)
+
+
+def outline(name: str, *, module: str | None = None) -> Primitive:
+    """The edge of where a variable's envelope holds a value: a line on the map."""
+    return Primitive("outline", variable=name, module=module)
+
+
+def peak(name: str, *, module: str | None = None) -> Primitive:
+    """The one place a variable's envelope tops out: a point on the map carrying its figures."""
+    return Primitive("peak", variable=name, module=module)
 
 
 def series(name: str, at: Any = None, *, plane: int | None = None,

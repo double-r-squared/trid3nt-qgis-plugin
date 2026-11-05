@@ -246,3 +246,9 @@ def test_a_timed_group_resolves_one_legend_on_the_fixed_range_for_every_frame(tm
         caption="water depth", style={"kind": "continuous"})]).layers
     assert all(layer.legend is not None and layer.legend.qml for layer in layers)
     assert {(layer.legend.vmin, layer.legend.vmax) for layer in layers} == {(0.0, 5.0)}
+
+
+def test_a_deliverable_s_role_is_the_layer_s_role(_store) -> None:
+    layers = _publish([Deliverable(product=Vector(features={"type": "FeatureCollection", "features": []}),
+                                   caption="domain", role="input")]).layers
+    assert layers[0].role == "input"

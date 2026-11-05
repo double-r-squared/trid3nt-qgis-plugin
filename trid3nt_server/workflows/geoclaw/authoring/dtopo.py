@@ -18,7 +18,7 @@ from ..errors import GeoclawError
 
 logger = logging.getLogger("trid3nt_server.workflows.geoclaw.authoring.dtopo")
 
-__all__ = ["DTOPO", "KINEMATIC_FIELDS", "PLACEMENTS", "SUBFAULT_FIELDS", "dtopo_axes", "finite_fault_subfaults", "moment_tensor_subfaults", "sift_subfaults", "write_dtopofiles"]
+__all__ = ["DTOPO", "KINEMATIC_FIELDS", "PLACEMENTS", "SUBFAULT_FIELDS", "dtopo_axes", "finite_fault_subfaults", "moment_tensor_subfaults", "rupture_on_map", "sift_subfaults", "write_dtopofiles"]
 
 #: The key a composite's file entry carries its fault under.
 DTOPO = "dtopo"
@@ -159,8 +159,8 @@ def write_dtopofiles(sheet: Any, work: Path) -> dict[str, dict[str, Any]]:
     return facts
 
 
-def _written(spec: Mapping[str, Any], sheet: Any, work: Path, name: str) -> dict[str, Any]:
-    import numpy as np
+def _subfaults(spec: Mapping[str, Any]) -> list[Any]:
+    """The spec's subfaults as Clawpack SubFaults with their geometry computed."""
     from clawpack.geoclaw import dtopotools
 
     kinematic = spec.get("rupture_type") == "kinematic"
@@ -178,6 +178,15 @@ def _written(spec: Mapping[str, Any], sheet: Any, work: Path, name: str) -> dict
         except ValueError as exc:
             _refuse("FAULT_SUBFAULT", f"subfault {number} has no geometry Clawpack takes: {exc}")
         faults.append(sub)
+    return faults
+
+
+def _written(spec: Mapping[str, Any], sheet: Any, work: Path, name: str) -> dict[str, Any]:
+    import numpy as np
+    from clawpack.geoclaw import dtopotools
+
+    kinematic = spec.get("rupture_type") == "kinematic"
+    faults = _subfaults(spec)
     footprints = _inside(sheet, faults)
     x = np.linspace(*spec["x"][:2], int(spec["x"][2]))
     y = np.linspace(*spec["y"][:2], int(spec["y"][2]))
@@ -269,3 +278,33 @@ def _wet(sheet: Any, work: Path, polygons: list[Any], x: Any, y: Any) -> None:
                 f"{int((inside & ~np.isnan(z)).sum())} of them covered, none below "
                 f"{sea:g} m): the rupture lies over land or beyond the bed, so it "
                 "would deform nothing the run floods. Move the fault or state the bed over it.")
+
+
+def rupture_on_map(sheet: Any, work: Path) -> dict[str, dict[str, Any]]:
+    """Every dtopo the sheet's composite named, as what the map draws -> file name to its subfault polygons and final uplift.
+
+    ``features`` is a lon/lat FeatureCollection with one surface-projection polygon per subfault (slip m, depth m, strike, dip, rake,
+    and rupture_time s on a kinematic rupture); ``uplift`` is the file's last instant of vertical displacement as north-up rows
+    on ``bounds`` (west, south, east, north cell edges), read back from the file the engine reads."""
+    from clawpack.geoclaw import dtopotools
+
+    shown: dict[str, dict[str, Any]] = {}
+    for name, content in sheet.files.items():
+        if not (isinstance(content, Mapping) and DTOPO in content):
+            continue
+        spec = content[DTOPO]
+        kinematic = spec.get("rupture_type") == "kinematic"
+        features = [{"type": "Feature",
+                     "properties": {"subfault": number, "slip_m": float(sub.slip), "depth_m": float(sub.depth),
+                                    "strike": float(sub.strike), "dip": float(sub.dip), "rake": float(sub.rake),
+                                    **({"rupture_time_s": float(sub.rupture_time)} if kinematic else {})},
+                     "geometry": {"type": "Polygon",
+                                  "coordinates": [[[float(c[0]), float(c[1])] for c in sub.corners] + [[float(sub.corners[0][0]), float(sub.corners[0][1])]]]}}
+                    for number, sub in enumerate(_subfaults(spec), 1)]
+        dtopo = dtopotools.DTopography()
+        dtopo.read(str(work / name), dtopo_type=3)
+        x, y = dtopo.x, dtopo.y
+        dx, dy = (x[-1] - x[0]) / (len(x) - 1), (y[-1] - y[0]) / (len(y) - 1)
+        shown[name] = {"features": {"type": "FeatureCollection", "features": features},
+                       "uplift": dtopo.dZ[-1][::-1], "bounds": (float(x[0] - dx / 2), float(y[0] - dy / 2), float(x[-1] + dx / 2), float(y[-1] + dy / 2))}
+    return shown

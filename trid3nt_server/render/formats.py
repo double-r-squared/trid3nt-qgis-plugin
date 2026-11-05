@@ -91,6 +91,8 @@ class Deliverable:
     style: Mapping[str, Any] | None = None
     #: Which tracer, counted from 1 in the deck's order; a tracer's name is the run's, so position is what a reader asks by.
     tracer: int | None = None
+    #: What the layer is to the run: its product, an input it was solved on, or context beside it.
+    role: str = "primary"
 
 
 @dataclass(frozen=True)
@@ -143,7 +145,7 @@ async def publish(*, run_id: str, engine: str, name: str,
                 _vector_layer, item, run_id=run_id, engine=engine, name=name))
     emitter = current_emitter()
     for layer in layers:
-        await publish_input_layer(emitter, layer, role="primary")
+        await publish_input_layer(emitter, layer, role=layer.role)
     for item in items:
         if isinstance(item.product, Chart):
             charts[quantity_of(item.caption)] = dict(item.product.payload)
@@ -280,14 +282,14 @@ def _raster_layers(item: Deliverable, *, run_id: str, engine: str, name: str,
         return [LayerURI(
             layer_id=f"{engine}-{quantity}-{run_id}",
             name=_title(item, name=name), layer_type="raster", uri=raster.uri,
-            style=style, quantity=quantity, role="primary", units=raster.units,
+            style=style, quantity=quantity, role=item.role, units=raster.units,
             bbox=raster.bbox)]
     label = f"{item.caption[:1].upper()}{item.caption[1:]}"
     measured = f"{label} ({raster.units})" if raster.units else label
     return [LayerURI(
         layer_id=f"{engine}-{quantity}-t{instant_token(frame.t)}-{run_id}",
         name=f"{measured} at t = {frame.t:g} s ({name})", layer_type="raster",
-        uri=frame.uri, style=style, quantity=quantity, role="primary",
+        uri=frame.uri, style=style, quantity=quantity, role=item.role,
         units=raster.units, bbox=raster.bbox,
         valid_from=frame.valid_from, valid_to=frame.valid_to)
         for frame in raster.frames]
@@ -313,7 +315,7 @@ def _vector_layer(item: Deliverable, *, run_id: str, engine: str,
         layer_id=f"{engine}-{quantity}-{run_id}",
         name=title, layer_type="vector", uri=f"s3://{bucket}/{key}",
         style=_style_row(item, kind="reference", value_range=None),
-        quantity=quantity, role="primary", units=vector.units,
+        quantity=quantity, role=item.role, units=vector.units,
         bbox=_features_bbox(vector.features))
 
 

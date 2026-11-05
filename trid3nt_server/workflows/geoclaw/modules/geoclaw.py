@@ -26,6 +26,8 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "MAX_SURFACE": Output("surface elevation at the maximum depth", "m", style=_SURFACE, varies=False),
     "ARRIVAL_TIME": Output("arrival time", "s", style=_ARRIVAL, varies=False),
     "MAX_OVERLAND_DEPTH": Output("maximum overland water depth", "m", style=_DEPTH, varies=False),
+    "INUNDATION_LINE": Output("inundation limit", "", style={"kind": "reference", "geometry": "line"}, varies=False),
+    "MAX_RUNUP": Output("maximum runup", "m", style={"kind": "reference", "geometry": "point"}, varies=False),
     "DEPTH": Output("water depth", "m", style=_DEPTH),
     "SURFACE": Output("surface elevation", "m", style=_SURFACE),
     "OVERLAND_DEPTH": Output("overland water depth", "m", style=_DEPTH),

@@ -24,7 +24,7 @@ from trid3nt_server.inputs.slots import BED, DOMAIN
 from trid3nt_server.workflows.runtime import DeclarationError, RunResult, Workflow
 from trid3nt_server.workflows.runtime.data import Producer
 from trid3nt_server.workflows.runtime.module import identify_on, keyword_floor
-from trid3nt_server.workflows.runtime.primitives import Primitive, field, max_over_time, publish_reads, series, unanchored
+from trid3nt_server.workflows.runtime.primitives import Primitive, field, max_over_time, outline, peak, publish_reads, series, unanchored
 from trid3nt_server.workflows.runtime.review import _seat_on, fill_sheet
 from trid3nt_server.workflows.runtime.sheet import Keyword, Sheet, reference_time
 from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
@@ -147,6 +147,10 @@ def _table(solved: Solved, sheet: Sheet) -> tuple[list[Primitive], Callable[[Seq
             continue
         if token.startswith("GAUGE_"):
             rows += [series(token, at=number).chart() for number in gauges]
+        elif token == "INUNDATION_LINE":
+            rows.append(outline(token).layer(style=row.style))
+        elif token == "MAX_RUNUP":
+            rows.append(peak(token).layer(style=row.style))
         elif token in ("DEPTH", "SURFACE", "OVERLAND_DEPTH"):
             rows.append(field(token, t="every").animate(style=row.style))
         else:
@@ -183,6 +187,69 @@ def _record(solved: Solved, name: str) -> LayerURI:
         layer_id=f"geoclaw-{solved.run_id}", name=name, layer_type="vector",
         uri=f"s3://{storage.runs_bucket()}/{key}", style={"kind": "reference", "geometry": "polygon"},
         bbox=(west, south, east, north), crs_authid="EPSG:4326", reference_time=solved.run.get("reference_time"))
+
+
+def _domain_features(facts: Mapping[str, Any], name: str) -> dict[str, Any]:
+    """The level-1 box and one polygon per flagregion of the built grid, as a lon/lat FeatureCollection."""
+    from shapely.geometry import Polygon, box, mapping
+
+    def feature(properties: Mapping[str, Any], shape: Any) -> dict[str, Any]:
+        return {"type": "Feature", "properties": dict(properties), "geometry": mapping(shape)}
+
+    features = [feature({"name": name, "level": 1, "levels": facts["levels"]}, box(*facts["lower"], *facts["upper"]))]
+    for region in facts["flagregions"]:
+        shape = Polygon(region["polygon"]) if "polygon" in region else box(*region["extent"])
+        features.append(feature({"name": region["name"], "minlevel": region["minlevel"], "maxlevel": region["maxlevel"],
+                                 "t1_s": region["t1"], "t2_s": region["t2"]}, shape))
+    return {"type": "FeatureCollection", "features": features}
+
+
+async def publish_grid(*, art: Any, run_id: str, name: str) -> None:
+    """The level-1 box and the refinement regions of the built grid, surfaced as a run input beside the others."""
+    from trid3nt_server.render.formats import Deliverable, Vector, publish
+
+    features = await asyncio.to_thread(_domain_features, art.probes["claw_grid"], name)
+    await publish(run_id=run_id, engine="geoclaw", name=name, items=[Deliverable(
+        product=Vector(features=features, stem="domain"), caption="domain and refinement regions", role="input",
+        style={"kind": "reference", "geometry": "polygon"})])
+
+
+def _rupture_items(shown: Mapping[str, Any], run_id: str, name: str) -> list[Any]:
+    """Each dtopo's subfault outlines and final uplift as deliverables, the uplift on a diverging ramp centred on 0."""
+    from dataclasses import replace
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from trid3nt_server.render.formats import Deliverable, Vector
+    from trid3nt_server.workflows.runtime.primitives import Primitive, Rasters, deliver
+
+    style = {"kind": "continuous", "ramp": "rdbu", "center": 0.0}
+    items: list[Any] = []
+    for number, drawn in enumerate(shown.values(), 1):
+        suffix = "" if len(shown) == 1 else f" {number}"
+        items.append(Deliverable(product=Vector(features=drawn["features"], stem=f"rupture-subfaults{number}"),
+                                 caption=f"rupture subfaults{suffix}", role="context",
+                                 style={"kind": "reference", "geometry": "polygon"}))
+        read = Rasters(name="vertical seafloor displacement", units="m", values=np.stack([drawn["uplift"]]),
+                       bounds=drawn["bounds"])
+        items.append(replace(deliver(Primitive("max_over_time", style=style), read, SimpleNamespace(run_id=run_id, run={}),
+                                     caption=f"rupture uplift{suffix}", name=name, where=name), role="context"))
+    return items
+
+
+async def publish_rupture(*, sheet: Sheet, rundir: Any, run_id: str, name: str) -> None:
+    """The rupture the run solves: its subfault outlines and its final uplift, surfaced as context beside the products."""
+    from pathlib import Path
+
+    from trid3nt_server.render.formats import publish
+
+    from .authoring.dtopo import rupture_on_map
+
+    shown = await asyncio.to_thread(rupture_on_map, sheet, Path(rundir))
+    if shown:
+        items = await asyncio.to_thread(_rupture_items, shown, run_id, name)
+        await publish(run_id=run_id, engine="geoclaw", name=name, items=items)
 
 
 async def publish_outputs(*, run: Mapping[str, Any], sheet: Sheet, outputs: Sequence[Primitive],
@@ -347,6 +414,8 @@ class GeoclawWorkflow(Workflow):
                         name=await read(env, domain), input_mode=env.input_mode,
                         fresh=bool(state.carried.get("restart_clean")))
         await keep_mesh(run["mesh"])
+        run_tag = new_ulid()
+        await publish_grid(art=run["mesh"]["artifact"], run_id=run_tag, name=str(getattr(await read(env, domain), "name", None) or "domain"))
         for name in self.named_rows(run):
             await read(env, name)
         art = run["mesh"]["artifact"]
@@ -358,7 +427,6 @@ class GeoclawWorkflow(Workflow):
         grid = grid_keywords(art, set(own) | set(steering.ASSERTED), max((end for end in ends if end is not None), default=None))
         declared = {row.name for row in self.inputs if not row.is_row}
         staged: dict[str, Any] = {}
-        run_tag = new_ulid()
         prefix = self.engine
 
         async def write(sheet: Sheet) -> None:
@@ -379,6 +447,7 @@ class GeoclawWorkflow(Workflow):
             # A run that does not reach the box leaves no staged copy behind.
             await asyncio.to_thread(discard_run, run_tag, prefix, stem=self.engine)
             raise
+        await publish_rupture(sheet=run["sheet"], rundir=staged["rundir"], run_id=run_tag, name=name)
         solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=staged, mesh=run["mesh"], name=name,
                              moment=run.get(EVENT_TIME.name), frame=run.get(_FRAME.name) or _FRAME.default)
         await keep_mesh(run["mesh"], solved.get("run_id"))

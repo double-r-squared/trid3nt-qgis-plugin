@@ -221,3 +221,34 @@ def test_a_cartesian_run_refuses(tmp_path):
         _written(tmp_path, _fault(), GEO_COORDINATE_SYSTEM=1)
 
     assert caught.value.error_code == "GEOCLAW_FAULT_COORDINATES"
+
+
+def test_the_rupture_on_the_map_is_the_subfault_outline_and_the_final_uplift(tmp_path):
+    from trid3nt_server.workflows.geoclaw.authoring.dtopo import rupture_on_map
+
+    rundir, sheet, _ = _written(tmp_path, _fault())
+    shown = rupture_on_map(sheet, rundir)["dtopo_01.tt3"]
+    feature, = shown["features"]["features"]
+    ring = feature["geometry"]["coordinates"][0]
+    assert len(ring) == 5 and ring[0] == ring[-1]
+    assert feature["properties"]["slip_m"] == 15.0 and feature["properties"]["depth_m"] == 35.0e3
+    assert "rupture_time_s" not in feature["properties"]
+    uplift, (west, south, east, north) = shown["uplift"], shown["bounds"]
+    assert uplift.shape == (100, 100) and west < -77.0 and east > -67.0 and south < -40.0 and north > -30.0
+    assert float(uplift.max()) > 0.0 > float(uplift.min())
+
+
+def test_the_rupture_publishes_its_subfaults_and_uplift_as_context(tmp_path, fake_s3):
+    import asyncio
+
+    from trid3nt_server.workflows.geoclaw.workflow import publish_rupture
+    from trid3nt_server.workflows.runtime.journal import bind_outputs, drain_outputs
+
+    rundir, sheet, _ = _written(tmp_path, _fault())
+    token = bind_outputs()
+    asyncio.run(publish_rupture(sheet=sheet, rundir=rundir, run_id="RID", name="coast"))
+    layers = drain_outputs(token)
+    assert [(l["layer_type"], l["quantity"]) for l in layers] == [("vector", "rupture_subfaults"), ("raster", "rupture_uplift")]
+    assert {"RID/rupture-subfaults1.geojson", "RID/rupture_uplift.tif"} <= set(fake_s3.store)
+    uplift = next(l for l in layers if l["layer_type"] == "raster")
+    assert uplift["units"] == "m"

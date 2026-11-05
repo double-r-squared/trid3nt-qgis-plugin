@@ -9,23 +9,25 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+from dataclasses import replace
 from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
-from trid3nt_server.workflows.runtime.primitives import OutputEmpty, Primitive, Rasters, Series
+from trid3nt_server.workflows.runtime.primitives import OutputEmpty, Primitive, Rasters, Series, Track
 
 from ..errors import GeoclawError
 
-__all__ = ["PRIMITIVES", "Solved", "read_field", "read_max_over_time", "read_series", "refuse_dry_start"]
+__all__ = ["PRIMITIVES", "Solved", "read_field", "read_max_over_time", "read_outline", "read_peak", "read_series", "refuse_dry_start"]
 
 # Each output by token: the primitive that reads it, and the keyword that makes the engine write it.
 _READ_BY = {"MAX_DEPTH": "max_over_time", "MAX_SPEED": "max_over_time", "MAX_SURFACE": "max_over_time",
            "ARRIVAL_TIME": "max_over_time", "MAX_OVERLAND_DEPTH": "max_over_time",
+           "INUNDATION_LINE": "outline", "MAX_RUNUP": "peak",
            "DEPTH": "field", "SURFACE": "field", "OVERLAND_DEPTH": "field",
            "GAUGE_SURFACE": "series", "GAUGE_DEPTH": "series"}
-_KEYWORD = {"max_over_time": "FGMAX_FGMAX_GRIDS", "field": "FGOUT_FGOUT_GRIDS", "series": "GAUGE_GAUGES"}
+_KEYWORD = {"max_over_time": "FGMAX_FGMAX_GRIDS", "outline": "FGMAX_FGMAX_GRIDS", "peak": "FGMAX_FGMAX_GRIDS", "field": "FGOUT_FGOUT_GRIDS", "series": "GAUGE_GAUGES"}
 
 # The nodes of a lon/lat grid and the nodes of another coincide within this many degrees (about 0.1 m).
 _COINCIDE_DEG = 1.0e-6
@@ -107,7 +109,7 @@ class Solved:
             return _unsaved("GEO_COORDINATE_SYSTEM", "the grid nodes are not lon/lat and no raster is placed on them")
         if key == "MAX_SPEED" and (self.stated("FGMAX_NUM_FGMAX_VAL") or 1) < 2:
             return _unsaved("FGMAX_NUM_FGMAX_VAL", "fgmax holds no speed (2 or 5 saves it)")
-        if key == "MAX_OVERLAND_DEPTH" and not self.stated("FGOUT_FGOUT_GRIDS"):
+        if key in ("MAX_OVERLAND_DEPTH", "INUNDATION_LINE") and not self.stated("FGOUT_FGOUT_GRIDS"):
             return _unsaved("FGOUT_FGOUT_GRIDS", "no frame 0 gives the initial sea to take off the overland depth")
         if _READ_BY[key] == "series" and self.stated("GAUGE_FILE_FORMAT") not in (None, "ascii", 1):
             return _unsaved("GAUGE_FILE_FORMAT", "the gauge files are not the ascii tables GaugeSolution reads")
@@ -368,4 +370,66 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
                             "min": float(values[bottom]), "t_min": float(times[bottom]), "frames": int(times.size)})
 
 
-PRIMITIVES = {"field": read_field, "max_over_time": read_max_over_time, "series": read_series}
+def read_outline(primitive: Primitive, solved: Solved) -> Track:
+    """``outline(name)``: the edge of the maximum overland depth above the dry tolerance, as lines.
+
+    A wet cell on the grid's own border continues past the grid, so no line is drawn along the border: the grid cut the
+    water there, the land did not stop it.
+    """
+    import numpy as np
+    import shapely
+    from rasterio import features
+    from rasterio.transform import from_bounds
+
+    _flat(primitive)
+    solved.output(primitive.variable, "outline")
+    depth = read_max_over_time(replace(primitive, kind="max_over_time", variable="MAX_OVERLAND_DEPTH"), solved)
+    wet = np.isfinite(depth.values[0]) & (depth.values[0] > solved.dry_tolerance)
+    if not wet.any():
+        raise OutputEmpty("no cell of MAX_OVERLAND_DEPTH is deeper than GEO_DRY_TOLERANCE, so there is no limit to draw.")
+    west, south, east, north = depth.bounds
+    rows, cols = wet.shape
+    dx, dy = (east - west) / cols, (north - south) / rows
+    padded = np.pad(wet, 1, mode="edge")
+    transform = from_bounds(west - dx, south - dy, east + dx, north + dy, cols + 2, rows + 2)
+    shapes = [shapely.geometry.shape(g) for g, v in features.shapes(padded.astype("uint8"), mask=padded, transform=transform)]
+    edge = shapely.geometry.box(west, south, east, north)
+    lines = shapely.union_all([shapely.boundary(g) for g in shapes]).intersection(edge.buffer(-min(dx, dy) / 4))
+    drawn = shapely.geometry.mapping(lines)
+    return Track(features={"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {
+        "dry_tolerance_m": solved.dry_tolerance}, "geometry": drawn}]},
+        measures={"wet_cells": int(wet.sum())})
+
+
+def read_peak(primitive: Primitive, solved: Solved) -> Track:
+    """``peak(name)``: the wet land cell whose maximum surface is highest, as a point at that fgmax node.
+
+    Land is a bed above the run's initial sea level (GEO_SEA_LEVEL); the point carries the surface and bed elevations there in the run's
+    datum and the surface above the initial sea.
+    """
+    import numpy as np
+
+    _flat(primitive)
+    key, _row = solved.output(primitive.variable, "peak")
+    sea = solved.stated("GEO_SEA_LEVEL")
+    sea = float(solved.body.slot("GEO_SEA_LEVEL").engine_default if sea is None else sea)
+    with solved.staged() as stage:
+        grid = _fgmax(solved, key, stage)
+        h = np.ma.filled(grid.h.astype("float64"), np.nan)
+        bed = np.ma.filled(grid.B.astype("float64"), np.nan)
+        x, y = np.asarray(grid.x, dtype="float64"), np.asarray(grid.y, dtype="float64")
+    surface = h + bed
+    reached = np.isfinite(h) & (h > solved.dry_tolerance) & np.isfinite(bed) & (bed > sea)
+    if not reached.any():
+        raise OutputEmpty(f"no fgmax cell with a bed above the initial sea level ({sea:g} m) was wet, so no water reached land.")
+    iy, ix = np.unravel_index(np.argmax(np.where(reached, surface, -np.inf)), surface.shape)
+    top = float(surface[iy, ix])
+    lon, lat = float(x[ix]), float(y[iy])
+    properties = {"surface_m": top, "bed_m": float(bed[iy, ix]), "above_initial_sea_m": top - sea, "initial_sea_m": sea}
+    return Track(features={"type": "FeatureCollection", "features": [{
+        "type": "Feature", "properties": properties, "geometry": {"type": "Point", "coordinates": [lon, lat]}}]},
+        measures=properties)
+
+
+PRIMITIVES = {"field": read_field, "max_over_time": read_max_over_time, "series": read_series,
+              "outline": read_outline, "peak": read_peak}
