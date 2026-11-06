@@ -223,5 +223,10 @@ def test_the_settings_door_names_the_retrieval_backend_the_index_was_built_with(
 
     monkeypatch.setattr(search_tools, "_INDEX", _Index())
     assert drive("GET", "/api/settings").json()["retrieval_backend"] == "sentence_transformers"
+    class _Lexical:
+        backend_name = None
+
+    monkeypatch.setattr(search_tools, "_INDEX", _Lexical())
+    assert drive("GET", "/api/settings").json()["retrieval_backend"] == "lexical"
     monkeypatch.setattr(search_tools, "_INDEX", None)
     assert drive("GET", "/api/settings").json()["retrieval_backend"] is None
