@@ -34,6 +34,7 @@ from trid3nt_server.workflows.runtime.review import _seat_on, fill_sheet
 from trid3nt_server.workflows.runtime.sheet import Filled, Keyword, Sheet
 from trid3nt_server.workflows.runtime.sheet import fill_coupled, reference_time
 from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
+from trid3nt_server.workflows.solver.stop import SolveStopped
 from trid3nt_server.workflows.runtime.workflow import EVENT_TIME
 from trid3nt_server.workflows.solver.staging import discard_run
 
@@ -210,10 +211,16 @@ async def run_sheet(*, sheet: Sheet, staged: Mapping[str, Any],
     Its ``reference_time`` is the instant every published time counts from: the stated ``moment``, else the solve's own start, said on the record as defaulted;
     its ``vertical_frame`` is the zero the bed, and so every head, is counted from; ``units`` what the run stated its outputs in."""
     module, _, attribute = _DISPATCH.rpartition(".")
-    handle = await run_sheet_(staged, dispatch=getattr(import_module(module), attribute))
-    return {**handle, "mesh": mesh, "module": sheet.module, "name": name,
-            "reference_time": reference_time(moment, handle),
-            "vertical_frame": frame, "published_units": dict(units)}
+    def shaped(handle: Mapping[str, Any]) -> dict[str, Any]:
+        return {**handle, "mesh": mesh, "module": sheet.module, "name": name,
+                "reference_time": reference_time(moment, handle),
+                "vertical_frame": frame, "published_units": dict(units)}
+
+    try:
+        return shaped(await run_sheet_(staged, dispatch=getattr(import_module(module), attribute)))
+    except SolveStopped as stop:
+        stop.solved = shaped(stop.solved)
+        raise
 
 
 def _table(solved: Callable[[str], Solved], run_module: str, coupled: Sequence[str], *, mapped: bool = True
@@ -293,7 +300,7 @@ def _record(solved: Solved, name: str) -> LayerURI:
 async def publish_outputs(*, run: Mapping[str, Any], sheet: Sheet,
                           outputs: Sequence[Primitive], captions: Mapping[str, str],
                           params: Mapping[str, Any],
-                          anchors: Sequence[Mapping[str, Any]] = ()) -> LayerURI:
+                          anchors: Sequence[Mapping[str, Any]] = (), partial: str | None = None) -> LayerURI:
     """Read what the run saved and publish every output row, one temporal layer per layer, the template's reads beside them.
     A solved run is opened over the sheet it solved, which the handle carries only as its record; a coupled body's
     keywords are its own slots, and a refinement's model is read on the grid it was cut to."""
@@ -316,7 +323,7 @@ async def publish_outputs(*, run: Mapping[str, Any], sheet: Sheet,
         engine="modflow", run=run, outputs=outputs, captions=captions,
         params=params, anchors=anchors, solved=_solved,
         table=lambda solved: _table(solved, str(run["module"]), list(coupled), mapped=not unstructured(sheet)),
-        record=_record)
+        record=_record, partial=partial)
 
 
 class ModflowWorkflow(Workflow):
@@ -467,17 +474,22 @@ class ModflowWorkflow(Workflow):
             # A run that does not reach the box leaves no staged copy behind.
             await asyncio.to_thread(discard_run, run_id, prefix, stem=self.engine)
             raise
-        solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=staged,
-                             mesh=run["mesh"], name=name,
-                             moment=run.get(EVENT_TIME.name),
-                             frame=run.get(_FRAME.name) or _FRAME.default,
-                             units=self.published_units(run))
+        async def products(handle: Mapping[str, Any], partial: str | None) -> Any:
+            outputs, captions = self._outputs()
+            # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
+            anchors = await anchors_of(env, outputs)
+            return await stage(
+                "outputs", publish_outputs, run=handle, sheet=run["sheet"],
+                outputs=[unanchored(p) for p in outputs], captions=captions,
+                anchors=anchors, params={key: run[key] for key in declared}, partial=partial)
+
+        try:
+            solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=staged,
+                                 mesh=run["mesh"], name=name,
+                                 moment=run.get(EVENT_TIME.name),
+                                 frame=run.get(_FRAME.name) or _FRAME.default,
+                                 units=self.published_units(run))
+        except SolveStopped as stop:
+            await self.stopped(stop, run, products)
         await keep_mesh(run["mesh"], solved.get("run_id"))
-        outputs, captions = self._outputs()
-        # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
-        anchors = await anchors_of(env, outputs)
-        value = await stage(
-            "outputs", publish_outputs, run=solved, sheet=run["sheet"],
-            outputs=[unanchored(p) for p in outputs], captions=captions,
-            anchors=anchors, params={key: run[key] for key in declared})
-        return RunResult(value=value, results=dict(run))
+        return RunResult(value=await products(solved, None), results=dict(run))

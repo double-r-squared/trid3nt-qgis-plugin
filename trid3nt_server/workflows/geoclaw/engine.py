@@ -3,7 +3,7 @@
 Status is the worker's exit code AND the worker's metrics verdict together: a
 clean process whose stdout refused (GeoClaw's ``stop`` exits 0) is an error.
 The worker runs ``--network none``, so everything it reads is staged. The wait
-is a CEILING rather than an estimate of the run's length.
+has no time limit: it ends when the container exits or the user cancels.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-from trid3nt_server.settings import setting
 from trid3nt_server.store import objects as storage
 from trid3nt_server.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
@@ -23,10 +22,12 @@ from trid3nt_server.workflows.solver.solver import (
     dispatch_and_wait,
     register_local_solver_spec,
 )
+from trid3nt_server.workflows.solver.stop import SolveStopped
 from trid3nt_server.workflows.solver.diagnostics import register_diagnostics_parser
 
 from .diagnostics import parse_geoclaw
 from .errors import GeoclawError
+from .progress import step_of
 
 logger = logging.getLogger("trid3nt_server.workflows.geoclaw.engine")
 
@@ -116,6 +117,7 @@ def _spec() -> LocalSolverSpec:
         stdout_uri_field=f"{GEOCLAW_SOLVER_NAME}_stdout_uri",
         stderr_uri_field=f"{GEOCLAW_SOLVER_NAME}_stderr_uri",
         classify_exit=classify_exit,
+        progress=step_of,
     )
 
 
@@ -147,16 +149,25 @@ def _run_start_iso(run_result: Any) -> str | None:
     return started.isoformat() if started is not None else None
 
 
+def _result_uri(run_id: str, run: dict[str, Any]) -> str:
+    return f"s3://{storage.runs_bucket()}/{run_id}/{run['result_basename']}"
+
+
 async def solve_case(*, run: dict[str, Any], cores: int) -> dict[str, Any]:
     """Dispatch the staged case to the worker and wait -> the run handle.
 
     The returned ``uri`` is the result the ledger replay probes; GeoClaw's
     product is its ``.data``-driven output set, so no mesh fact rides back."""
-    run_result, batch_run_id = await dispatch_and_wait(
-        solver=GEOCLAW_SOLVER_NAME, manifest_uri=run["manifest_uri"],
-        cores=cores, module=str(run["case"]["module"]),
-        label=str(run["name"]), timeout_s=setting("SOLVE_TIMEOUT_S"),
-        run_id=run["run_id"])
+    try:
+        run_result, batch_run_id = await dispatch_and_wait(
+            solver=GEOCLAW_SOLVER_NAME, manifest_uri=run["manifest_uri"],
+            cores=cores, module=str(run["case"]["module"]),
+            label=str(run["name"]), sheet=run["sheet"],
+            run_id=run["run_id"])
+    except SolveStopped as stop:
+        # The worker never reached its metrics: the handle states what a stop leaves, the frames as far as they were written.
+        stop.solved = {"run_id": stop.run_id, "uri": _result_uri(stop.run_id, run), "metrics": {}, "started_at": None}
+        raise
     if run_result is None or run_result.status != "complete":
         raise GeoclawError(
             f"the {run['name']} solve did not complete "
@@ -169,8 +180,7 @@ async def solve_case(*, run: dict[str, Any], cores: int) -> dict[str, Any]:
     # back a temp file; the products step re-downloads from the run prefix.
     return {
         "run_id": batch_run_id,
-        "uri": (f"s3://{storage.runs_bucket()}/{batch_run_id}/"
-                f"{run['result_basename']}"),
+        "uri": _result_uri(batch_run_id, run),
         "metrics": metrics,
         "started_at": _run_start_iso(run_result),
     }

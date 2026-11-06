@@ -17,16 +17,17 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import ExecutionHandle, RunResult
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.store import objects as storage
-from trid3nt_server.settings import setting
 from trid3nt_server.store.objects import StorageError
 from trid3nt_server.tools import register_tool
+
+from .stop import SolveStopped, finish
 
 
 __all__ = [
@@ -35,17 +36,12 @@ __all__ = [
     "SolverNotRegisteredError",
     "SolverDispatchError",
     "RunOutputMissing",
-    "set_emitter_binding",
     "LOCAL_DOCKER_WORKFLOW_NAME",
     "LocalSolverSpec",
     "launch_local_solver",
     "LOCAL_SOLVER_SPEC_REGISTRY",
     "register_local_solver_spec",
-    "EmitterBinding",
-    "NFR_P_4_TARGET_SECONDS",
     "DEFAULT_POLL_INTERVAL_S",
-    "PROGRESS_CLAMP_MAX",
-    "PROGRESS_TERMINAL",
     "dispatch_and_wait",
     "download_result",
 ]
@@ -55,19 +51,8 @@ logger = logging.getLogger("trid3nt_server.workflows.solver.solver")
 
 
 
-#: Target run-time budget the progress ramp is linear in: progress is
-#: (now - submitted_at) / target, and nothing else.
-NFR_P_4_TARGET_SECONDS: float = 900.0
-
-#: Default poll cadence, matched to the target budget granularity.
+#: Default poll cadence of the completion check.
 DEFAULT_POLL_INTERVAL_S: int = 10
-
-#: Highest progress ever advertised before the run reports success: the clamp is
-#: what stops a late run reading as finished on the strength of an estimate.
-PROGRESS_CLAMP_MAX: int = 95
-
-#: Final progress, written only when the run actually reports success.
-PROGRESS_TERMINAL: int = 100
 
 
 #: ``ExecutionHandle.workflow_name`` sentinel for container handles. The poll
@@ -105,26 +90,6 @@ class RunOutputMissing(SolverDispatchError):
     error_code: str = "RUN_OUTPUT_MISSING"
 
 
-
-
-@dataclass(frozen=True)
-class EmitterBinding:
-    """The ``(emitter, step_id)`` pair the active ``wait_for_completion`` drives its
-    progress emissions through. The caller binds it around each call and clears it
-    after; an unbound invocation emits nothing rather than guessing a step."""
-
-    emitter: Any
-    step_id: str
-
-
-_EMITTER_BINDING: EmitterBinding | None = None
-
-
-def set_emitter_binding(binding: EmitterBinding | None) -> None:
-    """Bind the active ``(emitter, step_id)`` pair for progress emission.
-    ``None`` clears it, and the polling loop falls back to no-op emission."""
-    global _EMITTER_BINDING
-    _EMITTER_BINDING = binding
 
 
 # The local backend envelope, one shape for every solver: only the knobs in ``LocalSolverSpec`` differ.
@@ -189,6 +154,9 @@ class LocalSolverSpec:
     classify_exit: (
         Callable[[Path, int], tuple[str, int, str | None, dict[str, Any]]] | None
     ) = None
+    progress: Callable[[str, Mapping[str, Any]], Mapping[str, str] | None] | None = None
+    """The engine's own step, read off one stdout line and the staged sheet: the named parts that line
+    states (a part keeps its latest text), or ``None`` for a line that states none. Pure: it estimates nothing."""
     network: str | None = None
     """The docker network this solver's container runs on. ``"none"`` is the
     ENGINE-ROOM posture - a fully staged run directory and nothing reachable - and
@@ -718,22 +686,19 @@ def _build_local_run_result(
 
 
 async def _wait_for_completion_local(
-    handle: ExecutionHandle, poll_interval_s: int, timeout_s: int
+    handle: ExecutionHandle, poll_interval_s: int
 ) -> RunResult:
     """``wait_for_completion`` body for a local handle: poll the completion.json
-    object under the run prefix on the caller's cadence, ramping progress and
-    stopping at the timeout."""
+    object under the run prefix on the caller's cadence until the container has
+    exited. A cancel stops the container and re-raises; nothing else ends the wait."""
     runs_bucket = storage.local_runs_bucket()
-    deadline = handle.submitted_at.timestamp() + float(timeout_s)
     loop = asyncio.get_running_loop()
 
     logger.info(
-        "wait_for_completion(local-docker) handle_id=%s run_id=%s "
-        "poll_interval=%ds timeout=%ds",
+        "wait_for_completion(local-docker) handle_id=%s run_id=%s poll_interval=%ds",
         handle.handle_id,
         handle.run_id,
         poll_interval_s,
-        timeout_s,
     )
 
     try:
@@ -741,44 +706,8 @@ async def _wait_for_completion_local(
             manifest = await loop.run_in_executor(
                 None, _try_get_completion_s3, runs_bucket, handle.run_id
             )
-            now = datetime.now(timezone.utc)
-
             if manifest is not None:
-                if str(manifest.get("status", "")).lower() == "ok":
-                    await _emit_progress(PROGRESS_TERMINAL)
-                else:
-                    await _emit_progress(
-                        _progress_percent(handle.submitted_at, now)
-                    )
                 return _build_local_run_result(handle, manifest, runs_bucket)
-
-            await _emit_progress(_progress_percent(handle.submitted_at, now))
-
-            if now.timestamp() >= deadline:
-                logger.warning(
-                    "wait_for_completion(local-docker) timed out handle_id=%s "
-                    "after %ds; killing container %s",
-                    handle.handle_id,
-                    timeout_s,
-                    handle.run_id,
-                )
-                # A timeout is not a user cancel: kill WITHOUT the cancelled flag so the supervisor records status="error".
-                await loop.run_in_executor(None, _docker_kill, handle.run_id)
-                return RunResult(
-                    run_id=handle.run_id,
-                    handle_id=handle.handle_id,
-                    status="failed",
-                    output_uri=None,
-                    started_at=None,
-                    completed_at=now,
-                    duration_seconds=None,
-                    error_code="SOLVER_TIMEOUT",
-                    error_message=(
-                        f"wait_for_completion exceeded {timeout_s}s budget while "
-                        f"polling s3://{runs_bucket}/{handle.run_id}/completion.json"
-                    ),
-                )
-
             await asyncio.sleep(poll_interval_s)
 
     except asyncio.CancelledError:
@@ -792,8 +721,6 @@ async def _wait_for_completion_local(
         )
         _request_local_cancel(handle.run_id)
         raise
-
-
 
 
 _RUN_SOLVER_METADATA = AtomicToolMetadata(
@@ -873,30 +800,9 @@ _WAIT_FOR_COMPLETION_METADATA = AtomicToolMetadata(
 )
 
 
-def _progress_percent(handle_submitted_at: datetime, now: datetime) -> int:
-    """The wall-clock-linear progress estimate, clamped to ``PROGRESS_CLAMP_MAX``
-    while the run is still going. Wall-clock arithmetic, never an estimate from a
-    model, and clamped so completion is never advertised before it happens."""
-    elapsed = max(0.0, (now - handle_submitted_at).total_seconds())
-    raw = (elapsed / NFR_P_4_TARGET_SECONDS) * 100.0
-    capped = min(PROGRESS_CLAMP_MAX, max(0, int(raw)))
-    return capped
-
-
-async def _emit_progress(progress_percent: int) -> None:
-    """Push a progress update to the active emitter binding (if any)."""
-    binding = _EMITTER_BINDING
-    if binding is None:
-        return
-    try:
-        await binding.emitter.update_progress(binding.step_id, progress_percent)
-    except Exception as exc:  # noqa: BLE001 -- emission must never fail the poll
-        logger.warning("emitter.update_progress raised: %s", exc)
-
-
 @register_tool(
     _WAIT_FOR_COMPLETION_METADATA,
-    # Annotations: not read-only (emits progress envelopes every poll tick), closed-world, non-destructive, non-idempotent.
+    # Annotations: not read-only (blocks on a live run), closed-world, non-destructive, non-idempotent.
     read_only_hint=False,
     open_world_hint=False,
     destructive_hint=False,
@@ -905,7 +811,6 @@ async def _emit_progress(progress_percent: int) -> None:
 async def wait_for_completion(
     handle: ExecutionHandle,
     poll_interval_s: int = DEFAULT_POLL_INTERVAL_S,
-    timeout_s: float | None = None,
     # Absorbs kwargs the model invents; the normalizer catches these upstream too.
     **_extra_ignored: Any,
 ) -> RunResult:
@@ -920,8 +825,8 @@ async def wait_for_completion(
     solver-class blocking pattern.
 
     Params: ``handle`` from ``run_solver`` (its ``workflow_name`` pins the
-    backend); ``poll_interval_s``; ``timeout_s`` (unstated, the SOLVE_TIMEOUT_S
-    setting), on which the run is cancelled best-effort and a failed ``RunResult`` returns with ``SOLVER_TIMEOUT``.
+    backend); ``poll_interval_s``. The wait has no time limit: it ends when the
+    run does or when the user cancels.
 
     Returns the terminal ``RunResult``: ``status="complete"`` carries the
     ``output_uri``, ``"failed"`` an error code and message, ``"cancelled"`` a
@@ -932,17 +837,11 @@ async def wait_for_completion(
         raise SolverDispatchError(
             f"poll_interval_s must be non-negative; got {poll_interval_s!r}"
         )
-    if timeout_s is None:
-        timeout_s = setting("SOLVE_TIMEOUT_S")
-    if timeout_s <= 0:
-        raise SolverDispatchError(
-            f"timeout_s must be positive; got {timeout_s!r}"
-        )
 
     # The HANDLE pins its backend, not the env: env churn between submit and wait
     # cannot mis-route the poll. Both local sentinels share the completion poll.
     if handle.workflow_name == LOCAL_DOCKER_WORKFLOW_NAME:
-        return await _wait_for_completion_local(handle, poll_interval_s, timeout_s)
+        return await _wait_for_completion_local(handle, poll_interval_s)
 
     raise SolverDispatchError(
         f"unsupported handle backend {handle.workflow_name!r}: "
@@ -953,17 +852,22 @@ async def wait_for_completion(
 
 
 async def dispatch_and_wait(*, solver: str, manifest_uri: str, cores: int,
-                            module: str, label: str, timeout_s: float,
+                            module: str, label: str,
                             run_id: str | None = None,
+                            sheet: Mapping[str, Any] | None = None,
                             grid_resolution_m: float | None = None,
                             active_cell_count: int | None = None
                             ) -> tuple[Any, str]:
     """Dispatch a staged manifest, drive the cards, wait, and hand back the result.
 
-    Judges nothing: a non-complete status is the caller's error to raise."""
+    The wait ends when the container exits or the user cancels. ``sheet`` is the run's staged deck, which
+    the engine's ``progress`` parser reads its totals from. Judges nothing: a non-complete status is the caller's error to raise."""
+    from functools import partial
+
     from trid3nt_server.render.pipeline_emitter import current_emitter
 
     from .solve_progress import (
+        StdoutSteps,
         drive_live_solve_progress,
         mint_dispatch_and_sim_cards,
         route_sim_terminal,
@@ -976,29 +880,39 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, cores: int,
     sim_step_id = await mint_dispatch_and_sim_cards(
         emitter=emitter, solver=solver, module=module, handle=handle,
         cores=cores)
-    if emitter is not None and sim_step_id is not None:
-        set_emitter_binding(EmitterBinding(emitter=emitter, step_id=sim_step_id))
+    local = _LOCAL_RUNS.get(run_id)
+    steps = (StdoutSteps(local.stdout_path, partial(local.spec.progress, sheet=sheet or {}))
+             if local is not None and local.spec.progress is not None else None)
     progress = asyncio.ensure_future(drive_live_solve_progress(
         emitter=emitter, run_id=run_id, solver=solver,
         grid_resolution_m=grid_resolution_m, active_cell_count=active_cell_count,
-        vcpus=None, eta_seconds=None))
+        vcpus=None, steps=steps))
 
     run_result = None
     try:
-        run_result = await wait_for_completion(handle, timeout_s=timeout_s)
+        run_result = await wait_for_completion(handle)
     except asyncio.CancelledError:
         logger.info("%s %s solve cancelled awaiting solver", solver, label)
         await route_sim_terminal(emitter, sim_step_id, run_result=None)
-        raise
+        raise SolveStopped(run_id, await finish(_stopped_at(local, steps))) from None
     finally:
         progress.cancel()
         try:
             await progress
         except (asyncio.CancelledError, Exception):  # noqa: BLE001
             pass
-        set_emitter_binding(None)
     await route_sim_terminal(emitter, sim_step_id, run_result=run_result)
     return run_result, (getattr(run_result, "run_id", None) or run_id)
+
+
+async def _stopped_at(local: _LocalRun | None, steps: Any) -> str | None:
+    """Once the supervisor has uploaded what a killed run wrote, the last step its stdout stated."""
+    if local is not None and local.supervisor is not None:
+        await asyncio.to_thread(local.supervisor.join)
+    if steps is None:
+        return None
+    await asyncio.to_thread(steps.read)
+    return steps.step
 
 
 def download_result(run_id: str, basename: str) -> str:

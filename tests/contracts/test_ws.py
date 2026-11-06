@@ -792,7 +792,8 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
             active_cell_count=100_000,
             vcpus=8,
             elapsed_seconds=42.5,
-            eta_seconds=300.0,
+            step="step 500 of 2449",
+            step_seconds=3.5,
         ),
         # auto/ask modes -- tool-selection picker (Stage 3,
         # 2026-07-22). Request is agent->client (ranked candidates + reason +

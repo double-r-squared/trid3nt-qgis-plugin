@@ -1,0 +1,23 @@
+ Total mass at initial time:    10050372.383544566     
+ AMRCLAW: level  1  CFL = .611E-02  dt = 0.2000E+00  final t = 0.200000E+00
+Writing fgout grid #   1  frame    1 at time =    0.00000000E+00
+ AMRCLAW: level  1  CFL = .850E+00  dt = 0.2781E+02  final t = 0.280127E+02
+Writing fgout grid #   1  frame    2 at time =    0.30000000E+01
+Writing fgout grid #   1  frame    3 at time =    0.60000000E+01
+Writing fgout grid #   1  frame    4 at time =    0.90000000E+01
+Writing fgout grid #   1  frame    5 at time =    0.12000000E+02
+Writing fgout grid #   1  frame    6 at time =    0.15000000E+02
+Writing fgout grid #   1  frame    7 at time =    0.18000000E+02
+Writing fgout grid #   1  frame    8 at time =    0.21000000E+02
+Writing fgout grid #   1  frame    9 at time =    0.24000000E+02
+Writing fgout grid #   1  frame   10 at time =    0.27000000E+02
+ AMRCLAW: level  1  CFL = .660E+00  dt = 0.2599E+02  final t = 0.540000E+02
+Writing fgout grid #   1  frame   11 at time =    0.30000000E+02
+Writing fgout grid #   1  frame   12 at time =    0.33000000E+02
+Writing fgout grid #   1  frame   13 at time =    0.36000000E+02
+Writing fgout grid #   1  frame   14 at time =    0.39000000E+02
+Writing fgout grid #   1  frame   15 at time =    0.42000000E+02
+Writing fgout grid #   1  frame   16 at time =    0.45000000E+02
+Writing fgout grid #   1  frame   17 at time =    0.48000000E+02
+Writing fgout grid #   1  frame   18 at time =    0.51000000E+02
+Writing fgout grid #   1  frame   19 at time =    0.54000000E+02

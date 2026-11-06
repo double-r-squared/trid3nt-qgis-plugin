@@ -337,9 +337,10 @@ class PipelineStatePayload(ContractModel):
 
 
 class SolveProgressPayload(ContractModel):
-    """``solve-progress``: one LIVE telemetry tick during a long solver run.
-    Every field is solver- or perf-model-sourced, and ``eta_seconds`` is ``None``
-    when nothing can estimate it rather than a fabricated number."""
+    """``solve-progress``: one LIVE tick of a running solve.
+    ``step`` is the engine's own latest step, as it states it (``None`` before it has stated one);
+    ``step_seconds`` is the wall time since that step changed; ``elapsed_seconds`` is the wall time since the dispatch.
+    Nothing here estimates what is left."""
 
     MESSAGE_TYPE: ClassVar[str] = "solve-progress"
 
@@ -349,7 +350,8 @@ class SolveProgressPayload(ContractModel):
     active_cell_count: int | None = None
     vcpus: int | None = None
     elapsed_seconds: float = Field(ge=0)
-    eta_seconds: float | None = Field(default=None, ge=0)
+    step: str | None = None
+    step_seconds: float | None = Field(default=None, ge=0)
     # Mirrored verbatim from the control plane; None when not bound to a batch job.
     phase: str | None = None
 

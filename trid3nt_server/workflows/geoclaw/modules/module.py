@@ -578,24 +578,13 @@ def _friction(wrapper: type, filled: dict[str, Any]) -> None:
 
 @dataclass(frozen=True, slots=True)
 class GeoclawSheet(Sheet):
-    """A filled GeoClaw deck: the sheet, plus the card row stating the run's wall time."""
+    """A filled GeoClaw deck: the sheet, plus the card row stating what the storm file leaves out."""
 
     def engine_rows(self) -> tuple[list[ParamSheetRow], set[str]]:
-        """The card's engine section: the wall-time estimate of the whole run, from the accepted grid's rate and the stated CLAW_TFINAL, and what the storm file leaves out or defaults.
+        """The card's engine section: what the storm file leaves out or defaults.
 
-        The wall row is stated only when the run holds grid facts and CLAW_TFINAL; the storm row only when the writer omits or defaults a fix."""
-        from trid3nt_server.tools.mesh.meshers.claw_grid import PROBE_KEY, WALL_BASIS
-
+        The storm row is stated only when the writer omits or defaults a fix."""
         rows: list[ParamSheetRow] = []
-        mesh = self.run.get("mesh")
-        facts = (getattr(mesh.get("artifact"), "probes", None) or {}).get(PROBE_KEY) if isinstance(mesh, Mapping) else None
-        tfinal = self.stated().get("CLAW_TFINAL")
-        if facts and tfinal is not None:
-            minutes = facts["wall_s_per_sim_s"] * float(tfinal) / 60.0
-            rows.append(ParamSheetRow(
-                name="wall_estimate", value=f"up to about {minutes:.0f} min of wall for CLAW_TFINAL {float(tfinal):g} s",
-                desc="The run's wall time: the grid's wall seconds per simulated second times CLAW_TFINAL. Read-only, not enforced.",
-                origin=Origin.DERIVED, editable=False, source_badge=WALL_BASIS, group="Grid"))
         for content in self.files.values():
             track = content.get("storm") if isinstance(content, Mapping) else None
             if track and (track["omitted"] or track["default_radius"]):

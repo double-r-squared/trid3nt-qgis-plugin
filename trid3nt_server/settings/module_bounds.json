@@ -140,13 +140,6 @@
         100
       ]
     },
-    "SOLVE_TIMEOUT_S": {
-      "unit": "s",
-      "bounds": [
-        1,
-        1000000000000.0
-      ]
-    },
     "MAX_TURNS_PER_SESSION": {
       "unit": "turns",
       "bounds": [

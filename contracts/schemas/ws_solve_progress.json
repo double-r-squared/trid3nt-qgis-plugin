@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``solve-progress``: one LIVE telemetry tick during a long solver run.\nEvery field is solver- or perf-model-sourced, and ``eta_seconds`` is ``None``\nwhen nothing can estimate it rather than a fabricated number.",
+  "description": "``solve-progress``: one LIVE tick of a running solve.\n``step`` is the engine's own latest step, as it states it (``None`` before it has stated one);\n``step_seconds`` is the wall time since that step changed; ``elapsed_seconds`` is the wall time since the dispatch.\nNothing here estimates what is left.",
   "properties": {
     "active_cell_count": {
       "anyOf": [
@@ -18,19 +18,6 @@
       "minimum": 0,
       "title": "Elapsed Seconds",
       "type": "number"
-    },
-    "eta_seconds": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "number"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Eta Seconds"
     },
     "grid_resolution_m": {
       "anyOf": [
@@ -63,6 +50,31 @@
     "solver": {
       "title": "Solver",
       "type": "string"
+    },
+    "step": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Step"
+    },
+    "step_seconds": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Step Seconds"
     },
     "vcpus": {
       "anyOf": [

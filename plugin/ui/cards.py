@@ -1427,12 +1427,12 @@ class SimCard(QFrame):
         ("engine", "Engine"),
         ("run_id", "Run id"),
         ("status", "Status"),
-        ("progress", "Progress"),
+        ("step", "Step"),
+        ("on_step", "On this step"),
         ("nodes", "Nodes"),
         ("grid", "Grid"),
         ("vcpus", "vCPUs"),
         ("elapsed", "Elapsed"),
-        ("eta", "ETA"),
         ("duration", "Duration"),
     )
 
@@ -1441,7 +1441,7 @@ class SimCard(QFrame):
         self._engine = engine_label
         self._terminal = False
         # Latest live-progress bits, so the collapsed readout recomposes from whichever wire last spoke.
-        self._pct: Optional[int] = None
+        self._step_str: str = ""
         self._elapsed_str: str = ""
         self._phase: str = ""
         self.setObjectName("simcard")  # scope the fill; no text highlight
@@ -1506,6 +1506,8 @@ class SimCard(QFrame):
     @staticmethod
     def _fmt_seconds(seconds: float) -> str:
         s = int(max(0.0, round(seconds)))
+        if s >= 3600:
+            return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}"
         return f"{s // 60}:{s % 60:02d}"
 
     def update_from_step(self, step: PipelineStep) -> None:
@@ -1519,10 +1521,6 @@ class SimCard(QFrame):
         if step.batch_status and step.batch_status.lower() != step.state:
             status_bits.append(step.batch_status)
         self._set("status", " / ".join(status_bits))
-        if step.progress_percent is not None:
-            self._set("progress", f"{step.progress_percent}%")
-            self._pct = step.progress_percent
-            self._refresh_progress_readout()
         if step.duration_ms is not None:
             self._set("duration", self._fmt_seconds(step.duration_ms / 1000.0))
         if step.state in ("complete", "failed", "cancelled") and not self._terminal:
@@ -1571,9 +1569,13 @@ class SimCard(QFrame):
             if elapsed is not None:
                 self._elapsed_str = self._fmt_seconds(elapsed)
                 self._set("elapsed", self._elapsed_str)
-            eta = _num("eta_seconds")
-            if eta is not None:
-                self._set("eta", self._fmt_seconds(eta))
+            step_text = data.get("step")
+            if isinstance(step_text, str) and step_text:
+                self._step_str = step_text
+                self._set("step", step_text)
+            on_step = _num("step_seconds")
+            if on_step is not None:
+                self._set("on_step", self._fmt_seconds(on_step))
             phase = data.get("phase")
             if isinstance(phase, str) and phase:
                 self._phase = phase
@@ -1586,8 +1588,8 @@ class SimCard(QFrame):
         if self._terminal:
             return
         parts: List[str] = []
-        if self._pct is not None:
-            parts.append(f"{self._pct}%")
+        if self._step_str:
+            parts.append(self._step_str)
         if self._elapsed_str:
             parts.append(self._elapsed_str)
         if self._phase:

@@ -18,10 +18,7 @@ from botocore.exceptions import ClientError
 
 import trid3nt_server.workflows.solver.solver as solver_mod
 from trid3nt_server.store import objects as storage
-from trid3nt_server.workflows.solver.solver import (
-    LOCAL_SOLVER_SPEC_REGISTRY,
-    set_emitter_binding,
-)
+from trid3nt_server.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
 
 
 
@@ -55,14 +52,12 @@ class FakeS3Client:
 def reset_seams():
     """Reset solver DI seams and in-flight run registry around each test."""
     storage.set_client(None)
-    set_emitter_binding(None)
     storage.set_runs_bucket(None)
     solver_mod._LOCAL_RUNS.clear()
     try:
         yield
     finally:
         storage.set_client(None)
-        set_emitter_binding(None)
         storage.set_runs_bucket(None)
         solver_mod._LOCAL_RUNS.clear()
 

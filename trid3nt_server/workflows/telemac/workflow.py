@@ -51,6 +51,7 @@ from trid3nt_server.workflows.runtime.sheet import (
     reference_time,
 )
 from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
+from trid3nt_server.workflows.solver.stop import SolveStopped
 from trid3nt_server.workflows.telemac.modules.sheet import (
     CONTINUATION,
     TelemacSheet,
@@ -288,8 +289,8 @@ def _stated_value(value: Any) -> str:
 async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive],
                           captions: Mapping[str, str],
                           params: Mapping[str, Any],
-                          anchors: Sequence[Mapping[str, Any]] = ()
-                          ) -> LayerURI:
+                          anchors: Sequence[Mapping[str, Any]] = (),
+                          partial: str | None = None) -> LayerURI:
     """Read what the run wrote and publish every variable, ONE layer each (temporal where the row varies in time, else the final frame).
     Module rows style the layer; a variable no row names goes under the file's own spelling and one reaching no layer is journalled by name.
     The engine's half: how a module's result is opened, the table of what it wrote, and the run's record."""
@@ -304,7 +305,7 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
         engine="telemac", run=run, outputs=outputs, captions=captions,
         params=params, anchors=anchors,
         solved=lambda module: Solved(run, wrapper_for(module)), table=_table,
-        record=lambda solved, name: _record(solved, name=name))
+        record=lambda solved, name: _record(solved, name=name), partial=partial)
 
 
 def _record(solved: Solved, *, name: str) -> LayerURI:
@@ -370,17 +371,23 @@ async def run_sheet(*, sheet: TelemacSheet, staged: Mapping[str, Any],
     Its ``reference_time`` is the instant every published time counts from: the stated ``moment``, else the solve's own start, said on the record as defaulted."""
     module, _, attribute = str(dispatch).rpartition(".")
     to_the_box = getattr(import_module(module), attribute)
-    handle = await run_sheet_(staged, dispatch=to_the_box)
-    return {**settled, **handle, "module": sheet.module,
-            "reference_time": reference_time(moment, handle),
-            "display_basename": display or None,
-            "module_output": [{"token": token, "module": module,
-                               "name": row.name, "unit": row.unit,
-                               "style": row.style, "varies": row.varies,
-                               "has_edge": bool(row.has_edge),
-                               "injected": bool(row.injected)}
-                              for token, module, row in sheet.published()],
-            "tracer_names": dict(sheet.resolved()).get("NAMES OF TRACERS")}
+    def shaped(handle: Mapping[str, Any]) -> dict[str, Any]:
+        return {**settled, **handle, "module": sheet.module,
+                "reference_time": reference_time(moment, handle),
+                "display_basename": display or None,
+                "module_output": [{"token": token, "module": module,
+                                   "name": row.name, "unit": row.unit,
+                                   "style": row.style, "varies": row.varies,
+                                   "has_edge": bool(row.has_edge),
+                                   "injected": bool(row.injected)}
+                                  for token, module, row in sheet.published()],
+                "tracer_names": dict(sheet.resolved()).get("NAMES OF TRACERS")}
+
+    try:
+        return shaped(await run_sheet_(staged, dispatch=to_the_box))
+    except SolveStopped as stop:
+        stop.solved = shaped(stop.solved)
+        raise
 
 
 class TelemacWorkflow(Workflow):
@@ -615,22 +622,28 @@ class TelemacWorkflow(Workflow):
             await asyncio.to_thread(discard_run, run_id, prefix,
                                     stem=self.engine)
             raise
-        solved = await stage(
-            "solve", run_sheet, sheet=run["sheet"], staged=staged,
-            settled=run[_SETTLED], dispatch=_DISPATCH,
-            display=self._states("DISPLAY_FILE", ""),
-            moment=run.get(EVENT_TIME.name))
+        async def products(handle: Mapping[str, Any], partial: str | None) -> Any:
+            outputs, captions = self._outputs()
+            outputs = [p for p in outputs
+                       if not (_names_untaken(p.along, untaken) or _names_untaken(p.at, untaken))]
+            # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
+            anchors = await anchors_of(env, outputs)
+            return await stage(
+                "outputs", publish_outputs, run=handle,
+                outputs=[unanchored(p) for p in outputs], captions=captions,
+                anchors=anchors, params={name: run[name] for name in declared},
+                partial=partial)
+
+        try:
+            solved = await stage(
+                "solve", run_sheet, sheet=run["sheet"], staged=staged,
+                settled=run[_SETTLED], dispatch=_DISPATCH,
+                display=self._states("DISPLAY_FILE", ""),
+                moment=run.get(EVENT_TIME.name))
+        except SolveStopped as stop:
+            await self.stopped(stop, run, products)
         await keep_mesh(run["mesh"], solved.get("run_id"))
-        outputs, captions = self._outputs()
-        outputs = [p for p in outputs
-                   if not (_names_untaken(p.along, untaken) or _names_untaken(p.at, untaken))]
-        # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
-        anchors = await anchors_of(env, outputs)
-        value = await stage(
-            "outputs", publish_outputs, run=run["solve"],
-            outputs=[unanchored(p) for p in outputs], captions=captions,
-            anchors=anchors, params={name: run[name] for name in declared})
-        return RunResult(value=value, results=dict(run))
+        return RunResult(value=await products(solved, None), results=dict(run))
 
     def _declared(self, kind: type) -> tuple[Any, ...]:
         """Every placement or measurement the template module declares, in declared order."""

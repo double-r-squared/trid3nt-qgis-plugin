@@ -439,22 +439,6 @@
       "source": "QGIS raster properties, Min/Max Value Settings: \"Cumulative count cut: Removes outliers. The standard range of values is 2% to 98%, but it can be adapted manually.\" https://docs.qgis.org/3.40/en/docs/user_manual/working_with_raster/raster_properties.html"
     },
     {
-      "keyword": "SOLVE_TIMEOUT_S",
-      "identifier": "SOLVE_TIMEOUT_S",
-      "type": "REAL",
-      "shape": "",
-      "size": 1,
-      "unbounded": false,
-      "help": "The least time a solve is waited on before it is cancelled as a typed timeout; an engine that estimates a longer run waits its estimate.",
-      "rubrique": [
-        "solve"
-      ],
-      "is_file": false,
-      "mandatory": false,
-      "default": 7200.0,
-      "source": "TRID3NT engineering default."
-    },
-    {
       "keyword": "MAX_TURNS_PER_SESSION",
       "identifier": "MAX_TURNS_PER_SESSION",
       "type": "INTEGER",

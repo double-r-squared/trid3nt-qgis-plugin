@@ -510,6 +510,26 @@ same quantity agree within a stated tolerance, and the resolved range CONTAINS t
 headline - otherwise the caption states the gap. A number in prose that the
 picture cannot show is the dishonest case this pins.
 
+## The solve wait - no clock, the engine's own step, a stop keeps what was written
+
+The wait on a solve has no time limit: it ends when the container exits or the user stops it, and the stop
+kills the container. The Sim card shows the engine's own latest step, the wall time on that step and the
+wall time since dispatch, and estimates nothing - no percent, no remaining time, no threshold.
+
+Each engine DECLARES a pure parser from one stdout line (and the run's staged sheet) to the named parts of
+the step that line states, on its `LocalSolverSpec.progress` (`<engine>/progress.py`). The daemon follows the
+solve's stdout file, keeps the latest text of each part, and sends `step`, `step_seconds` and
+`elapsed_seconds` on the `solve-progress` envelope. A total comes only from the run's own deck: TELEMAC
+`step i of N` under a fixed step when the deck states NUMBER OF TIME STEPS, else the simulated time against
+DURATION; MODFLOW `stress period p of P, step s of S` from TDIS (no S where an ATS file adapts the step);
+GeoClaw `t = x s of T s` and `frame k of K` from CLAW_TFINAL and the fgout grid's frame count.
+
+A stop ends the wait as `SolveStopped` (a cancellation) once the supervisor has uploaded what the run wrote.
+The engine's `launch` hands it to `Workflow.stopped`, which publishes through the same `publish_outputs` with
+`partial=` set, so every layer, chart and the engine's record carry `(partial: stopped by the user at <step>)`
+in their name, and the run's journal record carries `stopped`. A run whose output cannot be read honestly
+publishes nothing and says why on the record; either way the launch ends as the stop.
+
 ## MODFLOW - a sheet over the accepted mesh
 
 The engine's own page - the simulation, the three module wrappers, the

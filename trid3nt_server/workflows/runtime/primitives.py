@@ -599,10 +599,12 @@ async def publish_reads(*, engine: str, run: Mapping[str, Any],
                             Sequence[Primitive],
                             Callable[[Sequence[LayerURI], Mapping[Primitive, str]], None]]],
                         record: Callable[[Any, str], LayerURI],
-                        anchors: Sequence[Mapping[str, Any]] = ()) -> LayerURI:
+                        anchors: Sequence[Mapping[str, Any]] = (),
+                        partial: str | None = None) -> LayerURI:
     """Read what the run wrote and publish every row of the engine's module table plus the template's own reads -> the run's record.
     ``solved`` makes a module's solved run, read ONCE per module; ``table`` turns it into the module table's reads and the account of what they landed as; ``record`` is the engine's own record of the run.
-    A chart's reference is a callable or another primitive read; a placed read the result lacks refuses."""
+    A chart's reference is a callable or another primitive read; a placed read the result lacks refuses.
+    ``partial`` is the sentence of a stopped run: every layer, chart and the record carry it in their name."""
     from .module import SlotRefused
 
     held: dict[str, Any] = {}
@@ -671,6 +673,8 @@ async def publish_reads(*, engine: str, run: Mapping[str, Any],
                           values=other.values),)
         reads[primitive.key] = replace(read, lines=lines)
     name, where = str(run["name"]), str(params.get("location") or run["name"])
+    if partial:
+        name, where = f"{name} (partial: {partial})", f"{where} (partial: {partial})"
 
     def _delivered(primitive: Primitive, caption: str) -> Any:
         return deliver(primitive, reads[primitive.key],

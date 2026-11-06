@@ -28,6 +28,7 @@ from trid3nt_server.workflows.runtime.primitives import Primitive, field, max_ov
 from trid3nt_server.workflows.runtime.review import _seat_on, fill_sheet
 from trid3nt_server.workflows.runtime.sheet import Keyword, Sheet, reference_time
 from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
+from trid3nt_server.workflows.solver.stop import SolveStopped
 from trid3nt_server.workflows.runtime.workflow import EVENT_TIME
 from trid3nt_server.workflows.solver.staging import discard_run
 
@@ -168,9 +169,15 @@ async def run_sheet(*, sheet: Sheet, staged: Mapping[str, Any], mesh: Mapping[st
     starts at its rupture), else the solve's own start, said on the record as defaulted;
     its ``vertical_frame`` is the zero the bed, and so every depth, is counted from."""
     module, _, attribute = _DISPATCH.rpartition(".")
-    handle = await run_sheet_(staged, dispatch=getattr(import_module(module), attribute))
-    return {**handle, "mesh": mesh, "module": sheet.module, "name": name, "reference_time": reference_time(moment, handle),
-            "vertical_frame": frame}
+    def shaped(handle: Mapping[str, Any]) -> dict[str, Any]:
+        return {**handle, "mesh": mesh, "module": sheet.module, "name": name,
+                "reference_time": reference_time(moment, handle), "vertical_frame": frame}
+
+    try:
+        return shaped(await run_sheet_(staged, dispatch=getattr(import_module(module), attribute)))
+    except SolveStopped as stop:
+        stop.solved = shaped(stop.solved)
+        raise
 
 
 def _table(solved: Solved, sheet: Sheet) -> tuple[list[Primitive], Callable[[Sequence[LayerURI], Mapping[Primitive, str]], None]]:
@@ -310,14 +317,14 @@ async def publish_rupture(*, sheet: Sheet, rundir: Any, run_id: str, name: str, 
 
 async def publish_outputs(*, run: Mapping[str, Any], sheet: Sheet, outputs: Sequence[Primitive],
                           captions: Mapping[str, str], params: Mapping[str, Any],
-                          anchors: Sequence[Mapping[str, Any]] = ()) -> LayerURI:
+                          anchors: Sequence[Mapping[str, Any]] = (), partial: str | None = None) -> LayerURI:
     """Read what the run saved and publish every row of the module table, the template's own reads beside them.
     A solved run is opened over the sheet it solved, which the handle carries only as its record."""
     opened = {**run, "sheet": sheet}
     return await publish_reads(
         engine="geoclaw", run=run, outputs=outputs, captions=captions, params=params, anchors=anchors,
         solved=lambda module: Solved(opened, GEO), table=lambda solved: _table(solved(str(run["module"])), sheet),
-        record=_record)
+        record=_record, partial=partial)
 
 
 class GeoclawWorkflow(Workflow):
@@ -510,8 +517,19 @@ class GeoclawWorkflow(Workflow):
             await asyncio.to_thread(discard_run, run_id, prefix, stem=self.engine)
             raise
         await publish_rupture(sheet=run["sheet"], rundir=staged["rundir"], run_id=run_id, name=name, catalogue=catalogue)
-        solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=staged, mesh=run["mesh"], name=name,
-                             moment=run.get(EVENT_TIME.name), frame=run.get(_FRAME.name) or _FRAME.default)
+        async def products(handle: Mapping[str, Any], partial: str | None) -> Any:
+            outputs, captions = self._outputs()
+            # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
+            anchors = await anchors_of(env, outputs)
+            return await stage("outputs", publish_outputs, run=handle, sheet=run["sheet"],
+                               outputs=[unanchored(p) for p in outputs], captions=captions, anchors=anchors,
+                               params={key: run[key] for key in declared}, partial=partial)
+
+        try:
+            solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=staged, mesh=run["mesh"], name=name,
+                                 moment=run.get(EVENT_TIME.name), frame=run.get(_FRAME.name) or _FRAME.default)
+        except SolveStopped as stop:
+            await self.stopped(stop, run, products)
         await keep_mesh(run["mesh"], solved.get("run_id"))
         from trid3nt_server.inputs.run_notes import journal_note
 
@@ -526,13 +544,7 @@ class GeoclawWorkflow(Workflow):
                          "the engine printed no Total mass at initial time")
         if str(solved.get("module")) == "geoclaw_bouss":
             await asyncio.to_thread(refuse_dry_start, Solved({**solved, "sheet": run["sheet"]}, GEO))
-        outputs, captions = self._outputs()
-        # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
-        anchors = await anchors_of(env, outputs)
-        value = await stage("outputs", publish_outputs, run=solved, sheet=run["sheet"],
-                            outputs=[unanchored(p) for p in outputs], captions=captions, anchors=anchors,
-                            params={key: run[key] for key in declared})
-        return RunResult(value=value, results=dict(run))
+        return RunResult(value=await products(solved, None), results=dict(run))
 
     async def _data(self, env: Any, own: Mapping[str, Any], steering: type) -> None:
         """The data the template's statements ask the world for, each a declared fetch row the run reads and journals.

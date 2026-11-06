@@ -3,22 +3,57 @@ heartbeat on the Sim card.
 
 A long solve runs off-loop and emits nothing for minutes, so the heartbeat runs ON
 the loop where the emitter is bound: launched BEFORE the solve, cancelled in a
-``finally``. The cards are observability only; a card failure never stops a solve.
+``finally``. The heartbeat follows the solver's stdout file and states the engine's
+own latest step, the wall time on it and the wall time since dispatch; it estimates
+nothing. The cards are observability only; a card failure never stops a solve.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable, Mapping
 
 from trid3nt_server.render.pipeline_emitter import dispatched_tool_name
 
 logger = logging.getLogger("trid3nt_server.workflows.solver.solve_progress")
 
 
-#: Cadence (seconds) of the live solve-progress envelope: a UX tick independent of the solver poll, conservative for a 10-20 min solve.
+#: Cadence (seconds) of the live solve-progress envelope: a UX tick independent of the solver poll.
 _LIVE_SOLVE_PROGRESS_INTERVAL_S = 10.0
+
+
+class StdoutSteps:
+    """The solver's stdout file followed from its start: each whole line goes to the engine's parser, which names the
+    parts of the step that line states (a part keeps its latest text and its first-seen place), and the parts read
+    together are the step."""
+
+    def __init__(self, path: Path,
+                 step_of: Callable[[str], Mapping[str, str] | None]) -> None:
+        self._path = path
+        self._step_of = step_of
+        self._offset = 0
+        self._tail = b""
+        self._parts: dict[str, str] = {}
+        self.step: str | None = None
+
+    def read(self) -> bool:
+        """Fold the lines written since the last read in; whether the step text changed. Blocking IO: run it off the loop."""
+        try:
+            with self._path.open("rb") as fh:
+                fh.seek(self._offset)
+                data = fh.read()
+        except OSError:
+            return False
+        self._offset += len(data)
+        *whole, self._tail = (self._tail + data).split(b"\n")
+        for raw in whole:
+            self._parts.update(self._step_of(raw.decode("utf-8", errors="replace")) or {})
+        step = ", ".join(self._parts.values()) or None
+        changed = step != self.step
+        self.step = step
+        return changed
 
 
 async def drive_live_solve_progress(
@@ -29,18 +64,21 @@ async def drive_live_solve_progress(
     grid_resolution_m: float | None,
     active_cell_count: int | None,
     vcpus: int | None,
-    eta_seconds: float | None,
+    steps: StdoutSteps | None = None,
 ) -> None:
     """Background loop: emit the LIVE solve-progress envelope every N seconds.
-    ``elapsed_seconds`` is wall-clock, never an estimate; best-effort and
-    cancellation-safe, and ``emitter=None`` is a no-op."""
+    ``elapsed_seconds`` and ``step_seconds`` are wall-clock; ``step`` is the engine's own text for its latest step.
+    Best-effort and cancellation-safe, and ``emitter=None`` is a no-op."""
     if emitter is None:
         return
     loop = asyncio.get_running_loop()
     started = loop.time()
+    changed_at: float | None = None
     try:
         while True:
-            elapsed = max(0.0, loop.time() - started)
+            now = loop.time()
+            if steps is not None and await asyncio.to_thread(steps.read):
+                changed_at = now
             payload = {
                 "run_id": run_id,
                 "solver": solver,
@@ -49,9 +87,10 @@ async def drive_live_solve_progress(
                 "active_cell_count": (int(active_cell_count)
                                       if active_cell_count is not None else None),
                 "vcpus": int(vcpus) if vcpus is not None else None,
-                "elapsed_seconds": float(elapsed),
-                "eta_seconds": (float(eta_seconds)
-                                if eta_seconds is not None else None),
+                "elapsed_seconds": float(max(0.0, now - started)),
+                "step": steps.step if steps is not None else None,
+                "step_seconds": (float(max(0.0, now - changed_at))
+                                 if changed_at is not None else None),
             }
             try:
                 await emitter.emit_solve_progress(payload)
@@ -68,6 +107,7 @@ async def drive_live_solve_progress(
 
 
 __all__ = [
+    "StdoutSteps",
     "drive_live_solve_progress",
     "_LIVE_SOLVE_PROGRESS_INTERVAL_S",
 ]

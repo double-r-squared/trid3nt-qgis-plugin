@@ -15,6 +15,8 @@ from trid3nt_contracts.common import Origin
 
 from trid3nt_server.errors import DeclarativeError
 
+from trid3nt_server.workflows.solver.stop import SolveStopped
+
 from .module import Slot, SlotRefused, accept
 
 __all__ = ["Filled", "Keyword", "Provenance", "Sheet", "SheetIncomplete",
@@ -314,7 +316,11 @@ class Keyword:
 async def run(staged: Mapping[str, Any], *, dispatch: Callable[..., Any]) -> Any:
     """A staged run handed to the box -> the staged run and the box's answer, as one handle."""
     # The launcher partitions across the count the staged case states; a serial case states none.
-    return {**staged, **await dispatch(run=staged, cores=int(staged["case"].get("cores", 1)))}
+    try:
+        return {**staged, **await dispatch(run=staged, cores=int(staged["case"].get("cores", 1)))}
+    except SolveStopped as stop:
+        stop.solved = {**staged, **stop.solved}
+        raise
 
 
 def reference_time(moment: str | None, handle: Mapping[str, Any]) -> str | None:

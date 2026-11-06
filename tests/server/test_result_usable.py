@@ -112,20 +112,31 @@ async def _one_tick(**kw) -> dict:
 @pytest.mark.asyncio
 async def test_the_heartbeat_tick_is_the_wire_payload():
     p = await _one_tick(run_id="r1", solver="sfincs", grid_resolution_m=30.0,
-                        active_cell_count=100_000, vcpus=8, eta_seconds=300.0)
+                        active_cell_count=100_000, vcpus=8)
     assert set(p) == {"run_id", "solver", "grid_resolution_m",
                       "active_cell_count", "vcpus", "elapsed_seconds",
-                      "eta_seconds"}
+                      "step", "step_seconds"}
     payload = SolveProgressPayload(**p)
     assert payload.MESSAGE_TYPE == "solve-progress"
     assert payload.run_id == "r1"
-    assert payload.eta_seconds == 300.0
+    assert payload.step is None and payload.step_seconds is None
 
 
 @pytest.mark.asyncio
 async def test_the_heartbeat_tick_states_none_for_what_is_unknown():
     p = await _one_tick(run_id="r2", solver="sfincs", grid_resolution_m=None,
-                        active_cell_count=None, vcpus=None, eta_seconds=None)
+                        active_cell_count=None, vcpus=None)
     payload = SolveProgressPayload(**p)
-    assert payload.eta_seconds is None
     assert payload.grid_resolution_m is None
+
+
+@pytest.mark.asyncio
+async def test_the_heartbeat_states_the_engines_latest_step_from_the_stdout_file(tmp_path):
+    out = tmp_path / "solver.stdout"
+    out.write_bytes(b"banner\nSTEP 7\nSTEP 8\nSTEP 9 half")
+    p = await _one_tick(run_id="r3", solver="x", grid_resolution_m=None,
+                        active_cell_count=None, vcpus=None,
+                        steps=solve_progress.StdoutSteps(
+                            out, lambda line: {"s": line} if line.startswith("STEP") else None))
+    assert p["step"] == "STEP 8"
+    assert p["step_seconds"] is not None and p["step_seconds"] >= 0

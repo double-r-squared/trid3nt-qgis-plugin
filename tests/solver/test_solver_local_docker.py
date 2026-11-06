@@ -26,7 +26,6 @@ from trid3nt_server.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     SolverDispatchError,
     run_solver,
-    set_emitter_binding,
     wait_for_completion,
 )
 from trid3nt_contracts import new_ulid
@@ -146,6 +145,11 @@ case "$behavior" in
   hang)
     exec sleep 300
     ;;
+  steps)
+    echo " ITERATION      500    TIME:  6 MN   7.5000 S   (      367.5000 S)"
+    printf 'SLF_PARTIAL_BYTES' > "$vol/r2d_river.slf"
+    exec sleep 300
+    ;;
 esac
 """
 
@@ -156,14 +160,12 @@ esac
 def reset_seams():
     """Reset every solver DI seam + the local-run registry around each test."""
     storage.set_client(None)
-    set_emitter_binding(None)
     storage.set_runs_bucket(None)
     solver_mod._LOCAL_RUNS.clear()
     try:
         yield
     finally:
         storage.set_client(None)
-        set_emitter_binding(None)
         storage.set_runs_bucket(None)
         solver_mod._LOCAL_RUNS.clear()
 
@@ -520,7 +522,7 @@ async def test_local_cancel_chain_docker_kill_plus_cancelled_completion(
 
 
 @pytest.mark.asyncio
-async def test_local_wait_timeout_returns_solver_timeout_and_kills(
+async def test_local_wait_has_no_time_limit_and_only_a_cancel_ends_it(
     reset_seams, local_env: Path, docker_shim: Path
 ) -> None:
     (docker_shim / "behavior").write_text("hang")
@@ -530,44 +532,43 @@ async def test_local_wait_timeout_returns_solver_timeout_and_kills(
 
     handle = run_solver(solver=_SOLVER, model_setup_uri=uri)
     run = solver_mod._LOCAL_RUNS[handle.run_id]
-    result = await wait_for_completion(handle, poll_interval_s=0, timeout_s=1)
+    # Nothing but the cancel ends a hanging run: the wait is still going when the caller stops waiting.
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(wait_for_completion(handle, poll_interval_s=0), timeout=1.5)
 
-    assert result.status == "failed"
-    assert result.error_code == "SOLVER_TIMEOUT"
-    assert "completion.json" in (result.error_message or "")
-    # Timeout best-effort kills the container (mirrors the GCP cancel).
-    calls = (docker_shim / "calls.log").read_text()
-    assert f"kill {handle.run_id}" in calls
-    # Timeout ≠ user cancel: the supervisor records error, not cancelled.
+    assert f"kill {handle.run_id}" in (docker_shim / "calls.log").read_text()
     completion = _wait_for_completion_object(s3, handle.run_id, timeout_s=15.0)
-    assert completion["status"] == "error"
+    assert completion["status"] == "cancelled"
     run.supervisor.join(timeout=5.0)
 
 
 @pytest.mark.asyncio
-async def test_local_wait_emits_progress_via_emitter_binding(
+async def test_a_stop_ends_the_wait_as_the_stop_with_the_last_step_and_what_the_run_wrote(
     reset_seams, local_env: Path, docker_shim: Path
 ) -> None:
-    """The local poll keeps the GCP path's progress-emission semantics."""
+    from trid3nt_server.workflows.solver.solver import dispatch_and_wait
+    from trid3nt_server.workflows.solver.stop import SolveStopped
 
-    class _CapturingEmitter:
-        def __init__(self) -> None:
-            self.calls: list[tuple[str, int]] = []
-
-        async def update_progress(self, step_id: str, pct: int) -> None:
-            self.calls.append((step_id, pct))
-
+    (docker_shim / "behavior").write_text("steps")
     s3 = FakeS3Client()
     storage.set_client(s3)
     uri = _seed_manifest(s3)
-    emitter = _CapturingEmitter()
-    set_emitter_binding(solver_mod.EmitterBinding(emitter=emitter, step_id="s1"))
 
-    handle = run_solver(solver=_SOLVER, model_setup_uri=uri)
-    result = await wait_for_completion(handle, poll_interval_s=0)
+    task = asyncio.ensure_future(dispatch_and_wait(
+        solver=_SOLVER, manifest_uri=uri, cores=1, module="telemac2d", label="x", sheet={}))
+    for _ in range(100):
+        await asyncio.sleep(0.05)
+        runs = list(solver_mod._LOCAL_RUNS.values())
+        if runs and runs[0].stdout_path.exists() and runs[0].stdout_path.stat().st_size:
+            break
+    run_id = runs[0].run_id
+    task.cancel()
+    with pytest.raises(SolveStopped) as stop:
+        await task
 
-    assert result.status == "complete"
-    assert emitter.calls, "no progress emissions on the local poll"
-    assert emitter.calls[-1] == ("s1", solver_mod.PROGRESS_TERMINAL)
-    for _sid, pct in emitter.calls[:-1]:
-        assert 0 <= pct <= solver_mod.PROGRESS_CLAMP_MAX
+    assert stop.value.run_id == run_id and isinstance(stop.value, asyncio.CancelledError)
+    assert stop.value.at == "step 500, t = 367.5 s"
+    assert stop.value.sentence() == "stopped by the user at step 500, t = 367.5 s"
+    completion = json.loads(s3.objects[("test-runs-bucket", f"{run_id}/completion.json")])
+    assert completion["status"] == "cancelled"
+    assert s3.objects[("test-runs-bucket", f"{run_id}/r2d_river.slf")] == b"SLF_PARTIAL_BYTES"

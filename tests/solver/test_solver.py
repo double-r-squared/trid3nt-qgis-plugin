@@ -15,12 +15,8 @@ from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.store import objects as storage
 from trid3nt_server.workflows.solver.solver import (
     LOCAL_SOLVER_SPEC_REGISTRY,
-    NFR_P_4_TARGET_SECONDS,
-    PROGRESS_CLAMP_MAX,
     SolverNotRegisteredError,
-    _progress_percent,
     run_solver,
-    set_emitter_binding,
 )
 
 
@@ -30,13 +26,11 @@ from trid3nt_server.workflows.solver.solver import (
 def reset_solver_di_seams():
     """Reset the module-level DI handles before and after each test so the
     bindings from one test don't leak into the next."""
-    set_emitter_binding(None)
     storage.set_runs_bucket(None)
     storage.set_client(None)
     try:
         yield
     finally:
-        set_emitter_binding(None)
         storage.set_runs_bucket(None)
         storage.set_client(None)
 
@@ -79,20 +73,6 @@ def test_run_solver_rejects_unregistered_solver(reset_solver_di_seams) -> None:
 
 
 
-def test_progress_estimator_is_wall_clock_linear_clamped() -> None:
-    """At t=0 → 0%; at t=NFR_P_4_TARGET_SECONDS/2 → 50%; at and beyond
-    t=NFR_P_4_TARGET_SECONDS → clamped to PROGRESS_CLAMP_MAX."""
-    submitted = datetime(2026, 6, 7, 12, 0, 0, tzinfo=timezone.utc)
-    assert _progress_percent(submitted, submitted) == 0
-    half = submitted + timedelta(seconds=NFR_P_4_TARGET_SECONDS / 2)
-    assert _progress_percent(submitted, half) == 50
-    over = submitted + timedelta(seconds=NFR_P_4_TARGET_SECONDS + 1.0)
-    assert _progress_percent(submitted, over) == PROGRESS_CLAMP_MAX
-    # Determinism: negative elapsed (clock skew) clamps to 0.
-    early = submitted - timedelta(seconds=10)
-    assert _progress_percent(submitted, early) == 0
-
-
 @pytest.mark.parametrize("engine", ["geoclaw", "telemac", "modflow"])
 def test_every_engine_solves_under_the_id_its_run_was_staged_with(engine, monkeypatch):
     import asyncio
@@ -109,8 +89,9 @@ def test_every_engine_solves_under_the_id_its_run_was_staged_with(engine, monkey
     monkeypatch.setattr(mod, "dispatch_and_wait", _dispatch)
     monkeypatch.setattr(mod, "read_run_metrics", lambda run_id: {})
     facts = {"name": "x", "duration_s": 1, "utm_epsg": 32616, "mesh_size_m": None, "nelem": None, "ncells": None}
-    run = {"run_id": "STAGED", "manifest_uri": "s3://b/m.json", "name": "x", "result_basename": "r",
+    run = {"run_id": "STAGED", "manifest_uri": "s3://b/m.json", "name": "x", "sheet": {}, "result_basename": "r",
            "case": {"module": "m", "cores": 1, "server_facts": facts}}
     out = asyncio.run(mod.solve_case(run=run, cores=1))
 
     assert seen["run_id"] == "STAGED" and out["run_id"] == "STAGED"
+    assert seen["sheet"] == {} and "timeout_s" not in seen

@@ -1,0 +1,296 @@
+  ~> Checking keyword/rubrique coherence
+ MASTER PROCESSOR NUMBER            0  OF THE GROUP OF            1
+ READ_CONFIG: FILE CONFIG NOT FOUND: CONFIG
+ DEFAULTS VALUES OF LU AND LNG:            6  AND            2
+ LISTING OF TELEMAC2D------------------------------------------------------------------------------
+
+                TTTTT  EEEEE  L      EEEEE  M   M  AAAAA  CCCCC
+                  T    E      L      E      MM MM  A   A  C    
+                  T    EEE    L      EEE    M M M  AAAAA  C    
+                  T    E      L      E      M   M  A   A  C    
+                  T    EEEEE  LLLLL  EEEEE  M   M  A   A  CCCCC
+                                                               
+                        2D    VERSION 9.0    FORTRAN 2003       
+
+
+
+
+
+
+
+                        ~^~^~^~^~^~^~^~^~^~^~^^~^~^~^~^~^~     
+                          ~                            ~       
+                               \   '    o      '               
+                               /\ o       \  o                 
+                             >=)'>    '   /\ '                 
+                               \/   \   >=)'>        ~         
+                               /    /\    \/                   
+                        ~         >=)'>   /     .              
+                                    \/                   )     
+                                    /                   (      
+                                          ~          )   )     
+                          }     ~              (    (   (      
+                         {                      )    )   )     
+                          }  }         .       (    (   (      
+                         {  {               /^^^^^^^^^^^^      
+                        ^^^^^^^^^\         /                   
+                                  ^^^^^^^^^                    
+
+
+
+
+
+
+  
+ DIFFERENT NUMBER OF PARALLEL PROCESSORS:
+ DECLARED BEFORE (CASE OF COUPLING ?):           1
+ TELEMAC-2D :           0
+ VALUE            1  IS KEPT
+
+                   ********************************************
+                   *               LECDON:                    *
+                   *        AFTER CALLING DAMOCLES            *
+                   *        CHECKING OF DATA  READ            *
+                   *         IN THE STEERING FILE             *
+                   ********************************************
+
+ TREATMENT OF NEGATIVE DEPTHS =           2
+ MASS-LUMPING ON H AUTOMATICALLY SET TO 1.D0
+ CONTINUITY CORRECTION AUTOMATICALLY SET TO YES
+ SUPG OPTION AUTOMATICALLY SET TO 0 FOR H
+
+
+ EXITING LECDON. NAME OF THE STUDY:
+ domain_mesh DOMAIN                                                      
+
+ OPENING FILES FOR TELEMAC2D               
+ OPENING: T2DGEO-domain.slf
+ OPENING: T2DCLI-domain.cli
+ OPENING: T2DRST-restart_domain.slf
+ OPENING: T2DRES-r2d_domain.slf
+ OPENING: T2DVEF-river_sources.txt
+
+
+
+                          *****************************
+                          *    MEMORY ORGANIZATION    *
+                          *****************************
+
+
+
+ READ_MESH_INFO: TITLE= TRID3NT 01M6QVR1M2HAXBS9V83F473WDS                                      
+            NUMBER OF ELEMENTS:      546
+            NUMBER OF POINTS:      316
+
+            TYPE OF ELEMENT: TRIANGLE            
+            TYPE OF BND ELEMENT: POINT               
+
+            SINGLE PRECISION FORMAT (R4)
+  
+ MXPTEL (BIEF) : MAXIMUM NUMBER OF ELEMENTS AROUND A POINT:   8
+                 MAXIMUM NUMBER OF POINTS AROUND A POINT:   8
+ USER_CORRXY (BIEF):NO MODIFICATION OF COORDINATES
+
+ MESH: MESH   ALLOCATED
+
+
+
+                     *************************************
+                     *    END OF MEMORY ORGANIZATION:    *
+                     *************************************
+
+ INITIALIZING TELEMAC2D FOR        
+ INBIEF (BIEF): NOT A VECTOR MACHINE (ACCORDING TO YOUR DATA)
+ STRCHE (BIEF): NO MODIFICATION OF FRICTION
+
+
+ THERE IS     1 SOLID BOUNDARIES:
+
+ BOUNDARY    1 : 
+  BEGINS AT BOUNDARY POINT:       12 , WITH GLOBAL NUMBER:       126
+  AND COORDINATES:     525235.9           5040247.    
+  ENDS AT BOUNDARY POINT:       12 , WITH GLOBAL NUMBER:       126
+  AND COORDINATES:     525235.9           5040247.    
+
+ USER_CORFON (TELEMAC2D): NO MODIFICATION OF BOTTOM
+
+
+ CORFON (TELEMAC2D): NO BOTTOM SMOOTHINGS
+
+
+ SOURCE POINT            1 PUT ON POINT
+   525785.75000000000       AND    5040586.0000000000     
+ LOCATED AT    17.749229419605989       METRES
+
+
+================================================================================
+ ITERATION        0    TIME:   0.0000 S
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+     INITIAL QUANTITY OF TRACER   :    0.000000    
+ TELEMAC2D INITIALIZED
+ USING STREAMLINE VERSION 9.0 FOR CHARACTERISTICS
+
+================================================================================
+ ITERATION      500    TIME:  6 MN   7.5000 S   (      367.5000 S)
+ SOURCES : Q(1)     =   0.0000000000000000     
+ SOURCES : Q(1)     =   0.0000000000000000     
+ SOURCES : TR(1,1)  =   0.0000000000000000     
+--------------------------------------------------------------------------------
+                          ADVECTION STEP          
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP    
+ GRACJG (BIEF) :        2 ITERATIONS, ABSOLUTE PRECISION:   0.5669568E-06
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP    
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.7218856E-13
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     264902.1    
+     FINAL QUANTITY                    :     264918.5    
+     TOTAL QUANTITY LOST               :    -16.41738    
+     RELATIVE ERROR                    :   -0.6197143E-04
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME    
+     VOLUME IN THE DOMAIN :    2407957.     M3
+     RELATIVE ERROR IN VOLUME AT T =        367.5     S :   -0.3867688E-15
+
+================================================================================
+ ITERATION     1000    TIME: 12 MN  15.0000 S   (      735.0000 S)
+ SOURCES : Q(1)     =   0.0000000000000000     
+ SOURCES : Q(1)     =   0.0000000000000000     
+ SOURCES : TR(1,1)  =   0.0000000000000000     
+--------------------------------------------------------------------------------
+                          ADVECTION STEP          
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP    
+ GRACJG (BIEF) :        2 ITERATIONS, ABSOLUTE PRECISION:   0.3944856E-06
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP    
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.3728153E-13
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     266693.5    
+     FINAL QUANTITY                    :     266692.6    
+     TOTAL QUANTITY LOST               :    0.9106698    
+     RELATIVE ERROR                    :    0.3414668E-05
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME    
+     VOLUME IN THE DOMAIN :    2407957.     M3
+     RELATIVE ERROR IN VOLUME AT T =        735.0     S :   -0.5801532E-15
+
+================================================================================
+ ITERATION     1500    TIME: 18 MN  22.5000 S   (     1102.5000 S)
+ SOURCES : Q(1)     =   0.0000000000000000     
+ SOURCES : Q(1)     =   0.0000000000000000     
+ SOURCES : TR(1,1)  =   0.0000000000000000     
+--------------------------------------------------------------------------------
+                          ADVECTION STEP          
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP    
+ GRACJG (BIEF) :        2 ITERATIONS, ABSOLUTE PRECISION:   0.3398739E-06
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP    
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.4140280E-13
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     268053.3    
+     FINAL QUANTITY                    :     268051.5    
+     TOTAL QUANTITY LOST               :     1.776767    
+     RELATIVE ERROR                    :    0.6628409E-05
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME    
+     VOLUME IN THE DOMAIN :    2407957.     M3
+     RELATIVE ERROR IN VOLUME AT T =        1103.     S :   -0.9669221E-15
+
+================================================================================
+ ITERATION     2000    TIME: 24 MN  30.0000 S   (     1470.0000 S)
+ SOURCES : Q(1)     =   0.0000000000000000     
+ SOURCES : Q(1)     =   0.0000000000000000     
+ SOURCES : TR(1,1)  =   0.0000000000000000     
+--------------------------------------------------------------------------------
+                          ADVECTION STEP          
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP    
+ GRACJG (BIEF) :        2 ITERATIONS, ABSOLUTE PRECISION:   0.3021803E-06
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP    
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.6158655E-13
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     269277.0    
+     FINAL QUANTITY                    :     269281.2    
+     TOTAL QUANTITY LOST               :    -4.141768    
+     RELATIVE ERROR                    :   -0.1538083E-04
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME    
+     VOLUME IN THE DOMAIN :    2407957.     M3
+     RELATIVE ERROR IN VOLUME AT T =        1470.     S :   -0.1933844E-15
+
+================================================================================
+ ITERATION     2449    TIME: 30 MN   0.0150 S   (     1800.0150 S)
+ SOURCES : Q(1)     =   0.0000000000000000     
+ SOURCES : Q(1)     =   0.0000000000000000     
+ SOURCES : TR(1,1)  =   0.0000000000000000     
+--------------------------------------------------------------------------------
+                          ADVECTION STEP          
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP    
+ GRACJG (BIEF) :        2 ITERATIONS, ABSOLUTE PRECISION:   0.2283964E-06
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP    
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.3496584E-13
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     270495.7    
+     FINAL QUANTITY                    :     270497.7    
+     TOTAL QUANTITY LOST               :    -2.011356    
+     RELATIVE ERROR                    :   -0.7435761E-05
+
+                      FINAL BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     0.000000    
+     FINAL QUANTITY                    :     270497.7    
+     QUANTITY CREATED BY SOURCE TERM   :     239904.0    
+     TOTAL QUANTITY LOST               :    -30593.67    
+     RELATIVE ERROR                    :   -0.1131014    
+
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME    
+     VOLUME IN THE DOMAIN :    2407957.     M3
+     RELATIVE ERROR IN VOLUME AT T =        1800.     S :    0.3867688E-15
+--------------------------------------------------------------------------------
+                   FINAL BALANCE OF WATER VOLUME  
+
+     RELATIVE ERROR CUMULATED ON VOLUME:   -0.1547075E-14
+
+     INITIAL VOLUME              :     2405555.     M3
+     FINAL VOLUME                :     2407957.     M3
+     VOLUME ADDED BY SOURCE TERM   :     2401.980     M3
+     TOTAL VOLUME LOST             :   -0.3725290E-08 M3
+
+
+
+                     *************************************
+                     *    END OF MEMORY ORGANIZATION:    *
+                     *************************************
+
+
+
+
+ CORRECT END OF RUN
+
+
+
+ ELAPSE TIME : 
+                              0  SECONDS

@@ -12,7 +12,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable, Collection, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Collection, Mapping, NoReturn, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.coverage import SourceChoice
@@ -24,6 +24,7 @@ from trid3nt_server.inputs.run_notes import (
 from trid3nt_server.inputs.slots import BED, DOMAIN, Slot
 from trid3nt_server.inputs.user_input import WireArgsError
 from trid3nt_server.settings import bind_run, clear_session_run, reset_run
+from trid3nt_server.workflows.solver.stop import SolveStopped, Stopped, finish
 
 from . import journal
 from .errors import DeclarationError, DeclarativeError, said
@@ -298,6 +299,10 @@ class Workflow:
         started = time.monotonic()
         try:
             run = await self._launched(state)
+        except Stopped as stop:
+            await asyncio.to_thread(self._journal_stop, stop, time.monotonic() - started,
+                                    dict(state.env.supplied))
+            raise
         except asyncio.CancelledError:
             raise
         except DeclarativeError as exc:
@@ -315,7 +320,8 @@ class Workflow:
                                    supplied=dict(state.env.supplied))
 
     async def _launched(self, state: Fill) -> RunResult:
-        """Launch under the run's own domain and collectors; notes ride out on the run or on the failure."""
+        """Launch under the run's own domain and collectors; notes ride out on the run or on the failure.
+        A launch the user stopped is completed the same way and raised again as the stop, carrying the run."""
         from .fill import production, restate
 
         env = production(state)
@@ -324,10 +330,13 @@ class Workflow:
         choices, coverage = journal.bind_choices(), bind_coverage()
         reading, run_token = journal.bind_settings(), bind_run(state.settings)
         restate(state)
+        stopped: Stopped | None = None
         # The drain lives only in the finally so a second reset never replaces the run's own error.
         try:
             try:
                 run = await self.launch(state)
+            except Stopped as stop:
+                stopped, run = stop, stop.run
             finally:
                 reset_domain(token)
                 said_notes = drain_notes(notes)
@@ -347,7 +356,33 @@ class Workflow:
         run.settings = {**read, **run.settings}
         run.outputs += published
         run.choices += matched
+        if stopped is not None:
+            raise stopped
         return run
+
+    async def stopped(self, stop: SolveStopped, run: dict[str, Any],
+                      products: Callable[[dict[str, Any], str], Awaitable[Any]]) -> NoReturn:
+        """The user stopped the solve: publish what the run wrote, every layer and the record labelled partial, then end as the stop.
+        ``products`` is the engine's own publish of a run handle; a run whose output cannot be read honestly publishes nothing and says why."""
+        from trid3nt_server.inputs.run_notes import journal_note
+
+        why = stop.sentence()
+        run[self.solve_step] = stop.solved
+        value = None
+        try:
+            value = await finish(products(stop.solved, why))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("%s: nothing of the stopped run %s was published: %s", self.name, stop.run_id, said(exc))
+            journal_note(f"{why}; nothing of what it wrote was published: {said(exc)}")
+        raise Stopped(RunResult(value=value, results=dict(run)), value, why)
+
+    def _journal_stop(self, stop: Stopped, wall_seconds: float, supplied: Mapping[str, Any]) -> None:
+        """The record of a stopped run: what it published and what it was asked, labelled partial."""
+        run = stop.run
+        self._journal(self._run_id(stop.value, run), run, stop.value, wall_seconds, [*run.notes, stop.why],
+                      self._inputs(run, supplied), stopped=stop.why)
 
     def _error(self, code: str, exc: BaseException) -> dict[str, Any]:
         """The failure, plus whatever auxiliary outputs the run also lost on the way."""
@@ -435,7 +470,7 @@ class Workflow:
 
     def _journal(self, run_id: str | None, run: RunResult, result: Any,
                  wall_seconds: float, notes: Sequence[str],
-                 inputs: Mapping[str, Mapping[str, Any]]) -> None:
+                 inputs: Mapping[str, Mapping[str, Any]], *, stopped: str | None = None) -> None:
         """Append this run to the run journal, from publish where the inputs and wall time are both in hand."""
         from trid3nt_server.render.pipeline_emitter import current_emitter
 
@@ -446,7 +481,7 @@ class Workflow:
             result=result, wall_seconds=round(wall_seconds, 3),
             origin=journal.run_origin(live_session=current_emitter() is not None),
             notes=list(notes), outputs=run.outputs,
-            mesh=run.results.get("mesh"), settings=run.settings,
+            mesh=run.results.get("mesh"), settings=run.settings, stopped=stopped,
         ))
         clear_session_run()
 
