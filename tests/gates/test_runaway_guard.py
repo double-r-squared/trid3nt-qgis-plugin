@@ -1,8 +1,7 @@
 """Runaway-agent guard: a per-turn step cap, a wall clock and a loop watchdog.
 
 What stops one hung session from pegging the shared event loop and starving
-others. Unit tests over the ``runaway_guard`` module - thresholds, the
-cheap-model halving, the watchdog state machine, the honest abort messages - and
+others. Unit tests over the ``runaway_guard`` module - thresholds, the watchdog state machine, the honest abort messages - and
 integration tests where each guard fires a clean abort on the real stream."""
 
 from __future__ import annotations
@@ -16,15 +15,12 @@ import pytest
 
 from trid3nt_server.model.guards.runaway_guard import (
     ABORT_LOOP_WATCHDOG,
-    ABORT_STEP_CAP,
     ABORT_WALL_CLOCK,
+    LOOP_REPEAT_N,
     LoopWatchdog,
     abort_message,
-    is_cheap_model,
-    max_agent_steps,
-    max_turn_seconds,
-    step_cap_for_model,
 )
+from trid3nt_server.settings import setting
 
 
 
@@ -37,7 +33,7 @@ def _inflight_turn_count() -> int:
 
 
 def test_abort_messages_are_honest_and_distinct():
-    for code in (ABORT_STEP_CAP, ABORT_WALL_CLOCK, ABORT_LOOP_WATCHDOG):
+    for code in (ABORT_WALL_CLOCK, ABORT_LOOP_WATCHDOG):
         msg = abort_message(code)
         assert isinstance(msg, str) and msg
         assert "stopping to protect" in msg.lower() or "stopped" in msg.lower()
@@ -45,35 +41,11 @@ def test_abort_messages_are_honest_and_distinct():
     assert abort_message("WHATEVER") == "Agent stopped to protect the session."
 
 
-def test_defaults_and_env_overrides(monkeypatch):
-    monkeypatch.delenv("TRID3NT_MAX_AGENT_STEPS", raising=False)
-    monkeypatch.delenv("TRID3NT_MAX_TURN_SECONDS", raising=False)
-    assert max_agent_steps() == 30
-    assert max_turn_seconds() == 420.0
-    # Overrides take.
-    monkeypatch.setenv("TRID3NT_MAX_AGENT_STEPS", "12")
-    monkeypatch.setenv("TRID3NT_MAX_TURN_SECONDS", "900")
-    assert max_agent_steps() == 12
-    assert max_turn_seconds() == 900.0
-    # Garbage / non-positive falls back to the safe default (never 0 / None).
-    monkeypatch.setenv("TRID3NT_MAX_AGENT_STEPS", "not-a-number")
-    monkeypatch.setenv("TRID3NT_MAX_TURN_SECONDS", "0")
-    assert max_agent_steps() == 30
-    assert max_turn_seconds() == 420.0
-
-
-def test_cheap_model_gets_tighter_step_cap(monkeypatch):
-    monkeypatch.delenv("TRID3NT_MAX_AGENT_STEPS", raising=False)
-    # Full-tier (Sonnet / default None) keeps the full cap.
-    assert is_cheap_model("anthropic.claude-3-5-sonnet") is False
-    assert step_cap_for_model("anthropic.claude-3-5-sonnet") == max_agent_steps()
-    assert step_cap_for_model(None) == max_agent_steps()
-    # Cheap / loop-prone tiers (Nova, Haiku) get HALF (floored), never above full.
-    for cheap in ("amazon.nova-lite-v1", "anthropic.claude-3-haiku"):
-        assert is_cheap_model(cheap) is True
-        cap = step_cap_for_model(cheap)
-        assert cap < max_agent_steps()
-        assert cap >= 6  # _CHEAP_STEP_FLOOR -- a real short chain still fits
+def test_the_turn_bounds_are_settings_and_the_watchdog_a_constant(user_settings):
+    assert (setting("MAX_TURN_STEPS"), setting("MAX_TURN_SECONDS")) == (12, 420.0)
+    assert LoopWatchdog()._threshold == LOOP_REPEAT_N == 4
+    user_settings(MAX_TURN_STEPS=30, MAX_TURN_SECONDS=900.0)
+    assert (setting("MAX_TURN_STEPS"), setting("MAX_TURN_SECONDS")) == (30, 900.0)
 
 
 def test_loop_watchdog_trips_on_identical_repeats():
@@ -140,7 +112,7 @@ def _settings():
 
 
 @pytest.mark.asyncio
-async def test_wall_clock_guard_aborts_a_slow_turn(monkeypatch, fake_llm):
+async def test_wall_clock_guard_aborts_a_slow_turn(monkeypatch, fake_llm, user_settings):
     """A turn overrunning its wall-clock budget aborts with AGENT_TURN_TIMEOUT.
 
     The deadline is re-checked at the TOP of a round, never mid-await, so an
@@ -161,15 +133,15 @@ async def test_wall_clock_guard_aborts_a_slow_turn(monkeypatch, fake_llm):
         # The dispatched round takes longer than the (tiny) wall-clock budget --
         # like a long poll. It is NOT interrupted mid-flight; the deadline bites
         # at the TOP of the next round.
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(1.1)
         return {"ok": True}
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
 
+    user_settings(MAX_TURN_SECONDS=1.0)
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_slow_invoke), \
-         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
-         patch.object(agent_server, "max_turn_seconds", return_value=0.05):
+         patch.object(agent_server, "build_tool_declarations", return_value=[]):
         await agent_server._stream_model_reply(sock, state, _settings(), "x", "research")
 
     # Round 1 fully ran (the in-flight await was not killed); the wall-clock then
@@ -181,11 +153,9 @@ async def test_wall_clock_guard_aborts_a_slow_turn(monkeypatch, fake_llm):
 
 
 @pytest.mark.asyncio
-async def test_step_cap_guard_aborts_a_varied_runaway(monkeypatch, fake_llm):
-    """A varied-tool runaway (watchdog never trips) is fail-stopped at the step cap.
-
-    With the cap TIGHTENED below MAX_TURN_ITERATIONS (the cheap-tier shape) the
-    abort is the distinct AGENT_STEP_LIMIT_REACHED code."""
+async def test_step_cap_guard_aborts_a_varied_runaway(monkeypatch, fake_llm, user_settings):
+    """A varied-tool runaway (watchdog never trips) is fail-stopped at the
+    MAX_TURN_STEPS setting with the loop_exhausted envelope."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
     from trid3nt_contracts import new_ulid
@@ -206,14 +176,14 @@ async def test_step_cap_guard_aborts_a_varied_runaway(monkeypatch, fake_llm):
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
 
+    user_settings(MAX_TURN_STEPS=3)
     with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke), \
-         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
-         patch.object(agent_server, "step_cap_for_model", return_value=3):
+         patch.object(agent_server, "build_tool_declarations", return_value=[]):
         await agent_server._stream_model_reply(sock, state, _settings(), "x", "research")
 
-    # Stopped at the (tightened) step cap, not before, not infinitely.
+    # Stopped at the step cap, not before, not infinitely.
     assert dispatched == 3
-    assert ABORT_STEP_CAP in _abort_codes(sock)
+    assert _abort_codes(sock) == ["MAX_ITERATIONS_REACHED"]
     assert _inflight_turn_count() == 0
 
 
@@ -273,8 +243,7 @@ async def test_watchdog_reads_the_args_not_only_the_tool(monkeypatch, fake_llm):
         sock = _FakeSocket()
         state = SessionState(session_id=new_ulid())
         with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke), \
-             patch.object(agent_server, "build_tool_declarations", return_value=[]), \
-             patch.object(agent_server, "step_cap_for_model", return_value=12):
+             patch.object(agent_server, "build_tool_declarations", return_value=[]):
             await agent_server._stream_model_reply(sock, state, _settings(), "x", "research")
         return _abort_codes(sock)
 

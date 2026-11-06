@@ -1133,8 +1133,9 @@ package SteeringSurface {
         then one the engine or a row's type declares, then the keyword - and
         the fill ONE loop over it, so every input leaves one verdict with one
         origin. The two doors of the wire keep their own sets: an argument is a
-        declared input, a name inside the keyword container is the engine's,
-        and each refuses the other's by name. What a row's type declares beside itself is an input like
+        declared input, a name inside the keyword container is the engine's; a
+        name stated at the wrong door that the other spells exactly is moved to
+        its own and its verdict says so, and any other is refused by name. What a row's type declares beside itself is an input like
         any other, and the mesh ask's edge is the mesher's own. Values and rows
         are documented to the model in one section, required first, and the run
         record carries one map of them by name. A direct run and a model call
@@ -1156,9 +1157,11 @@ package SteeringSurface {
     verify requirement AnInputIsOneDeclaration by
         "tests/runtime/test_one_fill.py::test_a_keyword_is_answered_as_an_input_is_through_the_one_lookup";
     verify requirement AnInputIsOneDeclaration by
-        "tests/runtime/test_one_fill.py::test_beside_keywords_only_a_declared_input_is_taken";
+        "tests/runtime/test_one_fill.py::test_beside_keywords_an_engine_keyword_is_moved_inside_and_says_so";
     verify requirement AnInputIsOneDeclaration by
-        "tests/runtime/test_one_fill.py::test_inside_keywords_a_declared_input_refuses_naming_where_it_belongs";
+        "tests/runtime/test_one_fill.py::test_inside_keywords_a_declared_input_is_moved_beside_and_says_so";
+    verify requirement AnInputIsOneDeclaration by
+        "tests/runtime/test_one_fill.py::test_beside_keywords_a_name_no_body_spells_exactly_still_refuses";
     verify requirement AnInputIsOneDeclaration by
         "tests/runtime/test_run_journal.py::test_a_keyword_stated_on_a_coupled_body_keeps_its_own_entry";
     verify requirement AnInputIsOneDeclaration by

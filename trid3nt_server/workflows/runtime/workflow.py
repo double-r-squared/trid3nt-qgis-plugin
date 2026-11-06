@@ -309,7 +309,7 @@ class Workflow:
                 raise
             logger.exception("%s unexpected failure", self.name)
             return self._error(f"{self.error_prefix}_INTERNAL_ERROR", exc)
-        run.notes[:0] = state.notes
+        run.notes[:0] = [*state.notes, *state.moved]
         run.settings = {**state.settings_read, **run.settings}
         return await self._publish(run, time.monotonic() - started,
                                    supplied=dict(state.env.supplied))

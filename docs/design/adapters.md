@@ -8,8 +8,11 @@ surface the turn engine drives regardless of backend.
 
 - `adapter.py` -- the shared surface: `SYSTEM_PROMPT`,
   `build_contents_from_history`, `build_tool_declarations`,
-  `MAX_TURN_ITERATIONS`, `UsageMetadataEvent`, error classification. Builds
-  turns from the `trid3nt_contracts.message` IR.
+  `summarize_tool_result`, `UsageMetadataEvent`, error classification. Builds
+  turns from the `trid3nt_contracts.message` IR. A tool's result reaches the
+  model whole when it fits the TOOL_RESULT_CHARS setting and summarized past
+  it; a refusal - raised, or returned as `{"status": "error"}` by a template's
+  fill - is an error envelope, its text cut only past that same budget.
 - `model_selection.py` -- provider + per-turn model resolution, owned by no
   one provider: `model_provider()` reads `MODEL_PROVIDER` at call time, and
   `resolve_selected_model()` validates a client-supplied model id before it
@@ -61,6 +64,19 @@ adapter passes its OWN `max_tokens` as `output_reserve` (the reply shares the
 window) and may supply an authoritative total via `wire_tokens` (the OpenAI
 path measures the real payload; the Anthropic path consults `count_tokens` once
 the estimate nears the window).
+
+## Settings and limits
+
+What a person may reasonably change about a turn is the `model` family of
+settings (`docs/design/settings.md`): MAX_TURN_STEPS, MAX_TURN_SECONDS,
+TEMPERATURE (sent where the model accepts one), TOOL_RESULT_CHARS, and the
+small-context wire's TOOL_DESC_CHARS / PARAM_DESC_CHARS. The internal limits are
+one constant each where they are used: the provider retry count and backoff
+(`adapter.py`), the rate-limit wait cap (`openai_adapter.py`), the circuit
+breaker's threshold and cooldown, the loop watchdog's repeat count and the
+context budget's reserves and ratios (`model/guards/`). The served model's
+window stays an environment fact (`TRID3NT_OPENAI_NUM_CTX`,
+`TRID3NT_CONTEXT_WINDOW`).
 
 ## Invariants / extension points
 

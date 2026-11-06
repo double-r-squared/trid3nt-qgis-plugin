@@ -86,23 +86,46 @@ def test_a_keyword_is_answered_as_an_input_is_through_the_one_lookup():
     assert _wf().input("spill_duration_s").bounds == (1.0, 86400.0)
 
 
-@pytest.mark.parametrize("name", ["wind", "sources", "LAW OF BOTTOM FRICTION",
+@pytest.mark.parametrize("name", ["LAW OF BOTTOM FRICTION",
                                   "LAW_OF_BOTTOM_FRICTION"])
-def test_beside_keywords_only_a_declared_input_is_taken(name):
-    """A composite, a keyword or its identifier stated as an argument is not an
-    input of the tool: it refuses by name and says where a keyword is stated."""
-    state = _filled({name: 1})
+def test_beside_keywords_an_engine_keyword_is_moved_inside_and_says_so(name):
+    """A keyword or its identifier stated as an argument is taken as the keyword it
+    spells, and its verdict says it was moved and where it is stated."""
+    state = _filled({name: 4})
     verdict = state.inputs[name]
-    assert (verdict.state, verdict.code) == (REJECTED, "INPUT_UNNAMED")
-    assert f"{name!r} is not an input of telemac_dye_release" in verdict.reason
-    assert "inside keywords" in verdict.reason and not state.ready
+    assert (verdict.state, verdict.value) == (ACCEPTED, 4)
+    assert "moved inside keywords" in verdict.note
+    assert state.keywords == {name: 4}
+    assert verdict.note in state.refusal()[1]
 
 
-def test_inside_keywords_a_declared_input_refuses_naming_where_it_belongs():
+def test_beside_keywords_a_name_no_body_spells_exactly_still_refuses():
+    state = _filled({"LAW OF BOTTOM FRICTON": 4, "duration_s": 600.0})
+    for name in ("LAW OF BOTTOM FRICTON", "duration_s"):
+        verdict = state.inputs[name]
+        assert (verdict.state, verdict.code) == (REJECTED, "INPUT_UNNAMED")
+        assert not verdict.note
+    assert "nearest: spill_duration_s" in state.inputs["duration_s"].reason
+
+
+def test_inside_keywords_a_declared_input_is_moved_beside_and_says_so():
     state = _filled({"keywords": {"spill_duration_s": 600.0}})
     verdict = state.inputs["spill_duration_s"]
-    assert (verdict.state, verdict.code) == (REJECTED, "KEYWORD_REFUSED")
-    assert "beside keywords" in verdict.reason and not state.ready
+    assert (verdict.state, verdict.value) == (ACCEPTED, 600.0)
+    assert "moved out of keywords" in verdict.note
+    assert "spill_duration_s" not in state.keywords
+
+
+def test_a_refusal_says_each_reason_once_and_the_waiting_rows_together():
+    """A row produced on a refused param waits; the rows say so in one sentence,
+    and a reason several inputs share is said once."""
+    state = _filled({"spill_duration_s": 172800.0, "release": [0.5, 0.5],
+                     "domain": "Willamette River", "bed": "natural"})
+    code, sentence = state.refusal()
+    assert code == "GATE_INPUT_REQUIRED"
+    assert sentence.count("outside the declared range") == 1
+    assert "domain, bed are produced once the refused inputs" in sentence
+    assert "stands on the run's params" not in sentence
 
 
 def test_a_misspelled_keyword_names_the_nearest_spelling():
@@ -444,3 +467,35 @@ def test_a_coverage_line_a_restaged_run_says_again_stands_on_the_card_once():
         assert run_coverage() == ["the cut covers the water", "the cut covers the land"]
     finally:
         drain_coverage(token)
+
+
+def test_a_refused_layer_input_lists_the_case_layers_its_slot_takes(tmp_path):
+    """A refused place names the Case layers its ingestion takes, never one it
+    refuses, and that leaving it unstated lets the run match a source."""
+    import json
+
+    from trid3nt_server.render.uri_registry import (
+        SessionUriRegistry, activate_registry, deactivate_registry)
+
+    ring = [[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6], [0.4, 0.4]]
+    lake, gauge = tmp_path / "lake.geojson", tmp_path / "gauge.geojson"
+    lake.write_text(json.dumps({"type": "FeatureCollection", "features": [{
+        "type": "Feature", "properties": {},
+        "geometry": {"type": "Polygon", "coordinates": [ring]}}]}))
+    gauge.write_text(json.dumps({"type": "FeatureCollection", "features": [{
+        "type": "Feature", "properties": {},
+        "geometry": {"type": "Point", "coordinates": [0.5, 0.5]}}]}))
+    reg = SessionUriRegistry(session_id="s")
+    reg.record("lake-layer", uri=str(lake))
+    reg.record("gauge-layer", uri=str(gauge))
+    token = activate_registry(reg)
+    try:
+        state = _filled({**_DYE, "domain": "Willamette River"})
+    finally:
+        deactivate_registry(token)
+    verdict = state.inputs["domain"]
+    assert verdict.state == REJECTED
+    said = " ".join(verdict.remedies)
+    assert "lake-layer" in said and "gauge-layer" not in said
+    assert "leave domain unstated and the run matches a source of hydrography" in said
+    assert "Remedies:" in state.refusal()[1]

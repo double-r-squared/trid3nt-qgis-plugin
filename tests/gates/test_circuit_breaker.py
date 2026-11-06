@@ -16,8 +16,8 @@ from trid3nt_server.model.guards.circuit_breaker import (
     CircuitBreakerError,
     ToolCircuitBreaker,
     is_client_arg_error,
-    _DEFAULT_COOLDOWN_S,
-    _DEFAULT_THRESHOLD,
+    COOLDOWN_S,
+    THRESHOLD,
 )
 
 
@@ -40,10 +40,10 @@ class _FakeArgError(RuntimeError):
 
 
 def test_default_threshold_and_cooldown():
-    """Breaker uses _DEFAULT_THRESHOLD and _DEFAULT_COOLDOWN_S out of the box."""
+    """Breaker uses THRESHOLD and COOLDOWN_S out of the box."""
     cb = ToolCircuitBreaker()
-    assert cb.threshold == _DEFAULT_THRESHOLD
-    assert cb.cooldown_s == _DEFAULT_COOLDOWN_S
+    assert cb.threshold == THRESHOLD
+    assert cb.cooldown_s == COOLDOWN_S
 
 
 
@@ -155,46 +155,9 @@ def test_success_on_clean_tool_is_noop():
 
 
 
-def test_env_override_threshold(monkeypatch):
-    """``TRID3NT_CIRCUIT_THRESHOLD`` overrides the default threshold."""
-    monkeypatch.setenv("TRID3NT_CIRCUIT_THRESHOLD", "2")
+def test_the_breaker_trips_at_its_one_threshold_and_cools_for_its_one_cooldown():
     cb = ToolCircuitBreaker()
-    assert cb.threshold == 2
-    # With threshold=2, trip on 2nd failure.
-    cb.record_failure("tool_a")
-    assert cb.is_tripped("tool_a") is False
-    cb.record_failure("tool_a")
-    assert cb.is_tripped("tool_a") is True
-
-
-def test_env_override_cooldown(monkeypatch):
-    """``TRID3NT_CIRCUIT_COOLDOWN_S`` overrides the default cooldown."""
-    monkeypatch.setenv("TRID3NT_CIRCUIT_COOLDOWN_S", "5.0")
-    cb = ToolCircuitBreaker()
-    assert cb.cooldown_s == 5.0
-
-
-def test_env_override_threshold_invalid_falls_back(monkeypatch):
-    """An invalid ``TRID3NT_CIRCUIT_THRESHOLD`` falls back to the default."""
-    monkeypatch.setenv("TRID3NT_CIRCUIT_THRESHOLD", "not_a_number")
-    cb = ToolCircuitBreaker()
-    assert cb.threshold == _DEFAULT_THRESHOLD
-
-
-def test_env_override_cooldown_invalid_falls_back(monkeypatch):
-    """An invalid ``TRID3NT_CIRCUIT_COOLDOWN_S`` falls back to the default."""
-    monkeypatch.setenv("TRID3NT_CIRCUIT_COOLDOWN_S", "bad")
-    cb = ToolCircuitBreaker()
-    assert cb.cooldown_s == _DEFAULT_COOLDOWN_S
-
-
-def test_env_override_threshold_zero_falls_back(monkeypatch):
-    """A threshold of 0 (< 1) is invalid and falls back to the default."""
-    monkeypatch.setenv("TRID3NT_CIRCUIT_THRESHOLD", "0")
-    cb = ToolCircuitBreaker()
-    assert cb.threshold == _DEFAULT_THRESHOLD
-
-
+    assert (cb.threshold, cb.cooldown_s) == (THRESHOLD, COOLDOWN_S) == (3, 60.0)
 
 
 def test_circuit_breaker_error_shape():

@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING, Any
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.ws import Envelope, ErrorPayload
 
-from trid3nt_server.model.adapters.adapter import MAX_TURN_ITERATIONS
 from trid3nt_server.render.pipeline_emitter import current_turn_case
 from trid3nt_server.server.protocol.connections import _SESSION_WS_CONNECTIONS
+from trid3nt_server.settings import setting
 
 if TYPE_CHECKING:
     from websockets.asyncio.server import ServerConnection
@@ -152,7 +152,7 @@ async def _send_loop_exhausted(
 
     if message is None:
         message = (
-            f"Agent reached max iteration limit ({MAX_TURN_ITERATIONS}) "
+            f"Agent reached max iteration limit ({setting('MAX_TURN_STEPS')}) "
             "before completing the request. "
             "Try rephrasing your request with a narrower scope."
         )

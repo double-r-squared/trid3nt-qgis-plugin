@@ -677,6 +677,19 @@ def lookup_uri_for_handle(handle: str) -> str | None:
     return record.uri if record is not None else None
 
 
+def case_layers() -> list[dict[str, str]]:
+    """The layers the active session holds, newest first, as ``{layer_id, uri, name}``; the id is
+    the short handle the model reads where one is minted. Empty outside an active dispatch."""
+    reg = _ACTIVE_REGISTRY.get()
+    if reg is None:
+        return []
+    held = sorted((r for r in reg._records.values()
+                   if r.uri and not r.handle.startswith("uri:")),
+                  key=lambda r: r.seq, reverse=True)
+    return [{"layer_id": reg._uri_to_short.get(r.uri) or r.handle, "uri": r.uri,
+             "name": r.handle} for r in held]
+
+
 def lookup_layer_for_handle(handle: str) -> dict[str, Any] | None:
     """The layer a handle stands for - its uri and what its producer said about
     it - or ``None`` where nothing published it."""

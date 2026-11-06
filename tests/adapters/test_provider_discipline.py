@@ -27,15 +27,14 @@ from trid3nt_contracts import new_ulid
 
 
 
-def test_provider_retries_env(monkeypatch):
-    monkeypatch.delenv("TRID3NT_PROVIDER_RETRIES", raising=False)
-    assert provider_retries() == 3  # the documented default
-    monkeypatch.setenv("TRID3NT_PROVIDER_RETRIES", "1")
+def test_provider_retries_is_the_one_constant(monkeypatch):
+    assert provider_retries() == 3
+    monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_RETRIES", 1)
     assert provider_retries() == 1
 
 
 def test_backoff_is_exponential(monkeypatch):
-    monkeypatch.setenv("TRID3NT_PROVIDER_BACKOFF_S", "2")
+    monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_BACKOFF_S", 2)
     assert provider_backoff_wait(0) == 2.0
     assert provider_backoff_wait(1) == 4.0
     assert provider_backoff_wait(2) == 8.0
@@ -85,7 +84,7 @@ class TestOpenAIProviderDiscipline:
         import openai
         import trid3nt_server.model.adapters.openai_adapter as oa
 
-        monkeypatch.setenv("TRID3NT_PROVIDER_RETRIES", "1")
+        monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_RETRIES", 1)
         monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
         monkeypatch.setattr(oa.asyncio, "sleep", AsyncMock())
         verbatim = (
@@ -133,8 +132,8 @@ class TestOpenAIProviderDiscipline:
         import openai
         import trid3nt_server.model.adapters.openai_adapter as oa
 
-        monkeypatch.setenv("TRID3NT_PROVIDER_RETRIES", "2")
-        monkeypatch.setenv("TRID3NT_PROVIDER_BACKOFF_S", "2")
+        monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_RETRIES", 2)
+        monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_BACKOFF_S", 2)
         waits: list[float] = []
 
         async def _sleep(seconds):

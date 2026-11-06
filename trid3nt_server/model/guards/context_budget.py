@@ -19,7 +19,7 @@ from trid3nt_server.model.adapters.model_discovery import _ollama_root
 
 logger = logging.getLogger("trid3nt_server.model.guards.context_budget")
 
-# Config (env-overridable, read at call time)
+# The budget's own limits, read at call time. Only the served window's fallback is the deployment's, by env.
 
 #: Final fallback when neither /api/show discovery nor a ``-<N>k`` name suffix resolves a model's context window
 #: (``TRID3NT_OPENAI_NUM_CTX``, ``TRID3NT_CONTEXT_WINDOW``). Deliberately small: under-stating a window costs an early
@@ -82,17 +82,6 @@ def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
     return val if val >= minimum else default
 
 
-def _env_float(name: str, default: float, *, minimum: float = 0.0, maximum: float = 1.0) -> float:
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    try:
-        val = float(str(raw).strip())
-    except (TypeError, ValueError):
-        return default
-    return val if minimum <= val <= maximum else default
-
-
 def num_ctx_env_fallback() -> int:
     """``TRID3NT_OPENAI_NUM_CTX`` -- the final fallback when discovery and the
     name-suffix parse both come up empty."""
@@ -100,11 +89,11 @@ def num_ctx_env_fallback() -> int:
 
 
 def openai_max_output_tokens() -> int:
-    """``TRID3NT_OPENAI_MAX_TOKENS`` -- the cap on every LOCAL request.
+    """The cap on every LOCAL request.
 
     It maps to ``num_predict``, and the completion truncates at exactly that
     count under both streaming and non-streaming requests."""
-    return _env_int("TRID3NT_OPENAI_MAX_TOKENS", OPENAI_MAX_TOKENS_DEFAULT, minimum=1)
+    return OPENAI_MAX_TOKENS_DEFAULT
 
 
 def reserve_output_tokens() -> int:
@@ -115,39 +104,27 @@ def reserve_output_tokens() -> int:
 
 
 def safety_tokens() -> int:
-    return _env_int("TRID3NT_CONTEXT_SAFETY_TOKENS", SAFETY_TOKENS_DEFAULT, minimum=0)
+    return SAFETY_TOKENS_DEFAULT
 
 
 def proactive_target_ratio() -> float:
-    return _env_float("TRID3NT_CONTEXT_PROACTIVE_RATIO", PROACTIVE_TARGET_RATIO_DEFAULT)
+    return PROACTIVE_TARGET_RATIO_DEFAULT
 
 
 def reactive_target_ratio() -> float:
-    return _env_float("TRID3NT_CONTEXT_REACTIVE_RATIO", REACTIVE_TARGET_RATIO_DEFAULT)
+    return REACTIVE_TARGET_RATIO_DEFAULT
 
 
 def tool_result_harden_chars() -> int:
-    return _env_int(
-        "TRID3NT_CONTEXT_TOOL_RESULT_HARDEN_CHARS",
-        TOOL_RESULT_HARDEN_CHARS_DEFAULT,
-        minimum=20,
-    )
+    return TOOL_RESULT_HARDEN_CHARS_DEFAULT
 
 
 def narration_row_harden_chars() -> int:
-    return _env_int(
-        "TRID3NT_CONTEXT_NARRATION_HARDEN_CHARS",
-        NARRATION_ROW_HARDEN_CHARS_DEFAULT,
-        minimum=100,
-    )
+    return NARRATION_ROW_HARDEN_CHARS_DEFAULT
 
 
 def contents_normalize_char_cap() -> int:
-    return _env_int(
-        "TRID3NT_CONTEXT_NORMALIZE_CHAR_CAP",
-        CONTENTS_NORMALIZE_CHAR_CAP_DEFAULT,
-        minimum=500,
-    )
+    return CONTENTS_NORMALIZE_CHAR_CAP_DEFAULT
 
 
 def compute_budget_tokens(num_ctx: int) -> int:

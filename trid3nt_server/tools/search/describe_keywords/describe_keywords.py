@@ -119,28 +119,30 @@ def _row(slot: Any) -> dict[str, Any]:
     destructive_hint=False,
     idempotent_hint=True,
 )
-def describe_keywords(module: str = "", keyword: str = "", query: str = "",
-                      limit: int = 12) -> dict[str, Any]:
-    """Read a simulation module's own keyword DICTIONARY: one keyword's entry, or the keywords a question reaches.
+def describe_keywords(module: str = "", keyword: str | list[str] = "",
+                      query: str | list[str] = "", limit: int = 12) -> dict[str, Any]:
+    """Read a simulation module's own keyword DICTIONARY: keywords' entries, or the keywords questions reach - several in ONE call.
 
     For what a template's inputs do not name - a friction law, a turbulence
     model, an ice process, a wave spectrum - in ANY carried module (telemac2d,
     telemac3d, khione, tomawac, gaia, artemis, waqtel, gwf, gwt, gwe, prt, geoclaw,
-    ...). State what you learn on the call: `keywords={"LAW OF BOTTOM FRICTION": 4}`;
+    settings, ...). State what you learn on the call: `keywords={"LAW OF BOTTOM FRICTION": 4}`;
     on a run of several bodies the name carries its body first, as
     `keywords={"gwt: IMS_PRINT_OPTION": "ALL"}`. Never runs anything; never
     picks a template.
 
     Args:
         module: The dictionary to read; EMPTY lists the carried modules.
-        keyword: One keyword's exact name or identifier -> its entry; an
+        keyword: One keyword's exact name or identifier, or a LIST of them -> each entry; an
             unknown one is refused with the nearest spellings.
-        query: Words ("bottom friction", "frazil ice") matched against names,
-            sections and help; with no keyword or query, the section index.
-        limit: How many matches, at most 50.
+        query: Words ("bottom friction", "frazil ice") matched against names, sections and
+            help, or a LIST of such questions answered each apart; with no keyword or query,
+            the section index.
+        limit: How many matches per question, at most 50.
 
-    Returns ``{module, entry}`` for a keyword, else ``{module, matches}``, the
-    matches grouped by rubrique, best first.
+    Returns ``{module, entry}`` for one keyword, ``{module, entries, unknown}`` for a list,
+    ``{module, matches}`` for one question and ``{module, answers}`` for a list, the matches
+    grouped by rubrique, best first.
     """
     carried = _carried()
     name = str(module or "").strip().lower()
@@ -156,17 +158,25 @@ def describe_keywords(module: str = "", keyword: str = "", query: str = "",
             f"there is no keyword dictionary for {module!r} ({nearest(name, sorted(carried))}); "
             f"the carried modules are {', '.join(sorted(carried))}.")
     dictionary = load_module_input(name, directory=carried[name])
+    if isinstance(keyword, (list, tuple)):
+        entries, unknown = [], []
+        for asked in keyword:
+            try:
+                entries.append(_entry(name, dictionary, str(asked)))
+            except DescribeKeywordsError as exc:
+                unknown.append(str(exc))
+        if not entries:
+            raise DescribeKeywordsError("UNKNOWN_KEYWORD", " ".join(unknown))
+        return {"module": name, "keyword_count": len(dictionary), "entries": entries,
+                **({"unknown": unknown} if unknown else {})}
     asked = str(keyword or "").strip()
     if asked:
-        by_spelling = {spelling.strip().upper(): slot for ident, slot in dictionary.items()
-                       for spelling in (slot.keyword, ident)}
-        slot = by_spelling.get(asked.upper())
-        if slot is None:
-            raise DescribeKeywordsError(
-                "UNKNOWN_KEYWORD",
-                f"{name} has no keyword {asked!r} "
-                f"({nearest(asked.upper(), [s.keyword for s in dictionary.values()])}).")
-        return {"module": name, "keyword_count": len(dictionary), "entry": _row(slot)}
+        return {"module": name, "keyword_count": len(dictionary),
+                "entry": _entry(name, dictionary, asked)}
+    if isinstance(query, (list, tuple)):
+        return {"module": name, "keyword_count": len(dictionary),
+                "answers": [{"query": str(q), **_matches(dictionary, str(q), limit)}
+                            for q in query]}
     if not str(query or "").strip():
         sections: dict[str, int] = {}
         for slot in dictionary.values():
@@ -176,7 +186,25 @@ def describe_keywords(module: str = "", keyword: str = "", query: str = "",
                 "sections": [{"rubrique": head, "keywords": count}
                              for head, count in sorted(sections.items())],
                 "modules": sorted(carried)}
+    return {"module": name, "query": str(query), "keyword_count": len(dictionary),
+            **_matches(dictionary, str(query), limit)}
 
+
+def _entry(name: str, dictionary: Mapping[str, Any], asked: str) -> dict[str, Any]:
+    """One keyword's row, by its exact name or identifier; an unknown one refuses with the nearest."""
+    by_spelling = {spelling.strip().upper(): slot for ident, slot in dictionary.items()
+                   for spelling in (slot.keyword, ident)}
+    slot = by_spelling.get(asked.strip().upper())
+    if slot is None:
+        raise DescribeKeywordsError(
+            "UNKNOWN_KEYWORD",
+            f"{name} has no keyword {asked!r} "
+            f"({nearest(asked.upper(), [s.keyword for s in dictionary.values()])}).")
+    return _row(slot)
+
+
+def _matches(dictionary: Mapping[str, Any], query: str, limit: int) -> dict[str, Any]:
+    """The keywords one question reaches, best first, grouped by rubrique."""
     phrase = " ".join(_words(query))
     wanted = {w for w in _words(query) if w not in _GLUE}
     scored = [(_score(slot, wanted, phrase), index, slot)
@@ -190,7 +218,6 @@ def describe_keywords(module: str = "", keyword: str = "", query: str = "",
     for _score_value, _index, slot in kept:
         head = slot.rubrique[0] if slot.rubrique else ""
         grouped.setdefault(head, []).append(_row(slot))
-    return {"module": name, "query": str(query), "keyword_count": len(dictionary),
-            "match_count": len(best),
+    return {"match_count": len(best),
             "matches": [{"rubrique": head, "keywords": rows}
                         for head, rows in grouped.items()]}

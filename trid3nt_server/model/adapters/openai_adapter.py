@@ -26,7 +26,9 @@ from .adapter import (
     UpstreamProviderError,
     UsageMetadataEvent,
     provider_backoff_wait,
+    provider_retries,
 )
+from trid3nt_server.settings import setting
 from trid3nt_server.model.guards.context_budget import (
     ContextWindowExceededError,
     discover_context_window,
@@ -67,16 +69,8 @@ def openai_api_key() -> str:
 
 
 def openai_temperature() -> float:
-    """Sampling temperature for the OpenAI-compat body (default 0.7).
-    ``TRID3NT_OPENAI_TEMPERATURE`` pins it for a deterministic run; an
-    unparseable value falls back to the default."""
-    raw = os.environ.get("TRID3NT_OPENAI_TEMPERATURE", "").strip()
-    if not raw:
-        return 0.7
-    try:
-        return float(raw)
-    except ValueError:
-        return 0.7
+    """The sampling temperature this wire sends: the TEMPERATURE setting."""
+    return float(setting("TEMPERATURE"))
 
 
 def openai_default_headers() -> dict[str, str] | None:
@@ -113,13 +107,10 @@ def openai_model(session_model: str | None = None) -> str:
 # context window the schemas alone can crowd the conversation out of the budget, so the local wire
 # caps them at schema-BUILD time. ONLY description strings change - name, type, enum, required
 # and the properties/items structure pass through, so truncation cannot break the schema contract.
-# TRID3NT_OPENAI_TOOL_DESC_CAP (default 600) caps each tool description and
-# TRID3NT_OPENAI_PARAM_DESC_CAP (default 200) each parameter description; a tool cap of 0 disables
-# ALL slimming, a param cap of 0 only the param-level cap. Word-boundary cut with a trailing
-# "..." marker. LOCAL-path only: the shared declarations are NOT touched.
-
-TOOL_DESC_CAP_DEFAULT = 600
-PARAM_DESC_CAP_DEFAULT = 200
+# The TOOL_DESC_CHARS setting caps each tool description and PARAM_DESC_CHARS each parameter
+# description; a tool cap of 0 disables ALL slimming, a param cap of 0 only the param-level cap.
+# Word-boundary cut with a trailing "..." marker. LOCAL-path only: the shared declarations are
+# NOT touched.
 
 _TRUNC_MARKER = "..."
 
@@ -127,27 +118,14 @@ _TRUNC_MARKER = "..."
 _SCHEMA_STATS_LOGGED = False
 
 
-def _desc_cap_env(name: str, default: int) -> int:
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    try:
-        val = int(str(raw).strip())
-    except (TypeError, ValueError):
-        return default
-    return val if val >= 0 else default
-
-
 def tool_desc_cap() -> int:
-    """``TRID3NT_OPENAI_TOOL_DESC_CAP`` -- per-tool description cap in chars
-    (default 600). 0 disables all tool-schema description slimming."""
-    return _desc_cap_env("TRID3NT_OPENAI_TOOL_DESC_CAP", TOOL_DESC_CAP_DEFAULT)
+    """Per-tool description cap in chars; 0 disables all tool-schema description slimming."""
+    return int(setting("TOOL_DESC_CHARS"))
 
 
 def param_desc_cap() -> int:
-    """``TRID3NT_OPENAI_PARAM_DESC_CAP`` -- per-parameter description cap in
-    chars (default 200). 0 disables the param-level cap only."""
-    return _desc_cap_env("TRID3NT_OPENAI_PARAM_DESC_CAP", PARAM_DESC_CAP_DEFAULT)
+    """Per-parameter description cap in chars; 0 disables the param-level cap only."""
+    return int(setting("PARAM_DESC_CHARS"))
 
 
 def _truncate_word_boundary(text: str, cap: int) -> str:
@@ -369,27 +347,9 @@ def contents_to_openai_messages(
 #: 429 retry policy: a free-tier model pool is transiently rate-limited, and a
 #: single 429 mid multi-round tool turn would otherwise kill the whole turn.
 #: The request-time 429 lands BEFORE any token, so a bounded retry honoring the
-#: provider's ``retry_after`` lets a throttled model survive a tool-heavy turn.
-#: The retry count and backoff come from the cross-provider
-#: ``TRID3NT_PROVIDER_RETRIES`` (default 3) / ``TRID3NT_PROVIDER_BACKOFF_S``
-#: (exponential base, default 5.0); the openai-specific envs stay honored as
-#: fallbacks. Read at CALL time.
-_RATE_LIMIT_MAX_WAIT_S = float(os.environ.get("TRID3NT_OPENAI_RATE_LIMIT_MAX_WAIT_S", "45"))
-
-
-def _max_provider_retries() -> int:
-    """Max retries after the first attempt. Precedence: ``TRID3NT_PROVIDER_RETRIES`` (preferred) >
-    ``TRID3NT_OPENAI_RATE_LIMIT_RETRIES`` (legacy openai-path env) > 3."""
-    for env in ("TRID3NT_PROVIDER_RETRIES", "TRID3NT_OPENAI_RATE_LIMIT_RETRIES"):
-        raw = os.environ.get(env)
-        if raw is not None and str(raw).strip():
-            try:
-                val = int(str(raw).strip())
-                if val >= 0:
-                    return val
-            except (TypeError, ValueError):
-                continue
-    return 3
+#: provider's ``retry_after`` lets a throttled model survive a tool-heavy turn;
+#: no one wait is longer than this.
+_RATE_LIMIT_MAX_WAIT_S = 45.0
 
 
 def _backoff_wait_s(attempt: int) -> float:
@@ -516,7 +476,7 @@ async def _create_stream_with_retry(client: Any, kwargs: dict[str, Any]) -> Any:
     token, so nothing partial replays."""
     import openai  # noqa: WPS433 -- dep dormant unless the openai provider is on
 
-    max_retries = _max_provider_retries()
+    max_retries = provider_retries()
     last_exc: BaseException | None = None
     for attempt in range(max_retries + 1):
         try:

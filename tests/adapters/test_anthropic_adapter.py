@@ -327,8 +327,8 @@ def test_transient_classification():
 
 @pytest.mark.asyncio
 async def test_transient_error_retries_then_raises_typed(monkeypatch):
-    monkeypatch.setenv("TRID3NT_PROVIDER_RETRIES", "2")
-    monkeypatch.setenv("TRID3NT_PROVIDER_BACKOFF_S", "0.001")
+    monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_RETRIES", 2)
+    monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_BACKOFF_S", 0.001)
     attempts: list[int] = []
 
     def _factory(n: int):
@@ -346,8 +346,8 @@ async def test_transient_error_retries_then_raises_typed(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_transient_error_recovers_on_retry(monkeypatch):
-    monkeypatch.setenv("TRID3NT_PROVIDER_RETRIES", "2")
-    monkeypatch.setenv("TRID3NT_PROVIDER_BACKOFF_S", "0.001")
+    monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_RETRIES", 2)
+    monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_BACKOFF_S", 0.001)
 
     def _factory(n: int):
         if n == 1:
@@ -361,7 +361,7 @@ async def test_transient_error_recovers_on_retry(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_non_transient_error_fails_fast(monkeypatch):
-    monkeypatch.setenv("TRID3NT_PROVIDER_RETRIES", "3")
+    monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_RETRIES", 3)
     calls: list[int] = []
 
     def _factory(n: int):

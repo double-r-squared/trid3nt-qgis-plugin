@@ -212,3 +212,34 @@ def test_every_corpus_phrasing_surfaces_the_tool_model_free():
     missed = [q for q in corpus
               if "describe_keywords" not in retrieve_visible_tools(q, None, 8)]
     assert not missed, f"corpus phrasings that do not surface the tool: {missed}"
+
+
+def test_a_list_of_keywords_is_answered_in_one_call_an_unknown_one_named_beside():
+    answer = describe_keywords(module="telemac2d", keyword=[
+        "LAW OF BOTTOM FRICTION", "DURATION", "LAW OF BOTTOM FRICTON"])
+    assert [row["keyword"] for row in answer["entries"]] == [
+        "LAW OF BOTTOM FRICTION", "DURATION"]
+    assert len(answer["unknown"]) == 1 and "FRICTON" in answer["unknown"][0]
+    with pytest.raises(DescribeKeywordsError) as refused:
+        describe_keywords(module="telemac2d", keyword=["NO SUCH KEY"])
+    assert refused.value.error_code == "UNKNOWN_KEYWORD"
+
+
+def test_a_list_of_questions_is_answered_each_apart_in_one_call():
+    answer = describe_keywords(module="telemac2d", query=[
+        "bottom friction", "turbulence model"])
+    assert [a["query"] for a in answer["answers"]] == ["bottom friction",
+                                                       "turbulence model"]
+    assert "LAW OF BOTTOM FRICTION" in _keywords(answer["answers"][0])
+    assert "TURBULENCE MODEL" in _keywords(answer["answers"][1])
+
+
+def test_the_model_reads_a_question_s_matches_whole_not_their_keys():
+    """The result reaches the model as rows it can read, never as collapsed keys."""
+    import json
+
+    from trid3nt_server.model.adapters.adapter import summarize_tool_result
+
+    seen = json.dumps(summarize_tool_result("describe_keywords", describe_keywords(
+        module="telemac2d", query="bottom friction", limit=3)))
+    assert "LAW OF BOTTOM FRICTION" in seen and "dict keys=" not in seen

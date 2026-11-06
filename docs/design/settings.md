@@ -10,7 +10,7 @@ module that uses it; it is an entry in one dictionary, and the module calls
 
 `settings/module_input/settings.json` is a keyword dictionary in the engines' own
 format, read by `load_module_input`. A row's rubrique is its family (`bed`,
-`notes`, `gate`, `render`, `solve`, `server`), its help says what it decides, its default is the cited
+`notes`, `gate`, `render`, `solve`, `server`, `model`), its help says what it decides, its default is the cited
 default, and its `source` quotes where the default comes from; a default with no
 published source says so (`TRID3NT engineering default.`). The range a value is
 refused outside, and its unit, sit in `settings/module_bounds.json`, the same

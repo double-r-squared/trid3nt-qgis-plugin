@@ -18,14 +18,19 @@ import pytest
 
 from trid3nt_server.model.adapters.model_selection import ModelSettings
 from trid3nt_server.model.adapters.adapter import (
-    MAX_TURN_ITERATIONS,
     summarize_tool_result,
 )
+from trid3nt_server.settings import entry
 from trid3nt_server.model.guards.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
 from trid3nt_server.server import SessionState
 from trid3nt_contracts import new_ulid
 
 
+
+
+
+#: The step cap a turn takes by default: the MAX_TURN_STEPS dictionary default.
+MAX_TURN_ITERATIONS = entry("MAX_TURN_STEPS").engine_default
 
 
 @dataclass
@@ -163,7 +168,7 @@ def test_summarize_circuit_breaker_error_emits_wave49_envelope():
     assert summary["error_type"] == "CircuitBreakerError"
     assert "fetch_dem" in summary["message"]
     # Legacy alias preserved.
-    assert summary["error"] == summary["message"]
+    assert "error" not in summary
 
 
 def test_summarize_circuit_breaker_error_is_json_serializable():

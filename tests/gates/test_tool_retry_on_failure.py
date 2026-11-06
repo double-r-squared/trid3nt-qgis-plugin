@@ -18,14 +18,19 @@ import pytest
 from trid3nt_server.model.adapters.model_selection import ModelSettings
 from trid3nt_server.model.adapters.adapter import (
     FunctionCallEvent,
-    MAX_TURN_ITERATIONS,
     TextDeltaEvent,
     _classify_error,
     summarize_tool_result,
 )
+from trid3nt_server.settings import entry
 from trid3nt_contracts import new_ulid
 
 
+
+
+
+#: The step cap a turn takes by default: the MAX_TURN_STEPS dictionary default.
+MAX_TURN_ITERATIONS = entry("MAX_TURN_STEPS").engine_default
 
 
 def test_summarize_tool_result_error_carries_structured_fields():
@@ -37,8 +42,7 @@ def test_summarize_tool_result_error_carries_structured_fields():
     assert summary["message"] == "dem fetch upstream 503"
     assert summary["retryable"] is True  # RuntimeError defaults to retryable
     assert summary["error_type"] == "RuntimeError"
-    # Legacy alias preserved.
-    assert summary["error"] == summary["message"]
+    assert "error" not in summary
 
 
 def test_summarize_tool_result_error_harvests_typed_attributes():
@@ -127,14 +131,31 @@ def test_classify_error_typed_overrides_heuristic():
 
 def test_error_summary_is_json_serializable():
     """The error dict must round-trip through json.dumps without raising."""
-    err = RuntimeError("a" * 1000)  # long message exercises the 500-char clip
+    err = RuntimeError("a" * 1000)
     summary = summarize_tool_result("fetch_dem", None, error=err)
     encoded = json.dumps(summary)
     decoded = json.loads(encoded)
     assert decoded["status"] == "error"
     assert decoded["retryable"] in (True, False)
-    # 500-char clip on the message.
-    assert len(decoded["message"]) <= 500
+    # A message inside the result budget is read whole.
+    assert decoded["message"] == "a" * 1000
+
+
+def test_an_error_past_the_result_budget_is_cut_to_it(user_settings):
+    user_settings(TOOL_RESULT_CHARS=1000)
+    summary = summarize_tool_result("fetch_dem", None, error=RuntimeError("a" * 5000))
+    assert len(json.dumps(summary)) <= 1000
+    assert summary["message"].endswith("[cut to the result budget]")
+
+
+def test_a_returned_refusal_reaches_the_model_as_an_error_whole():
+    """A template's fill refusal is returned, not raised; it reads as an error, every word kept."""
+    sentence = "spill_duration_s is outside the declared range. " * 20
+    summary = summarize_tool_result("telemac_dye_release", {
+        "status": "error", "error_code": "GATE_INPUT_REQUIRED", "error_message": sentence})
+    assert summary["status"] == "error"
+    assert summary["error_code"] == "GATE_INPUT_REQUIRED"
+    assert summary["error_message"] == sentence
 
 
 
@@ -316,14 +337,11 @@ async def test_stream_model_reply_failed_retry_caps_at_max_iterations(fake_llm):
 
 
 
-def test_summarize_tool_result_error_legacy_alias_preserved():
-    """An old caller reading ``summary['error']`` still gets a string.
-
-    The structured fields were added beside that contract, not in place of it."""
-    err = RuntimeError("upstream 503 — temporary")
+def test_summarize_tool_result_error_says_its_text_once():
+    """The text is the ``message``; it is not sent twice under a second key."""
+    err = RuntimeError("upstream 503 - temporary")
     summary = summarize_tool_result("fetch_dem", None, error=err)
-    assert "error" in summary  # legacy field preserved
-    assert summary["error"] == summary["message"]
+    assert "error" not in summary
     assert summary["error_type"] == "RuntimeError"
     # New structured fields also present.
     assert "error_code" in summary

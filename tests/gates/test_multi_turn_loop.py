@@ -19,15 +19,20 @@ from trid3nt_contracts.message import Message
 from trid3nt_server.model.adapters.model_selection import ModelSettings
 from trid3nt_server.model.adapters.adapter import (
     FunctionCallEvent,
-    MAX_TURN_ITERATIONS,
     TextDeltaEvent,
     build_contents_from_history,
     stream_events_with_contents,
     summarize_tool_result,
 )
+from trid3nt_server.settings import entry
 from trid3nt_contracts import new_ulid
 
 
+
+
+
+#: The step cap a turn takes by default: the MAX_TURN_STEPS dictionary default.
+MAX_TURN_ITERATIONS = entry("MAX_TURN_STEPS").engine_default
 
 
 def test_summarize_tool_result_dict_with_metrics():
@@ -52,7 +57,7 @@ def test_summarize_tool_result_error_path():
     err = RuntimeError("dem fetch upstream 503")
     summary = summarize_tool_result("fetch_dem", None, error=err)
     assert summary["status"] == "error"
-    assert "503" in summary["error"]
+    assert "503" in summary["message"]
     assert summary["error_type"] == "RuntimeError"
 
 
@@ -85,12 +90,12 @@ def test_summarize_tool_result_oversized_clipped():
     assert "clipped" in encoded or "truncated" in encoded
 
 
-def test_summarize_tool_result_list_truncated():
-    """A long list is truncated to a few items plus a count marker."""
-    result = {"items": list(range(100))}
-    summary = summarize_tool_result("fetch_nws_alerts_conus", result)
-    items = summary["result"]["items"]
-    assert isinstance(items, list)
+def test_summarize_tool_result_list_whole_inside_the_budget_truncated_past_it():
+    """A list that fits the result budget is read whole; past it, a few items plus a count marker."""
+    summary = summarize_tool_result("fetch_nws_alerts_conus", {"items": list(range(100))})
+    assert summary["result"]["items"] == list(range(100))
+    nested = {"rows": [{"deep": {"deeper": [1, 2]}, "text": "x" * 300} for _ in range(40)]}
+    items = summarize_tool_result("fetch_nws_alerts_conus", nested)["result"]["rows"]
     # 5 items + 1 "more items" marker = 6.
     assert len(items) == 6
     assert "more items" in items[-1]
@@ -425,13 +430,13 @@ async def test_stream_model_reply_caps_runaway_loop(fake_llm):
 
     # The runaway is fail-stopped FAST. Every round is the SAME
     # tool+args (identical fetch_dem), so the LOOP WATCHDOG trips at
-    # loop_repeat_n() rounds - well before the historical MAX_TURN_ITERATIONS
+    # loop_repeat_n() rounds - well before the MAX_TURN_STEPS cap
     # cap. (A varied-tool runaway hits the step cap instead - next test.)
-    from trid3nt_server.model.guards.runaway_guard import loop_repeat_n
+    from trid3nt_server.model.guards.runaway_guard import LOOP_REPEAT_N
 
-    assert dispatch_count <= loop_repeat_n(), (
+    assert dispatch_count <= LOOP_REPEAT_N, (
         f"identical-repeat runaway not watchdog-capped: {dispatch_count} "
-        f"dispatches vs watchdog threshold {loop_repeat_n()}"
+        f"dispatches vs watchdog threshold {LOOP_REPEAT_N}"
     )
     assert dispatch_count < MAX_TURN_ITERATIONS
 

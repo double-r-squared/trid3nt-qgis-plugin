@@ -14,7 +14,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.model.adapters.adapter import MAX_TURN_ITERATIONS
+from trid3nt_server.settings import entry
 from trid3nt_server.server import (
     SessionState,
     _POST_DELIVERABLE_WRAPUP_ROUNDS,
@@ -23,6 +23,11 @@ from trid3nt_server.server import (
 from trid3nt_contracts import new_ulid
 
 
+
+
+
+#: The step cap a turn takes by default: the MAX_TURN_STEPS dictionary default.
+MAX_TURN_ITERATIONS = entry("MAX_TURN_STEPS").engine_default
 
 
 @dataclass

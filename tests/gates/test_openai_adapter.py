@@ -203,10 +203,10 @@ class TestToolDeclarationsToOpenaiTools:
         assert params["type"] == "object"
         assert params["properties"] == {}
 
-    def test_description_truncated_to_1000_chars_when_cap_disabled(self, monkeypatch):
+    def test_description_truncated_to_1000_chars_when_cap_disabled(self, user_settings):
         # With the slimming cap disabled (0), the legacy hard [:1000] bound
         # still applies.
-        monkeypatch.setenv("TRID3NT_OPENAI_TOOL_DESC_CAP", "0")
+        user_settings(TOOL_DESC_CHARS=0)
         long_desc = "x" * 2000
         decl = ToolDeclaration(name="tool", description=long_desc)
         tools = tool_declarations_to_openai_tools([decl])
@@ -270,8 +270,8 @@ class TestToolDeclarationsToOpenaiTools:
         assert len(items["description"]) <= 200
         assert items["description"].endswith("...")
 
-    def test_cap_zero_disables_all_slimming(self, monkeypatch):
-        monkeypatch.setenv("TRID3NT_OPENAI_TOOL_DESC_CAP", "0")
+    def test_cap_zero_disables_all_slimming(self, user_settings):
+        user_settings(TOOL_DESC_CHARS=0)
         long_desc = "word " * 160  # 800 chars, under the legacy 1000 bound
         long_param = "param detail " * 40  # 520 chars
         decl = self._make_decl("tool", long_desc, {"field": long_param})
@@ -282,8 +282,8 @@ class TestToolDeclarationsToOpenaiTools:
             fn["parameters"]["properties"]["field"]["description"] == long_param
         )
 
-    def test_env_override_cap_value(self, monkeypatch):
-        monkeypatch.setenv("TRID3NT_OPENAI_TOOL_DESC_CAP", "100")
+    def test_the_setting_sets_the_cap(self, user_settings):
+        user_settings(TOOL_DESC_CHARS=100)
         long_desc = "word " * 100
         decl = ToolDeclaration(name="tool", description=long_desc)
         tools = tool_declarations_to_openai_tools([decl])
@@ -819,7 +819,6 @@ class TestMaxTokensCap:
     @pytest.mark.asyncio
     async def test_max_tokens_sent_on_every_request_default(self, monkeypatch):
         self._env(monkeypatch)
-        monkeypatch.delenv("TRID3NT_OPENAI_MAX_TOKENS", raising=False)
 
         async def _fake_discover(provider, model_name, *, base_url=None):
             return ContextWindow(
@@ -845,11 +844,13 @@ class TestMaxTokensCap:
         assert captured["max_tokens"] == 4096 == openai_max_output_tokens()
 
     @pytest.mark.asyncio
-    async def test_max_tokens_honors_env_override_and_stays_coupled_to_reserve(
+    async def test_max_tokens_stays_coupled_to_reserve(
         self, monkeypatch
     ):
+        from trid3nt_server.model.guards import context_budget
+
         self._env(monkeypatch)
-        monkeypatch.setenv("TRID3NT_OPENAI_MAX_TOKENS", "512")
+        monkeypatch.setattr(context_budget, "OPENAI_MAX_TOKENS_DEFAULT", 512)
 
         async def _fake_discover(provider, model_name, *, base_url=None):
             return ContextWindow(
@@ -873,7 +874,7 @@ class TestMaxTokensCap:
                 pass
 
         # The request cap AND the proactive budget's output reserve must move
-        # together -- a single env knob, never two that can drift apart.
+        # together -- a single constant, never two that can drift apart.
         assert captured["max_tokens"] == 512
         assert reserve_output_tokens() == 512
 

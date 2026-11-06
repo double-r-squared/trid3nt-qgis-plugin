@@ -28,6 +28,7 @@ from trid3nt_server.tools.search.match import (
     Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
 
 from .data import Producer, refuse_wrong_shape
+from .sheet import Keyword
 
 from trid3nt_server.inputs.slots import (
     BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, MESH, Slot)
@@ -806,6 +807,9 @@ ACCEPTED, REJECTED, MISSING, DEFAULTED = (
 #: reviewed, and whether a kept mesh is rebuilt.
 _CARRIED = ("input_mode", "restart_clean")
 
+#: The code of a row that was not produced because a param it stands on was refused.
+_WAITS = "FILL_NOT_READY"
+
 
 @dataclass(frozen=True)
 class Verdict:
@@ -820,6 +824,8 @@ class Verdict:
     #: Who stated the value, and the source or producer that names it; none on an input that holds no value.
     origin: Origin | None = None
     source: str = ""
+    #: What the fill did with the name on its way in: a name stated on the wrong side of ``keywords`` is moved, and says so.
+    note: str = ""
 
 
 @dataclass
@@ -856,13 +862,25 @@ class Fill:
                 if verdict.state == ACCEPTED and name not in declared}
 
     def refusal(self) -> tuple[str, str]:
-        """``(code, sentence)`` naming every input that keeps this fill from ready."""
+        """``(code, sentence)`` naming every input that keeps this fill from ready, each reason
+        said once, the rows waiting on a refused param in one sentence, and every name moved."""
         held = [(n, v) for n, v in self.inputs.items()
                 if v.state in (REJECTED, MISSING)]
-        code = next((v.code for _n, v in held if v.code), "FILL_NOT_READY")
-        return code, " ".join(
+        code = next((v.code for _n, v in held if v.code and v.code != _WAITS),
+                    _WAITS)
+        waiting = [n for n, v in held if v.code == _WAITS]
+        said = dict.fromkeys(
             v.reason + (f" Remedies: {', '.join(v.remedies)}." if v.remedies
-                        else "") for _n, v in held)
+                        else "") for _n, v in held if v.code != _WAITS)
+        if waiting:
+            said[f"{', '.join(waiting)} are produced once the refused "
+                 "inputs above are stated again."] = None
+        return code, " ".join([*said, *self.moved])
+
+    @property
+    def moved(self) -> list[str]:
+        """What the fill said of each name it moved across ``keywords``."""
+        return [v.note for v in self.inputs.values() if v.note]
 
 
 async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
@@ -892,7 +910,8 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
     tokens = (bind_notes(), journal.bind_choices(), bind_coverage())
     reading, run_token = journal.bind_settings(), bind_run(state.settings)
     try:
-        found = _looked_up(state, values, set(keywords))
+        moves: dict[str, str] = {}
+        found = _looked_up(state, values, set(keywords), moves)
         declared = {row.name: row for row in wf.inputs}
         state.stated.update({name: values[name] for name in found
                              if name in declared and not declared[name].is_row})
@@ -922,11 +941,16 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
             _stated(production(state), declared[name], value)
         # EVERY ROW A STAGE READS WITHOUT THE MESH is produced here: a consumer only reads the mapping, so a row that cannot be
         # produced is refused now, by name, and a READY fill is followed by no fetch but a placed mark's.
-        for name, value in sourced.items():
+        # The place answers first: every other row stands on it.
+        for name, value in sorted(sourced.items(), key=lambda item: (
+                declared[item[0]].slot not in (DOMAIN, EXTENT))):
             await _answer(state, name, declared[name], value)
         for name in wf.named_rows(production(state).run) if state.ready else ():
             if name not in production(state).run:
                 await _answer(state, name, declared[name], None)
+        for name, note in moves.items():
+            if name in state.inputs:
+                state.inputs[name] = dataclasses.replace(state.inputs[name], note=note)
     finally:
         for held, drain, token in zip(state.said, (
                 drain_notes, journal.drain_choices,
@@ -937,10 +961,19 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
     return state
 
 
-def _looked_up(state: Fill, values: Mapping[str, Any],
-               keywords: set[str]) -> dict[str, Any]:
-    """Every stated name through the workflow's ONE lookup -> the input each names, each door keeping its own set:
-    beside ``keywords`` a name is a declared input, inside it an engine keyword, and any other is refused here."""
+def _engine_keyword(wf: Any, name: str) -> Any:
+    """The engine keyword ``name`` spells exactly on this run, or ``None``."""
+    try:
+        return wf.input(name)
+    except Exception:  # noqa: BLE001 - a name no body spells is no keyword
+        return None
+
+
+def _looked_up(state: Fill, values: Mapping[str, Any], keywords: set[str],
+               moves: dict[str, str]) -> dict[str, Any]:
+    """Every stated name through the workflow's ONE lookup -> the input each names. A declared
+    input stated inside ``keywords``, or an engine keyword spelled exactly beside it, is taken on
+    its own side and the move is said; any other name is refused here."""
     wf = state.workflow
     known = sorted(row.name for row in wf.inputs)
     found: dict[str, Any] = {}
@@ -949,14 +982,21 @@ def _looked_up(state: Fill, values: Mapping[str, Any],
         if name not in keywords:
             if name in known:
                 found[name] = wf.input(name)
+            elif isinstance(keyword := _engine_keyword(wf, name), Keyword):
+                found[name] = keyword
+                moves[name] = (
+                    f"{name!r} is an engine keyword and was moved inside "
+                    "keywords; state it there.")
             else:
                 unknown.append(name)
             continue
+        if name in known:
+            found[name] = wf.input(name)
+            moves[name] = (
+                f"{name!r} is an input of {wf.name} and was moved out of "
+                "keywords; state it by its own name beside keywords.")
+            continue
         try:
-            if name in known:
-                raise StepFailedError(
-                    f"{name!r} is an input of {wf.name}, not an engine keyword: "
-                    "state it by its own name beside keywords.")
             found[name] = wf.input(name)
         except Exception as exc:  # noqa: BLE001 - the refusal is the verdict
             if getattr(exc, "retryable", False):
@@ -1027,13 +1067,15 @@ async def _answer(state: Fill, name: str, held: Any, value: Any) -> None:
         if row and state.env is not None:
             picked = state.env.picks.pop(name, None)
             state.env.supplied.pop(name, None)
+        code = _refusal_code(exc, name)
         state.inputs[name] = Verdict(
-            REJECTED, value, code=_refusal_code(exc, name),
+            REJECTED, value, code=code,
             reason=str(exc) if value is not None or not row
             else f"{name!r} could not be produced: {exc}",
             remedies=await _instead(state.env, held, picked) if picked
             else (f"a value between {held.bounds[0]} and {held.bounds[1]}",)
-            if getattr(held, "bounds", None) else ())
+            if getattr(held, "bounds", None)
+            else await _otherwise(held, value) if row and code != _WAITS else ())
         return
     note = getattr(held, "note", "")
     if note and note not in state.notes:
@@ -1095,11 +1137,11 @@ async def _row(state: Fill, decl: Input, value: Any) -> None:
            if not row.is_row and row.name in state.inputs):
         raise StepFailedError(
             f"{decl.name} stands on the run's params, and one of them was "
-            "refused.", error_code="FILL_NOT_READY")
+            "refused.", error_code=_WAITS)
     env = production(state)
     _stated(env, decl, value)
     if decl.slot not in (DOMAIN, EXTENT):
-        await _place_first(env)
+        await _place_first(state, env, decl)
     await _taken(env, decl)
     state.domain = current_domain()
 
@@ -1113,13 +1155,45 @@ def _refusal_code(exc: BaseException, name: str) -> str:
     return code or "INPUT_REFUSED"
 
 
-async def _place_first(env: _Env) -> None:
-    """A sourced input stands on the run's place, so the place is filled first.
+async def _place_first(state: Fill, env: _Env, decl: Input) -> None:
+    """A sourced input stands on the run's place, so the place is filled first. A place that
+    refuses answers as its own input, once, and the row waits on it.
 
     Producing a row may register runtime rows, so the loop is over the rows as they stood."""
     for row in list(env.data.values()):
-        if row.slot is DOMAIN and row.name not in env.run:
-            await _taken(env, row)
+        if row.slot is not DOMAIN or row.name in env.run:
+            continue
+        if getattr(state.inputs.get(row.name), "state", None) != REJECTED:
+            try:
+                await _taken(env, row)
+                continue
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - the refusal is the place's verdict
+                if getattr(exc, "retryable", False):
+                    raise
+                state.inputs[row.name] = Verdict(
+                    REJECTED, None, code=_refusal_code(exc, row.name),
+                    reason=f"{row.name!r} could not be produced: {exc}",
+                    remedies=await _otherwise(row, None))
+        raise StepFailedError(
+            f"{decl.name} stands on the run's {row.name}, which was refused.",
+            error_code=_WAITS)
+
+
+async def _otherwise(decl: Input, value: Any) -> tuple[str, ...]:
+    """What a refused row takes instead: each Case layer its slot's ingestion takes, and, for a
+    row the match can fill, leaving it unstated."""
+    from trid3nt_server.inputs.accept import layers_taking
+    from trid3nt_server.render.uri_registry import case_layers
+
+    held = case_layers()
+    taken = await asyncio.to_thread(layers_taking, decl.slot, decl.name, held) \
+        if held and decl.slot is not None and decl.slot.ingest is not None else []
+    return (*(f"the Case layer {layer_id} ({label})" if label != layer_id
+              else f"the Case layer {layer_id}" for layer_id, label in taken),
+            *((f"leave {decl.name} unstated and the run matches a source of "
+               f"{decl.data_class}",) if decl.data_class and value is not None else ()))
 
 
 async def _instead(env: _Env, decl: Input, picked: str) -> tuple[str, ...]:

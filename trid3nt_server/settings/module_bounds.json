@@ -153,6 +153,48 @@
         0,
         1000000000000.0
       ]
+    },
+    "MAX_TURN_STEPS": {
+      "unit": "rounds",
+      "bounds": [
+        1,
+        1000000000000.0
+      ]
+    },
+    "MAX_TURN_SECONDS": {
+      "unit": "s",
+      "bounds": [
+        1,
+        1000000000000.0
+      ]
+    },
+    "TEMPERATURE": {
+      "unit": "",
+      "bounds": [
+        0,
+        2
+      ]
+    },
+    "TOOL_RESULT_CHARS": {
+      "unit": "chars",
+      "bounds": [
+        200,
+        1000000000000.0
+      ]
+    },
+    "TOOL_DESC_CHARS": {
+      "unit": "chars",
+      "bounds": [
+        0,
+        1000000000000.0
+      ]
+    },
+    "PARAM_DESC_CHARS": {
+      "unit": "chars",
+      "bounds": [
+        0,
+        1000000000000.0
+      ]
     }
   }
 }

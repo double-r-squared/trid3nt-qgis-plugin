@@ -469,6 +469,102 @@
       "mandatory": false,
       "default": 25,
       "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "MAX_TURN_STEPS",
+      "identifier": "MAX_TURN_STEPS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How many model rounds one turn takes - each a model call and the tools it calls - before the turn stops and says so.",
+      "rubrique": [
+        "model"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 12,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "MAX_TURN_SECONDS",
+      "identifier": "MAX_TURN_SECONDS",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How long one turn runs before it stops and says so; checked before each model round, so a round under way finishes first.",
+      "rubrique": [
+        "model"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 420.0,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "TEMPERATURE",
+      "identifier": "TEMPERATURE",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The sampling temperature each model call is sent with, where the model accepts one: lower answers the same request the same way more often.",
+      "rubrique": [
+        "model"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.7,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "TOOL_RESULT_CHARS",
+      "identifier": "TOOL_RESULT_CHARS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How many characters of one tool's result a model call carries: a result that fits is read whole, a longer one is summarized and then cut.",
+      "rubrique": [
+        "model"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 4000,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "TOOL_DESC_CHARS",
+      "identifier": "TOOL_DESC_CHARS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How many characters of each tool's description a call carries on a model served with a small context; 0 sends each whole.",
+      "rubrique": [
+        "model"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 600,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "PARAM_DESC_CHARS",
+      "identifier": "PARAM_DESC_CHARS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How many characters of each input's description a call carries on a model served with a small context; 0 sends each whole.",
+      "rubrique": [
+        "model"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 200,
+      "source": "TRID3NT engineering default."
     }
   ]
 }

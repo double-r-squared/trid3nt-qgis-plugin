@@ -9,7 +9,7 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.ws import AgentMessageChunkPayload, AgentThinkingChunkPayload, PipelineStatePayload, PipelineStep
 from trid3nt_contracts.message import Message
 from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.model.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, MAX_TURN_ITERATIONS, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_layers_present_note, build_tool_declarations, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result, system_prompt
+from trid3nt_server.model.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_layers_present_note, build_tool_declarations, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result, system_prompt
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.render.charts import is_chart_emission_result
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
@@ -20,7 +20,8 @@ from trid3nt_server.model.guards.circuit_breaker import CircuitBreakerError
 # The gate engine (trid3nt_server.inputs.gate.confirm) is imported function-locally in
 # _stream_model_reply -- deferred to break the server<->gates load cycle.
 from trid3nt_server.model.guards.context_budget import ContextWindowExceededError, FABRICATION_CAVEAT, build_context_window_abort_note, looks_like_fabricated_action_claim
-from trid3nt_server.model.guards.runaway_guard import ABORT_STEP_CAP, ABORT_WALL_CLOCK, LoopWatchdog, abort_message, max_turn_seconds, step_cap_for_model
+from trid3nt_server.model.guards.runaway_guard import ABORT_WALL_CLOCK, LoopWatchdog, abort_message
+from trid3nt_server.settings import setting
 from trid3nt_server.server.config import _env_flag, _tool_retrieval_k
 from trid3nt_server.server.dispatch.emitter import _invoke_tool_via_emitter
 from trid3nt_server.server.dispatch.helpers import _DELIVERABLE_COMPLETE_DIRECTIVE, _DISCOVERY_EXPAND_CAP, _EMPTY_COMPLETION_NUDGE, _EMPTY_COMPLETION_RETRY_CAP, _POST_DELIVERABLE_WRAPUP_ROUNDS, _default_declarable_registry, _dispatch_made_progress, _gate_expander_tool_names, _is_terminal_composer, _tool_names_from_search_result
@@ -253,8 +254,7 @@ async def _stream_model_reply(
     # RUNAWAY-AGENT GUARD: three independent per-turn bounds route to a
     # single clean ABORT that terminates the turn (releasing busy) instead of
     # letting the model<->tool loop run away and wedge the shared box:
-    #   1. STEP CAP -- min of the historical MAX_TURN_ITERATIONS and the
-    #      model-tier step cap (cheap/Nova/Haiku tiers get HALF).
+    #   1. STEP CAP -- the MAX_TURN_STEPS setting.
     #   2. WALL-CLOCK -- a per-turn deadline aborts a slow turn even under
     #      the step cap.
     #   3. LOOP WATCHDOG -- aborts when the SAME tool+args (or identical
@@ -262,8 +262,8 @@ async def _stream_model_reply(
     # ``_agent_abort`` is set to (reason_code, message) the moment a guard
     # fires; the loop breaks and the post-loop block surfaces the honest
     # typed envelope (honesty floor) like the loop_exhausted fail-stop.
-    _step_cap = min(MAX_TURN_ITERATIONS, step_cap_for_model(model_id))
-    _turn_deadline = started_at + max_turn_seconds()
+    _step_cap = setting("MAX_TURN_STEPS")
+    _turn_deadline = started_at + setting("MAX_TURN_SECONDS")
     _watchdog = LoopWatchdog()
     _agent_abort: tuple[str, str] | None = None
 
@@ -944,19 +944,11 @@ async def _stream_model_reply(
                         break
 
         else:
-            # Natural exhaustion of the step cap (guard aborts break with _agent_abort set). At
-            # the full MAX_TURN_ITERATIONS it emits the loop_exhausted envelope clients rely on;
-            # a cap tightened for a cheap tier is AGENT_STEP_LIMIT_REACHED. AGENT_LOOP_DETECTED
-            # is reserved for the watchdog.
-            if _agent_abort is None and _step_cap < MAX_TURN_ITERATIONS:
-                _agent_abort = (
-                    ABORT_STEP_CAP, abort_message(ABORT_STEP_CAP)
-                )
+            # Natural exhaustion of the step cap (guard aborts break with _agent_abort set) emits
+            # the loop_exhausted envelope clients rely on.
             logger.warning(
-                "model loop hit step cap=%d (full=%d) session=%s -- "
-                "emitting %s envelope",
+                "model loop hit step cap=%d session=%s -- emitting %s envelope",
                 _step_cap,
-                MAX_TURN_ITERATIONS,
                 state.session_id,
                 "agent-abort" if _agent_abort is not None else "loop_exhausted",
             )

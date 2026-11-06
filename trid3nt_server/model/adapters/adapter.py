@@ -18,6 +18,8 @@ from typing import Any, Literal, get_args, get_origin, get_type_hints, Union
 
 from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
+from trid3nt_server.settings import setting
+
 logger = logging.getLogger("trid3nt_server.model.adapters.adapter")
 
 #: The code a modeled envelope with no layers carries when its failure marker
@@ -101,14 +103,9 @@ StreamEvent = (
 # as an internal error. Non-transient provider errors (auth, bad request) fail
 # fast unchanged as ``error_class="provider_request"``.
 #
-# Retry policy env, shared by the adapters:
-#   TRID3NT_PROVIDER_RETRIES    -- max retries after the first attempt
-#                                  (default 3)
-#   TRID3NT_PROVIDER_BACKOFF_S  -- exponential-backoff BASE seconds; the wait
-#                                  before retry N (0-based) is
-#                                  ``base * 2**N`` (default 5.0). A provider
-#                                  Retry-After, when present, OVERRIDES the
-#                                  schedule for that attempt.
+# The retry policy the adapters share is PROVIDER_RETRIES retries after the first attempt, the wait
+# before retry N (0-based) ``PROVIDER_BACKOFF_S * 2**N``; a provider Retry-After, when present,
+# OVERRIDES the schedule for that attempt.
 
 
 class UpstreamProviderError(RuntimeError):
@@ -136,38 +133,21 @@ class UnsupportedModelProviderError(RuntimeError):
     error_class = "internal"
 
 
+#: Retries of one model call after its first attempt, on a transient provider fault.
+PROVIDER_RETRIES = 3
+#: The exponential-backoff base between those retries, in seconds.
+PROVIDER_BACKOFF_S = 5.0
+
+
 def provider_retries() -> int:
-    """Max provider retries after the first attempt (``TRID3NT_PROVIDER_RETRIES``,
-    default 3). Read at call time so an env injection works without re-import."""
-    raw = os.environ.get("TRID3NT_PROVIDER_RETRIES")
-    if raw is not None and str(raw).strip():
-        try:
-            val = int(str(raw).strip())
-            if val >= 0:
-                return val
-        except (TypeError, ValueError):
-            pass
-    return 3
-
-
-def _provider_backoff_s() -> float:
-    """Exponential-backoff BASE seconds (``TRID3NT_PROVIDER_BACKOFF_S``,
-    default 5.0)."""
-    raw = os.environ.get("TRID3NT_PROVIDER_BACKOFF_S")
-    if raw is not None and str(raw).strip():
-        try:
-            val = float(str(raw).strip())
-            if val > 0:
-                return val
-        except (TypeError, ValueError):
-            pass
-    return 5.0
+    """Max provider retries after the first attempt."""
+    return PROVIDER_RETRIES
 
 
 def provider_backoff_wait(attempt: int, *, cap: float = 60.0) -> float:
     """Seconds to wait before retry ``attempt`` (0-based): ``base * 2**attempt``
     capped at ``cap``. Pure so tests can pin the schedule."""
-    wait = _provider_backoff_s() * (2.0 ** max(int(attempt), 0))
+    wait = PROVIDER_BACKOFF_S * (2.0 ** max(int(attempt), 0))
     return max(0.0, min(wait, float(cap)))
 
 
@@ -743,16 +723,6 @@ def build_tool_declarations(tool_registry: dict[str, Any]) -> list[ToolDeclarati
     ]
 
 
-# Hard upper bound on chars a tool response carries back to the model. Anything bigger gets clipped
-# -- the model does not need megabytes of GeoJSON to decide the next tool call; it needs the
-# LayerURI, key metrics, error code, and a couple of identifying fields.
-_FUNCTION_RESPONSE_CHAR_BUDGET = 4_000
-
-# Maximum loop iterations for the multi-turn driver: one model stream plus optional dispatched
-# calls each. 12 fits the widest fetcher chains plus search_tools -> fetch -> publish; past it is
-# a runaway, and the fail-stop + loop_exhausted envelope is the correct response.
-MAX_TURN_ITERATIONS = 12
-
 
 # NEVER-REHYDRATE guard. The persisted agent chat row carries a ``thinking`` field (the
 # reasoning-channel text for the same bubble as the answer -- see
@@ -1095,6 +1065,11 @@ def encode_parts_blob(parts: list[Part]) -> bytes:
     return _json.dumps(out).encode("utf-8")
 
 
+#: Result fields that are bytes the model cannot read, never sent.
+_OPAQUE_FIELDS = frozenset({"raw_bytes", "raw_body", "binary", "geometry_wkb", "pixels"})
+_CUT = "...[cut to the result budget]"
+
+
 def _coerce_to_summary_value(value: Any, depth: int = 0) -> Any:
     """Coerce to summary form: non-JSON types become strings, long lists and strings truncate, and
     a dict past depth 2 collapses - signal, never fidelity."""
@@ -1120,8 +1095,7 @@ def _coerce_to_summary_value(value: Any, depth: int = 0) -> Any:
         for k, v in value.items():
             if not isinstance(k, str):
                 k = str(k)
-            # Filter obviously huge / opaque fields the LLM doesn't need.
-            if k in {"raw_bytes", "raw_body", "binary", "geometry_wkb", "pixels"}:
+            if k in _OPAQUE_FIELDS:
                 out[k] = f"[{k} suppressed]"
                 continue
             out[k] = _coerce_to_summary_value(v, depth + 1)
@@ -1148,7 +1122,7 @@ def _classify_error(error: BaseException) -> tuple[str, bool]:
 
     # 2. Heuristic fallback for an untyped exception: a timeout or network-ish OSError is
     # retryable; an argument-shape error (ValueError/TypeError/KeyError/AttributeError) is not;
-    # anything else is retryable, capped either way by MAX_TURN_ITERATIONS.
+    # anything else is retryable, capped either way by the MAX_TURN_STEPS setting.
     import asyncio as _asyncio
 
     if isinstance(error, (_asyncio.TimeoutError, TimeoutError)):
@@ -1335,7 +1309,7 @@ def summarize_tool_result(
 
     # An error becomes {status: "error", error_code, message, retryable, error_type}; code and
     # retryability come from the tool's own typed exception, so the model can retry with corrected
-    # args or narrate honestly. MAX_TURN_ITERATIONS caps a runaway retry either way.
+    # args or narrate honestly. The MAX_TURN_STEPS setting caps a runaway retry either way.
     if error is not None:
         from trid3nt_server.model.guards.actionability import classify_actionability
 
@@ -1351,7 +1325,7 @@ def summarize_tool_result(
             }
 
         code, retryable = _classify_error(error)
-        message = str(error)[:500]
+        message = str(error)
         actionability = classify_actionability(tool_name, error)
         if actionability == "operator":
             # Contract violation or internal exception: the model gets a terse, honest
@@ -1364,7 +1338,6 @@ def summarize_tool_result(
             "error_code": code,
             "message": message,
             "retryable": retryable,
-            "error": message,  # alias of ``message``; callers read either
             "error_type": type(error).__name__,
             "actionability": actionability,
         }
@@ -1376,7 +1349,7 @@ def summarize_tool_result(
             suggestions = [str(s) for s in raw_suggestions if str(s).strip()]
             if suggestions:
                 envelope["suggestions"] = suggestions[:8]
-        return envelope
+        return _within_budget(envelope, "message")
 
     if result is None:
         return {"tool": tool_name, "status": "no_result"}
@@ -1439,18 +1412,22 @@ def summarize_tool_result(
             "error_type": "NoRenderableLayer",
         }
 
+    if isinstance(result, dict) and result.get("status") == "error":
+        # A refusal the tool RETURNED (a template's fill naming every held input) is an error
+        # the model corrects its call from, so it reaches the model as one, whole.
+        return _within_budget({"tool": tool_name, **_whole(result)}, "error_message")
     if isinstance(result, dict):
-        summary = _coerce_to_summary_value(result)
         payload: dict[str, Any] = {
             "tool": tool_name,
             "status": "ok",
-            "result": summary,
+            "result": _whole(result),
         }
     else:
         payload = {
             "tool": tool_name,
             "status": "ok",
-            "result": _coerce_to_summary_value(result),
+            "result": _whole(result) if isinstance(result, (list, tuple))
+            else _coerce_to_summary_value(result),
         }
         # HONESTY FLOOR: a bare LayerURI result repr-coerces clipped to 200 chars, which would drop
         # the layer's ``notes``. They are hoisted to a top-level key so the model ALWAYS reads them
@@ -1468,9 +1445,13 @@ def summarize_tool_result(
     # the coerced/repr'd result otherwise.
     _hoist_synthetic_inputs(payload, result)
 
-    # Final char-budget clip: serialize, if oversized clip and re-wrap.
+    # A result that fits the budget reaches the model whole; one past it is summarized, then clipped.
+    budget = setting("TOOL_RESULT_CHARS")
     try:
         encoded = _json.dumps(payload, default=str)
+        if len(encoded) > budget and "result" in payload:
+            payload["result"] = _coerce_to_summary_value(result)
+            encoded = _json.dumps(payload, default=str)
     except Exception:  # noqa: BLE001 -- pathological non-serializable
         return {
             "tool": tool_name,
@@ -1478,14 +1459,38 @@ def summarize_tool_result(
             "result_repr": repr(result)[:1000],
             "note": "result not JSON-serializable; coerced via repr",
         }
-    if len(encoded) > _FUNCTION_RESPONSE_CHAR_BUDGET:
+    if len(encoded) > budget:
         return {
             "tool": tool_name,
             "status": "ok",
-            "result_summary": encoded[:_FUNCTION_RESPONSE_CHAR_BUDGET] + "…[clipped]",
+            "result_summary": encoded[:budget] + "…[clipped]",
             "note": "full result exceeded char budget; clipped for LLM context",
         }
     return payload
+
+
+def _whole(value: Any) -> Any:
+    """``value`` as JSON-able data with nothing cut; only the opaque byte fields are suppressed."""
+    if isinstance(value, dict):
+        return {str(k): f"[{k} suppressed]" if k in _OPAQUE_FIELDS else _whole(v)
+                for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_whole(v) for v in value]
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    return repr(value)
+
+
+def _within_budget(envelope: dict[str, Any], field_name: str) -> dict[str, Any]:
+    """``envelope`` with its one text field cut so the whole fits the result budget: a refusal is
+    read whole, and only an unbounded one (an upstream body quoted in an exception) is cut."""
+    import json as _json
+
+    over = len(_json.dumps(envelope, default=str)) - setting("TOOL_RESULT_CHARS")
+    text = envelope.get(field_name)
+    if over > 0 and isinstance(text, str):
+        envelope[field_name] = text[:max(len(text) - over - len(_CUT), 0)] + _CUT
+    return envelope
 
 
 # ``success`` (no raise, no failure-tagged envelope) is not ``result_usable``: a layer-producing
@@ -1669,7 +1674,6 @@ async def stream_events_with_contents(
 
 
 __all__ = [
-    "MAX_TURN_ITERATIONS",
     "StreamEvent",
     "TextDeltaEvent",
     "ThinkingDeltaEvent",

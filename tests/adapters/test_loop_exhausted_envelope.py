@@ -15,13 +15,16 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.model.adapters.adapter import (
-    MAX_TURN_ITERATIONS,
-)
+from trid3nt_server.settings import entry
 from trid3nt_server.server import _send_loop_exhausted, SessionState
 from trid3nt_contracts import new_ulid
 
 
+
+
+
+#: The step cap a turn takes by default: the MAX_TURN_STEPS dictionary default.
+MAX_TURN_ITERATIONS = entry("MAX_TURN_STEPS").engine_default
 
 
 @dataclass
@@ -83,7 +86,7 @@ async def test_send_loop_exhausted_retryable_false():
 
 @pytest.mark.asyncio
 async def test_send_loop_exhausted_message_references_limit():
-    """Message mentions the MAX_TURN_ITERATIONS limit."""
+    """Message mentions the MAX_TURN_STEPS limit."""
     sock = _FakeSocket()
     await _send_loop_exhausted(sock, "s1")
     payload = sock.sent[0]["payload"]

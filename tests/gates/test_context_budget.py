@@ -112,49 +112,27 @@ class TestEstimator:
 
 
 class TestBudget:
-    def test_defaults(self, monkeypatch):
-        monkeypatch.delenv("TRID3NT_OPENAI_MAX_TOKENS", raising=False)
-        monkeypatch.delenv("TRID3NT_CONTEXT_SAFETY_TOKENS", raising=False)
+    def test_defaults(self):
         assert reserve_output_tokens() == 4096
         assert safety_tokens() == 1024
         assert compute_budget_tokens(16384) == 16384 - 4096 - 1024
 
-    def test_budget_floors_at_256_for_a_tiny_num_ctx(self, monkeypatch):
-        monkeypatch.delenv("TRID3NT_OPENAI_MAX_TOKENS", raising=False)
-        monkeypatch.delenv("TRID3NT_CONTEXT_SAFETY_TOKENS", raising=False)
+    def test_budget_floors_at_256_for_a_tiny_num_ctx(self):
         assert compute_budget_tokens(100) == 256
-
-    def test_openai_max_output_tokens_default_and_override(self, monkeypatch):
-        monkeypatch.delenv("TRID3NT_OPENAI_MAX_TOKENS", raising=False)
-        assert openai_max_output_tokens() == 4096
-        monkeypatch.setenv("TRID3NT_OPENAI_MAX_TOKENS", "1024")
-        assert openai_max_output_tokens() == 1024
-        # Garbage falls back to the safe default (same _env_int contract as
-        # every other context-budget env knob).
-        monkeypatch.setenv("TRID3NT_OPENAI_MAX_TOKENS", "not-a-number")
-        assert openai_max_output_tokens() == 4096
 
     def test_reserve_output_tokens_is_coupled_to_max_output_tokens(self, monkeypatch):
         """The proactive budget's output reserve IS the max-tokens cap sent on the wire.
 
         One source of truth, not two knobs that can drift apart."""
-        monkeypatch.delenv("TRID3NT_OPENAI_MAX_TOKENS", raising=False)
+        from trid3nt_server.model.guards import context_budget
+
         assert reserve_output_tokens() == openai_max_output_tokens() == 4096
-        monkeypatch.setenv("TRID3NT_OPENAI_MAX_TOKENS", "777")
+        monkeypatch.setattr(context_budget, "OPENAI_MAX_TOKENS_DEFAULT", 777)
         assert reserve_output_tokens() == openai_max_output_tokens() == 777
 
-    def test_ratio_defaults_and_overrides(self, monkeypatch):
-        monkeypatch.delenv("TRID3NT_CONTEXT_PROACTIVE_RATIO", raising=False)
-        monkeypatch.delenv("TRID3NT_CONTEXT_REACTIVE_RATIO", raising=False)
+    def test_ratio_defaults(self):
         assert proactive_target_ratio() == 0.75
         assert reactive_target_ratio() == 0.60
-        monkeypatch.setenv("TRID3NT_CONTEXT_PROACTIVE_RATIO", "0.5")
-        assert proactive_target_ratio() == 0.5
-        # Out-of-range / garbage falls back to the safe default.
-        monkeypatch.setenv("TRID3NT_CONTEXT_PROACTIVE_RATIO", "5")
-        assert proactive_target_ratio() == 0.75
-        monkeypatch.setenv("TRID3NT_CONTEXT_PROACTIVE_RATIO", "not-a-number")
-        assert proactive_target_ratio() == 0.75
 
 
 

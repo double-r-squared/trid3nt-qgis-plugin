@@ -6,57 +6,16 @@ every time, so counting one would block the corrected retry.
 from __future__ import annotations
 
 import logging
-import os
 import time
 from dataclasses import dataclass, field
 
 logger = logging.getLogger("trid3nt_server.model.guards.circuit_breaker")
 
 
-_DEFAULT_THRESHOLD = 3
-_DEFAULT_COOLDOWN_S = 60.0
-
-
-def _get_threshold() -> int:
-    """Consecutive-failure threshold before the breaker trips; ``TRID3NT_CIRCUIT_THRESHOLD``
-    overrides, and anything below 1 falls back to 3."""
-    raw = os.environ.get("TRID3NT_CIRCUIT_THRESHOLD")
-    if raw is None:
-        return _DEFAULT_THRESHOLD
-    try:
-        val = int(raw)
-        if val < 1:
-            raise ValueError("must be >= 1")
-        return val
-    except (ValueError, TypeError):
-        logger.warning(
-            "TRID3NT_CIRCUIT_THRESHOLD=%r is not a valid positive integer; "
-            "using default %d",
-            raw,
-            _DEFAULT_THRESHOLD,
-        )
-        return _DEFAULT_THRESHOLD
-
-
-def _get_cooldown_s() -> float:
-    """Cooldown duration in seconds after the breaker trips; ``TRID3NT_CIRCUIT_COOLDOWN_S``
-    overrides, and a negative value falls back to 60."""
-    raw = os.environ.get("TRID3NT_CIRCUIT_COOLDOWN_S")
-    if raw is None:
-        return _DEFAULT_COOLDOWN_S
-    try:
-        val = float(raw)
-        if val < 0:
-            raise ValueError("must be >= 0")
-        return val
-    except (ValueError, TypeError):
-        logger.warning(
-            "TRID3NT_CIRCUIT_COOLDOWN_S=%r is not a valid float; "
-            "using default %.1f",
-            raw,
-            _DEFAULT_COOLDOWN_S,
-        )
-        return _DEFAULT_COOLDOWN_S
+#: Consecutive upstream failures of one tool that trip its breaker.
+THRESHOLD = 3
+#: Seconds a tripped tool stays unavailable.
+COOLDOWN_S = 60.0
 
 
 class CircuitBreakerError(RuntimeError):
@@ -116,8 +75,8 @@ class ToolCircuitBreaker:
 
     Threshold and cooldown are read once at construction, never mid-flight."""
 
-    threshold: int = field(default_factory=_get_threshold)
-    cooldown_s: float = field(default_factory=_get_cooldown_s)
+    threshold: int = THRESHOLD
+    cooldown_s: float = COOLDOWN_S
     # Internal state: consecutive failure counters and cooldown deadlines.
     _consecutive_failures: dict[str, int] = field(default_factory=dict, repr=False)
     _cooldown_until: dict[str, float] = field(default_factory=dict, repr=False)

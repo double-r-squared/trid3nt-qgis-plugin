@@ -219,9 +219,11 @@ dictionary-backed row and is answered as an `Input` is (`Keyword`,
 `telemac/modules/sheet.py`: its name, the one range that bounds it, the
 module's accept rule). The `keywords={...}` container stays on the wire and the
 two doors keep their own sets: BESIDE it a name is a declared input, INSIDE it
-an engine keyword or composite. A keyword stated beside it refuses naming the
-container, and a declared input stated inside it refuses naming where it
-belongs.
+an engine keyword or composite. A name stated at the wrong door that the other
+spells EXACTLY is moved to its own - a keyword stated beside the container goes
+inside it, a declared input stated inside it comes out - and its verdict carries
+a note saying so, which the refusal and a launched run's notes both say. Only an
+exact spelling moves; anything else refuses at the door it was stated at.
 
 ONE floor routes every name inside it across the run's bodies
 (`keyword_floor`, `runtime/module.py`; each engine's `_floor` hands it its
@@ -243,7 +245,12 @@ statement of the body.
 The fill (`workflows/runtime/fill.py`) answers every input in one loop and
 leaves one `Verdict` each: the state, the value taken, and where it came from -
 the origin (user, template, producer, derived; `Origin`, in the contracts) and
-the source or producer that names it. A row is fetched or read and ingested
+the source or producer that names it. A refusal names every held input once:
+a reason several inputs share is said once, the place (the domain) answers
+before every row that stands on it and refuses as its own input, and the rows
+left waiting on a refused input are said together. A refused row's remedies
+name each Case layer its slot's ingestion takes and, where the match can fill
+it, leaving it unstated. A row is fetched or read and ingested
 before it answers, and a row first read by a stage of the launch is stamped the
 same way. A row handed a case layer by its handle - bare or as `{"layer": id}` -
 is read at that layer's uri, and nothing judges a workflow's input before the

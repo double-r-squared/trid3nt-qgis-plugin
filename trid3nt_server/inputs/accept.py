@@ -16,7 +16,7 @@ from typing import Any, Literal, Mapping, Sequence, Union, get_args, get_origin,
 from .slots import Slot, ingest_slot
 from .user_input import UserInputError
 
-__all__ = ["InputRefused", "accept", "choices_of", "inputs_of", "offers"]
+__all__ = ["InputRefused", "accept", "choices_of", "inputs_of", "layers_taking", "offers"]
 
 #: What rides a call beside its inputs and is never an input to supply.
 _CARRIED = ("input_mode",)
@@ -133,11 +133,18 @@ def offers(fn: Any, name: str,
     slot = _slot(fn, name)
     if slot is None or slot.ingest is None:
         return None
+    return layers_taking(slot, name, layers)
+
+
+def layers_taking(slot: Slot, name: str,
+                  layers: Sequence[Mapping[str, Any]]) -> list[tuple[str, str]]:
+    """``(layer_id, label)`` for each of ``layers`` the slot's own ingestion takes as ``name``.
+    Runs the ingestion over each layer, so call it off the loop."""
     taken = []
     for layer in layers:
         try:
-            accept(fn, name, layer.get("layer_id"), layers)
-        except InputRefused:
+            ingest_slot(slot, layer.get("uri") or layer.get("layer_id"), label=name)
+        except Exception:  # noqa: BLE001 - a layer the ingestion refuses is not offered
             continue
         taken.append((str(layer.get("layer_id")),
                       str(layer.get("name") or layer.get("layer_id"))))
