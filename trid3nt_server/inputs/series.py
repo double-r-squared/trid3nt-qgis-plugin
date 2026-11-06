@@ -6,6 +6,8 @@ from bisect import bisect_left
 from dataclasses import dataclass
 from typing import Any, Sequence
 
+from trid3nt_server.settings import setting
+
 from .temporal import (
     CATEGORICAL,
     RATE,
@@ -23,11 +25,6 @@ _QUANTITY: dict[str, str] = {
     "discharge series": RATE,
     "land cover": CATEGORICAL,
 }
-
-#: The default bound on a hole, in native intervals. Within-cadence
-#: interpolation is refinement; bridging three missed reports is invention.
-_GAP_INTERVALS = 3.0
-
 
 @dataclass(frozen=True, slots=True)
 class Aligned:
@@ -48,10 +45,10 @@ def align(series: Series, *, onto: Any = None, quantity: str = STATE,
     """One record onto the clock a reader reads it on, in the unit that reader reads.
 
     ``opening_at`` moves the record to the reader's zero; a hole wider than
-    ``max_gap_s`` (three native intervals unstated) refuses."""
+    ``max_gap_s`` (the SERIES_GAP_INTERVALS setting's native intervals unstated) refuses."""
     notes: list[str] = []
     native = min(b - a for a, b in zip(series.times_s, series.times_s[1:]))
-    bound = float(max_gap_s) if max_gap_s is not None else native * _GAP_INTERVALS
+    bound = float(max_gap_s) if max_gap_s is not None else native * setting("SERIES_GAP_INTERVALS")
     _refuse_gaps(series, bound, native)
     if units is not None and str(units) != series.units:
         notes.append(f"converted {series.units}->{units}")

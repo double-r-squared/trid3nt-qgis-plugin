@@ -200,3 +200,15 @@ def test_every_declared_credential_is_listed_once_with_no_key_material(listing):
 def test_the_settings_door_no_longer_serves_a_second_catalog():
     out = _drive(_get("/api/tool-catalog"))
     assert _status(out) == 404
+
+
+def test_the_settings_door_lists_every_setting_with_the_level_it_resolves_at(user_settings):
+    from door_client import drive
+
+    user_settings(FILL_MAX_DISTANCE=250)
+    answer = drive("GET", "/api/settings")
+    assert answer.status == 200
+    rows = {row["name"]: row for row in answer.json()["settings"]}
+    assert rows["FILL_MAX_DISTANCE"]["value"] == 250 and rows["FILL_MAX_DISTANCE"]["level"] == "user"
+    assert rows["FILL_MAX_DISTANCE"]["default"] == 100 and rows["FILL_MAX_DISTANCE"]["bounds"][0] == 1.0
+    assert rows["MERGE_BUFFER_CELLS"]["level"] == "default" and rows["MERGE_BUFFER_CELLS"]["source"]

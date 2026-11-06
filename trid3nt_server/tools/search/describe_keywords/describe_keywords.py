@@ -15,6 +15,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.inputs.user_input import nearest
 from trid3nt_server.tools import register_tool
+from trid3nt_server.settings import input_dir as settings_input_dir
 from trid3nt_server.workflows.geoclaw.modules.module import (
     module_input_dir as geoclaw_input_dir)
 from trid3nt_server.workflows.modflow.modules.module import (
@@ -54,7 +55,7 @@ def _carried() -> dict[str, Path]:
     """Every dictionary the system carries, by module name: wherever its wrapper loads its slots from."""
     return {path.stem: directory
             for directory in (module_input_dir(), modflow_input_dir(),
-                              geoclaw_input_dir())
+                              geoclaw_input_dir(), settings_input_dir())
             for path in directory.glob("*.json")}
 
 
@@ -92,6 +93,8 @@ def _row(slot: Any) -> dict[str, Any]:
                          else [list(pair) for pair in slot.bounds])
     if slot.choices:
         row["choices"] = slot.choices
+    if slot.source:
+        row["source"] = slot.source
     if slot.is_list:
         row["values"] = "a list of any length" if slot.unbounded else slot.size
     if slot.is_open:

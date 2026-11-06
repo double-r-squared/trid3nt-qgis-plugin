@@ -28,6 +28,7 @@ _SUBSYSTEM_BY_MODULE: tuple[tuple[str, str], ...] = (
     ("trid3nt_server.workflows.runtime", "runtime"),
     ("trid3nt_server.workflows.telemac", "engine"),
     ("trid3nt_server.inputs.gate", "gates"),
+    ("trid3nt_server.tools.meta", "meta"),
 )
 
 #: The order the subsystems are listed in: what a run is made of, then what it
@@ -35,7 +36,7 @@ _SUBSYSTEM_BY_MODULE: tuple[tuple[str, str], ...] = (
 #: not name is listed after these, alphabetically.
 _SUBSYSTEM_ORDER: tuple[str, ...] = (
     "templates", "fetchers", "mesh", "derives", "render", "solver", "runtime",
-    "engine", "search", "gates",
+    "engine", "search", "gates", "meta",
 )
 
 #: How many tools one library search ranks, the ceiling the search tool clamps

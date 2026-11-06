@@ -15,6 +15,7 @@ from typing import Any
 from trid3nt_contracts.execution import layer_seed
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.settings import setting
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.derive._raster_layers import (
     NODATA, UNMEASURED, RasterLayerError, RasterLayerURI, bbox_4326, coverage,
@@ -24,10 +25,6 @@ __all__ = ["merge_rasters", "merged"]
 
 #: What a source counting DOWN from its zero names its quantity as.
 _DEPTH_QUANTITY = "depth_below_datum"
-
-#: The most cells one merge will build: a ceiling refuses by name rather than
-#: quietly coarsening the measurement the merge was called to keep.
-_MAX_CELLS = 60_000_000
 
 #: The merged surface is an elevation in metres on the frame it landed on.
 _STYLE = {"kind": "continuous", "ramp": "terrain", "units": "m"}
@@ -55,13 +52,14 @@ def _common_grid(sources: list[Any]) -> tuple[Any, int, int, Any, float]:
     east, north = max(b[2] for b in boxes), max(b[3] for b in boxes)
     width = max(1, int(math.ceil((east - west) / cell)))
     height = max(1, int(math.ceil((north - south) / cell)))
-    if width * height > _MAX_CELLS:
+    ceiling = setting("MERGE_MAX_CELLS")
+    if width * height > ceiling:
         raise RasterLayerError(
             "MERGE_RASTERS_RESOLUTION_INVALID",
             f"merging these over their union at "
             f"{cell * _metres_per_unit(crs):.3g} m is {width} x {height} = "
-            f"{width * height} cells, past the {_MAX_CELLS}-cell ceiling. Merge "
-            "surfaces that cover less ground, or coarser ones.")
+            f"{width * height} cells, past the {ceiling}-cell ceiling "
+            "(setting MERGE_MAX_CELLS). Merge surfaces that cover less ground, or coarser ones.")
     return crs, width, height, from_origin(west, north, cell, cell), cell
 
 
@@ -80,7 +78,7 @@ def _warped(src: Any, crs: Any, width: int, height: int, transform: Any,
               src_transform=src.transform, src_crs=src.crs,
               dst_transform=transform, dst_crs=crs,
               src_nodata=(src.nodata if values is None else NODATA),
-              dst_nodata=NODATA, resampling=Resampling.bilinear)
+              dst_nodata=NODATA, resampling=Resampling[setting("MERGE_RESAMPLING")])
     return out
 
 
@@ -169,9 +167,10 @@ def _no_cliff(grids: list[Any], won: Any, labels: list[str]) -> None:
     if relief <= 0.0 or len(spans) < 2:
         return
     spans.sort()
+    allowed = relief * setting("MERGE_CLIFF_FACTOR")
     for split in range(1, len(spans)):
         gap = spans[split][0] - max(high for _low, high, _label in spans[:split])
-        if gap <= relief:
+        if gap <= allowed:
             continue
         raise RasterLayerError(
             "MERGE_RASTERS_CLIFF",

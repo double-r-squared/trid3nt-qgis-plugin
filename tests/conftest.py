@@ -19,6 +19,22 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from trid3nt_server import tools as agent_tools
 
 
+@pytest.fixture(autouse=True)
+def user_settings(monkeypatch, tmp_path):
+    """The user settings file of every test is its own: ``user_settings(NAME=value)`` writes it, so a run on this box never reads the developer's."""
+    import json
+
+    from trid3nt_server.settings import reader
+
+    path = tmp_path / "user_settings.json"
+    monkeypatch.setattr(reader, "user_file", lambda: path)
+
+    def write(**values):
+        path.write_text(json.dumps(values))
+
+    return write
+
+
 # Shared in-memory S3 double (GCP decommissioned — cache shim is S3-only).
 #
 # The cache read-through (``trid3nt_server.tools.cache``) and every tool

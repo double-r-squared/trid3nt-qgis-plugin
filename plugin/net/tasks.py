@@ -15,10 +15,12 @@ from .trid3nt_client import (
     KeyedSourcesRequestError,
     ModelListRequestError,
     ProviderConfigRequestError,
+    SettingsRequestError,
     fetch_case_list,
     fetch_keyed_sources,
     fetch_library,
     fetch_model_list,
+    fetch_settings,
     post_provider_config,
     search_library,
 )
@@ -148,6 +150,31 @@ class _KeyedSourcesTask(QObject):
         try:
             rows = fetch_keyed_sources(self._base_url)
         except KeyedSourcesRequestError as exc:
+            self.errored.emit(str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001 -- surfaced, never silent
+            self.errored.emit(f"{type(exc).__name__}: {exc}")
+            return
+        self.finished.emit(rows)
+
+
+class _SettingsTask(QObject):
+    """GET /api/settings, the changeable settings the daemon holds."""
+
+    finished = pyqtSignal(list)  # list[{name, family, value, level, default, ...}]
+    errored = pyqtSignal(str)    # honest message
+
+    def __init__(self, base_url: str, parent: Optional[QObject] = None):
+        super().__init__(parent)
+        self._base_url = base_url
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            rows = fetch_settings(self._base_url)
+        except SettingsRequestError as exc:
             self.errored.emit(str(exc))
             return
         except Exception as exc:  # noqa: BLE001 -- surfaced, never silent

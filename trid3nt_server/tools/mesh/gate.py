@@ -24,12 +24,6 @@ __all__ = [
     "render_probe_lines",
 ]
 
-#: Gate wait cap, in seconds.
-_TTL_SECONDS = 300
-
-#: How many times the gate re-presents before it stops asking.
-_MAX_ROUNDS = 3
-
 #: The mesh at the gate. One mesh is under construction at a time, and a runtime
 #: op edits THAT one; with none open an op refuses by name rather than editing a
 #: session nothing is watching.
@@ -116,7 +110,7 @@ _REFUSALS = {
 
 async def gate_mesh_build(session: MeshSession, *, tool_name: str,
                           input_mode: str | None = None,
-                          max_rounds: int = _MAX_ROUNDS) -> MeshArtifact:
+                          max_rounds: int | None = None) -> MeshArtifact:
     """Build the demanded mesh under the gate -> the accepted :class:`MeshArtifact`.
 
     AUTO builds inline; user_gated with no session to present on refuses."""
@@ -145,7 +139,7 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
     try:
         outcome = await gate_input_review(
             tool_name=tool_name, mode=input_mode, entries=[], params={},
-            max_rounds=max_rounds, ttl_seconds=_TTL_SECONDS,
+            max_rounds=max_rounds,
             present=card, apply_revision=revise)
     finally:
         _AT_GATE = None

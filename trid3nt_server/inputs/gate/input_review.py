@@ -13,6 +13,7 @@ from typing import Any, Awaitable, Callable, Literal
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.common import ORIGIN_LABELS, Origin, SyntheticInput
 from trid3nt_contracts.payload_warning import ParamSheet, PayloadWarningEnvelopePayload
+from trid3nt_server.settings import setting
 
 logger = logging.getLogger("trid3nt_server.inputs.gate.input_review")
 
@@ -29,12 +30,6 @@ __all__ = [
 #: Run-mode lever for every gated thing. ``auto``
 #: proceeds immediately with labeled inputs; ``user_gated`` pauses for review.
 InputGateMode = Literal["auto", "user_gated"]
-
-#: Max review rounds before an honest cancel; a ``provide values`` reply consumes one.
-_DEFAULT_MAX_ROUNDS = 3
-
-#: Gate wait cap (seconds); running out is a typed cancel, never a silent run.
-_DEFAULT_TTL_SECONDS = 300
 
 
 def resolve_input_gate_mode(mode: str | None) -> InputGateMode:
@@ -193,8 +188,8 @@ async def gate_input_review(
     mode: str | None,
     entries: list[SyntheticInput],
     params: dict[str, Any],
-    max_rounds: int = _DEFAULT_MAX_ROUNDS,
-    ttl_seconds: int = _DEFAULT_TTL_SECONDS,
+    max_rounds: int | None = None,
+    ttl_seconds: int | None = None,
     param_sheet: "ParamSheet | None" = None,
     present: Callable[[], Awaitable[GateCard]] | None = None,
     apply_revision: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
@@ -204,7 +199,10 @@ async def gate_input_review(
     """Present what is under review before it runs, and ask.
 
     ``auto`` proceeds at once; ``user_gated`` with no live session REFUSES. ``present``/``apply_revision``/``blocked`` let a caller that owns the
-    thing reviewed build the card, take a reply as a change, and name what blocks a proceed."""
+    thing reviewed build the card, take a reply as a change, and name what blocks a proceed.
+    Unstated, ``max_rounds`` and ``ttl_seconds`` are the MAX_ROUNDS and TTL_S settings; a ``provide values`` reply consumes a round and running out of either is a typed cancel."""
+    max_rounds = max_rounds or setting("MAX_ROUNDS")
+    ttl_seconds = ttl_seconds or setting("TTL_S")
     resolved_mode = resolve_input_gate_mode(mode)
     if resolved_mode == "auto":
         return ReviewOutcome(proceed=True, entries=list(entries),

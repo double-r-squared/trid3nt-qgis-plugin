@@ -1,0 +1,369 @@
+{
+  "module": "settings",
+  "keywords": [
+    {
+      "keyword": "FILL_MAX_DISTANCE",
+      "identifier": "FILL_MAX_DISTANCE",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How far, in pixels, a hole's fill searches outward for a measured value to interpolate from.",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 100,
+      "source": "GDAL gdal_fillnodata -md: \"The maximum distance (in pixels) that the algorithm will search out for values to interpolate. The default is 100 pixels.\" https://gdal.org/en/stable/programs/gdal_fillnodata.html"
+    },
+    {
+      "keyword": "FILL_ALGORITHM",
+      "identifier": "FILL_ALGORITHM",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The interpolator a hole is filled with: GDAL's inverse-distance weighting, the library's own.",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": "inverse_distance",
+      "source": "GDAL FillNodata (rasterio.fill.fillnodata), the library's native algorithm; the only one the fill implements. https://gdal.org/en/stable/programs/gdal_fillnodata.html",
+      "choices": [
+        "inverse_distance"
+      ]
+    },
+    {
+      "keyword": "MERGE_BUFFER_CELLS",
+      "identifier": "MERGE_BUFFER_CELLS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Cells between two merged datasets interpolated so the bed levels pass smoothly from one to the other; 0 leaves the seam as measured.",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0,
+      "source": "HydroMT-SFINCS merge_multi_dataarrays buffer_cells: \"Number of cells between datasets to ensure smooth transition of bed levels, by default 0\" https://github.com/Deltares/hydromt_sfincs/blob/main/hydromt_sfincs/workflows/merge.py"
+    },
+    {
+      "keyword": "MERGE_MAX_CELLS",
+      "identifier": "MERGE_MAX_CELLS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The most cells one merge builds over the union of its inputs; a merge past it refuses by name rather than coarsening the measurement.",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 60000000,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "MERGE_RESAMPLING",
+      "identifier": "MERGE_RESAMPLING",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How each merged input is resampled onto the common grid.",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": "bilinear",
+      "source": "TRID3NT engineering default. HydroMT-SFINCS picks bilinear when the next dataset is as coarse as or coarser than the first and average when finer.",
+      "choices": [
+        "nearest",
+        "bilinear",
+        "cubic"
+      ]
+    },
+    {
+      "keyword": "MERGE_CLIFF_FACTOR",
+      "identifier": "MERGE_CLIFF_FACTOR",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How many times the last input's relief two merged populations may stand apart before the merge refuses them as a cliff.",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1.0,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "COVERAGE_CELLS",
+      "identifier": "COVERAGE_CELLS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The most cells a coverage read builds over a cut; a finer raster is read on a coarser grid for the count, never for its values.",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 4000000,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "DEM_MAX_CELLS",
+      "identifier": "DEM_MAX_CELLS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The most DEM cells the D8 flow-direction chain takes before it refuses; cost grows with the grid (about 40 s at 4000 x 4000).",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 16000000,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "EHYDRO_MAX_SURVEYS",
+      "identifier": "EHYDRO_MAX_SURVEYS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The most eHydro channel surveys one read lays over an area before it stops adding more.",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 12,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "EHYDRO_NEW_GROUND",
+      "identifier": "EHYDRO_NEW_GROUND",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The share of the area a further eHydro survey must newly cover to be taken.",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.01,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "FETCH_MARGIN",
+      "identifier": "FETCH_MARGIN",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How far past a mesh's extent, as a fraction of its own span, the bed is fetched so its rim is read, not filled.",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.02,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "SAMPLE_INTERP",
+      "identifier": "SAMPLE_INTERP",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How a bed raster is read between cell centres at a mesh's nodes: nearest returns a value the grid holds, bilinear interpolates.",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": "nearest",
+      "source": "TRID3NT engineering default.",
+      "choices": [
+        "nearest",
+        "bilinear"
+      ]
+    },
+    {
+      "keyword": "SAMPLE_MIN_COVERAGE",
+      "identifier": "SAMPLE_MIN_COVERAGE",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The share of a node's bilinear footprint that must be measured for the node to take a value; below it the node is a hole.",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.999,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "SOUNDING_GRID_ALGORITHM",
+      "identifier": "SOUNDING_GRID_ALGORITHM",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The QGIS algorithm a refusal names for gridding soundings into a bed surface.",
+      "rubrique": [
+        "bed"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": "gdal:gridinversedistancenearestneighbor",
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "RAIN_HOLE_INTERVALS",
+      "identifier": "RAIN_HOLE_INTERVALS",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How many cadences a gap between two rain stamps spans before it counts as a missing report.",
+      "rubrique": [
+        "notes"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 1.5,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "SERIES_GAP_INTERVALS",
+      "identifier": "SERIES_GAP_INTERVALS",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The default bound, in native intervals, on a hole a series bridges: within-cadence interpolation is refinement, bridging three missed reports is invention.",
+      "rubrique": [
+        "notes"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 3.0,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "OBSERVATION_WINDOW_DAYS",
+      "identifier": "OBSERVATION_WINDOW_DAYS",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How far back of a run's moment a sample still speaks for the water it was taken from.",
+      "rubrique": [
+        "notes"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 30.0,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "FLAT_WITHIN_M",
+      "identifier": "FLAT_WITHIN_M",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How close, in metres, a pixel must sit to a water body's modal elevation to count as its hydro-flattened surface.",
+      "rubrique": [
+        "notes"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.001,
+      "source": "USGS Elevation-Derived Hydrography Data Acquisition Specifications, Vertical Alignment of lake/pond polygons: a water body's z-values match its hydro-flattened surface within 0.001 m."
+    },
+    {
+      "keyword": "TTL_S",
+      "identifier": "TTL_S",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How long a gate card waits for a reply before it expires as a typed timeout, never a silent proceed.",
+      "rubrique": [
+        "gate"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 300,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "MAX_ROUNDS",
+      "identifier": "MAX_ROUNDS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How many times a review card is redrawn on a person's picks before the run is refused unlaunched.",
+      "rubrique": [
+        "gate"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 3,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "PROCESSING_TIMEOUT_S",
+      "identifier": "PROCESSING_TIMEOUT_S",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The wall clock a request run in the user's QGIS session may take before the call resolves as a timeout.",
+      "rubrique": [
+        "gate"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 600.0,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "TOOL_CHOICE_TIMEOUT_S",
+      "identifier": "TOOL_CHOICE_TIMEOUT_S",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How long a tool-candidates card waits for a pick before the turn falls back to autonomous routing.",
+      "rubrique": [
+        "gate"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 45.0,
+      "source": "TRID3NT engineering default."
+    }
+  ]
+}

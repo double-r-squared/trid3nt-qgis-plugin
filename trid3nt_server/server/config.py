@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import os
 
+from trid3nt_server.settings import setting
+
 # Tool-retrieval K, the discover top-k for retrieve_visible_tools. Surfacing is
 # unconditional; K is the only lever (retrieve_visible_tools clamps it).
 def _tool_retrieval_k() -> int:
@@ -56,6 +58,6 @@ def _ambiguity_margin_threshold() -> float:
 
 def _tool_choice_timeout_s() -> float:
     """Bounded wait for a ``tool-choice`` reply to the tool-candidates card
-    (``TRID3NT_TOOL_CHOICE_TIMEOUT_S``, default 45); an unanswered picker
+    (the TOOL_CHOICE_TIMEOUT_S setting); an unanswered picker
     degrades to autonomous routing rather than hanging the turn."""
-    return _env_float("TRID3NT_TOOL_CHOICE_TIMEOUT_S", 45.0)
+    return setting("TOOL_CHOICE_TIMEOUT_S")

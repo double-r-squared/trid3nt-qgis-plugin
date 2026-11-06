@@ -159,6 +159,11 @@ QGIS profile when the daemon's MinIO uses different ones.
 
 ## Not in the file, but related
 
+- **Settings** (how far a bed fill reaches, how long a card waits, ...) are not environment variables: they live in a
+  dictionary (`describe_keywords(module="settings")`) and the daemon's `~/.trid3nt/settings.json`
+  (`$TRID3NT_HOME/settings.json`). Change one from the dock (Settings -> Settings), or ask for it in chat; either way a
+  card shows the change and nothing is written until you proceed.
+
 - **Per-source API keys** (`TRID3NT_AIRNOW_API_KEY`, `TRID3NT_COPERNICUS_CDS_API_KEY`,
   `TRID3NT_OPENAQ_API_KEY`, `TRID3NT_FIRMS_MAP_KEY`) may be set here; otherwise the dock asks for the key
   on the input card and keeps it in QGIS's authentication manager (Settings -> Keys). Each source's

@@ -28,6 +28,8 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
+from trid3nt_server.settings import setting
+
 from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
 from ..._router.hooks import register_hook
 from ..._router.transport import TransportError, get_bytes, get_client, get_zip
@@ -48,16 +50,6 @@ _OUT_FIELDS = (
 #: years old, and a page ordered by date would never reach it.
 _INDEX_PAGE = 2000
 _INDEX_PAGES = 10
-
-#: How many packages one fetch downloads. Each survey is its own multi-megabyte
-#: ZIP, so the selection stops here rather than truncating silently.
-_MAX_SURVEYS = 12
-
-#: How much of the AOI a survey has to cover that no NEWER selected survey
-#: already covers, as a fraction of the AOI, before its package is worth
-#: downloading. A survey overlapping its neighbour by a sliver adds a package
-#: and no bed.
-_NEW_GROUND = 0.01
 
 #: The feature class carrying the measured soundings, and the three fields a bed
 #: cannot be built without.
@@ -204,14 +196,16 @@ def _selected(spec: SourceSpec, features: list[dict[str, Any]],
     west, south, east, north = (float(v) for v in bbox)
     aoi = box(west, south, east, north)
     uncovered, taken = aoi, []
+    # Each survey is its own multi-megabyte ZIP, so the selection stops at the cap rather than truncating silently.
+    max_surveys, new_ground = setting("EHYDRO_MAX_SURVEYS"), setting("EHYDRO_NEW_GROUND")
     for feature, _date in usable:
-        if len(taken) == _MAX_SURVEYS or uncovered.is_empty:
+        if len(taken) == max_surveys or uncovered.is_empty:
             break
         try:
             footprint = shapely.make_valid(shape(feature["geometry"]))
         except Exception:  # noqa: BLE001 -- an unreadable footprint covers nothing
             continue
-        if footprint.intersection(uncovered).area < _NEW_GROUND * aoi.area:
+        if footprint.intersection(uncovered).area < new_ground * aoi.area:
             continue
         uncovered = uncovered.difference(footprint)
         taken.append(feature)
@@ -219,7 +213,7 @@ def _selected(spec: SourceSpec, features: list[dict[str, Any]],
         raise router_empty_error(
             sc,
             f"none of the {len(usable)} eHydro surveys intersecting this extent "
-            f"covers more than {_NEW_GROUND:.0%} of it, so no package here "
+            f"covers more than {new_ground:.0%} of it, so no package here "
             "would add a bed. Widen the bbox onto the channel the surveys run "
             "along.",
             spec.empty_error_suffix,

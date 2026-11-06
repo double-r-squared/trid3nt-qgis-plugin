@@ -1,6 +1,6 @@
-"""The SETTINGS door: the models a client can pick and the provider switch.
+"""The SETTINGS door: the models a client can pick, the provider switch and the changeable settings.
 
-Both routes answer only while the local provider is active. The credentials the
+The model routes answer only while the local provider is active. The credentials the
 keys form offers ride the library listing, which already lists what is here."""
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ import asyncio
 from aiohttp import web
 
 from trid3nt_server.model.adapters import model_discovery
+from trid3nt_server.settings import listing
 from trid3nt_server.server.protocol.http.transport import (
     HttpError, failure, json_reply, raw_reply,
 )
@@ -41,7 +42,14 @@ async def _provider_config(request: web.Request) -> web.Response:
     return raw_reply(body)
 
 
+@failure("settings listing failed")
+async def _settings(_request: web.Request) -> web.Response:
+    """``GET /api/settings``: every changeable setting with the value the daemon holds, its level (default, user), default, range, unit and source. The file is read on a worker thread."""
+    return json_reply({"settings": await asyncio.to_thread(listing)})
+
+
 def add_routes(app: web.Application) -> None:
     """Register the settings door's routes on the door's one app."""
     app.router.add_get("/api/local-models", _local_models, allow_head=False)
+    app.router.add_get("/api/settings", _settings, allow_head=False)
     app.router.add_post("/api/provider-config", _provider_config)

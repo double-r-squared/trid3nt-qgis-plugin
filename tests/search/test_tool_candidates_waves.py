@@ -62,11 +62,11 @@ _SCRIPT = [
 
 
 @pytest.mark.asyncio
-async def test_ask_mode_emits_stage_labeled_wave_per_round(monkeypatch):
+async def test_ask_mode_emits_stage_labeled_wave_per_round(monkeypatch, user_settings):
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
     monkeypatch.setenv("TRID3NT_MODE", "ask")
     # Each unanswered wave times out fast and proceeds (never hangs).
-    monkeypatch.setenv("TRID3NT_TOOL_CHOICE_TIMEOUT_S", "0.1")
+    user_settings(TOOL_CHOICE_TIMEOUT_S=0.1)
     set_script(_SCRIPT)
     monkeypatch.setattr(tr, "retrieve_ranked_tools", lambda text, k=25: list(_PIPELINE))
 

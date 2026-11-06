@@ -1,0 +1,130 @@
+{
+  "settings": {
+    "FILL_MAX_DISTANCE": {
+      "unit": "px",
+      "bounds": [
+        1,
+        1000000000000.0
+      ]
+    },
+    "MERGE_BUFFER_CELLS": {
+      "unit": "cells",
+      "bounds": [
+        0,
+        1000000000000.0
+      ]
+    },
+    "MERGE_MAX_CELLS": {
+      "unit": "cells",
+      "bounds": [
+        1,
+        1000000000000.0
+      ]
+    },
+    "MERGE_CLIFF_FACTOR": {
+      "unit": "relief",
+      "bounds": [
+        0,
+        1000000000000.0
+      ]
+    },
+    "COVERAGE_CELLS": {
+      "unit": "cells",
+      "bounds": [
+        1,
+        1000000000000.0
+      ]
+    },
+    "DEM_MAX_CELLS": {
+      "unit": "cells",
+      "bounds": [
+        1,
+        1000000000000.0
+      ]
+    },
+    "EHYDRO_MAX_SURVEYS": {
+      "unit": "surveys",
+      "bounds": [
+        1,
+        1000000000000.0
+      ]
+    },
+    "EHYDRO_NEW_GROUND": {
+      "unit": "fraction",
+      "bounds": [
+        0,
+        1
+      ]
+    },
+    "FETCH_MARGIN": {
+      "unit": "fraction",
+      "bounds": [
+        0,
+        1
+      ]
+    },
+    "SAMPLE_MIN_COVERAGE": {
+      "unit": "fraction",
+      "bounds": [
+        0,
+        1
+      ]
+    },
+    "RAIN_HOLE_INTERVALS": {
+      "unit": "intervals",
+      "bounds": [
+        1,
+        1000000000000.0
+      ]
+    },
+    "SERIES_GAP_INTERVALS": {
+      "unit": "intervals",
+      "bounds": [
+        0,
+        1000000000000.0
+      ]
+    },
+    "OBSERVATION_WINDOW_DAYS": {
+      "unit": "days",
+      "bounds": [
+        0,
+        1000000000000.0
+      ]
+    },
+    "FLAT_WITHIN_M": {
+      "unit": "m",
+      "bounds": [
+        0,
+        1000000000000.0
+      ]
+    },
+    "TTL_S": {
+      "unit": "s",
+      "bounds": [
+        1,
+        1000000000000.0
+      ]
+    },
+    "MAX_ROUNDS": {
+      "unit": "rounds",
+      "bounds": [
+        1,
+        1000000000000.0
+      ]
+    },
+    "PROCESSING_TIMEOUT_S": {
+      "unit": "s",
+      "bounds": [
+        0.001,
+        1000000000000.0
+      ]
+    },
+    "TOOL_CHOICE_TIMEOUT_S": {
+      "unit": "s",
+      "bounds": [
+        0.001,
+        1000000000000.0
+      ]
+    }
+  }
+}

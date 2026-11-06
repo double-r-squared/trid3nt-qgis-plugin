@@ -111,6 +111,8 @@ class Slot:
     shape: str = ""
     # The DFN marks this array layered: its value is one number for every layer, a row of cells per layer, or a name per layer.
     layered: bool = False
+    # Where the default comes from: the citation a settings entry carries beside its help; empty on an engine row.
+    source: str = ""
 
     @property
     def is_list(self) -> bool:
@@ -319,6 +321,7 @@ def load_module_input(module: str, *, directory: Path) -> Mapping[str, Slot]:
         mandatory=row.get("mandatory", False),
         shape=row.get("shape", ""),
         layered=row.get("layered", False),
+        source=row.get("source", ""),
         unit=bounded.get(row["identifier"], unbounded_row)[0],
         bounds=bounded.get(row["identifier"], unbounded_row)[1],
     ) for row in rows})

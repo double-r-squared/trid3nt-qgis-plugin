@@ -20,6 +20,7 @@ import numpy as np
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.settings import setting
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.derive import DeriveError
 
@@ -69,10 +70,6 @@ class HydrologyUpstreamError(HydrologyPrimitivesError):
     error_code = "HYDROLOGY_UPSTREAM_ERROR"
     retryable = True
 
-
-#: CPU-bound clamp on the D8 chain in the DEM's own CELLS, not degrees (a projected DEM's degree extent is map bulge).
-#: A 4000 x 4000 grid conditions in about forty seconds on the pysheds chain.
-_MAX_DEM_CELLS: int = 16_000_000
 
 _ENGINE_NOTE = (
     "Engine: pysheds D8 (fill_pits -> fill_depressions -> resolve_flats -> "
@@ -199,11 +196,12 @@ def _open_dem(dem_path: str) -> tuple[Any, Any]:
             f"could not open DEM raster {dem_path!r}: {exc}"
         ) from exc
     rows, cols = int(grid.shape[0]), int(grid.shape[1])
-    if rows * cols > _MAX_DEM_CELLS:
+    ceiling = setting("DEM_MAX_CELLS")
+    if rows * cols > ceiling:
         raise HydrologyDemTooLargeError(
             f"DEM {dem_path!r} carries {rows * cols:,} cells "
             f"({rows:,} x {cols:,}), past the D8 clamp of "
-            f"{_MAX_DEM_CELLS:,}. Fetch the DEM over a smaller area, or at a "
+            f"{ceiling:,}. Fetch the DEM over a smaller area, or at a "
             "coarser resolution_m, and pass that layer instead."
         )
     return grid, dem

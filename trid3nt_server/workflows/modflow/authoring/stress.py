@@ -14,6 +14,7 @@ from typing import Any, Mapping
 
 from trid3nt_server.inputs.geometry import flatten_features
 from trid3nt_server.inputs.point import Point, require_viable
+from trid3nt_server.settings import setting
 
 from ..errors import ModflowError
 from .griddata import METRES, depth_of, field_name, field_value, leakance_of, sample, surface_of, surface_pixels
@@ -1156,10 +1157,6 @@ def _is_constant(status: Any) -> bool:
     return any(str(item).strip().lower() == "constant" for item in states)
 
 
-# USGS Elevation-Derived Hydrography Data Acquisition Specifications, Vertical Alignment of lake/pond polygons:
-# a water body's z-values match its hydro-flattened surface within 0.001 m; a pixel at the mode is within it.
-_FLAT_WITHIN_M = 0.001
-
 
 def _linked_flowlines(flowlines: Any, to_utm: Any) -> list[tuple[Any, str, Any, str]]:
     """The statement's flowline layer -> ``(UTM line, wbarea_permanent_identifier, slope, nhdplusid)`` for each line that names a waterbody area."""
@@ -1223,7 +1220,7 @@ def _flat_stage(found: list[float], count: int, *, frame: Any) -> tuple[float | 
     metres = _metres(frame, "Lakes stage reads a surface")
     # Islands and banks inside a polygon sit above the flattened water, so the water is the mode, not every pixel.
     ordered = np.sort(np.asarray(found, dtype=float))
-    within = _FLAT_WITHIN_M / metres
+    within = setting("FLAT_WITHIN_M") / metres
     low = np.searchsorted(ordered, ordered - within, side="left")
     high = np.searchsorted(ordered, ordered + within, side="right")
     best = int(np.argmax(high - low))

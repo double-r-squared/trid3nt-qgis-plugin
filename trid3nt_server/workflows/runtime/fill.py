@@ -39,6 +39,7 @@ from .journal import slot_choice
 from trid3nt_server.inputs.run_notes import (
     bind_coverage, bind_notes, cut_coverage, drain_coverage, drain_notes, journal_note)
 from trid3nt_server.inputs.user_input import nearest
+from trid3nt_server.settings import bind_run, reset_run, split_keywords
 from trid3nt_server.inputs.temporal import RATE, STATE
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.fill")
@@ -790,6 +791,9 @@ class Fill:
     #: runs before the run's own channels open, so the launch restates them.
     said: tuple[list[str], list[Any], list[str]] = field(
         default_factory=lambda: ([], [], []))
+    #: The settings the run states in its keywords, by identifier, and the ones the fill has read: the launch binds the first and carries the second onto the journal.
+    settings: dict[str, Any] = field(default_factory=dict)
+    settings_read: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     @property
     def ready(self) -> bool:
@@ -833,8 +837,13 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
             reason="keywords takes a mapping of the engine's own keyword names "
             f"to values; got {type(keywords).__name__}.")
         keywords = {}
+    stated_settings, unsaid, keywords = split_keywords(keywords)
+    state.settings.update(stated_settings)
+    for name, reason in unsaid.items():
+        state.inputs[name] = Verdict(REJECTED, None, reason=reason, code="KEYWORD_REFUSED")
     values.update({str(name): value for name, value in keywords.items()})
     tokens = (bind_notes(), journal.bind_choices(), bind_coverage())
+    reading, run_token = journal.bind_settings(), bind_run(state.settings)
     try:
         found = _looked_up(state, values, set(keywords))
         declared = {row.name: row for row in wf.inputs}
@@ -876,6 +885,8 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
                 drain_notes, journal.drain_choices,
                 drain_coverage), tokens):
             held += drain(token)
+        state.settings_read.update(journal.drain_settings(reading))
+        reset_run(run_token)
     return state
 
 

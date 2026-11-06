@@ -10,3 +10,6 @@ describe_keywords:
 - which khione keyword governs frazil ice
 - describe the tomawac dictionary entry for wind generation
 - what does the gaia keyword for bed porosity mean
+- which setting controls how far the bed fill searches for a measured value
+- list the changeable settings the system carries and their defaults
+- what does the settings dictionary say about the merge cell ceiling

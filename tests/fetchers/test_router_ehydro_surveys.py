@@ -13,6 +13,8 @@ import datetime as _dt
 
 import pytest
 
+from trid3nt_server.settings import setting
+
 from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 from trid3nt_server.tools.fetchers.hydrology.fetch_ehydro_surveys import hooks as eh
@@ -126,7 +128,7 @@ def test_the_southern_reachs_old_surveys_enter_where_nothing_newer_measured_it(s
     assert "CR_01_SCR_20211123_CS" in picked
     assert "CR_01_SCR_20200819_CS" in picked
     assert picked[0] == "PH_01_BRV_20260616_CS"
-    assert len(picked) <= eh._MAX_SURVEYS
+    assert len(picked) <= setting("EHYDRO_MAX_SURVEYS")
     # A survey lying wholly inside a newer one's footprint buys no bed.
     assert "CR_01_SCR_20251027_AD_BRS" not in picked
     assert "PH_01_BRV_20250828_CS" not in picked

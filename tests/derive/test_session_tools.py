@@ -130,10 +130,10 @@ async def test_no_session_is_a_typed_refusal(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_wait_that_runs_out_is_typed_and_cleans_up(monkeypatch) -> None:
+async def test_a_wait_that_runs_out_is_typed_and_cleans_up(monkeypatch, user_settings) -> None:
     emitter = _FakeEmitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: emitter)
-    monkeypatch.setenv("TRID3NT_SESSION_PROCESSING_TIMEOUT_S", "0.05")
+    user_settings(PROCESSING_TIMEOUT_S=0.05)
     with pytest.raises(processing.SessionProcessingTimeoutError):
         await run_qgis_algorithm("native:slope", {})
     assert not processing._PENDING_PROCESSING

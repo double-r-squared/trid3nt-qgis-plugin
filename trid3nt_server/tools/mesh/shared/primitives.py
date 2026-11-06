@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from trid3nt_server.tools.mesh.inputs import op_geometry, op_raster, raster_cell_m
+from trid3nt_server.settings import setting
 from trid3nt_server.tools.mesh.meshers import (
     Mesh,
     MeshToolError,
@@ -19,20 +20,14 @@ from trid3nt_server.tools.mesh.meshers import (
 
 __all__ = ["set_bed", "set_boundary_roles"]
 
-#: How the sampled surface is read between the raster's cell centres. ``nearest``
-#: is the labeled default: it returns a value the grid actually holds, which is
-#: what a bed has to be when the raster is already finer than the elements.
+#: How the sampled surface may be read between the raster's cell centres.
 _INTERPOLATIONS = ("nearest", "bilinear")
 
 #: The one conditioning a bed source is put through: the watershed delineator's pit/depression/flat chain. A basin delineated on a
 #: filled surface over a raw-sink bed ponds in pits the routing does not believe in.
 _PIT_FILL = "pit_fill"
 
-#: How far past the mesh's own extent the bed is fetched, as a fraction of each
-#: span. The mesh has nodes ON the extent's corners and a raster's rim rows carry
-#: the warp's fill, so the grid has to reach past where the domain ends.
-_BED_MARGIN_FRAC = 0.02
-def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
+def set_bed(mesh: Mesh, source: Any, interp: str | None = None,
             condition: str | None = None) -> Mesh:
     """Paint every node's elevation from the bed slot -> the mesh, bedded.
 
@@ -40,6 +35,7 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
     a bed of several is composed BEFORE here by merge_rasters and fill_nodata. A node the surface has nothing for refuses."""
     import numpy as np
 
+    interp = interp or setting("SAMPLE_INTERP")
     if str(interp) not in _INTERPOLATIONS:
         raise MeshToolError(
             "MESH_OP_BAD_VALUE",
@@ -394,9 +390,12 @@ def _extent(lonlat: Any) -> tuple[float, float, float, float]:
 
 def _grown(box: tuple[float, float, float, float]
            ) -> tuple[float, float, float, float]:
-    """The extent grown by :data:`_BED_MARGIN_FRAC` of its own span, in degrees."""
-    dx = (box[2] - box[0]) * _BED_MARGIN_FRAC
-    dy = (box[3] - box[1]) * _BED_MARGIN_FRAC
+    """The extent grown by the FETCH_MARGIN setting's fraction of its own span, in degrees.
+
+    The mesh has nodes ON the extent's corners and a raster's rim rows carry the warp's fill, so the grid has to reach past where the domain ends."""
+    margin = setting("FETCH_MARGIN")
+    dx = (box[2] - box[0]) * margin
+    dy = (box[3] - box[1]) * margin
     return (box[0] - dx, box[1] - dy, box[2] + dx, box[3] + dy)
 
 

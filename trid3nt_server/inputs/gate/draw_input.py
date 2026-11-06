@@ -13,6 +13,8 @@ from typing import Any, Literal
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.ws import SpatialInputRequestPayload
 
+from trid3nt_server.settings import setting
+
 logger = logging.getLogger("trid3nt_server.inputs.gate.draw_input")
 
 __all__ = ["DrawGeometry", "DrawOutcome", "gate_draw_input"]
@@ -30,10 +32,6 @@ _AFFORDANCE: dict[str, tuple[str, str | None]] = {
     "polygon": ("vector_draw", "aoi"),
     "polyline": ("vector_draw", "line"),
 }
-
-#: Wait cap. Same read-decision TTL as every other card gate; running out is a
-#: typed refusal, never a silent default.
-_DEFAULT_TTL_SECONDS = 300
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,12 +53,13 @@ async def gate_draw_input(
     geometry: str,
     prompt: str,
     purpose: str | None = None,
-    ttl_seconds: int = _DEFAULT_TTL_SECONDS,
+    ttl_seconds: int | None = None,
 ) -> DrawOutcome:
     """Present the draw card and WAIT for the geometry.
 
     ``purpose`` is what the card offers tools for; unstated, the draw kind's own.
     Returns an unstamped value, or a ``reason`` for the caller's typed refusal."""
+    ttl_seconds = ttl_seconds or setting("TTL_S")
     affordance = _AFFORDANCE.get(geometry)
     if affordance is None:
         return DrawOutcome(reason=f"{geometry!r} is not a draw kind")

@@ -16,9 +16,6 @@ from trid3nt_server.tools.fetchers._fetch_common import KeyAskError, KeyRejected
 
 __all__ = ["KeyDeclinedError", "ask_for_key"]
 
-#: Rounds a card is redrawn on an empty answer before the call is refused.
-_ROUNDS = 3
-
 
 class KeyDeclinedError(UserDeclinedError):
     """The person cancelled the card that asked for a source's key."""
@@ -57,7 +54,7 @@ async def ask_for_key(tool_name: str, asked: KeyAskError, *, emitter: Any) -> bo
 
     outcome = await gate_input_review(
         tool_name=tool_name, mode="user_gated", entries=[], params={},
-        present=card, blocked=blocked, max_rounds=_ROUNDS, emitter=emitter)
+        present=card, blocked=blocked, emitter=emitter)
     if outcome.proceed:
         return True
     if outcome.cancel_code == "declined":

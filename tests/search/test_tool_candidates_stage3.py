@@ -158,9 +158,9 @@ async def test_ask_mode_emits_card_and_choice_pins_tool(_scripted, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_auto_near_tie_emits_ambiguity_card(_scripted, monkeypatch):
+async def test_auto_near_tie_emits_ambiguity_card(_scripted, monkeypatch, user_settings):
     monkeypatch.delenv("TRID3NT_MODE", raising=False)  # auto default
-    monkeypatch.setenv("TRID3NT_TOOL_CHOICE_TIMEOUT_S", "0.2")
+    user_settings(TOOL_CHOICE_TIMEOUT_S=0.2)
     task, sock, state, captured = await _start_turn(monkeypatch, _NEAR_TIE)
     card = await _wait_for_card(sock)
     assert (card.get("payload") or {}).get("reason") == "ambiguity"
@@ -185,10 +185,10 @@ async def test_ambiguity_margin_zero_disables_auto_asks(_scripted, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_timeout_proceeds_autonomously_with_note(_scripted, monkeypatch):
+async def test_timeout_proceeds_autonomously_with_note(_scripted, monkeypatch, user_settings):
     """An unanswered card must NEVER hang: bounded timeout, note, autonomy."""
     monkeypatch.setenv("TRID3NT_MODE", "ask")
-    monkeypatch.setenv("TRID3NT_TOOL_CHOICE_TIMEOUT_S", "0.15")
+    user_settings(TOOL_CHOICE_TIMEOUT_S=0.15)
     task, sock, state, captured = await _start_turn(monkeypatch, _CONFIDENT)
     await _wait_for_card(sock)
     # No reply -- the turn must still complete promptly.

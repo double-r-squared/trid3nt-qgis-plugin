@@ -13,7 +13,7 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.processing_contracts import ProcessingRequestPayload
 
 from trid3nt_server.inputs.gate.pending import _PENDING_PROCESSING
-from trid3nt_server.server.config import _env_float
+from trid3nt_server.settings import setting
 
 if TYPE_CHECKING:
     from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
@@ -29,10 +29,9 @@ __all__ = [
 ]
 
 def _timeout_s() -> float:
-    """Wall clock a session run may take before the call resolves as a timeout
-    (``TRID3NT_SESSION_PROCESSING_TIMEOUT_S``, default 600): an algorithm over a
+    """Wall clock a session run may take before the call resolves as a timeout (the PROCESSING_TIMEOUT_S setting): an algorithm over a
     large raster runs for minutes, and the cap keeps a turn from hanging."""
-    return _env_float("TRID3NT_SESSION_PROCESSING_TIMEOUT_S", 600.0)
+    return setting("PROCESSING_TIMEOUT_S")
 
 
 class SessionProcessingError(RuntimeError):

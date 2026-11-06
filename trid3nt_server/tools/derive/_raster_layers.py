@@ -12,6 +12,7 @@ from typing import Any, Mapping
 from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.inputs.user_input import UserInputError
+from trid3nt_server.settings import setting
 
 NODATA = float("nan")
 #: The band-2 codes no input's place reaches.
@@ -186,10 +187,6 @@ def polygons(doc: Any) -> list[dict[str, Any]]:
             if str(g.get("type")) in ("Polygon", "MultiPolygon")]
 
 
-#: The most cells a coverage read builds over a cut; a finer raster is read on
-#: a coarser grid for the count, never for its values.
-_COVERAGE_CELLS = 4_000_000
-
 
 def over_the_cut(won: Any, crs: Any, transform: Any, polygon: Any
                  ) -> tuple[Any, Any]:
@@ -216,8 +213,9 @@ def over_the_cut(won: Any, crs: Any, transform: Any, polygon: Any
     north = max([north, *(b[3] for b in bounds)])
     cell = abs(float(transform.a))
     count = (east - west) * (north - south) / (cell * cell)
-    if count > _COVERAGE_CELLS:
-        cell *= math.sqrt(count / _COVERAGE_CELLS)
+    ceiling = setting("COVERAGE_CELLS")
+    if count > ceiling:
+        cell *= math.sqrt(count / ceiling)
     width = max(1, int(math.ceil((east - west) / cell)))
     height = max(1, int(math.ceil((north - south) / cell)))
     grid = from_origin(west, north, cell, cell)

@@ -947,6 +947,7 @@ class Trid3ntDock(QDockWidget):
             connected=self.bridge.running,
             on_charts=self._show_charts_window,
             on_library=self._show_library_window,
+            on_set_setting=self._change_setting,
         )
         dlg.exec()
         # The next send recomputes the AOI. An explicit preset change applies here, not gated on
@@ -1935,6 +1936,18 @@ class Trid3ntDock(QDockWidget):
             )
         except Exception as exc:  # noqa: BLE001
             self._pending.add_note(f"!run send failed: {exc}", error=True)
+
+    def _change_setting(self, name: str, value, reset: bool) -> None:
+        """Ask the agent to change one user setting: set_config runs outside the model loop and opens its card in the chat."""
+        args = {"name": name, "scope": "user"}
+        args.update({"reset": True} if reset else {"value": value})
+        text = f"!run set_config {json.dumps(args)}"
+        if not (self._case_id and self.bridge.running):
+            self.status_label.setText("Not connected -- open Settings to connect")
+            return
+        run_inv = parse_run_invocation(text)
+        if run_inv is not None:
+            self._send_run_invocation(text, run_inv)
 
     def _send(self) -> None:
         # Read the full document (toPlainText); the composer is multi-line.

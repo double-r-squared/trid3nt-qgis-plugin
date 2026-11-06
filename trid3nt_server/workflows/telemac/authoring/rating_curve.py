@@ -87,7 +87,7 @@ def _outlet_manning(landcover: Any, lonlat: Any, roughness: Mapping[Any, Any],
                     unmapped: Any) -> list[float]:
     table = {int(code): tuple(row) for code, row in dict(roughness).items()}
     return [float(table.get(int(round(float(code))), tuple(unmapped))[1])
-            for code in sample_layer_at_nodes(landcover, lonlat)]
+            for code in sample_layer_at_nodes(landcover, lonlat, interp="nearest")]
 
 
 def _measured_outlet(topology: Mapping[str, Any], node_xy: Any, node_bed: Any,

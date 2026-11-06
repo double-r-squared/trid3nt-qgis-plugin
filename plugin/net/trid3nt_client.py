@@ -37,7 +37,9 @@ __all__ = [
     "CaseOpenInfo",
     "ModelListRequestError",
     "ProviderConfigRequestError",
+    "SettingsRequestError",
     "fetch_model_list",
+    "fetch_settings",
     "post_provider_config",
     "ConnectionClosed",
     "Debouncer",
@@ -514,6 +516,28 @@ def fetch_keyed_sources(base_url: str, timeout: float = 8.0) -> list:
                 "env_var": str(credential.get("env_var") or ""),
             }
     return [by_name[k] for k in sorted(by_name)]
+
+
+class SettingsRequestError(Exception):
+    """``fetch_settings`` failed -- transport, HTTP status, or a non-JSON body. Carries an honest, user-facing message."""
+
+
+def fetch_settings(base_url: str, timeout: float = 8.0) -> list:
+    """``GET {base_url}/api/settings`` -> the daemon's settings, each with its value in force and level. Any fault RAISES."""
+    url = f"{base_url.rstrip('/')}/api/settings"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, method="GET"), timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise SettingsRequestError(f"settings request failed (HTTP {exc.code})") from exc
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        raise SettingsRequestError(f"agent HTTP API unreachable at {url} ({exc})") from exc
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SettingsRequestError(f"settings returned non-JSON: {exc}") from exc
+    rows = payload.get("settings") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        raise SettingsRequestError("settings returned no list")
+    return [row for row in rows if isinstance(row, dict) and row.get("name")]
 
 
 class LibraryRequestError(Exception):

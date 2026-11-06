@@ -153,9 +153,9 @@ def test_a_wide_extent_over_few_cells_is_not_a_clamp(spec, tmp_path):
 def test_a_dem_past_the_cell_clamp_refuses(spec, tmp_path):
     """The clamp is read off the raster's declared shape, so the header alone
     settles it and nothing here allocates sixteen million cells."""
-    from trid3nt_server.tools.derive import _hydrology_common
+    from trid3nt_server.settings import setting
 
-    side = int(_hydrology_common._MAX_DEM_CELLS ** 0.5) + 1
+    side = int(setting("DEM_MAX_CELLS") ** 0.5) + 1
     path = str(tmp_path / "dense.tif")
     with rasterio.open(path, "w", driver="GTiff", height=side, width=side,
                        count=1, dtype="float32", crs="EPSG:4326", nodata=-9999.0,

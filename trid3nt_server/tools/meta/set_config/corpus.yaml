@@ -1,0 +1,11 @@
+set_config:
+- change the fill distance
+- set the maximum fill distance to 200 pixels for my account
+- set a setting
+- change a setting for this run only
+- raise the merge cell ceiling to 100 million cells
+- make the gate cards wait ten minutes before they expire
+- reset the fill distance to its default
+- change how far a hole in the bathymetry is filled from its measured neighbours
+- use bilinear sampling when the bed is read at the mesh nodes
+- how many rounds does a review card get, set it to five

@@ -13,6 +13,8 @@ from typing import Any, Mapping
 
 from trid3nt_contracts.execution import LayerURI, layer_seed
 
+from trid3nt_server.settings import setting
+
 from .user_input import UserInputError
 
 logger = logging.getLogger(__name__)
@@ -27,9 +29,6 @@ _REMEDIES = ("merge_rasters", "fill_nodata")
 #: The two shapes an elevation source arrives in.
 RASTER = "raster"
 DEPTH = "depth"
-
-#: The QGIS step a layer of soundings is gridded by before it is a bed.
-_GRID_STEP = "gdal:gridinversedistancenearestneighbor"
 
 #: What a surface of DEPTHS names its quantity as; a depth counts DOWN from the
 #: survey's zero and a bed counts UP, so it reaches the mesh only through the flip.
@@ -86,7 +85,7 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None,
             or artifact_class(value) == "vector":
         raise UserInputError(
             f"the {label} was handed a layer of points, and a bed is a raster: "
-            f"grid the soundings first with run_qgis_algorithm {_GRID_STEP} "
+            f"grid the soundings first with run_qgis_algorithm {setting('SOUNDING_GRID_ALGORITHM')} "
             "(QGIS's IDW) and hand this slot the raster it produces.",
             code="BED_POINTS")
     if water is not None:

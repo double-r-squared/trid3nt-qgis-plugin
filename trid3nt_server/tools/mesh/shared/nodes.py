@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from trid3nt_server.inputs.geometry import utm_epsg_for
+from trid3nt_server.settings import setting
 
 __all__ = [
     "interior_nodes",
@@ -82,16 +83,17 @@ def reproject_nodes_to_utm(points_lonlat: Any) -> tuple[Any, int]:
 
 
 def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any,
-                           interp: str = "nearest",
+                           interp: str | None = None,
                            fill_holes: bool = True) -> Any:
     """Sample a raster at (N,2) lon/lat nodes -> (N,) values, holes filled.
 
-    ``nearest`` returns a value the grid holds; ``bilinear`` interpolates. ``fill_holes=False`` leaves a node the grid
+    ``nearest`` returns a value the grid holds; ``bilinear`` interpolates; unstated, the SAMPLE_INTERP setting says which. ``fill_holes=False`` leaves a node the grid
     has nothing for as NaN, which a caller with a SECOND source to try has to see."""
     import numpy as np
     import rasterio
     from rasterio.warp import transform as warp_transform
 
+    interp = interp or setting("SAMPLE_INTERP")
     pts = np.asarray(points_lonlat, dtype=float)
     with rasterio.open(raster_path) as src:
         xs, ys = warp_transform(
@@ -122,7 +124,7 @@ def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any,
 
 
 def sample_layer_at_nodes(layer: Any, points_lonlat: Any,
-                          interp: str = "nearest") -> Any:
+                          interp: str | None = None) -> Any:
     """A fetched raster layer sampled at (N,2) lon/lat nodes -> (N,) values.
 
     The layer's ``uri`` names the raster, in the store or on disk."""
@@ -163,7 +165,7 @@ def _bilinear(src: Any, xs: Any, ys: Any, nodata: Any) -> Any:
     weight = map_coordinates(valid.astype(float), at, order=1, mode="nearest")
     # A stencil that touched a hole reports the hole rather than three quarters
     # of a value: the caller fills it once, honestly, with the rest.
-    return np.where(weight > 0.999, value, np.nan)
+    return np.where(weight > setting("SAMPLE_MIN_COVERAGE"), value, np.nan)
 
 
 def read_accepted_mesh_nodes(display_uri: str, *, utm_epsg: int | None = None

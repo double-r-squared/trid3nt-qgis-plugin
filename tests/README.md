@@ -44,12 +44,12 @@ instance fixtures, and nothing else has one.
 
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
-    make test-fetchers        # tests/fetchers                                                                              2404
+    make test-fetchers        # tests/fetchers                                                                              2405
     make test-spatial         # tests/derive tests/render tests/mesh                                         783
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      2766
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1159
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search                                      2780
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1161
     make test-model-surface   # tests/adapters tests/tools                                                                   613
-    make test-packages        # tests/contracts tests/plugin                                                                  762
+    make test-packages        # tests/contracts tests/plugin                                                                  764
 
 The source-text guards - history markers, dead references, the package maps,
 the template pages, banner comments, import walls, wiring pins, retired names,

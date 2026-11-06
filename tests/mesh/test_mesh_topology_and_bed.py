@@ -312,11 +312,17 @@ def test_the_bed_is_painted_at_the_nodes_and_the_row_it_came_from_is_named(tmp_p
     assert row[0]["basis"] == "producer"
 
 
-def test_the_interpolation_is_a_visible_default_off_a_declared_roster(tmp_path):
+def test_the_interpolation_is_a_visible_default_off_a_declared_roster(tmp_path, user_settings):
     raster = _bed_raster(tmp_path)
     import inspect
 
-    assert inspect.signature(P.set_bed).parameters["interp"].default == "nearest"
+    assert inspect.signature(P.set_bed).parameters["interp"].default is None
+    from trid3nt_server.settings import setting
+
+    assert setting("SAMPLE_INTERP") == "nearest"
+    user_settings(SAMPLE_INTERP="bilinear")
+    assert setting("SAMPLE_INTERP") == "bilinear"
+    assert P.set_bed(_lonlat_mesh(), source=str(raster)).bed == pytest.approx([-18.0] * 4)
     assert P.set_bed(_lonlat_mesh(), source=str(raster),
                      interp="bilinear").bed == pytest.approx([-18.0] * 4)
     with pytest.raises(MeshToolError) as excinfo:

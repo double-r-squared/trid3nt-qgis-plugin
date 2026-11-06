@@ -23,6 +23,7 @@ from trid3nt_server.inputs.run_notes import (
     bind_coverage, bind_notes, drain_coverage, drain_notes)
 from trid3nt_server.inputs.slots import BED, DOMAIN, Slot
 from trid3nt_server.inputs.user_input import WireArgsError
+from trid3nt_server.settings import bind_run, clear_session_run, reset_run
 
 from . import journal
 from .errors import DeclarationError, DeclarativeError, said
@@ -68,6 +69,8 @@ class RunResult:
     inputs: dict[str, Any] = field(default_factory=dict)
     outputs: list[dict[str, Any]] = field(default_factory=list)
     choices: list[SourceChoice] = field(default_factory=list)
+    #: The settings the run read, by name, with the value in force and the level it resolved at.
+    settings: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 class Workflow:
@@ -303,6 +306,7 @@ class Workflow:
             logger.exception("%s unexpected failure", self.name)
             return self._error(f"{self.error_prefix}_INTERNAL_ERROR", exc)
         run.notes[:0] = state.notes
+        run.settings = {**state.settings_read, **run.settings}
         return await self._publish(run, time.monotonic() - started,
                                    supplied=dict(state.env.supplied))
 
@@ -314,6 +318,7 @@ class Workflow:
         token = bind_domain(state.domain)
         notes, outputs = bind_notes(), journal.bind_outputs()
         choices, coverage = journal.bind_choices(), bind_coverage()
+        reading, run_token = journal.bind_settings(), bind_run(state.settings)
         restate(state)
         # The drain lives only in the finally so a second reset never replaces the run's own error.
         try:
@@ -325,6 +330,8 @@ class Workflow:
                 published = journal.drain_outputs(outputs)
                 matched = journal.drain_choices(choices)
                 drain_coverage(coverage)
+                read = journal.drain_settings(reading)
+                reset_run(run_token)
         except Exception as exc:
             for note in said_notes:
                 exc.add_note(f"also missing from this run: {note}")
@@ -333,6 +340,7 @@ class Workflow:
         run.entries = provenance_entries(env.inputs, self.inputs)
         run.inputs = dict(env.inputs)
         run.notes += said_notes
+        run.settings = {**read, **run.settings}
         run.outputs += published
         run.choices += matched
         return run
@@ -434,8 +442,9 @@ class Workflow:
             result=result, wall_seconds=round(wall_seconds, 3),
             origin=journal.run_origin(live_session=current_emitter() is not None),
             notes=list(notes), outputs=run.outputs,
-            mesh=run.results.get("mesh"),
+            mesh=run.results.get("mesh"), settings=run.settings,
         ))
+        clear_session_run()
 
 
 #: Controls every workflow carries: whether the run pauses, whether a kept mesh is rebuilt, the raw keyword floor,

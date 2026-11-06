@@ -601,7 +601,8 @@ def _sampled_step(observed: Observation, solved: Solved, times: Any) -> int:
     asked at holds, the one nearest its sample; with none in that window, the nearest saved time, said on the journal."""
     from datetime import timedelta
 
-    from trid3nt_server.inputs.observation import _WINDOW_DAYS, _in_window
+    from trid3nt_server.inputs.observation import _in_window
+    from trid3nt_server.settings import setting
     from trid3nt_server.tools.search.match import instant
 
     if len(times) == 1:
@@ -621,7 +622,7 @@ def _sampled_step(observed: Observation, solved: Solved, times: Any) -> int:
         nearest = min(range(len(saved)), key=lambda i: abs(saved[i] - asked))
         journal_note(
             f"the reading is compared at {asked.isoformat()}, and the run saved no "
-            f"time within {_WINDOW_DAYS:g} days before it or a day after, so it is "
+            f"time within {setting("OBSERVATION_WINDOW_DAYS"):g} days before it or a day after, so it is "
             f"checked against the nearest saved time, {saved[nearest].isoformat()}, "
             f"{abs(saved[nearest] - asked).days} days away.")
         return nearest

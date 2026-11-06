@@ -14,6 +14,8 @@ import math
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
+from trid3nt_server.settings import setting
+
 from .temporal import (
     Series,
     convert_units,
@@ -39,11 +41,6 @@ _CODE = "OBSERVATION_INVALID"
 #: reported; the journal note needs both to find the number again.
 _STAMP_FIELDS = ("result_date", "valid_time", "datetime", "date_time")
 _SITE_FIELDS = ("site_id", "station_id", "feature_id")
-
-#: How far back of the moment a run asks at a SAMPLE still speaks for the water it was
-#: taken from: what a body carries drifts with the season. A row that states no moment
-#: asks about none, and every sample it fetched is a candidate.
-_WINDOW_DAYS = 30.0
 
 #: How far AHEAD of the asked moment a record may be read when it sampled nothing before
 #: it: one of the record's OWN cadences, so a daily record's same-day reading is that
@@ -233,7 +230,7 @@ def _in_window(sampled: Any, at: Any,
     if taken is None:
         return False
     if taken <= asked:
-        return asked - taken <= dt.timedelta(days=_WINDOW_DAYS)
+        return asked - taken <= dt.timedelta(days=setting("OBSERVATION_WINDOW_DAYS"))
     return taken - asked <= cadence
 
 
@@ -274,7 +271,7 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
         raise ObservationError(
             code,
             f"{label} reports {measures} near this domain, but nothing sampled "
-            f"within {_WINDOW_DAYS:g} days of {at}: the nearest reading is from "
+            f"within {setting("OBSERVATION_WINDOW_DAYS"):g} days of {at}: the nearest reading is from "
             "another moment, and a sample outside the window this run is about "
             "is not this run's water. State the value on the call, or ask about "
             "a moment a sample was taken near.")
@@ -299,7 +296,7 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
         from .run_notes import journal_note
 
         journal_note(f"{len(found)} sites of {label} report {measures} within "
-                     f"{_WINDOW_DAYS:g} days of {at}, each at its own sample; a "
+                     f"{setting("OBSERVATION_WINDOW_DAYS"):g} days of {at}, each at its own sample; a "
                      "site the mesh does not hold is left out and said.")
         return found
     _journal(found[0], opens=opens, stated=False)

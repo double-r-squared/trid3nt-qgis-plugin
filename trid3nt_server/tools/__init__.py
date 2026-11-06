@@ -175,6 +175,7 @@ from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 from .search.search_tools import search_tools  # noqa: E402,F401
 from .search.find_sources import find_sources  # noqa: E402,F401
 from .search.describe_keywords.describe_keywords import describe_keywords  # noqa: E402,F401
+from .meta.set_config.set_config import set_config  # noqa: E402,F401
 from trid3nt_server.inputs.gate import spatial_input_tool  # noqa: E402,F401
 
 from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import telemac_dye_release as _telemac_dye_release  # noqa: E402,F401

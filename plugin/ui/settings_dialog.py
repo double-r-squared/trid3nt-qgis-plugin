@@ -26,7 +26,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ..plugin_settings import PluginSettings
 from ..net.auth_broker import LANGUAGE_MODEL_CREDENTIAL, AuthBroker, key_entries
-from ..net.tasks import _KeyedSourcesTask, _ModelListTask, _ProviderConfigTask
+from ..net.tasks import _KeyedSourcesTask, _ModelListTask, _ProviderConfigTask, _SettingsTask
 
 
 #: What a Keys entry says and the colour it is drawn in: red the provider refused it, green stored, grey no key.
@@ -95,9 +95,13 @@ class SettingsDialog(QDialog):
         connected: bool = False,
         on_charts=None,
         on_library=None,
+        on_set_setting=None,
     ):
         super().__init__(parent)
         self._settings = settings
+        self._on_set_setting = on_set_setting
+        self._setting_rows: dict = {}
+        self._settings_task: Optional["_SettingsTask"] = None
         # Keep-alive refs for model-list fetch tasks; set BEFORE _reload_model_choices runs.
         self._model_list_tasks: List["_ModelListTask"] = []
         self._keys_task: Optional["_KeyedSourcesTask"] = None
@@ -217,6 +221,29 @@ class SettingsDialog(QDialog):
         self._refresh_keys()
         self._load_keyed_sources()
 
+        # One scroll list of every changeable setting, read off the daemon. Set and Reset ask the agent to run set_config, which opens its card in the chat.
+        self.config_list = QListWidget()
+        self.config_list.setMaximumHeight(150)
+        self.config_list.currentItemChanged.connect(self._show_setting)
+        form.addRow("Settings", self.config_list)
+        self.config_help_lbl = QLabel("")
+        self.config_help_lbl.setWordWrap(True)
+        self.config_edit = QLineEdit()
+        self.config_set_btn = QPushButton("Set")
+        self.config_set_btn.clicked.connect(self._set_setting)
+        self.config_reset_btn = QPushButton("Reset")
+        self.config_reset_btn.clicked.connect(self._reset_setting)
+        self._config_detail = QWidget()
+        config_detail = QHBoxLayout(self._config_detail)
+        config_detail.setContentsMargins(0, 0, 0, 0)
+        config_detail.addWidget(self.config_help_lbl, 2)
+        config_detail.addWidget(self.config_edit, 1)
+        config_detail.addWidget(self.config_set_btn)
+        config_detail.addWidget(self.config_reset_btn)
+        self._config_detail.setVisible(False)
+        form.addRow("", self._config_detail)
+        self._load_settings()
+
         self._form = form
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
@@ -238,6 +265,78 @@ class SettingsDialog(QDialog):
         self._push_provider_config()
         self._set_key()
         super().accept()
+
+    def _load_settings(self) -> None:
+        """Read the daemon's settings off-thread so a dead agent never freezes the dialog."""
+        task = _SettingsTask(self._resolve_http_base(), self)
+        self._settings_task = task
+        task.finished.connect(self._on_settings)
+        task.errored.connect(self._on_settings_errored)
+        task.start()
+
+    def _on_settings(self, rows: list) -> None:
+        try:
+            self._setting_rows = {row["name"]: row for row in rows}
+            self.config_list.blockSignals(True)
+            self.config_list.clear()
+            for row in rows:
+                item = QListWidgetItem(f"{row['family']}: {row['name']} = {row['value']} ({row['level']})")
+                item.setData(Qt.ItemDataRole.UserRole, row["name"])
+                item.setToolTip(f"{row['help']}\nDefault {row['default']}. Source: {row['source']}")
+                if row["level"] != "default":
+                    item.setForeground(QColor(_KEY_STATE_COLOURS["stored"]))
+                self.config_list.addItem(item)
+            self.config_list.blockSignals(False)
+        except RuntimeError:
+            return  # the dialog closed mid-fetch
+
+    def _on_settings_errored(self, message: str) -> None:
+        try:
+            self.config_list.setToolTip(f"Settings are not listed: {message}")
+        except RuntimeError:
+            return
+
+    def _selected_setting(self) -> Optional[dict]:
+        item = self.config_list.currentItem()
+        return self._setting_rows.get(item.data(Qt.ItemDataRole.UserRole)) if item is not None else None
+
+    def _show_setting(self, item, *_previous) -> None:
+        """Click a setting: what it decides, its range and the field its value is typed in."""
+        row = self._selected_setting()
+        self._config_detail.setVisible(row is not None)
+        if row is None:
+            return
+        bounds = row.get("bounds")
+        range_text = f" ({bounds[0]:g} to {bounds[1]:g} {row['unit']})" if bounds and bounds[1] < 1e11 else (
+            f" (at least {bounds[0]:g} {row['unit']})" if bounds else (f" ({row['unit']})" if row["unit"] else ""))
+        choices = f" One of: {', '.join(str(c) for c in row['choices'])}." if row.get("choices") else ""
+        self.config_help_lbl.setText(f"{row['help']}{range_text}{choices}")
+        self.config_edit.setText(str(row["value"]))
+        self.config_reset_btn.setEnabled(row["level"] != "default")
+
+    def _typed_setting(self, row: dict, text: str):
+        """The typed text as the setting's own type, or ``None`` where it does not parse (the agent refuses a value out of range on its own card)."""
+        try:
+            if row["type"] == "INTEGER":
+                return int(text)
+            if row["type"] == "REAL":
+                return float(text)
+        except ValueError:
+            return None
+        return text.strip() or None
+
+    def _set_setting(self) -> None:
+        row = self._selected_setting()
+        value = self._typed_setting(row, self.config_edit.text()) if row else None
+        if row is None or value is None or self._on_set_setting is None:
+            return
+        self._act_and_close(lambda: self._on_set_setting(row["name"], value, False))
+
+    def _reset_setting(self) -> None:
+        row = self._selected_setting()
+        if row is None or self._on_set_setting is None:
+            return
+        self._act_and_close(lambda: self._on_set_setting(row["name"], None, True))
 
     def _load_keyed_sources(self) -> None:
         """Add the credentials the daemon's rows declare to the entry's choices, off-thread so

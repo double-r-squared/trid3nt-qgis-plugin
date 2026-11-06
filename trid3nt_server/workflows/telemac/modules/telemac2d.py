@@ -425,7 +425,7 @@ def _infiltration(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     points_utm, cells, bed, lonlat = accepted_mesh_nodes(value["mesh"])
     table = {int(code): tuple(row) for code, row in dict(value["table"]).items()}
     rows = [table.get(int(round(float(code))), tuple(value["unmapped"]))
-            for code in sample_layer_at_nodes(value["landcover"], lonlat)]
+            for code in sample_layer_at_nodes(value["landcover"], lonlat, interp="nearest")]
     uniform = value.get("uniform_cn")
     cn2 = [float(uniform) if uniform is not None else float(row[0]) for row in rows]
     if value.get("steep_slope_correction"):

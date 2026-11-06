@@ -17,9 +17,10 @@ from typing import Any, Mapping, Sequence
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.journal")
 
-__all__ = ["append_record", "bind_choices", "bind_outputs", "drain_choices",
-           "drain_outputs", "journal_outputs", "journal_path", "read_records",
-           "run_choices", "run_origin", "run_outputs", "slot_choice"]
+__all__ = ["append_record", "bind_choices", "bind_outputs", "bind_settings",
+           "drain_choices", "drain_outputs", "drain_settings", "journal_outputs",
+           "journal_path", "read_records", "run_choices", "run_origin",
+           "run_outputs", "setting_read", "slot_choice"]
 
 #: Layers the run has published, drained into the record: the one place outputs are read back from.
 _OUTPUTS: contextvars.ContextVar[list[dict[str, Any]] | None] = contextvars.ContextVar(
@@ -72,6 +73,30 @@ def drain_choices(token: contextvars.Token) -> list[Any]:
     chosen = _CHOICES.get() or []
     _CHOICES.reset(token)
     return list(chosen)
+
+
+#: The settings the run has read, by name: the value in force and the level it resolved at.
+_SETTINGS: contextvars.ContextVar[dict[str, dict[str, Any]] | None] = contextvars.ContextVar(
+    "trid3nt_run_settings_read", default=None)
+
+
+def setting_read(name: str, value: Any, level: str) -> None:
+    """Record that the run in progress read ``name``. Outside a run, a no-op."""
+    read = _SETTINGS.get()
+    if read is not None:
+        read[name] = {"value": value, "level": level}
+
+
+def bind_settings() -> contextvars.Token:
+    """Open a settings-read channel for one run -> the token that closes it."""
+    return _SETTINGS.set({})
+
+
+def drain_settings(token: contextvars.Token) -> dict[str, dict[str, Any]]:
+    """Close the channel and return the settings read."""
+    read = _SETTINGS.get() or {}
+    _SETTINGS.reset(token)
+    return dict(read)
 
 
 #: Env var a DRIVER sets to label its runs, so telemetry never learns a default from a canary's pinned window.
@@ -137,7 +162,8 @@ def build_record(*, run_id: str | None, engine: str | None,
                  notes: Sequence[str],
                  correct_end: bool | None = None,
                  outputs: Sequence[Mapping[str, Any]] = (),
-                 mesh: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                 mesh: Mapping[str, Any] | None = None,
+                 settings: Mapping[str, Mapping[str, Any]] = {}) -> dict[str, Any]:
     """One run record, from what the publish stage already holds."""
     return {
         "run_id": run_id,
@@ -161,6 +187,9 @@ def build_record(*, run_id: str | None, engine: str | None,
         "notes": list(notes),
         # What the run put on the map: the one place outputs are read back once artifacts and session are gone.
         "outputs": [dict(layer) for layer in outputs],
+        # The settings the run read: name, the value in force and the level it resolved at (default, user or run).
+        "settings": [{"name": name, "value": _small(row.get("value")), "level": row.get("level")}
+                     for name, row in sorted(settings.items())],
     }
 
 
