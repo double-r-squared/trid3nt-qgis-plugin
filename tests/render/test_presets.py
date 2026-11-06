@@ -136,7 +136,7 @@ def test_a_reversed_ramp_is_the_base_reversed():
 
 def test_an_unknown_ramp_takes_the_default_never_grey():
     assert presets.ramp_stops("chartreuse_deluxe") == presets.ramp_stops(
-        presets.DEFAULT_RAMP)
+        "viridis")
 
 
 def test_the_relief_ramp_is_land_coloured_and_is_not_the_default():
@@ -144,7 +144,7 @@ def test_the_relief_ramp_is_land_coloured_and_is_not_the_default():
     itself: it resolves to its own stops rather than warning through to the
     default, and it opens on land rather than on sub-sea blue."""
     stops = presets.ramp_stops("terrain")
-    assert stops != presets.ramp_stops(presets.DEFAULT_RAMP)
+    assert stops != presets.ramp_stops("viridis")
     red, green, blue = (int(stops[0][i:i + 2], 16) for i in (1, 3, 5))
     assert green > red and green > blue
 
@@ -253,3 +253,17 @@ def test_a_label_with_xml_punctuation_survives_the_writer():
     resolved = presets.resolve(Preset(units='m<sup>3</sup>/s & "cfs"'))
     items = _doc(resolved).findall("./pipe/rasterrenderer/rastershader/colorrampshader/item")
     assert items[-1].get("label").endswith('m<sup>3</sup>/s & "cfs"')
+
+
+def test_the_default_ramp_and_clip_are_settings(user_settings):
+    """A preset that names no ramp or clip takes the DEFAULT_RAMP and CLIP_PERCENTILES in force."""
+    bare = presets.resolve(Preset(kind="continuous"), read_range=lambda scale: (0.0, 1.0))
+    assert bare.preset.ramp == "viridis" and bare.preset.scale.clip == (2.0, 98.0)
+    user_settings(DEFAULT_RAMP="magma", CLIP_PERCENTILES=[5, 95])
+    seen = []
+    mine = presets.resolve(Preset(kind="continuous"), read_range=lambda scale: seen.append(scale.clip) or (0.0, 1.0))
+    assert mine.preset.ramp == "magma" and seen == [(5.0, 95.0)]
+    assert presets.ramp_stops("chartreuse_deluxe") == presets.ramp_stops("magma")
+    declared = presets.resolve(Preset(kind="continuous", ramp="blues", scale=Scale(clip=(1.0, 99.0))),
+                               read_range=lambda scale: (0.0, 1.0))
+    assert declared.preset.ramp == "blues" and declared.preset.scale.clip == (1.0, 99.0)

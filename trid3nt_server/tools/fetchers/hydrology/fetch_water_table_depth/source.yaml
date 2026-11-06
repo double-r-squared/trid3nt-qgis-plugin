@@ -28,7 +28,7 @@ params:
 gates:
   conus_only: true
   # The staged grid's REAL bounds, read off the object itself -- not the generic
-  # router._CONUS_BBOX (gridmet's, south 25.05), which would false-refuse AOIs
+  # CONUS_LAND envelope (the Census conterminous US, south 24.52), which would false-refuse AOIs
   # this grid covers. The envelope is the cheap pre-fetch reject for AOIs the
   # object certainly cannot serve; an AOI inside it but off the model's active
   # domain (the Florida Keys, the Great Lakes, open ocean) is not refused here,

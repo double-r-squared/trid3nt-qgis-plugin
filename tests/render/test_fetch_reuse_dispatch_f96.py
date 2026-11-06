@@ -27,9 +27,9 @@ from trid3nt_contracts.ws import PayloadConfirmationEnvelopePayload
 def _cap_gate_waits(monkeypatch):
     """Cap every user-decision gate wait so a headless run never hangs.
 
-    Production leaves ``TRID3NT_GATE_WAIT_CAP_S`` unset; the approver below answers
+    Production leaves ``GATE_WAIT_CAP_S`` unset; the approver below answers
     in milliseconds, so the cap is a fail-closed backstop, not the path exercised."""
-    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
+    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
 
 
 @pytest_asyncio.fixture(autouse=True)

@@ -40,6 +40,7 @@ __all__ = [
     "SettingsRequestError",
     "fetch_model_list",
     "fetch_settings",
+    "typed_setting",
     "post_provider_config",
     "ConnectionClosed",
     "Debouncer",
@@ -520,6 +521,24 @@ def fetch_keyed_sources(base_url: str, timeout: float = 8.0) -> list:
 
 class SettingsRequestError(Exception):
     """``fetch_settings`` failed -- transport, HTTP status, or a non-JSON body. Carries an honest, user-facing message."""
+
+
+def typed_setting(row: dict, text: str):
+    """Text typed for a setting as the setting's own type, or ``None`` where it does not parse; the agent refuses a value out of range on its own card.
+
+    A setting whose value is a list takes its values comma-separated, brackets optional."""
+    try:
+        if isinstance(row.get("value"), list):
+            cast = int if row["type"] == "INTEGER" else float
+            items = [p.strip() for p in text.strip().strip("[]").split(",") if p.strip()]
+            return [cast(p) for p in items] or None
+        if row["type"] == "INTEGER":
+            return int(text)
+        if row["type"] == "REAL":
+            return float(text)
+    except ValueError:
+        return None
+    return text.strip() or None
 
 
 def fetch_settings(base_url: str, timeout: float = 8.0) -> list:

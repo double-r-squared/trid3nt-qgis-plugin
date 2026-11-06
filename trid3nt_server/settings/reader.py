@@ -70,30 +70,35 @@ def entry(name: str) -> "Slot":
 
 def typed(slot: "Slot", value: Any) -> Any:
     checked = slot.check(value)
-    return float(checked) if slot.type == "REAL" else checked
+    if slot.type != "REAL":
+        return checked
+    return [float(v) for v in checked] if isinstance(checked, list) else float(checked)
 
 
-_FILE: tuple[Path, tuple[int, int], dict[str, Any]] | None = None
+_FILE: tuple[Path, bytes, dict[str, Any]] | None = None
 
 
 def user_values() -> dict[str, Any]:
-    """The file's mapping, read again only when it changed on disk; an absent file states nothing."""
+    """The file's mapping, parsed again only when its bytes changed; an absent file states nothing.
+
+    The bytes are the key, never the file's stamp: two writes inside one clock tick at one size share a stamp."""
     global _FILE
     path = user_file()
     try:
-        found = path.stat()
-        stamp = (found.st_mtime_ns, found.st_size)
+        raw = path.read_bytes()
     except FileNotFoundError:
         return {}
-    if _FILE is not None and _FILE[:2] == (path, stamp):
+    except OSError as exc:
+        raise SettingsFileError(f"{path} is not readable: {exc}.") from exc
+    if _FILE is not None and _FILE[:2] == (path, raw):
         return _FILE[2]
     try:
-        values = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
+        values = json.loads(raw.decode("utf-8"))
+    except ValueError as exc:
         raise SettingsFileError(f"{path} is not readable JSON: {exc}.") from exc
     if not isinstance(values, dict):
         raise SettingsFileError(f"{path} must hold a mapping of setting names to values.")
-    _FILE = (path, stamp, values)
+    _FILE = (path, raw, values)
     return values
 
 

@@ -37,7 +37,7 @@ from typing import Any
 
 from trid3nt_server.tools.cache import record_provenance
 
-from ..._fetch_common import FetchError
+from ..._fetch_common import NHDPLUS_DOMAIN, FetchError
 from ..._router.hooks import register_hook
 
 logger = logging.getLogger(__name__)
@@ -106,9 +106,6 @@ _NLDI_BASE = "https://api.water.usgs.gov/nldi"
 #: Supported NWM products.
 _VALID_PRODUCTS: frozenset[str] = frozenset({"analysis_assim", "short_range"})
 
-#: CONUS bounding box (EPSG:4326) -- the NHDPlus v2.1 CONUS domain.
-_CONUS_BBOX: tuple[float, float, float, float] = (-130.0, 20.0, -60.0, 55.0)
-
 #: User-Agent per AWS Open Data + NOAA usage guidelines.
 _USER_AGENT = (
     "trid3nt/0.1 (Hazard Modeling Agent; "
@@ -157,13 +154,13 @@ def _validate_conus_bbox(bbox: tuple[float, float, float, float]) -> None:
     validation already covered shape, range and degeneracy; this adds the intersect
     gate over this source's own domain envelope, which is wider than the shared one."""
     min_lon, min_lat, max_lon, max_lat = bbox
-    if max_lon < _CONUS_BBOX[0] or min_lon > _CONUS_BBOX[2]:
+    if max_lon < NHDPLUS_DOMAIN[0] or min_lon > NHDPLUS_DOMAIN[2]:
         raise NWMStreamflowInputError(
-            f"bbox {bbox} does not intersect NWM CONUS domain {_CONUS_BBOX}"
+            f"bbox {bbox} does not intersect NWM CONUS domain {NHDPLUS_DOMAIN}"
         )
-    if max_lat < _CONUS_BBOX[1] or min_lat > _CONUS_BBOX[3]:
+    if max_lat < NHDPLUS_DOMAIN[1] or min_lat > NHDPLUS_DOMAIN[3]:
         raise NWMStreamflowInputError(
-            f"bbox {bbox} does not intersect NWM CONUS domain {_CONUS_BBOX}"
+            f"bbox {bbox} does not intersect NWM CONUS domain {NHDPLUS_DOMAIN}"
         )
 
 

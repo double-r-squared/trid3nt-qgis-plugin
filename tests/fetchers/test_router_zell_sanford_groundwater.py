@@ -268,15 +268,15 @@ def test_outside_conus_is_refused_naming_the_coverage_limit(spec, label, bbox):
 
 def test_envelope_is_the_staged_grids_own_bounds(spec):
     """Read off the staged objects, which share one grid. Borrowing the generic
-    router._CONUS_BBOX (gridmet's, south 25.05) would false-refuse AOIs this
+    CONUS_LAND envelope (the Census conterminous US) would false-refuse AOIs this
     grid covers."""
     assert tuple(spec.gates.conus_bbox) == (
         -127.873333, 23.235556, -65.362222, 51.546667,
     )
     # Strictly wider than the generic envelope on the south and west sides --
     # otherwise declaring a per-spec box bought nothing.
-    assert spec.gates.conus_bbox[1] < router._CONUS_BBOX[1]
-    assert spec.gates.conus_bbox[0] < router._CONUS_BBOX[0]
+    assert spec.gates.conus_bbox[1] < router.CONUS_LAND[1]
+    assert spec.gates.conus_bbox[0] < router.CONUS_LAND[0]
 
 
 def test_key_west_passes_the_gate_and_fails_honestly_on_the_read(spec, monkeypatch):

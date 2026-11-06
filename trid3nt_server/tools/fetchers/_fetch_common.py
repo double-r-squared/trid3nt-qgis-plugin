@@ -13,6 +13,7 @@ import math
 __all__ = [
     "MAX_PX_PER_AXIS",
     "MAX_TILES",
+    "NHDPLUS_DOMAIN",
     "FetchError",
     "UpstreamAPIError",
     "KeyAskError",
@@ -27,6 +28,9 @@ __all__ = [
 
 #: Source tiles one fetch may download before it refuses and asks for a narrower bbox.
 MAX_TILES = 64
+
+#: The NHDPlus v2.1 CONUS domain (EPSG:4326) the National Water Model and NLDI are built on; not the US land envelope.
+NHDPLUS_DOMAIN: tuple[float, float, float, float] = (-130.0, 20.0, -60.0, 55.0)
 
 
 class FetchError(RuntimeError):

@@ -365,6 +365,110 @@
       "mandatory": false,
       "default": 45.0,
       "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "CODE_EXEC_APPROVAL_TIMEOUT_S",
+      "identifier": "CODE_EXEC_APPROVAL_TIMEOUT_S",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How long the code-exec approval card waits for an answer before the parked call resolves as a timeout and the turn completes.",
+      "rubrique": [
+        "gate"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 180.0,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "DEFAULT_RAMP",
+      "identifier": "DEFAULT_RAMP",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The colour ramp a continuous layer is painted with when its declaration names none, and the ramp an unknown name falls back to.",
+      "rubrique": [
+        "render"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": "viridis",
+      "source": "matplotlib's default colormap: matplotlibrc \"#image.cmap:            viridis      # A colormap name (plasma, magma, etc.)\" https://github.com/matplotlib/matplotlib/blob/main/lib/matplotlib/mpl-data/matplotlibrc",
+      "choices": [
+        "blues",
+        "cividis",
+        "gnbu",
+        "gray",
+        "greens",
+        "hsv",
+        "inferno",
+        "magma",
+        "oranges",
+        "plasma",
+        "rdbu",
+        "rdylbu",
+        "rdylgn",
+        "reds",
+        "terrain",
+        "viridis",
+        "ylgn",
+        "ylgnbu",
+        "ylorrd"
+      ]
+    },
+    {
+      "keyword": "CLIP_PERCENTILES",
+      "identifier": "CLIP_PERCENTILES",
+      "type": "REAL",
+      "shape": "",
+      "size": 2,
+      "unbounded": false,
+      "help": "The low and high percentiles a data-scaled layer's colours stretch between; values past them take the end colours.",
+      "rubrique": [
+        "render"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": [
+        2.0,
+        98.0
+      ],
+      "source": "QGIS raster properties, Min/Max Value Settings: \"Cumulative count cut: Removes outliers. The standard range of values is 2% to 98%, but it can be adapted manually.\" https://docs.qgis.org/3.40/en/docs/user_manual/working_with_raster/raster_properties.html"
+    },
+    {
+      "keyword": "SOLVE_TIMEOUT_S",
+      "identifier": "SOLVE_TIMEOUT_S",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The least time a solve is waited on before it is cancelled as a typed timeout; an engine that estimates a longer run waits its estimate.",
+      "rubrique": [
+        "solve"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 7200.0,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "MAX_TURNS_PER_SESSION",
+      "identifier": "MAX_TURNS_PER_SESSION",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How many turns one session takes before it stops and asks for a new one; 0 takes no limit.",
+      "rubrique": [
+        "server"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 25,
+      "source": "TRID3NT engineering default."
     }
   ]
 }

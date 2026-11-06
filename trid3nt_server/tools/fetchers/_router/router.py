@@ -18,6 +18,8 @@ from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_contracts.gate_spec import GateSpec, LeverSpec
 
+from ..us_state_envelopes import CONUS_LAND
+
 #: The confirm gate for a heavy raster fetcher (one resolution_m lever, no ``confirmed`` injection);
 #: a source opts in with ``confirm_gate: fetch_resolution``.
 _PROVIDERS = "trid3nt_server.inputs.gate.cards.fetch_resolution"
@@ -68,7 +70,6 @@ __all__ = [
 #: Sentinel: no ``spec.dispatch`` condition matched; ``route()`` proceeds only on this.
 _NO_DISPATCH = object()
 
-_CONUS_BBOX: tuple[float, float, float, float] = (-124.77, 25.05, -67.06, 49.40)
 
 
 
@@ -93,7 +94,7 @@ def synthesize_payload_estimator(spec: SourceSpec) -> Callable[..., float]:
 
     def _sq_deg(bbox: Any) -> float:
         if not bbox:
-            cb = _CONUS_BBOX
+            cb = CONUS_LAND
             return (cb[2] - cb[0]) * (cb[3] - cb[1])
         try:
             w, s, e, n = bbox
@@ -168,7 +169,7 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
         return
     bsfx = bbox_error_suffix(spec)
     if g.conus_only:
-        envelope = g.conus_bbox or _CONUS_BBOX
+        envelope = g.conus_bbox or CONUS_LAND
         cw, cs, ce, cn = envelope
         w, s, e, n = bbox
         if e < cw or w > ce or n < cs or s > cn:

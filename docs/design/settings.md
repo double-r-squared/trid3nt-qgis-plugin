@@ -10,12 +10,15 @@ module that uses it; it is an entry in one dictionary, and the module calls
 
 `settings/module_input/settings.json` is a keyword dictionary in the engines' own
 format, read by `load_module_input`. A row's rubrique is its family (`bed`,
-`notes`, `gate`), its help says what it decides, its default is the cited
+`notes`, `gate`, `render`, `solve`, `server`), its help says what it decides, its default is the cited
 default, and its `source` quotes where the default comes from; a default with no
 published source says so (`TRID3NT engineering default.`). The range a value is
 refused outside, and its unit, sit in `settings/module_bounds.json`, the same
 sidecar the engines use. `describe_keywords(module="settings", query=...)`
 discovers entries; nothing else reads the dictionary for discovery.
+
+A value may be a list of fixed length (`CLIP_PERCENTILES` is a low and a high
+percentile); its range holds every item, and the dock takes it comma-separated.
 
 A name is spelled once. A judgment two modules used to hold separately (the
 gate card's time-to-live and rounds, the bed interpolation, the observation
@@ -51,5 +54,8 @@ list reads `GET /api/settings`, never the file, and its Set and Reset run
 ## What is not a setting
 
 A value a source, an engine or a format fixes; a bound that is a fact of the
-world; a wire constant. Environment variables stay for deployment and secrets:
-a variable that steers a setting is removed when the setting lands.
+world; a wire constant; an internal limit a person has no reason to change (a
+registry cap, a poll interval, a drain timeout, a heartbeat), which is one
+constant in one module. Environment variables stay for deployment and secrets:
+a variable that steers a setting is removed when the setting lands, and one that
+steers an internal limit becomes the constant.

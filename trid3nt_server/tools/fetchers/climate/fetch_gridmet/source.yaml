@@ -27,6 +27,8 @@ params:
   end_date:   {type: iso_date, required: true, max_range_days: 366, max_future_days: 1}
 gates:
   conus_only: true             # bbox must intersect gridMET CONUS domain
+  # gridMET's own native bounds, narrower than the conterminous US land envelope (south 25.05).
+  conus_bbox: [-124.77, 25.05, -67.06, 49.40]
 
 # --- ingestion (raster-COG / OPeNDAP sub-mode) ----------------------------
 ingest:

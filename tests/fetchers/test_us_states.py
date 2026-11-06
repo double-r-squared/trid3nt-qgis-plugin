@@ -102,3 +102,30 @@ def test_state_display_name_roundtrip() -> None:
 
 def test_state_display_name_marine_zone_echoes_code() -> None:
     assert state_display_name("GM") == "GM"
+
+
+def test_every_named_state_has_a_census_envelope_and_the_table_names_its_source() -> None:
+    from trid3nt_server.tools.fetchers import us_state_envelopes
+
+    assert set(STATE_NAME_TO_CODE.values()) <= set(us_state_envelopes.STATE_ENVELOPES)
+    assert us_state_envelopes.SOURCE.startswith("https://www2.census.gov/geo/tiger/GENZ")
+    assert str(us_state_envelopes.VINTAGE) in us_state_envelopes.SOURCE
+
+
+@pytest.mark.parametrize("bbox,expected", [
+    ((-87.6, 30.3, -87.4, 30.5), ["AL", "FL"]),     # Perdido Bay, the Alabama-Florida line
+    ((-81.9, 24.5, -81.7, 24.6), ["FL"]),           # Key West
+    ((173.0, 52.7, 173.4, 53.0), ["AK"]),           # Attu, west of the antimeridian
+    ((-179.5, 51.5, -178.5, 52.0), ["AK"]),         # the Aleutians east of the antimeridian
+    ((10.0, 45.0, 11.0, 46.0), []),
+])
+def test_a_bbox_selects_the_states_whose_envelope_it_touches(bbox, expected) -> None:
+    from trid3nt_server.tools.fetchers.us_states import states_intersecting_bbox
+
+    assert states_intersecting_bbox(bbox) == expected
+
+
+def test_a_source_keeps_only_the_states_it_serves() -> None:
+    from trid3nt_server.tools.fetchers.us_states import states_intersecting_bbox
+
+    assert states_intersecting_bbox((-87.6, 30.3, -87.4, 30.5), among=("FL", "GA")) == ["FL"]

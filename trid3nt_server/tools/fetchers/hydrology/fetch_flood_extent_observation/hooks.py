@@ -14,6 +14,8 @@ from typing import Any
 from trid3nt_contracts.execution import LegendKey
 from trid3nt_contracts.source_spec import SourceSpec
 
+from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
+
 from ..._router import hooks as _hooks
 from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
 
@@ -138,8 +140,8 @@ def _summarize_cog(data: bytes, bbox: tuple[float, float, float, float]) -> dict
             continue
         breakdown[MCDWD_CLASSES.get(int(val), f"class_{int(val)}")] = int(cnt)
     flood_px = int(((arr == 2) | (arr == 3)).sum())
-    cell_km_lat = _CELL_DEG * 111.32
-    cell_km_lon = _CELL_DEG * 111.32 * math.cos(math.radians(lat_mid))
+    cell_km_lat = _CELL_DEG * METRES_PER_DEGREE / 1000.0
+    cell_km_lon = cell_km_lat * math.cos(math.radians(lat_mid))
     flood_area = flood_px * cell_km_lat * cell_km_lon
     return {
         "class_breakdown": breakdown,

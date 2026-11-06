@@ -27,7 +27,7 @@ from ..errors import (
 )
 from ..transport import READ_POLICY
 from trid3nt_server.render.cog import array_to_cog_bytes
-from trid3nt_server.render.presets import DEFAULT_CLIP
+from trid3nt_server.settings import setting
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.executors.stac_raster"
@@ -567,8 +567,9 @@ def _rgb_render_joint_stretch(spec: SourceSpec, bands: list[Any], bad: Any, rend
             "scene produced an all-cloud / all-nodata window over the AOI "
             "(no clear pixels to render)",
             spec.empty_error_suffix)
-    lo = float(np.nanpercentile(clear_vals, float(render.get("lo_pct", DEFAULT_CLIP[0]))))
-    hi = float(np.nanpercentile(clear_vals, float(render.get("hi_pct", DEFAULT_CLIP[1]))))
+    clip_lo, clip_hi = setting("CLIP_PERCENTILES")
+    lo = float(np.nanpercentile(clear_vals, float(render.get("lo_pct", clip_lo))))
+    hi = float(np.nanpercentile(clear_vals, float(render.get("hi_pct", clip_hi))))
     span = max(float(render.get("span_floor", 1e-6)), hi - lo)
     rgb = np.nan_to_num(np.clip((stack - lo) / span * 255.0, 0.0, 255.0),
                         nan=0.0).astype("uint8")
@@ -591,8 +592,9 @@ def _rgb_render_colormap(spec: SourceSpec, band: Any, bad: Any, render: dict) ->
             "thermal band produced an all-cloud / all-nodata window over the AOI "
             "(no valid surface-temperature pixels to render)",
             spec.empty_error_suffix)
-    lo = float(np.nanpercentile(vals, float(render.get("lo_pct", DEFAULT_CLIP[0]))))
-    hi = float(np.nanpercentile(vals, float(render.get("hi_pct", DEFAULT_CLIP[1]))))
+    clip_lo, clip_hi = setting("CLIP_PERCENTILES")
+    lo = float(np.nanpercentile(vals, float(render.get("lo_pct", clip_lo))))
+    hi = float(np.nanpercentile(vals, float(render.get("hi_pct", clip_hi))))
     span = max(float(render.get("span_floor", 1e-6)), hi - lo)
     norm = np.nan_to_num(np.clip((band - lo) / span, 0.0, 1.0), nan=0.0)
     try:

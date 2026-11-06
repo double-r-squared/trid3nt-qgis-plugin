@@ -24,6 +24,7 @@ from trid3nt_contracts.source_spec import SourceSpec
 
 from ..._router import hooks as _hooks
 from ..._router.errors import router_empty_error, router_input_error
+from ...us_states import states_intersecting_bbox
 
 logger = logging.getLogger(__name__)
 
@@ -49,34 +50,6 @@ _IEM_DCP_STATES = (
     "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC", "PR",
 )
 
-_STATE_BBOX: dict[str, tuple[float, float, float, float]] = {
-    "AL": (-88.6, 30.1, -84.8, 35.0), "AK": (-180.0, 51.2, -129.9, 71.4),
-    "AZ": (-114.9, 31.3, -109.0, 37.0), "AR": (-94.7, 33.0, -89.6, 36.5),
-    "CA": (-124.5, 32.5, -114.1, 42.0), "CO": (-109.1, 36.9, -102.0, 41.0),
-    "CT": (-73.7, 40.9, -71.7, 42.1), "DE": (-75.8, 38.4, -75.0, 39.9),
-    "FL": (-87.7, 24.4, -79.9, 31.0), "GA": (-85.6, 30.4, -80.8, 35.0),
-    "HI": (-160.3, 18.9, -154.8, 22.2), "ID": (-117.3, 41.9, -111.0, 49.0),
-    "IL": (-91.5, 36.9, -87.0, 42.5), "IN": (-88.1, 37.7, -84.7, 41.8),
-    "IA": (-96.7, 40.4, -90.1, 43.5), "KS": (-102.1, 36.9, -94.6, 40.0),
-    "KY": (-89.6, 36.5, -81.9, 39.1), "LA": (-94.1, 28.9, -88.8, 33.0),
-    "ME": (-71.1, 43.0, -66.9, 47.5), "MD": (-79.5, 37.9, -75.0, 39.7),
-    "MA": (-73.5, 41.2, -69.9, 42.9), "MI": (-90.5, 41.7, -82.4, 48.3),
-    "MN": (-97.2, 43.5, -89.5, 49.4), "MS": (-91.7, 30.2, -88.1, 35.0),
-    "MO": (-95.8, 35.9, -89.1, 40.6), "MT": (-116.1, 44.4, -104.0, 49.0),
-    "NE": (-104.1, 40.0, -95.3, 43.0), "NV": (-120.0, 35.0, -114.0, 42.0),
-    "NH": (-72.6, 42.7, -70.6, 45.3), "NJ": (-75.6, 38.9, -73.9, 41.4),
-    "NM": (-109.1, 31.3, -103.0, 37.0), "NY": (-79.8, 40.5, -71.8, 45.0),
-    "NC": (-84.3, 33.8, -75.4, 36.6), "ND": (-104.1, 45.9, -96.6, 49.0),
-    "OH": (-84.8, 38.4, -80.5, 42.3), "OK": (-103.0, 33.6, -94.4, 37.0),
-    "OR": (-124.7, 41.9, -116.5, 46.3), "PA": (-80.5, 39.7, -74.7, 42.3),
-    "RI": (-71.9, 41.1, -71.1, 42.0), "SC": (-83.4, 32.0, -78.5, 35.2),
-    "SD": (-104.1, 42.5, -96.4, 45.9), "TN": (-90.3, 34.9, -81.6, 36.7),
-    "TX": (-106.6, 25.8, -93.5, 36.5), "UT": (-114.1, 37.0, -109.0, 42.0),
-    "VT": (-73.4, 42.7, -71.5, 45.0), "VA": (-83.7, 36.5, -75.3, 39.5),
-    "WA": (-124.8, 45.5, -116.9, 49.0), "WV": (-82.7, 37.2, -77.7, 40.6),
-    "WI": (-92.9, 42.5, -86.8, 47.1), "WY": (-111.1, 40.9, -104.0, 45.0),
-    "DC": (-77.2, 38.8, -76.9, 39.0), "PR": (-67.3, 17.9, -65.2, 18.6),
-}
 
 
 def _headers(spec: SourceSpec) -> dict[str, str]:
@@ -107,12 +80,6 @@ def _resolve_dates(sc: str, params: dict[str, Any]) -> tuple[_date, _date]:
     if n_days > _MAX_DATE_RANGE_DAYS:
         raise router_input_error(sc, f"Date range of {n_days} days exceeds maximum ({_MAX_DATE_RANGE_DAYS}); split into smaller windows or reduce the date range")
     return start_d, end_d
-
-
-def _overlaps(bbox: tuple[float, ...], sb: tuple[float, float, float, float]) -> bool:
-    w1, s1, e1, n1 = bbox
-    w2, s2, e2, n2 = sb
-    return not (e1 < w2 or w1 > e2 or n1 < s2 or s1 > n2)
 
 
 def _discovery_box(params: dict[str, Any]) -> tuple[float, float, float, float]:
@@ -150,10 +117,8 @@ def resolve_build(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
     _resolve_dates(sc, params)  # validate pre-network
     bbox = _discovery_box(params)
     plans: list[_hooks.RequestPlan] = []
-    for state in _IEM_DCP_STATES:
-        sb = _STATE_BBOX.get(state)
-        if sb is not None and _overlaps(bbox, sb):
-            plans.append(_hooks.RequestPlan(url=_IEM_NETWORK_GEOJSON.format(state=state), headers=_headers(spec)))
+    for state in states_intersecting_bbox(bbox, among=_IEM_DCP_STATES):
+        plans.append(_hooks.RequestPlan(url=_IEM_NETWORK_GEOJSON.format(state=state), headers=_headers(spec)))
     if not plans:
         raise router_empty_error(
             sc,
@@ -175,9 +140,7 @@ def resolve_parse(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes])
     west, south, east, north = _discovery_box(params)
     # bodies arrive in resolve_build's per-overlapping-state order, so the state
     # each station's obhistory network= belongs to is the body's owning state.
-    overlap_states = [s for s in _IEM_DCP_STATES
-                      if _STATE_BBOX.get(s) is not None
-                      and _overlaps(_discovery_box(params), _STATE_BBOX[s])]
+    overlap_states = states_intersecting_bbox(_discovery_box(params), among=_IEM_DCP_STATES)
     stations: list[dict[str, Any]] = []
     seen: set[str] = set()
     for state, raw in zip(overlap_states, bodies):

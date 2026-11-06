@@ -2,8 +2,8 @@
 
 The counter increments per user-message dispatch and starts fresh on a new
 session; at the cap a ``session-state(status="max_turns_reached")`` and a closing
-chunk are emitted and every further turn gets the same refusal. The env override
-is parsed at import. Driven end to end through a live websockets connection."""
+chunk are emitted and every further turn gets the same refusal. The cap is the
+MAX_TURNS_PER_SESSION setting, read live. Driven end to end through a live websockets connection."""
 
 from __future__ import annotations
 
@@ -17,7 +17,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from trid3nt_server.server import SessionState, _handle_max_turns_reached
-from trid3nt_server.main import MAX_TURNS_PER_SESSION
+from trid3nt_server.settings import setting
+
+MAX_TURNS_PER_SESSION = 25
 
 
 
@@ -153,13 +155,13 @@ def test_multiple_sessions_have_independent_counters():
 
 
 
-def test_max_turns_env_var_default():
-    """MAX_TURNS_PER_SESSION defaults to 25 when the env var is absent."""
-    # We can only test the imported value (env-var is read at import time).
-    # Verify it's a positive integer >= 1. The exact default is 25
-    # but ops may override it; we just enforce it's a valid positive int.
-    assert isinstance(MAX_TURNS_PER_SESSION, int)
-    assert MAX_TURNS_PER_SESSION >= 1
+def test_max_turns_is_a_setting_read_live(user_settings):
+    """The default is 25; the user's file changes it on the next read, and 0 is no limit."""
+    assert setting("MAX_TURNS_PER_SESSION") == MAX_TURNS_PER_SESSION
+    user_settings(MAX_TURNS_PER_SESSION=3)
+    assert setting("MAX_TURNS_PER_SESSION") == 3
+    user_settings(MAX_TURNS_PER_SESSION=0)
+    assert setting("MAX_TURNS_PER_SESSION") == 0
 
 
 

@@ -45,9 +45,9 @@ from trid3nt_contracts.ws import (
 def _cap_gate_waits(monkeypatch):
     """Cap every user-decision gate wait so a headless run never hangs.
 
-    Production leaves ``TRID3NT_GATE_WAIT_CAP_S`` unset; the emit-and-await timeout
+    Production leaves ``GATE_WAIT_CAP_S`` unset; the emit-and-await timeout
     test tightens the cap so it reaches the honest None-return path fast."""
-    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
+    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
 
 
 
@@ -343,7 +343,7 @@ def test_emit_and_wait_timeout_returns_none(monkeypatch):
     # The F6 local-lane gate ignores the payload timeout and would wait 24h; the
     # LANE C cap forces the honest timeout quickly (tight override of the autouse
     # 5s net) so this asserts the real None-return path without hanging.
-    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "0.05")
+    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 0.05)
 
     async def _run() -> SpatialInputResponsePayload | None:
         ws = _MockWebSocket()

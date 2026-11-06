@@ -60,7 +60,7 @@ def _dummy_tool(**kwargs: Any) -> dict:
 
 @pytest.fixture(autouse=True)
 def _cap_gate_waits(monkeypatch) -> None:
-    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
+    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
 
 
 @pytest.fixture(autouse=True)
@@ -131,8 +131,10 @@ async def _expire(tool_name: str) -> tuple[_FakeWS, BaseException]:
 def _expired(tool_name: str, monkeypatch) -> tuple[_FakeWS, BaseException]:
     """``_expire`` with both deadline knobs tightened - the code-approval card
     reads its own, the other two the shared cap."""
-    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "0.2")
-    monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", "0.2")
+    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 0.2)
+    from trid3nt_server.settings import reader
+
+    reader.user_file().write_text('{"CODE_EXEC_APPROVAL_TIMEOUT_S": 0.2}')
     return asyncio.run(_expire(tool_name))
 
 

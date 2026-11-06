@@ -20,6 +20,7 @@ logger = logging.getLogger("trid3nt_server.render.uri_registry")
 
 __all__ = [
     "RESOLVABLE_URI_PARAMS",
+    "SESSIONS_HELD",
     "SHORT_HANDLE_RE",
     "SessionUriRegistry",
     "UriResolutionError",
@@ -48,7 +49,9 @@ _SHORT_HANDLES_CAP = 4096
 #: tail hallucination starts; 12 keeps headroom while staying collision-safe for 32-hex cache keys.
 _HASH_PREFIX_MIN = 12
 
-_REGISTRY_STORE_CAP = 4096
+#: How many sessions an in-memory map keyed by session holds before it evicts the oldest.
+SESSIONS_HELD = 4096
+
 _RECORDS_PER_SESSION_CAP = 1024
 _WALK_MAX_DEPTH = 8
 _WALK_MAX_ITEMS = 64
@@ -629,7 +632,7 @@ def get_uri_registry(session_id: str) -> SessionUriRegistry:
     """Return (creating if needed) the registry for ``session_id``."""
     reg = _SESSION_URI_REGISTRIES.get(session_id)
     if reg is None:
-        while len(_SESSION_URI_REGISTRIES) >= _REGISTRY_STORE_CAP:
+        while len(_SESSION_URI_REGISTRIES) >= SESSIONS_HELD:
             _SESSION_URI_REGISTRIES.popitem(last=False)
         reg = SessionUriRegistry(session_id=session_id)
         _SESSION_URI_REGISTRIES[session_id] = reg

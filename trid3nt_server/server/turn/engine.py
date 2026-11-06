@@ -10,7 +10,7 @@ from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.ws import AgentMessageChunkPayload, SessionStatePayload
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.render.pipeline_emitter import current_turn_case
-from trid3nt_server.main import MAX_TURNS_PER_SESSION
+from trid3nt_server.settings import setting
 from trid3nt_server.server.config import _ambiguity_margin_threshold, _tool_choice_timeout_s
 from trid3nt_server.inputs.extent import bbox_overlaps
 from trid3nt_server.server.dispatch.emitter import _ensure_emitter
@@ -167,9 +167,10 @@ async def _handle_max_turns_reached(
         _new_envelope("session-state", state.session_id, closing_payload)
     )
     message_id = new_ulid()
+    limit = setting("MAX_TURNS_PER_SESSION")
     closing_text = (
         "This session has reached its turn limit "
-        f"({MAX_TURNS_PER_SESSION} turns). "
+        f"({limit} turns). "
         "No further tool calls will be dispatched. "
         "Start a new session to continue working."
     )
@@ -193,7 +194,7 @@ async def _handle_max_turns_reached(
         "max-turns-reached session=%s turn_count=%d limit=%d",
         state.session_id,
         state.turn_count,
-        MAX_TURNS_PER_SESSION,
+        limit,
     )
 
 async def _maybe_emit_tool_candidates(

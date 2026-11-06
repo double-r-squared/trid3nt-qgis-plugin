@@ -76,8 +76,8 @@ async def test_cancel_blocks_dispatch_and_leaks_nothing() -> None:
 
 
 @pytest.mark.asyncio
-async def test_an_unanswered_card_expires_typed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", "0.2")
+async def test_an_unanswered_card_expires_typed(user_settings) -> None:
+    user_settings(CODE_EXEC_APPROVAL_TIMEOUT_S=0.2)
     ws, state = _FakeWS(), _FakeState()
     with pytest.raises(GateConfirmationTimeoutError) as excinfo:
         await confirm._gate_on_code_exec(ws, state, {"code": "result = 1"})  # type: ignore[arg-type]
@@ -105,11 +105,13 @@ async def test_a_cancelled_wait_drops_its_entry() -> None:
     assert not _PENDING_CONFIRMATIONS
 
 
-def test_approval_window_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", raising=False)
+def test_approval_window_is_bounded(user_settings) -> None:
+    from trid3nt_server.workflows.runtime.module import SlotRefused
+
     assert confirm._code_exec_approval_timeout_s() == 180.0
-    monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", "42.5")
+    user_settings(CODE_EXEC_APPROVAL_TIMEOUT_S=42.5)
     assert confirm._code_exec_approval_timeout_s() == 42.5
-    for bad in ("abc", "0", "-5"):
-        monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", bad)
-        assert confirm._code_exec_approval_timeout_s() == 180.0
+    for bad in ("abc", 0, -5):
+        user_settings(CODE_EXEC_APPROVAL_TIMEOUT_S=bad)
+        with pytest.raises(SlotRefused):
+            confirm._code_exec_approval_timeout_s()

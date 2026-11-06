@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import logging
 from trid3nt_contracts.secrets import SecretAddEnvelopePayload
 from trid3nt_server.model.credentials.resolver import set_session_credential
@@ -25,9 +24,7 @@ _BG_TASKS: set[asyncio.Task] = set()
 #: Bounded wall-clock budget for the graceful-shutdown drain of ``_BG_TASKS``.
 #: A shutdown waits at most this long for outstanding detached tasks, so a
 #: pathologically slow one is abandoned rather than hanging the exit.
-_BG_DRAIN_TIMEOUT_S: float = float(
-    os.environ.get("TRID3NT_BG_DRAIN_TIMEOUT_S", "10")
-)
+_BG_DRAIN_TIMEOUT_S: float = 10.0
 
 async def _drain_bg_tasks(
     timeout: float | None = None,

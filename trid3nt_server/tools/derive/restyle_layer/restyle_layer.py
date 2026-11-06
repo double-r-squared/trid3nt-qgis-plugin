@@ -178,7 +178,7 @@ def _declared_row(uri: str | None) -> dict[str, Any] | None:
     if legend is None:
         return None
     ramp = legend.colormap if isinstance(legend.colormap, str) else None
-    return {"kind": legend.kind, "ramp": ramp or presets.DEFAULT_RAMP,
+    return {"kind": legend.kind, "ramp": ramp,
             "units": legend.units}
 
 

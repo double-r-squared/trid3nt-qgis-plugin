@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 from typing import Any, Mapping
 
+from trid3nt_server.settings import setting
 from trid3nt_server.store import objects as storage
 from trid3nt_server.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
@@ -45,11 +46,6 @@ DEFAULT_MODFLOW_IMAGE: str = "trid3nt-local/modflow:latest"
 #: under the run prefix: the exit classifier reads the first, a reader of a
 #: finished run the second.
 _METRICS_FILENAME: str = "modflow_metrics.json"
-
-#: The ceiling on the completion wait. A staged DISV solves in seconds; a
-#: wedged container becomes a typed failure at the ceiling rather than a
-#: container nobody reaps.
-_WAIT_CEILING_S: float = 7200.0
 
 
 def _modflow_image() -> str:
@@ -169,7 +165,7 @@ async def solve_case(*, run: dict[str, Any], cores: int) -> dict[str, Any]:
     run_result, batch_run_id = await dispatch_and_wait(
         solver=MODFLOW_SOLVER_NAME, manifest_uri=run["manifest_uri"],
         cores=cores, module=str(run["case"]["module"]),
-        label=str(facts["name"]), timeout_s=_WAIT_CEILING_S,
+        label=str(facts["name"]), timeout_s=setting("SOLVE_TIMEOUT_S"),
         run_id=run["run_id"], grid_resolution_m=facts.get("mesh_size_m"),
         active_cell_count=facts.get("ncells"))
     if run_result is None or run_result.status != "complete":

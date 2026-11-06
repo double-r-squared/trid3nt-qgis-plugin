@@ -11,6 +11,7 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
+from ..._fetch_common import NHDPLUS_DOMAIN
 from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
 from ..._router.hooks import register_hook
 from ..._router.hooks.dataretrieval import retrieve
@@ -19,8 +20,7 @@ __all__ = ["validate", "features"]
 
 logger = logging.getLogger(__name__)
 
-#: CONUS envelope and the flowline cap for the navigate service.
-_NLDI_CONUS: tuple[float, float, float, float] = (-130.0, 20.0, -60.0, 55.0)
+#: The flowline cap for the navigate service.
 _NLDI_MAX_FLOWLINES = 5000
 
 
@@ -61,10 +61,10 @@ def validate(spec: SourceSpec, params: dict[str, Any]) -> None:
         )
     if seed is not None:
         lon, lat = float(seed[0]), float(seed[1])
-        w, s, e, n = _NLDI_CONUS
+        w, s, e, n = NHDPLUS_DOMAIN
         if not (w <= lon <= e and s <= lat <= n):
             raise router_input_error(
-                prefix, f"seed_point ({lon}, {lat}) is outside NLDI's CONUS coverage {_NLDI_CONUS}", sfx
+                prefix, f"seed_point ({lon}, {lat}) is outside NLDI's CONUS coverage {NHDPLUS_DOMAIN}", sfx
             )
     elif isinstance(comid, bool) or not isinstance(comid, int) or comid <= 0:
         raise router_input_error(prefix, f"comid must be a positive integer; got {comid!r}", sfx)

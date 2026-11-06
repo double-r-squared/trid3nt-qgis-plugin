@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from trid3nt_server.settings import setting
 from trid3nt_server.store import objects as storage
 from trid3nt_server.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
@@ -44,11 +45,6 @@ DEFAULT_GEOCLAW_IMAGE: str = "trid3nt-local/geoclaw:latest"
 #: under the run prefix: the exit classifier reads the first, a reader of a
 #: finished run the second.
 _METRICS_FILENAME: str = "geoclaw_metrics.json"
-
-#: The ceiling on the completion wait. chile2010 solves in ~40 s on this box;
-#: a wedged container becomes a typed failure at the ceiling rather than a
-#: container nobody reaps.
-_WAIT_CEILING_S: float = 7200.0
 
 
 def _geoclaw_image() -> str:
@@ -159,7 +155,7 @@ async def solve_case(*, run: dict[str, Any], cores: int) -> dict[str, Any]:
     run_result, batch_run_id = await dispatch_and_wait(
         solver=GEOCLAW_SOLVER_NAME, manifest_uri=run["manifest_uri"],
         cores=cores, module=str(run["case"]["module"]),
-        label=str(run["name"]), timeout_s=_WAIT_CEILING_S,
+        label=str(run["name"]), timeout_s=setting("SOLVE_TIMEOUT_S"),
         run_id=run["run_id"])
     if run_result is None or run_result.status != "complete":
         raise GeoclawError(

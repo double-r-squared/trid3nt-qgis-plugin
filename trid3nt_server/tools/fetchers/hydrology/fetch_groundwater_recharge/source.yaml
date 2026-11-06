@@ -28,9 +28,9 @@ params:
 
 gates:
   conus_only: true
-  # The generic router._CONUS_BBOX is gridmet's native bounds (south 25.05),
-  # which false-refuses Key West (24.55) and easternmost Maine even though the
-  # staged Reitz grid covers south to 24.0625. This is the UNION of both staged
+  # The generic CONUS_LAND envelope (the Census conterminous US, south 24.52)
+  # would false-refuse AOIs the staged grids cover past the land: the Reitz grid
+  # reaches south to 24.0625. This is the UNION of both staged
   # grids' real bounds (reitz2017 west/south -125.02/24.06, wolock2003
   # west/south -127.89/22.86; reitz2017 east/north -66.48/49.94, wolock2003
   # east/north -65.35/51.61) so the cheap pre-fetch gate never rejects an AOI

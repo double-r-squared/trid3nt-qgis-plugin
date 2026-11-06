@@ -14,10 +14,11 @@ from dataclasses import dataclass, replace
 from typing import Any, Callable, Iterable, Literal, Mapping
 from xml.sax.saxutils import quoteattr
 
+from trid3nt_server.settings import setting
+
 logger = logging.getLogger("trid3nt_server.render.presets")
 
 __all__ = [
-    "DEFAULT_RAMP",
     "KINDS",
     "Preset",
     "Resolved",
@@ -39,8 +40,6 @@ Geometry = Literal["point", "line", "polygon"]
 
 #: The whole family; a product that is none of these has no picture.
 KINDS: tuple[Kind, ...] = ("continuous", "classed", "reference", "mesh")
-
-DEFAULT_RAMP = "viridis"
 
 #: QGIS reads a ramp as explicit stops, so the paint travels in the document. Five stops at t = 0, .25, .5, .75, 1 of
 #: the matplotlib / ColorBrewer ramp; ``hsv`` is closed (a bearing wraps, so 0 and 360 are one colour). ``terrain`` is
@@ -72,7 +71,7 @@ _RAMP_STOPS: dict[str, tuple[str, ...]] = {
 def ramp_stops(name: str | None) -> tuple[str, ...]:
     """The hex stops of a ramp; a ``<base>_r`` name is the base reversed.
 
-    An unknown name takes the default ramp, never grey - grey reads as no data.
+    No name, or an unknown one, takes the DEFAULT_RAMP setting, never grey - grey reads as no data.
     """
     key = (name or "").strip().lower()
     stops = _RAMP_STOPS.get(key)
@@ -81,27 +80,24 @@ def ramp_stops(name: str | None) -> tuple[str, ...]:
         if base is not None:
             stops = tuple(reversed(base))
     if stops is None:
+        fallback = setting("DEFAULT_RAMP")
         if key:
-            logger.warning("presets: unknown ramp %r -> %s", name, DEFAULT_RAMP)
-        stops = _RAMP_STOPS[DEFAULT_RAMP]
+            logger.warning("presets: unknown ramp %r -> %s", name, fallback)
+        stops = _RAMP_STOPS[fallback]
     return stops
-
-
-#: The percentile window a data-driven stretch clips to, low and high.
-DEFAULT_CLIP: tuple[float, float] = (2.0, 98.0)
 
 
 @dataclass(frozen=True, slots=True)
 class Scale:
     """The one scale a quantity is read on.
 
-    ``range`` under ``policy="data"`` is the FALLBACK, never a second opinion.
+    ``range`` under ``policy="data"`` is the FALLBACK, never a second opinion; no ``clip`` is the CLIP_PERCENTILES setting.
     """
 
     policy: Policy = "data"
     range: tuple[float, float] | None = None
     transform: Transform = "percentile"
-    clip: tuple[float, float] | None = DEFAULT_CLIP
+    clip: tuple[float, float] | None = None
 
     def merged(self, other: "Scale | None") -> "Scale":
         """``other`` wins field by field - the override order, in one place."""
@@ -120,7 +116,8 @@ class Preset:
     """One of four renderer shapes, parameterised by what the data is."""
 
     kind: Kind = "continuous"
-    ramp: str = DEFAULT_RAMP
+    #: Empty is the DEFAULT_RAMP setting, read when the preset is resolved.
+    ramp: str = ""
     units: str | None = None
     scale: Scale = Scale()
     #: ``(lower, upper, "#rrggbb", label)`` breaks - what makes a preset classed.
@@ -258,6 +255,10 @@ def resolve(
     Override order, later wins: the declared row -> ``override`` -> ``shared``.
     """
     scale = preset.scale.merged(override)
+    if _paints_values(preset):
+        if scale.clip is None:
+            scale = replace(scale, clip=_clip_setting())
+        preset = replace(preset, ramp=preset.ramp or setting("DEFAULT_RAMP"))
     spec = replace(preset, scale=scale)
     if spec.kind == "reference" or spec.classes:
         return Resolved(spec, None if spec.kind == "reference" else scale.range, FIXED)
@@ -271,6 +272,15 @@ def resolve(
     if found is not None:
         return Resolved(spec, _widen(found), FROM_DATA)
     return Resolved(spec, scale.range or _SAFE_RANGE, FALLBACK)
+
+
+def _paints_values(preset: Preset) -> bool:
+    return preset.kind != "reference" and not preset.classes
+
+
+def _clip_setting() -> tuple[float, float]:
+    low, high = setting("CLIP_PERCENTILES")
+    return (float(low), float(high))
 
 
 def _widen(rng: tuple[float, float]) -> tuple[float, float]:
@@ -363,7 +373,7 @@ def band_range_reader(
         except Exception as exc:  # noqa: BLE001 - deps absent: declared fallback
             logger.debug("band-stats deps unavailable (%s: %s)", type(exc).__name__, exc)
             return None
-        lo_pct, hi_pct = scale.clip or DEFAULT_CLIP
+        lo_pct, hi_pct = scale.clip or _clip_setting()
         try:
             with MemoryFile(raster_bytes) as mem, mem.open() as src:
                 band = src.read(1, masked=True)

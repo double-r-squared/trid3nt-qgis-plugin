@@ -23,7 +23,7 @@ from trid3nt_server.workflows.runtime.workflow import RunResult
 def test_every_entry_carries_its_family_default_and_where_the_default_comes_from():
     table = settings.dictionary()
     assert {"FILL_MAX_DISTANCE", "FILL_ALGORITHM", "MERGE_BUFFER_CELLS"} <= set(table)
-    assert {slot.rubrique[0] for slot in table.values()} == {"bed", "notes", "gate"}
+    assert {slot.rubrique[0] for slot in table.values()} == {"bed", "notes", "gate", "render", "solve", "server"}
     for name, slot in table.items():
         assert slot.source, name
         assert slot.desc, name

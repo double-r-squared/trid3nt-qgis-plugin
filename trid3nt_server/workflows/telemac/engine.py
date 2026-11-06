@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 from typing import Any, Mapping
 
+from trid3nt_server.settings import setting
 from trid3nt_server.store import objects as storage
 from trid3nt_server.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
@@ -46,10 +47,8 @@ DEFAULT_TELEMAC_IMAGE: str = "trid3nt-local/telemac:latest"
 #: finished run the second.
 _METRICS_FILENAME: str = "telemac_metrics.json"
 
-#: Floor on the completion wait: the worst honest mesh (the node cap) with this
-#: headroom bounds the rest. A cap-sized solve outruns a shorter wait, and the
-#: publish leg is then lost to the timeout.
-_MIN_WAIT_S: float = 1800.0
+#: The completion wait past the SOLVE_TIMEOUT_S floor: the worst honest mesh (the node cap) with this
+#: headroom. A cap-sized solve outruns a shorter wait, and the publish leg is then lost to the timeout.
 _WAIT_HEADROOM: float = 1.5
 
 #: The wait for a sheet that states no horizon (a steady harmonic run has no duration or timestep): a bound, not an estimate,
@@ -152,9 +151,10 @@ def read_run_metrics(run_id: str) -> dict[str, Any]:
 def _wait_seconds(facts: Mapping[str, Any]) -> float:
     """How long to wait on this run, off the sheet's own duration and timestep."""
     duration_s, time_step_s = facts.get("duration_s"), facts.get("time_step_s")
+    floor = setting("SOLVE_TIMEOUT_S")
     if duration_s is None or time_step_s is None:
-        return _TIMELESS_WAIT_S
-    return max(_MIN_WAIT_S, estimate_telemac_solve_seconds(
+        return max(floor, _TIMELESS_WAIT_S)
+    return max(floor, estimate_telemac_solve_seconds(
         MESH_NODE_CAP, float(duration_s), float(time_step_s)) * _WAIT_HEADROOM)
 
 

@@ -50,3 +50,13 @@ class TestFetchSettings(unittest.TestCase):
     def test_an_unreachable_agent_raises_the_honest_error(self):
         with self.assertRaises(tc.SettingsRequestError):
             tc.fetch_settings("http://127.0.0.1:1", timeout=2)
+
+
+class TestTypedSetting(unittest.TestCase):
+    def test_a_list_setting_takes_its_values_comma_separated(self):
+        row = {"type": "REAL", "value": [2.0, 98.0]}
+        self.assertEqual(tc.typed_setting(row, "[5, 95]"), [5.0, 95.0])
+        self.assertEqual(tc.typed_setting(row, "1.5,99"), [1.5, 99.0])
+        self.assertIsNone(tc.typed_setting(row, "five"))
+        self.assertEqual(tc.typed_setting({"type": "REAL", "value": 1.0}, "7"), 7.0)
+        self.assertEqual(tc.typed_setting({"type": "STRING", "value": "viridis"}, " magma "), "magma")

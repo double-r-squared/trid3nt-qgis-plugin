@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
+from trid3nt_server.inputs.geometry import COS_LAT_FLOOR, METRES_PER_DEGREE
 
 __all__ = [
     "RegularGrid",
@@ -68,9 +68,8 @@ def regular_grid_from_bbox(
     centre_lat = 0.5 * (min_lat + max_lat)
     m_per_deg_lat = METRES_PER_DEGREE
     # Angular <-> metre conversion is a local equirectangular scale taken at the
-    # bbox centre latitude: 111_320 m per degree of latitude, times cos(lat) for
-    # longitude. The 0.01 floor keeps the longitude scale finite near the poles.
-    m_per_deg_lon = METRES_PER_DEGREE * max(0.01, math.cos(math.radians(centre_lat)))
+    # bbox centre latitude: METRES_PER_DEGREE per degree of latitude, times cos(lat) for longitude.
+    m_per_deg_lon = METRES_PER_DEGREE * max(COS_LAT_FLOOR, math.cos(math.radians(centre_lat)))
 
     span_x_m = (max_lon - min_lon) * m_per_deg_lon
     span_y_m = (max_lat - min_lat) * m_per_deg_lat

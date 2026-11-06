@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from trid3nt_server.model.guards.circuit_breaker import ToolCircuitBreaker
+from trid3nt_server.render.uri_registry import SESSIONS_HELD
 
 if TYPE_CHECKING:
     import asyncio
@@ -23,7 +24,6 @@ logger = logging.getLogger("trid3nt_server.server")
 # instead, keeping every connection of a session on the same Case. Bounded: the oldest entry is
 # evicted past the cap, and a stale session's next case command re-establishes its context.
 _SESSION_ACTIVE_CASE: dict[str, str | None] = {}
-_SESSION_ACTIVE_CASE_CAP = 4096
 
 #: Sentinel for ``SessionState.case_context_synced_to`` -- distinct from None
 #: because ``None`` is a legitimate "no active Case" binding.
@@ -38,7 +38,7 @@ def _set_session_active_case(session_id: str, case_id: str | None) -> None:
     """Bind ``case_id`` as the active Case for every connection of ``session_id``."""
     if (
         session_id not in _SESSION_ACTIVE_CASE
-        and len(_SESSION_ACTIVE_CASE) >= _SESSION_ACTIVE_CASE_CAP
+        and len(_SESSION_ACTIVE_CASE) >= SESSIONS_HELD
     ):
         # Evict the oldest by insertion order: bounded memory.
         _SESSION_ACTIVE_CASE.pop(next(iter(_SESSION_ACTIVE_CASE)))

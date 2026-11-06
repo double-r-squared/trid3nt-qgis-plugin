@@ -44,7 +44,7 @@ class _FakeWS:
 
 @pytest.fixture(autouse=True)
 def _tool(monkeypatch):
-    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
+    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
     monkeypatch.delenv("TRID3NT_AIRNOW_API_KEY", raising=False)
     resolver._SESSION_CREDENTIALS.clear()
     _calls.clear()

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from trid3nt_server.render.uri_registry import SESSIONS_HELD
+
 # Live-turn registry keyed by session and stream: an in-flight turn OUTLIVES its connection. Each
 # entry holds the task and the emitter it drives, so a reconnect can rebind the sink; a done-callback
 # removes the entry on completion.
@@ -21,7 +23,6 @@ class _LiveTurn:
 #: connection (so its emitter sink is rebound to the live turn).
 _SESSION_LIVE_TURNS: dict[str, dict[str, _LiveTurn]] = {}
 
-_SESSION_LIVE_TURNS_CAP = 4096
 
 def _register_live_turn(
     session_id: str, turn_key: str, task: "asyncio.Task", emitter: "PipelineEmitter | None"
@@ -31,7 +32,7 @@ def _register_live_turn(
     task is safe, because the callback de-dups on identity."""
     if (
         session_id not in _SESSION_LIVE_TURNS
-        and len(_SESSION_LIVE_TURNS) >= _SESSION_LIVE_TURNS_CAP
+        and len(_SESSION_LIVE_TURNS) >= SESSIONS_HELD
     ):
         # Evict the oldest bucket whose turns are ALL done, or the oldest
         # regardless when none is fully done: bounded memory, and a live solve

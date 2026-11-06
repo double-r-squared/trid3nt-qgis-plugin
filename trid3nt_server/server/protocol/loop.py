@@ -19,7 +19,7 @@ from trid3nt_server.inputs.gate.pending import (
     _PENDING_SPATIAL_INPUTS,
     _PENDING_TOOL_CHOICES,
 )
-from trid3nt_server.main import MAX_TURNS_PER_SESSION
+from trid3nt_server.settings import setting
 from trid3nt_server.server.dispatch.emitter import _assert_sync_offload_safe, _ensure_emitter
 from trid3nt_server.inputs.gate.errors import SpatialInputInvalidResponseError
 from trid3nt_server.server.protocol.auth import _handle_auth_token, _handle_session_resume, reject_auth_handshake
@@ -161,10 +161,8 @@ def _make_handler(settings: ModelSettings):
                         # first so the cap fires one past the limit. A session
                         # already at the cap is refused on every later message.
                         state.turn_count += 1
-                        if (
-                            MAX_TURNS_PER_SESSION > 0
-                            and state.turn_count > MAX_TURNS_PER_SESSION
-                        ):
+                        limit = setting("MAX_TURNS_PER_SESSION")
+                        if limit > 0 and state.turn_count > limit:
                             await _handle_max_turns_reached(websocket, state)
                             continue
                         # Reset the per-turn accumulators before dispatch, so the persisted row

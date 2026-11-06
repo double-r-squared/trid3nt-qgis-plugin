@@ -11,7 +11,7 @@ import math
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
 
-from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
+from trid3nt_server.inputs.geometry import COS_LAT_FLOOR, METRES_PER_DEGREE
 from trid3nt_server.tools.mesh.grid_geometry import RegularGrid
 from trid3nt_server.tools.mesh.meshers import (
     POST,
@@ -148,7 +148,7 @@ def build(recipe: Any) -> Mesh:
     ncol = max(1, round((max_lon - min_lon) / step))
     nrow = max(1, round((max_lat - min_lat) / step))
     centre_lat = 0.5 * (min_lat + max_lat)
-    m_lon = METRES_PER_DEGREE * max(0.01, math.cos(math.radians(centre_lat)))
+    m_lon = METRES_PER_DEGREE * max(COS_LAT_FLOOR, math.cos(math.radians(centre_lat)))
     grid = RegularGrid(
         min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat,
         resolution_m=float(recipe.resolution_m), ncol=ncol, nrow=nrow,

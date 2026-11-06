@@ -20,9 +20,9 @@ from trid3nt_contracts.ws import PayloadConfirmationEnvelopePayload
 def _cap_gate_waits(monkeypatch):
     """Cap every user-decision gate wait so a headless run never hangs.
 
-    Production leaves ``TRID3NT_GATE_WAIT_CAP_S`` unset; the dedicated timeout test
+    Production leaves ``GATE_WAIT_CAP_S`` unset; the dedicated timeout test
     tightens the cap so it reaches the honest fail-closed path fast."""
-    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
+    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
 
 
 class _FakeWS:
@@ -219,11 +219,10 @@ async def test_timeout_fails_closed(monkeypatch) -> None:
     from trid3nt_server import server
     from trid3nt_server.inputs.gate.errors import GateConfirmationTimeoutError
 
-    monkeypatch.setattr(server, "CODE_EXEC_CONFIRM_TIMEOUT_SECONDS", 0)
     # No client answers the card: the local-lane gate would wait 24h, so the
     # cap forces the honest timeout path quickly (a tight override of the
     # autouse 5s net keeps this pure-timeout assertion fast).
-    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "0.05")
+    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 0.05)
     ws, state = _FakeWS(), _FakeState()
     with pytest.raises(GateConfirmationTimeoutError):
         await server._gate_on_solver_confirm(  # type: ignore[arg-type]

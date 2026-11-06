@@ -7,7 +7,6 @@ resolves the parked call with a typed error rather than hanging it.
 from __future__ import annotations
 
 import asyncio
-import os
 import logging
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.gate_spec import GateSpec
@@ -19,7 +18,7 @@ from trid3nt_server.inputs.gate.cards import _build_spatial_input_request_payloa
 from trid3nt_server.inputs.gate.cards.estimate import call_provider
 from trid3nt_server.inputs.gate.pending import _PENDING_CONFIRMATIONS, _PENDING_SPATIAL_INPUTS
 from trid3nt_server.inputs.gate.spatial_input_tool import SPATIAL_INPUT_SENTINEL_KEY
-from trid3nt_server.server.config import _env_float
+from trid3nt_server.settings import setting
 from trid3nt_server.inputs.gate.errors import GateConfirmationTimeoutError, SpatialInputInvalidResponseError
 from trid3nt_server.server.session.state import SessionState
 from trid3nt_server.server.turn.wire import _new_envelope, _send_error, _session_safe_send
@@ -28,17 +27,11 @@ from websockets.asyncio.server import ServerConnection
 
 logger = logging.getLogger("trid3nt_server.server")
 
-# The decision window (seconds) the payload and solver-confirm gates share.
-CODE_EXEC_CONFIRM_TIMEOUT_SECONDS: int = int(
-    os.environ.get("TRID3NT_CODE_EXEC_CONFIRM_TIMEOUT", "300")
-)
-
-
 def _code_exec_approval_timeout_s() -> float:
-    """The code-exec gate's approval window (``TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S``, default 180).
+    """The code-exec gate's approval window, the CODE_EXEC_APPROVAL_TIMEOUT_S setting.
 
     An expired card raises ``CodeExecApprovalTimeoutError`` so the turn completes honestly."""
-    return _env_float("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", 180.0)
+    return setting("CODE_EXEC_APPROVAL_TIMEOUT_S")
 
 # Gate membership is DERIVED: a tool's ``GateSpec`` on its ``AtomicToolMetadata`` is the
 # one signal, and ``kind`` ('solver' | 'fetch') splits the two lanes: a solver strips a
@@ -66,29 +59,17 @@ def _confirm_tools_by_kind(kind: str) -> "frozenset[str]":
 _LOCAL_GATE_TIMEOUT_SECONDS: int = 24 * 3600
 
 # Test seam: a headless suite exercises the gate-park machinery with no client to answer
-# the card, so the local-lane 24h wait would hang the run. With ``TRID3NT_GATE_WAIT_CAP_S``
-# set, every gate waits ``min(configured, cap)`` and reaches the honest timeout path.
-def _gate_wait_cap_s() -> "float | None":
-    """Optional hard ceiling (seconds) applied to EVERY gate wait window.
+# the card, so the local-lane 24h wait would hang the run. A suite sets this, read live, and
+# every gate then waits ``min(24h, cap)`` and reaches the honest timeout path. None in the product.
+GATE_WAIT_CAP_S: "float | None" = None
 
-    Read LIVE; unset, malformed or non-positive leave every wait unchanged."""
-    raw = os.environ.get("TRID3NT_GATE_WAIT_CAP_S")
-    if raw is None:
-        return None
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return None
-    return value if value > 0 else None
-
-def _gate_wait_timeout(default_seconds: float) -> float:
+def _gate_wait_timeout() -> float:
     """Effective ``asyncio.wait_for`` timeout for a user-decision gate future.
 
-    ``default_seconds`` is what the CARD advertises and is not rewritten here."""
+    What the CARD advertises is its own and is not read here."""
     effective = float(_LOCAL_GATE_TIMEOUT_SECONDS)
-    cap = _gate_wait_cap_s()
-    if cap is not None:
-        return min(effective, cap)
+    if GATE_WAIT_CAP_S is not None:
+        return min(effective, GATE_WAIT_CAP_S)
     return effective
 
 async def _gate_on_confirm(
@@ -145,7 +126,7 @@ async def _gate_on_confirm(
         gate_spec.kind,
     )
 
-    wait_s = _gate_wait_timeout(CODE_EXEC_CONFIRM_TIMEOUT_SECONDS)
+    wait_s = _gate_wait_timeout()
     try:
         decision_payload: PayloadConfirmationEnvelopePayload = (
             await _PENDING_CONFIRMATIONS.park(
@@ -397,7 +378,7 @@ async def _maybe_gate_on_payload_warning(
 
     # Await the confirmation (TTL on the envelope is advisory; we honour it
     # with an asyncio timeout so the dispatch coroutine doesn't hang forever).
-    wait_s = _gate_wait_timeout(warning_payload.ttl_seconds)
+    wait_s = _gate_wait_timeout()
     try:
         decision_payload: PayloadConfirmationEnvelopePayload = (
             await _PENDING_CONFIRMATIONS.park(
@@ -577,7 +558,7 @@ async def _emit_spatial_input_and_wait(
             state.session_id, payload.request_id,
             lambda: _session_safe_send(websocket, state.session_id, _new_envelope(
                 "spatial-input-request", state.session_id, payload)),
-            _gate_wait_timeout(payload.default_timeout_seconds))
+            _gate_wait_timeout())
     except asyncio.TimeoutError:
         logger.info(
             "spatial-input-request timeout session=%s request_id=%s; "

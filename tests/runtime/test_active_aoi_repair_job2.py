@@ -42,9 +42,9 @@ _CASE_AOI = (-82.0, 26.5, -81.8, 26.7)
 def _cap_gate_waits(monkeypatch):
     """Cap every user-decision gate wait so a headless run never hangs.
 
-    Production leaves ``TRID3NT_GATE_WAIT_CAP_S`` unset, so this is a fail-closed
+    Production leaves ``GATE_WAIT_CAP_S`` unset, so this is a fail-closed
     backstop rather than the path the fetch tests take."""
-    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
+    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
 
 
 async def _invoke_with_gate_proceed(ws, state, tool_name: str, params: dict):

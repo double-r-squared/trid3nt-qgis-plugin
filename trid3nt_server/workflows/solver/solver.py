@@ -24,6 +24,7 @@ from trid3nt_contracts.execution import ExecutionHandle, RunResult
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.store import objects as storage
+from trid3nt_server.settings import setting
 from trid3nt_server.store.objects import StorageError
 from trid3nt_server.tools import register_tool
 
@@ -43,7 +44,6 @@ __all__ = [
     "EmitterBinding",
     "NFR_P_4_TARGET_SECONDS",
     "DEFAULT_POLL_INTERVAL_S",
-    "DEFAULT_TIMEOUT_S",
     "PROGRESS_CLAMP_MAX",
     "PROGRESS_TERMINAL",
     "dispatch_and_wait",
@@ -61,20 +61,6 @@ NFR_P_4_TARGET_SECONDS: float = 900.0
 
 #: Default poll cadence, matched to the target budget granularity.
 DEFAULT_POLL_INTERVAL_S: int = 10
-
-#: Default overall timeout, roughly twice the target budget. Env-overridable via
-#: ``TRID3NT_SOLVER_TIMEOUT_S`` so a legitimately long solve gets headroom without
-#: touching a call site; an absent or unparseable value falls back to the default.
-def _default_timeout_s() -> int:
-    raw = (os.environ.get("TRID3NT_SOLVER_TIMEOUT_S") or "").strip()
-    try:
-        v = int(raw)
-        return v if v > 0 else 1800
-    except ValueError:
-        return 1800
-
-
-DEFAULT_TIMEOUT_S: int = _default_timeout_s()
 
 #: Highest progress ever advertised before the run reports success: the clamp is
 #: what stops a late run reading as finished on the strength of an estimate.
@@ -919,7 +905,7 @@ async def _emit_progress(progress_percent: int) -> None:
 async def wait_for_completion(
     handle: ExecutionHandle,
     poll_interval_s: int = DEFAULT_POLL_INTERVAL_S,
-    timeout_s: int = DEFAULT_TIMEOUT_S,
+    timeout_s: float | None = None,
     # Absorbs kwargs the model invents; the normalizer catches these upstream too.
     **_extra_ignored: Any,
 ) -> RunResult:
@@ -934,8 +920,8 @@ async def wait_for_completion(
     solver-class blocking pattern.
 
     Params: ``handle`` from ``run_solver`` (its ``workflow_name`` pins the
-    backend); ``poll_interval_s``; ``timeout_s``, on which the run is cancelled
-    best-effort and a failed ``RunResult`` returns with ``SOLVER_TIMEOUT``.
+    backend); ``poll_interval_s``; ``timeout_s`` (unstated, the SOLVE_TIMEOUT_S
+    setting), on which the run is cancelled best-effort and a failed ``RunResult`` returns with ``SOLVER_TIMEOUT``.
 
     Returns the terminal ``RunResult``: ``status="complete"`` carries the
     ``output_uri``, ``"failed"`` an error code and message, ``"cancelled"`` a
@@ -946,6 +932,8 @@ async def wait_for_completion(
         raise SolverDispatchError(
             f"poll_interval_s must be non-negative; got {poll_interval_s!r}"
         )
+    if timeout_s is None:
+        timeout_s = setting("SOLVE_TIMEOUT_S")
     if timeout_s <= 0:
         raise SolverDispatchError(
             f"timeout_s must be positive; got {timeout_s!r}"

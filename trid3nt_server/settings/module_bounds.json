@@ -125,6 +125,34 @@
         0.001,
         1000000000000.0
       ]
+    },
+    "CODE_EXEC_APPROVAL_TIMEOUT_S": {
+      "unit": "s",
+      "bounds": [
+        0.001,
+        1000000000000.0
+      ]
+    },
+    "CLIP_PERCENTILES": {
+      "unit": "percent",
+      "bounds": [
+        0,
+        100
+      ]
+    },
+    "SOLVE_TIMEOUT_S": {
+      "unit": "s",
+      "bounds": [
+        1,
+        1000000000000.0
+      ]
+    },
+    "MAX_TURNS_PER_SESSION": {
+      "unit": "turns",
+      "bounds": [
+        0,
+        1000000000000.0
+      ]
     }
   }
 }

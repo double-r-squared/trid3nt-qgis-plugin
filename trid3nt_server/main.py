@@ -13,11 +13,6 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-# Turn cap before dispatch refuses and emits ``session-state`` ``status="max_turns_reached"``;
-# ``TRID3NT_MAX_TURNS_PER_SESSION`` overrides 25, 0 disables.
-MAX_TURNS_PER_SESSION: int = int(os.environ.get("TRID3NT_MAX_TURNS_PER_SESSION", "25"))
-
-
 def _import_tools_registry() -> int:
     """Import ``trid3nt_server.tools`` to populate ``TOOL_REGISTRY`` and return
     the number of registered tools; an empty registry is a packaging fault.

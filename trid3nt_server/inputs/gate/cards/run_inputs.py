@@ -19,10 +19,6 @@ from trid3nt_server.inputs.user_input import UserInputError
 
 __all__ = ["RunInputsDeclinedError", "open_inputs", "review_run_inputs"]
 
-#: Rounds a card is redrawn on picks before the run is refused unlaunched.
-_ROUNDS = 6
-
-
 class RunInputsDeclinedError(UserDeclinedError):
     """The person cancelled the inputs card a direct run opened."""
 
@@ -114,7 +110,7 @@ async def review_run_inputs(tool_name: str, fn: Any, args: Mapping[str, Any], *,
         entries=[SyntheticInput(param=name, value=None, basis="user")
                  for name in rows],
         params={}, present=card, apply_revision=revise, blocked=blocked,
-        max_rounds=_ROUNDS, emitter=emitter)
+        emitter=emitter)
     if outcome.proceed:
         return taken
     if outcome.cancel_code == "declined":

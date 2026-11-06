@@ -26,6 +26,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ..plugin_settings import PluginSettings
 from ..net.auth_broker import LANGUAGE_MODEL_CREDENTIAL, AuthBroker, key_entries
+from ..net.trid3nt_client import typed_setting
 from ..net.tasks import _KeyedSourcesTask, _ModelListTask, _ProviderConfigTask, _SettingsTask
 
 
@@ -314,20 +315,9 @@ class SettingsDialog(QDialog):
         self.config_edit.setText(str(row["value"]))
         self.config_reset_btn.setEnabled(row["level"] != "default")
 
-    def _typed_setting(self, row: dict, text: str):
-        """The typed text as the setting's own type, or ``None`` where it does not parse (the agent refuses a value out of range on its own card)."""
-        try:
-            if row["type"] == "INTEGER":
-                return int(text)
-            if row["type"] == "REAL":
-                return float(text)
-        except ValueError:
-            return None
-        return text.strip() or None
-
     def _set_setting(self) -> None:
         row = self._selected_setting()
-        value = self._typed_setting(row, self.config_edit.text()) if row else None
+        value = typed_setting(row, self.config_edit.text()) if row else None
         if row is None or value is None or self._on_set_setting is None:
             return
         self._act_and_close(lambda: self._on_set_setting(row["name"], value, False))
