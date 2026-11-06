@@ -44,8 +44,12 @@ async def _provider_config(request: web.Request) -> web.Response:
 
 @failure("settings listing failed")
 async def _settings(_request: web.Request) -> web.Response:
-    """``GET /api/settings``: every changeable setting with the value the daemon holds, its level (default, user), default, range, unit and source. The file is read on a worker thread."""
-    return json_reply({"settings": await asyncio.to_thread(listing)})
+    """``GET /api/settings``: every changeable setting with the value the daemon holds, its level (default, user), default, range, unit and source, and ``retrieval_backend``, the dense backend the tool-retrieval index was built with (null while the index is cold or built lexical-only). The file is read on a worker thread."""
+    from trid3nt_server.tools.search.search_tools import search_tools
+
+    index = search_tools._INDEX
+    backend = getattr(index, "backend_name", None) if index is not None else None
+    return json_reply({"settings": await asyncio.to_thread(listing), "retrieval_backend": backend})
 
 
 def add_routes(app: web.Application) -> None:

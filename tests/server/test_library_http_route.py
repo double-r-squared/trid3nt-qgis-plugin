@@ -212,3 +212,16 @@ def test_the_settings_door_lists_every_setting_with_the_level_it_resolves_at(use
     assert rows["FILL_MAX_DISTANCE"]["value"] == 250 and rows["FILL_MAX_DISTANCE"]["level"] == "user"
     assert rows["FILL_MAX_DISTANCE"]["default"] == 100 and rows["FILL_MAX_DISTANCE"]["bounds"][0] == 1.0
     assert rows["MERGE_BUFFER_CELLS"]["level"] == "default" and rows["MERGE_BUFFER_CELLS"]["source"]
+
+
+def test_the_settings_door_names_the_retrieval_backend_the_index_was_built_with(monkeypatch):
+    from door_client import drive
+    from trid3nt_server.tools.search.search_tools import search_tools
+
+    class _Index:
+        backend_name = "sentence_transformers"
+
+    monkeypatch.setattr(search_tools, "_INDEX", _Index())
+    assert drive("GET", "/api/settings").json()["retrieval_backend"] == "sentence_transformers"
+    monkeypatch.setattr(search_tools, "_INDEX", None)
+    assert drive("GET", "/api/settings").json()["retrieval_backend"] is None
