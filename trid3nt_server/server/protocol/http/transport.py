@@ -17,7 +17,7 @@ from aiohttp import web
 
 logger = logging.getLogger("trid3nt_server.server.protocol.http")
 
-DEFAULT_HTTP_PORT = 8766
+from trid3nt_server.model.credentials.auth_handshake import ADVERTISED_HTTP_PORT_DEFAULT
 
 #: Every response carries these: the doors are unauthenticated with open CORS,
 #: and nothing they answer is cacheable.
@@ -108,6 +108,6 @@ async def preflight(_request: web.Request) -> web.Response:
 def http_port() -> int:
     """The port the doors listen on: ``TRID3NT_AGENT_HTTP_PORT`` or the default."""
     try:
-        return int(os.environ.get("TRID3NT_AGENT_HTTP_PORT", DEFAULT_HTTP_PORT))
+        return int(os.environ.get("TRID3NT_AGENT_HTTP_PORT", ADVERTISED_HTTP_PORT_DEFAULT))
     except ValueError:
-        return DEFAULT_HTTP_PORT
+        return ADVERTISED_HTTP_PORT_DEFAULT

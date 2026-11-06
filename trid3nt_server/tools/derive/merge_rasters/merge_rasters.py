@@ -15,6 +15,7 @@ from typing import Any
 from trid3nt_contracts.execution import layer_seed
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
 from trid3nt_server.settings import setting
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.derive._raster_layers import (
@@ -33,7 +34,7 @@ _STYLE = {"kind": "continuous", "ramp": "terrain", "units": "m"}
 def _metres_per_unit(crs: Any) -> float:
     """How many metres one unit of this CRS spans, for a degree grid or a metre
     one. A projected CRS in feet is not one any source here ships."""
-    return 1.0 if crs is not None and crs.is_projected else 111_320.0
+    return 1.0 if crs is not None and crs.is_projected else METRES_PER_DEGREE
 
 
 def _common_grid(sources: list[Any]) -> tuple[Any, int, int, Any, float]:

@@ -12,6 +12,7 @@ from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts.execution import LayerURI
 
+from trid3nt_server.inputs.point import POINT_PAD_DEG
 __all__ = ["Chart", "Deliverable", "Mesh", "Published", "Raster", "RasterFrame",
            "Vector", "instant_token", "publish", "quantity_of"]
 
@@ -319,9 +320,6 @@ def _vector_layer(item: Deliverable, *, run_id: str, engine: str,
         bbox=_features_bbox(vector.features))
 
 
-#: Degrees a zero-extent geometry's declared bbox reaches; a point reads as no extent to the camera.
-_POINT_PAD_DEG = 0.002
-
 
 def _features_bbox(features: Mapping[str, Any]
                    ) -> tuple[float, float, float, float] | None:
@@ -342,5 +340,5 @@ def _features_bbox(features: Mapping[str, Any]
         return None
     lons = [p[0] for p in points]
     lats = [p[1] for p in points]
-    pad = _POINT_PAD_DEG if len(points) == 1 else 0.0
+    pad = POINT_PAD_DEG if len(points) == 1 else 0.0
     return (min(lons) - pad, min(lats) - pad, max(lons) + pad, max(lats) + pad)

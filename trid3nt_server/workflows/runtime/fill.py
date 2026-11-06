@@ -21,6 +21,7 @@ from typing import Any, Mapping, Sequence
 from trid3nt_contracts.common import Origin
 from trid3nt_contracts.coverage import CoverageExtent, SourceChoice
 
+from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
 from trid3nt_server.render.pipeline_emitter import current_emitter, substep
 from trid3nt_server.render.uri_registry import lookup_uri_for_handle
 from trid3nt_server.tools.search.match import (
@@ -480,7 +481,7 @@ def _around(bbox: Sequence[float], mesh_m: float | None) -> list[float]:
 
     A surface stopping exactly at the edge leaves the edge nodes standing on nothing."""
     west, south, east, north = (float(v) for v in bbox)
-    pad = max(3.0 * float(mesh_m or 0.0), 100.0) / 111_320.0
+    pad = max(3.0 * float(mesh_m or 0.0), 100.0) / METRES_PER_DEGREE
     lon_pad = pad / max(math.cos(math.radians((south + north) / 2.0)), 0.1)
     return [west - lon_pad, south - pad, east + lon_pad, north + pad]
 

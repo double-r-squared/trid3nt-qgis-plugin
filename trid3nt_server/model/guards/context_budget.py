@@ -21,8 +21,9 @@ logger = logging.getLogger("trid3nt_server.model.guards.context_budget")
 
 # Config (env-overridable, read at call time)
 
-#: Final fallback when neither /api/show discovery nor a ``-<N>k`` name
-#: suffix resolves a model's context window (``TRID3NT_OPENAI_NUM_CTX``).
+#: Final fallback when neither /api/show discovery nor a ``-<N>k`` name suffix resolves a model's context window
+#: (``TRID3NT_OPENAI_NUM_CTX``, ``TRID3NT_CONTEXT_WINDOW``). Deliberately small: under-stating a window costs an early
+#: compaction, over-stating it costs a hard provider overflow.
 NUM_CTX_FALLBACK_DEFAULT = 16384
 
 #: The ``max_tokens`` cap sent on every LOCAL ``chat.completions`` request. An
@@ -280,11 +281,6 @@ _DISCOVERED_SOURCES = frozenset(
     }
 )
 
-#: Conservative window used when NOTHING could be discovered. Deliberately
-#: small: under-stating a window costs an early compaction, over-stating it
-#: costs a hard provider overflow. Operator override: ``TRID3NT_CONTEXT_WINDOW``.
-CONTEXT_WINDOW_FALLBACK_DEFAULT = 16384
-
 
 def context_window_env_override() -> int | None:
     """Operator-pinned window (``TRID3NT_CONTEXT_WINDOW``), or None when unset.
@@ -421,7 +417,7 @@ async def discover_context_window(
         if override is not None:
             resolved = (override, WINDOW_SOURCE_ENV)
         else:
-            resolved = (CONTEXT_WINDOW_FALLBACK_DEFAULT, WINDOW_SOURCE_FALLBACK)
+            resolved = (NUM_CTX_FALLBACK_DEFAULT, WINDOW_SOURCE_FALLBACK)
             logger.warning(
                 "context-window: UNDISCOVERABLE for provider=%s model=%r -- assuming a "
                 "conservative %d tokens. Set TRID3NT_CONTEXT_WINDOW to pin the real "
@@ -971,7 +967,6 @@ __all__ = [
     "CompactionResult",
     "ContextWindow",
     "ContextWindowExceededError",
-    "CONTEXT_WINDOW_FALLBACK_DEFAULT",
     "TurnPlan",
     "context_window_env_override",
     "discover_context_window",

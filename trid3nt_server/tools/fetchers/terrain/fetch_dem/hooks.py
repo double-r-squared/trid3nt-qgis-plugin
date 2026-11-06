@@ -31,6 +31,7 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..._fetch_common import (
+    MAX_PX_PER_AXIS,
     BboxInvalidError,
     UpstreamAPIError,
     _bbox_area_km2,
@@ -105,9 +106,6 @@ _DEM_COVERAGE_TOL_DEG = 0.0008
 
 #: Continent ceiling (mirrors fetch_landcover); above this a bbox hard-fails.
 _DEM_CONTINENT_CEILING_KM2 = 5_000_000.0
-
-#: Pixel-budget long-axis cap a request must fit (matches fetch_landcover).
-_DEM_PIXEL_BUDGET_PX = 4000
 
 #: Env override + default for the hard wall-clock budget on the 3DEP attempt.
 _DEM_PRIMARY_TIMEOUT_ENV = "TRID3NT_DEM_PRIMARY_TIMEOUT_S"
@@ -363,7 +361,7 @@ def validate_dem(spec: SourceSpec, params: dict[str, Any]) -> None:
     # PIXEL BUDGET last, once the bbox is one 3DEP can serve at all: the ask is
     # refused rather than coarsened, naming the spacing that fits.
     enforce_pixel_budget(
-        bbox, int(params["resolution_m"]), budget_px=_DEM_PIXEL_BUDGET_PX,
+        bbox, int(params["resolution_m"]), budget_px=MAX_PX_PER_AXIS,
         source="fetch_dem",
     )
 

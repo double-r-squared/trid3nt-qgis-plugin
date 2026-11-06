@@ -384,15 +384,15 @@ def ask_for(choice: SourceChoice, base: Mapping[str, Any], lon: float | None,
 def _reaching(bbox: Any, station: CoveragePoint) -> list[float]:
     """The run's own box, widened to REACH the station the row was ranked on."""
     west, south, east, north = (float(v) for v in bbox)
-    return [min(west, station.lon - _AROUND_STATION),
-            min(south, station.lat - _AROUND_STATION),
-            max(east, station.lon + _AROUND_STATION),
-            max(north, station.lat + _AROUND_STATION)]
+    return [min(west, station.lon - AROUND_PLACE_DEG),
+            min(south, station.lat - AROUND_PLACE_DEG),
+            max(east, station.lon + AROUND_PLACE_DEG),
+            max(north, station.lat + AROUND_PLACE_DEG)]
 
 
-#: How far past a station the widened box reaches, in degrees - about a hundred
+#: How far past a station or a point the widened box reaches, in degrees - about a hundred
 #: metres, so a station ON the edge is inside the box rather than on its line.
-_AROUND_STATION = 0.001
+AROUND_PLACE_DEG = 0.001
 
 
 def _picked_row(choice: SourceChoice) -> Coverage | None:

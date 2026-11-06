@@ -13,13 +13,13 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping
 
+from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
 from trid3nt_server.tools.mesh.meshers import MeshToolError
 
 __all__ = ["finest_edge", "op_geometry", "op_input", "op_raster",
            "raster_cell_m", "raster_scope"]
 
 #: Metres per degree of latitude, for a geographic raster's cell.
-_M_PER_DEG = 111_320.0
 
 
 def finest_edge(stated: Any, ops: Iterable[Any],
@@ -66,7 +66,7 @@ def raster_cell_m(path: Path) -> float:
         dx, dy = (abs(float(v)) for v in src.res)
         if src.crs is not None and src.crs.is_geographic:
             lat = math.radians(0.5 * (src.bounds.bottom + src.bounds.top))
-            dx, dy = dx * _M_PER_DEG * math.cos(lat), dy * _M_PER_DEG
+            dx, dy = dx * METRES_PER_DEGREE * math.cos(lat), dy * METRES_PER_DEGREE
     return round(min(dx, dy), 3)
 
 

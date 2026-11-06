@@ -18,6 +18,7 @@ from shapely import contains_xy
 from shapely.geometry import shape as _shape
 from shapely.ops import unary_union
 
+from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
 from trid3nt_server.tools.mesh.meshers import MeshToolError
 
 
@@ -72,7 +73,7 @@ def _typed(points, cells) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _m_per_deg(mid_lat_deg: float) -> float:
-    return 111_320.0 * max(0.15, math.cos(math.radians(mid_lat_deg)))
+    return METRES_PER_DEGREE * max(0.15, math.cos(math.radians(mid_lat_deg)))
 
 
 def _open_faces(path) -> list:

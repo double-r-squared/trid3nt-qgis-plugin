@@ -15,7 +15,7 @@ from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, 
 
 from trid3nt_server.model.adapters import model_discovery
 from trid3nt_server.model.guards.context_budget import (
-    CONTEXT_WINDOW_FALLBACK_DEFAULT,
+    NUM_CTX_FALLBACK_DEFAULT,
     ContextWindow,
     WINDOW_SOURCE_ANTHROPIC_MODELS,
     WINDOW_SOURCE_ENV,
@@ -211,7 +211,7 @@ async def test_undiscoverable_window_is_a_loud_conservative_fallback(caplog, mon
     ):
         with caplog.at_level(logging.WARNING):
             window = await discover_context_window("anthropic", "mystery-model")
-    assert window.tokens == CONTEXT_WINDOW_FALLBACK_DEFAULT
+    assert window.tokens == NUM_CTX_FALLBACK_DEFAULT
     assert window.source == WINDOW_SOURCE_FALLBACK
     assert window.discovered is False
     assert any("UNDISCOVERABLE" in r.getMessage() for r in caplog.records)

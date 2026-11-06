@@ -12,8 +12,15 @@ import tempfile
 from types import MappingProxyType
 from typing import Any, Mapping
 
-__all__ = ["GeometryReadError", "artifact_class", "covered_fraction",
+__all__ = ["GeometryReadError", "MAX_PX_PER_AXIS", "METRES_PER_DEGREE", "artifact_class", "covered_fraction",
            "flatten_features", "flatten_geometries", "read_geometry_doc", "source_uri", "utm_epsg_for"]
+
+
+#: Metres in one degree of latitude, which every degree-to-metre step reads.
+METRES_PER_DEGREE = 111_320.0
+
+#: Cells along one axis a fetched window may span before a fetcher refuses rather than coarsens.
+MAX_PX_PER_AXIS = 4000
 
 
 class GeometryReadError(RuntimeError):

@@ -6,9 +6,13 @@ before handing params to the cache shim."""
 
 from __future__ import annotations
 
+from trid3nt_server.inputs.geometry import MAX_PX_PER_AXIS, METRES_PER_DEGREE
+
 import math
 
 __all__ = [
+    "MAX_PX_PER_AXIS",
+    "MAX_TILES",
     "FetchError",
     "UpstreamAPIError",
     "KeyAskError",
@@ -20,6 +24,9 @@ __all__ = [
     "enforce_pixel_budget",
     "round_bbox_to_resolution",
 ]
+
+#: Source tiles one fetch may download before it refuses and asks for a narrower bbox.
+MAX_TILES = 64
 
 
 class FetchError(RuntimeError):
@@ -120,10 +127,10 @@ def round_bbox_to_resolution(
     min_lon, min_lat, max_lon, max_lat = bbox
     # mid_lat is rounded to 4 decimals (~11 m) so sub-meter edge differences give the same snap result.
     mid_lat = round(0.5 * (min_lat + max_lat), 4)
-    m_per_deg_lat = 111_320.0
-    m_per_deg_lon = 111_320.0 * math.cos(math.radians(mid_lat))
+    m_per_deg_lat = METRES_PER_DEGREE
+    m_per_deg_lon = METRES_PER_DEGREE * math.cos(math.radians(mid_lat))
     if m_per_deg_lon < 1e-6:  # near a pole -- fall back to deg-lat
-        m_per_deg_lon = 111_320.0
+        m_per_deg_lon = METRES_PER_DEGREE
 
     deg_lat_per_step = resolution_m / m_per_deg_lat
     deg_lon_per_step = resolution_m / m_per_deg_lon

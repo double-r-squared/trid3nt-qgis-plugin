@@ -18,7 +18,7 @@ import re
 import time
 from typing import Any
 
-from ..._fetch_common import FetchError
+from ..._fetch_common import MAX_TILES, FetchError
 from ..._tile_mosaic import VSICURL_ENV, MosaicEmpty, mosaic, own_utm
 from ..._router.hooks import register_hook
 
@@ -99,9 +99,6 @@ _TILE_NAME = re.compile(
 #: bbox fails before the manifest is downloaded.
 _US_COASTAL = (-180.0, 13.0, -64.0, 72.0)
 
-#: Ceiling on the tiles one AOI may merge. Past it the request is asking for a
-#: regional mosaic, and the honest answer is to say so.
-_MAX_TILES = 64
 
 #: The manifest is one static file the programme republishes on its own cadence,
 #: so it is read once per process rather than once per request.
@@ -242,10 +239,10 @@ def read_cudem(spec: Any, params: dict[str, Any], *,
             f"no NOAA NCEI CUDEM 1/9 arc-second tile intersects {bbox!r}. The "
             "hosted collection omits stretches of US coast and the Great Lakes "
             "entirely, so there is no nearshore topo-bathymetry here.")
-    if len(urls) > _MAX_TILES:
+    if len(urls) > MAX_TILES:
         raise CudemInputError(
             f"AOI {bbox!r} intersects {len(urls)} CUDEM tiles, past the "
-            f"{_MAX_TILES}-tile ceiling this row serves; narrow the bbox")
+            f"{MAX_TILES}-tile ceiling this row serves; narrow the bbox")
 
     paths = [f"/vsicurl/{url}" for url in urls]
     for path in paths:

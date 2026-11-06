@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT
@@ -25,7 +26,7 @@ SEA_LEVEL_DATUM = "MHW"
 DEEP_BED = "fetch_etopo"
 
 #: The level-1 cell: a quarter of a degree (degree_factor 4 in the example's setrun), along a meridian (111,320 m per degree).
-_LEVEL1_M = 0.25 * 111_320.0
+_LEVEL1_M = 0.25 * METRES_PER_DEGREE
 
 #: One ratio per finer level: the first four of the example's refinement_ratios_x [2, 2, 2, 6, 16], five levels, the finest 0.25 / 48 degrees.
 _RATIOS = [2, 2, 2, 6]

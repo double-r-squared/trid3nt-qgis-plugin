@@ -4,6 +4,8 @@ Pure envelope and suggestion builders: no websocket, no session state.
 """
 from __future__ import annotations
 
+from trid3nt_server.inputs.geometry import MAX_PX_PER_AXIS, METRES_PER_DEGREE
+
 import logging
 import math
 from typing import Any
@@ -37,8 +39,8 @@ _LANDCOVER_DEFAULT_RES_M: float = 30.0
 # Per-tool px-grid ceiling override: the MRLC WCS rejects GetCoverage beyond ~4096 px
 # per axis and fetch_dem refuses past 4000, so the card must not offer a finer rung.
 _FETCH_MAX_PX_BY_TOOL: dict[str, int] = {
-    "fetch_landcover": 4000,
-    "fetch_dem": 4000,
+    "fetch_landcover": MAX_PX_PER_AXIS,
+    "fetch_dem": MAX_PX_PER_AXIS,
 }
 
 
@@ -101,9 +103,9 @@ async def _build_fetch_resolution_envelope(
     # bbox extent in metres (approx, mid-latitude) -> the finest selectable rung.
     min_lon, min_lat, max_lon, max_lat = bbox
     mid_lat = 0.5 * (min_lat + max_lat)
-    m_per_deg_lon = 111_320.0 * max(0.05, math.cos(math.radians(mid_lat)))
+    m_per_deg_lon = METRES_PER_DEGREE * max(0.05, math.cos(math.radians(mid_lat)))
     width_m = max(0.0, max_lon - min_lon) * m_per_deg_lon
-    height_m = max(0.0, max_lat - min_lat) * 111_320.0
+    height_m = max(0.0, max_lat - min_lat) * METRES_PER_DEGREE
     long_axis_m = max(width_m, height_m)
     finest_allowed_m = max(ladder_floor, long_axis_m / float(max_fetch_px))
 

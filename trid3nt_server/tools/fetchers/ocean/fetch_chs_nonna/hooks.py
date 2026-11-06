@@ -12,7 +12,7 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..._fetch_common import bbox_pixel_dims, enforce_pixel_budget
+from ..._fetch_common import MAX_PX_PER_AXIS, bbox_pixel_dims, enforce_pixel_budget
 from ..._router import hooks as _hooks
 from ..._router.errors import (
     router_empty_error, router_input_error, router_upstream_error)
@@ -52,7 +52,7 @@ def validate(spec: SourceSpec, params: dict[str, Any]) -> None:
     wcs = (spec.ingest or {}).get("wcs", {})
     enforce_pixel_budget(
         bbox, float(params.get("resolution_m") or 10.0),
-        budget_px=int(wcs.get("max_px", 4000)), source=spec.name)
+        budget_px=int(wcs.get("max_px", MAX_PX_PER_AXIS)), source=spec.name)
 
 
 @_hooks.register_hook("chs_nonna.read")
@@ -69,7 +69,7 @@ def read(spec: SourceSpec, params: dict[str, Any], *,
     native = str(wcs.get("request_crs", "EPSG:3857"))
     width_px, height_px = bbox_pixel_dims(
         bbox, float(params.get("resolution_m") or 10.0),
-        px_max=int(wcs.get("max_px", 4000)))
+        px_max=int(wcs.get("max_px", MAX_PX_PER_AXIS)))
     into_native = Transformer.from_crs(
         spec.normalize.crs, native, always_xy=True).transform
     west, south = into_native(bbox[0], bbox[1])

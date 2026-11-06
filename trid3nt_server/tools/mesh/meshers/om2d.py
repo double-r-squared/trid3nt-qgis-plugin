@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
 from trid3nt_server.tools.mesh.inputs import finest_edge, op_geometry
 from trid3nt_server.tools.mesh.meshers import (
     POST,
@@ -40,7 +41,6 @@ _SEED = 0
 _MAX_ITER = 40
 
 #: Metres per degree of latitude, for the extent's own span.
-_M_PER_DEG = 111_320.0
 
 #: How far an apex may sit off its longest side, as a fraction of that side, before the three nodes are ONE LINE: no area to invert,
 #: and the boundary walk counts it as a second rim (the "pinched" domain a solver refuses). Relative, so a graded mesh's finest
@@ -151,8 +151,8 @@ def _unbounded_m(bbox: tuple[float, float, float, float]) -> float:
     """The extent's own diagonal, in metres: no edge inside it can be longer, so
     a coarsest edge here bounds nothing - the library's own default."""
     lon0, lat0, lon1, lat1 = (float(v) for v in bbox)
-    across = (lon1 - lon0) * _M_PER_DEG * math.cos(math.radians(0.5 * (lat0 + lat1)))
-    return round(math.hypot(across, (lat1 - lat0) * _M_PER_DEG), 1)
+    across = (lon1 - lon0) * METRES_PER_DEGREE * math.cos(math.radians(0.5 * (lat0 + lat1)))
+    return round(math.hypot(across, (lat1 - lat0) * METRES_PER_DEGREE), 1)
 
 
 def _read_built(points: Any, cells: Any, pfix: Any, stats: Mapping[str, Any],
@@ -450,7 +450,7 @@ def _box_faces(polygons: list[dict[str, Any]],
     The segment is the unit, never its run (a face names the shorter way round the ring). An OUTER ring on the box the whole way
     round was DRAWN as that box, so it is all shore; island holes say nothing about how the outer ring got there."""
     west, south, east, north = (float(v) for v in bbox)
-    lat_tol = _ON_BOX_TOLERANCE_M / 111_320.0
+    lat_tol = _ON_BOX_TOLERANCE_M / METRES_PER_DEGREE
     lon_tol = lat_tol / max(0.15, math.cos(math.radians(0.5 * (south + north))))
     sides = ((west, lon_tol, 0), (east, lon_tol, 0),
              (south, lat_tol, 1), (north, lat_tol, 1))
@@ -613,7 +613,7 @@ def _merge_coincident(points: Any, cells: Any,
     from scipy.spatial import cKDTree
 
     xy = np.asarray(points, dtype=float)
-    tol = _COINCIDENT_TOLERANCE_M / (111_320.0 * max(
+    tol = _COINCIDENT_TOLERANCE_M / (METRES_PER_DEGREE * max(
         0.15, float(np.cos(np.radians(xy[:, 1].mean())))))
     pairs = cKDTree(xy).query_pairs(tol, output_type="ndarray")
     if pairs.size == 0:

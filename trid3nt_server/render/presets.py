@@ -87,6 +87,10 @@ def ramp_stops(name: str | None) -> tuple[str, ...]:
     return stops
 
 
+#: The percentile window a data-driven stretch clips to, low and high.
+DEFAULT_CLIP: tuple[float, float] = (2.0, 98.0)
+
+
 @dataclass(frozen=True, slots=True)
 class Scale:
     """The one scale a quantity is read on.
@@ -97,7 +101,7 @@ class Scale:
     policy: Policy = "data"
     range: tuple[float, float] | None = None
     transform: Transform = "percentile"
-    clip: tuple[float, float] | None = (2.0, 98.0)
+    clip: tuple[float, float] | None = DEFAULT_CLIP
 
     def merged(self, other: "Scale | None") -> "Scale":
         """``other`` wins field by field - the override order, in one place."""
@@ -359,7 +363,7 @@ def band_range_reader(
         except Exception as exc:  # noqa: BLE001 - deps absent: declared fallback
             logger.debug("band-stats deps unavailable (%s: %s)", type(exc).__name__, exc)
             return None
-        lo_pct, hi_pct = scale.clip or (2.0, 98.0)
+        lo_pct, hi_pct = scale.clip or DEFAULT_CLIP
         try:
             with MemoryFile(raster_bytes) as mem, mem.open() as src:
                 band = src.read(1, masked=True)

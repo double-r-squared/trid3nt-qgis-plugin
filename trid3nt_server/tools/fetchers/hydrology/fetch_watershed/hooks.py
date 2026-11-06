@@ -28,18 +28,13 @@ from trid3nt_contracts.source_spec import SourceSpec
 
 from trid3nt_server.inputs.boundary import RATING
 
-from ..._fetch_common import FetchError
+from ..._fetch_common import MAX_PX_PER_AXIS, FetchError
 from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
 from ..._router.hooks import register_hook
 
 logger = logging.getLogger(__name__)
 
 __all__ = ["validate", "read"]
-
-#: Cells per axis the window is held to. 4000 x 4000 is the 16-million-cell D8 clamp
-#: the delineation declares and the DEM fetcher's own pixel budget at once, so a
-#: window under it is never silently coarsened on the way in.
-_MAX_PX_PER_AXIS = 4000
 
 #: Half the outlet run, in DEM cells: the cell the catchment drains through plus
 #: one either side. A catchment leaves through its channel, which the grid resolves
@@ -94,13 +89,13 @@ def validate(spec: SourceSpec, params: dict[str, Any]) -> None:
     buffer_km = float(params.get("buffer_km") or 10.0)
     resolution_m = int(params.get("resolution_m") or 30)
     px = math.ceil(2.0 * buffer_km * 1000.0 / resolution_m)
-    if px > _MAX_PX_PER_AXIS:
-        coarse = math.ceil(2.0 * buffer_km * 1000.0 / _MAX_PX_PER_AXIS)
-        wide = _MAX_PX_PER_AXIS * resolution_m / 2000.0
+    if px > MAX_PX_PER_AXIS:
+        coarse = math.ceil(2.0 * buffer_km * 1000.0 / MAX_PX_PER_AXIS)
+        wide = MAX_PX_PER_AXIS * resolution_m / 2000.0
         raise router_input_error(
             spec.error_code_prefix,
             f"a {2 * buffer_km:g} km window at {resolution_m} m is {px} cells per "
-            f"axis, over the {_MAX_PX_PER_AXIS}-cell budget the D8 trace is clamped "
+            f"axis, over the {MAX_PX_PER_AXIS}-cell budget the D8 trace is clamped "
             f"to. Ask again at resolution_m={coarse} over this window, or keep "
             f"{resolution_m} m and cut buffer_km to {wide:g}.",
             spec.input_error_suffix,

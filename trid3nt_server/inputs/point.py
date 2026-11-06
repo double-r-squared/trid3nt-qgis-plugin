@@ -22,7 +22,7 @@ _CODE = "POINT_INVALID"
 
 #: Half-width of a published point's declared bbox, in degrees. A zero-extent
 #: bbox reads as "no extent" to the camera, so the point gets a small honest box.
-_BBOX_PAD_DEG = 0.002
+POINT_PAD_DEG = 0.002
 
 #: A published point's style token. Vector presets are free descriptive strings
 #: (the QML style registry governs rasters), so it names what the point IS.
@@ -271,8 +271,8 @@ async def publish_point(emitter: Any, pt: Point, *, label: str, basis: str,
         layer = LayerURI(
             layer_id=f"point-{new_ulid()}", name=f"{title} ({basis}) - {context}",
             layer_type="vector", uri=uri, style=POINT_STYLE, role="context",
-            bbox=(pt.lon - _BBOX_PAD_DEG, pt.lat - _BBOX_PAD_DEG,
-                  pt.lon + _BBOX_PAD_DEG, pt.lat + _BBOX_PAD_DEG))
+            bbox=(pt.lon - POINT_PAD_DEG, pt.lat - POINT_PAD_DEG,
+                  pt.lon + POINT_PAD_DEG, pt.lat + POINT_PAD_DEG))
         emitted = await publish_input_layer(emitter, layer, role="context")
         logger.info("point layer emitted=%s basis=%s at (%.5f, %.5f)",
                     emitted, basis, pt.lon, pt.lat)

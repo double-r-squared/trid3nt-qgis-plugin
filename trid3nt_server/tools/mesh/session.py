@@ -18,13 +18,13 @@ import numpy as np
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
+from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
 from trid3nt_server.render.mesh_display import (
     MESH_ELEMENT_TAG,
     mesh_display_path,
     write_2dm,
     write_ugrid,
 )
-from trid3nt_server.tools.mesh.grid_geometry import M_PER_DEG_LAT
 from trid3nt_server.tools.mesh.artifact import (
     MeshArtifact,
     write_mesh_artifact_sidecar,
@@ -362,7 +362,7 @@ def _metre_scale(mesh: Mesh) -> tuple[float, float]:
     if str(mesh.crs_authid).upper() != "EPSG:4326":
         return 1.0, 1.0
     lat = float(np.asarray(mesh.points, dtype=float)[:, 1].mean())
-    return (M_PER_DEG_LAT * max(0.01, math.cos(math.radians(lat))), M_PER_DEG_LAT)
+    return (METRES_PER_DEGREE * max(0.01, math.cos(math.radians(lat))), METRES_PER_DEGREE)
 
 
 def _lonlat_bbox(mesh: Mesh) -> tuple[float, float, float, float]:

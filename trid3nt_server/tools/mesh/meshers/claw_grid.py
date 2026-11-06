@@ -11,7 +11,8 @@ import math
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
 
-from trid3nt_server.tools.mesh.grid_geometry import M_PER_DEG_LAT, RegularGrid
+from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
+from trid3nt_server.tools.mesh.grid_geometry import RegularGrid
 from trid3nt_server.tools.mesh.meshers import (
     POST,
     Mesh,
@@ -143,18 +144,18 @@ def build(recipe: Any) -> Mesh:
         _refuse("MESH_EXTENT_DEGENERATE",
                 f"extent {tuple(extent)!r} needs max_lon > min_lon and "
                 "max_lat > min_lat.")
-    step = float(recipe.resolution_m) / M_PER_DEG_LAT
+    step = float(recipe.resolution_m) / METRES_PER_DEGREE
     ncol = max(1, round((max_lon - min_lon) / step))
     nrow = max(1, round((max_lat - min_lat) / step))
     centre_lat = 0.5 * (min_lat + max_lat)
-    m_lon = M_PER_DEG_LAT * max(0.01, math.cos(math.radians(centre_lat)))
+    m_lon = METRES_PER_DEGREE * max(0.01, math.cos(math.radians(centre_lat)))
     grid = RegularGrid(
         min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat,
         resolution_m=float(recipe.resolution_m), ncol=ncol, nrow=nrow,
         dlon=(max_lon - min_lon) / ncol, dlat=(max_lat - min_lat) / nrow,
         span_x_m=(max_lon - min_lon) * m_lon,
-        span_y_m=(max_lat - min_lat) * M_PER_DEG_LAT,
-        m_per_deg_lon=m_lon, m_per_deg_lat=M_PER_DEG_LAT)
+        span_y_m=(max_lat - min_lat) * METRES_PER_DEGREE,
+        m_per_deg_lon=m_lon, m_per_deg_lat=METRES_PER_DEGREE)
     level1 = lattice(grid)
     mesh = Mesh(points=level1.points, cells=level1.cells,
                 crs_authid=level1.crs_authid, bed=None,
@@ -200,7 +201,7 @@ def _with_facts(mesh: Mesh, grid: RegularGrid, ratios: list[int],
     finest_deg = (grid.dlon / factor, grid.dlat / factor)
     regions = list(mesh.meta.get("flagregions", ()))
     counts = _level_counts(grid, ratios, regions)
-    finest_m = (finest_deg[1] * M_PER_DEG_LAT,
+    finest_m = (finest_deg[1] * METRES_PER_DEGREE,
                 finest_deg[0] * grid.m_per_deg_lon)
     facts = {
         "lower": [grid.min_lon, grid.min_lat],
@@ -209,7 +210,7 @@ def _with_facts(mesh: Mesh, grid: RegularGrid, ratios: list[int],
         "ratios": ratios,
         "levels": len(ratios) + 1,
         "level1_cell_deg": [grid.dlon, grid.dlat],
-        "level1_cell_m": [grid.dlat * M_PER_DEG_LAT, grid.dlon * grid.m_per_deg_lon],
+        "level1_cell_m": [grid.dlat * METRES_PER_DEGREE, grid.dlon * grid.m_per_deg_lon],
         "finest_cell_deg": list(finest_deg),
         "finest_cell_m": list(finest_m),
         "finest_cell_arcsec": [finest_deg[1] * _ARCSEC, finest_deg[0] * _ARCSEC],
@@ -232,7 +233,7 @@ def _with_facts(mesh: Mesh, grid: RegularGrid, ratios: list[int],
     ]
     rows.append(("wall_estimate", f"up to about {facts['wall_s_per_sim_s'] * 3600.0 / 60.0:.0f} min of wall per simulated hour "
                  f"on the box that measured it, {WALL_BASIS}"))
-    if abs(grid.dlat * M_PER_DEG_LAT - float(stated_m)) > 1e-6 * float(stated_m):
+    if abs(grid.dlat * METRES_PER_DEGREE - float(stated_m)) > 1e-6 * float(stated_m):
         notes.append(f"the stated {float(stated_m):g} m was fitted to the "
                      "extent as a whole number of cells")
     return dataclasses.replace(mesh, meta={

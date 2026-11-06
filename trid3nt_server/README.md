@@ -23,6 +23,7 @@ on one machine against one user; the only wire shapes it speaks are
 | `model/` | The model connection: provider adapters, credentials, and the guards over a model turn. |
 | `inputs/` | Every input into the system as a typed value: a Point, an Extent and a Shape, each with one ingestion from every form a user hands it in, the user's own file adopted as a layer, and the gate a turn waits on a person at. |
 | `server/` | The daemon core: connection loop, turn engine, dispatch, session state. |
+| `settings/` | The changeable judgments: one keyword dictionary, three levels (default, the user's file, the run), and the one reader every module calls. |
 | `store/` | What the daemon keeps: the object store, the case documents, and the sweep over the cache. |
 | `tools/` | The registered tool surface: fetchers and derive tools, the mesh front, with search and meta beside them. |
 | `workflows/` | The engine layer: the template runtime, the executor, TELEMAC. |

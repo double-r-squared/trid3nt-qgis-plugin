@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
 from trid3nt_server.inputs import point_arg
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT
@@ -35,7 +36,7 @@ _ASCE_SIFT_REGION2 = {"acsza57": 35.0, "acszb57": 35.0, "acsza58": 10.0, "acszb5
                       "acsza59": 10.0, "acszb59": 24.0, "acsza60": 30.0, "acszb60": 30.0}
 
 #: The level-1 cell: 4 arcminutes, 15 cells per degree, along a meridian (111,320 m per degree).
-_LEVEL1_M = 4.0 / 60.0 * 111_320.0
+_LEVEL1_M = 4.0 / 60.0 * METRES_PER_DEGREE
 
 #: One ratio per finer level: 4' -> 2' -> 24" -> 12" -> 6" -> 3" -> 1", seven levels (the tutorial's list, whose seventh ratio its amr_levels_max leaves unused).
 _RATIOS = [2, 5, 2, 2, 2, 3]

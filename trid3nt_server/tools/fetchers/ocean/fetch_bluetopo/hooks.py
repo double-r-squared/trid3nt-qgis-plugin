@@ -30,7 +30,7 @@ from typing import Any
 from trid3nt_server.tools.cache import record_provenance
 from trid3nt_server.tools.fetchers._public_s3 import public_s3_client
 
-from ..._fetch_common import FetchError
+from ..._fetch_common import MAX_TILES, FetchError
 from ..._tile_mosaic import VSICURL_ENV, MosaicEmpty, mosaic, own_utm, painted_fraction
 from ..._router.hooks import register_hook
 
@@ -117,10 +117,6 @@ _US_BBOX: tuple[float, float, float, float] = (-180.0, -15.0, -64.0, 72.0)
 #: ~6.5 MB and is republished on the programme's own cadence, not per request.
 _SCHEME_MEMO_TTL_S = 3600.0
 
-#: Ceiling on the tiles one AOI may merge. A request that wants more is asking
-#: for a regional mosaic, and the honest answer is to say so rather than to
-#: spend an unbounded number of reads discovering it.
-_MAX_TILES = 64
 
 _scheme_memo: tuple[float, str] | None = None
 
@@ -327,10 +323,10 @@ def read_bluetopo(
             "programme has delivered. Supply your own bed, or let the bed "
             "ladder lay a source that reaches this water."
         )
-    if len(rows) > _MAX_TILES:
+    if len(rows) > MAX_TILES:
         raise BlueTopoInputError(
             f"AOI {bbox!r} intersects {len(rows)} BlueTopo tiles, over the "
-            f"{_MAX_TILES}-tile ceiling; narrow the bbox"
+            f"{MAX_TILES}-tile ceiling; narrow the bbox"
         )
 
     sources: list[str] = []

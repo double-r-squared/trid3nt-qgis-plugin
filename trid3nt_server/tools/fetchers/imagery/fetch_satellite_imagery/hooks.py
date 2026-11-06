@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -18,6 +17,7 @@ import requests
 
 from trid3nt_contracts.source_spec import SourceSpec
 
+from ...imagery._goes_archive_core import MAX_ARCHIVE_FRAMES
 from ...imagery._satellite_slider import (
     _USER_AGENT,
     SliderEmptyError,
@@ -42,7 +42,6 @@ __all__ = [
     "frames_plan",
     "frame_bytes",
     "PRODUCT_INDEX_URL",
-    "MAX_FRAMES",
     "load_index",
     "sector_products",
     "is_geostationary",
@@ -69,7 +68,6 @@ _DAY_LST_END_H = 19.0
 #: is a cadence apart in every way that matters.
 _STEP_TOLERANCE_S = 30.0
 
-MAX_FRAMES: int = int(os.environ.get("TRID3NT_MAX_SATELLITE_FRAMES", "144"))
 
 _BBOX_QUANTIZE_DP = 6
 
@@ -337,7 +335,7 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
                 (bbox[0] + bbox[2]) / 2.0,
                 day_only=True if day_only is None else bool(day_only),
             )
-    frames = _cap(frames, MAX_FRAMES)
+    frames = _cap(frames, MAX_ARCHIVE_FRAMES)
     if not frames:
         raise router_empty_error(
             sc,

@@ -14,7 +14,7 @@ import logging
 import math
 from typing import Any
 
-from ..._fetch_common import FetchError
+from ..._fetch_common import MAX_TILES, FetchError
 from ..._tile_mosaic import MosaicEmpty, mosaic, own_utm
 from ..._router.hooks import register_hook
 
@@ -75,9 +75,6 @@ COLLECTIONS: tuple[dict[str, Any], ...] = (
     },
 )
 
-#: Ceiling on the items one AOI may merge, the same ceiling the sibling tile rows
-#: hold: past it the request is asking for a regional mosaic.
-_MAX_TILES = 64
 
 
 def select_tiles(bbox: tuple[float, float, float, float],
@@ -166,10 +163,10 @@ def read_regional_coastal_dem(spec: Any, params: dict[str, Any], *,
         raise RegionalCoastalDemCoverageGapError(
             f"the NCEI regional coastal DEM collection(s) over {bbox!r} ship no "
             "item that intersects it")
-    if len(urls) > _MAX_TILES:
+    if len(urls) > MAX_TILES:
         raise RegionalCoastalDemInputError(
             f"AOI {bbox!r} intersects {len(urls)} regional DEM items, past the "
-            f"{_MAX_TILES}-item ceiling this row serves; narrow the bbox")
+            f"{MAX_TILES}-item ceiling this row serves; narrow the bbox")
 
     paths = [f"/vsicurl/{url}" for url in urls]
     try:

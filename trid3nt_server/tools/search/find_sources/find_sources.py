@@ -20,7 +20,7 @@ from trid3nt_server.inputs.instant import instant as ingest_instant
 from trid3nt_server.inputs.point import point as ingest_point
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.search.match import (
-    Need, ask_for, base_ask, match, sources_with_coverage)
+    AROUND_PLACE_DEG, Need, ask_for, base_ask, match, sources_with_coverage)
 
 __all__ = ["FIND_SOURCES", "find_sources", "FindSourcesError"]
 
@@ -33,11 +33,6 @@ class FindSourcesError(RuntimeError):
     error_code = "FIND_SOURCES_NEED_UNKNOWN"
     retryable = False
 
-
-#: How far past a POINT the box reaches when the place is a point rather than an
-#: area, in degrees - about a hundred metres, so a source called by a box is
-#: asked for the ground the point stands on and not for a region around it.
-_AROUND_POINT = 0.001
 
 
 #: The name the registry and the dispatch gate know this tool by. The gate
@@ -143,8 +138,8 @@ async def _place(value: Any) -> tuple[list[float] | None, float | None,
         pt = await ingest_point(value, label="place")
         if pt is None:
             return (None, None, None)
-        return ([pt.lon - _AROUND_POINT, pt.lat - _AROUND_POINT,
-                 pt.lon + _AROUND_POINT, pt.lat + _AROUND_POINT],
+        return ([pt.lon - AROUND_PLACE_DEG, pt.lat - AROUND_PLACE_DEG,
+                 pt.lon + AROUND_PLACE_DEG, pt.lat + AROUND_PLACE_DEG],
                 pt.lon, pt.lat)
     area = await ingest_extent(value, label="place")
     if area is None:

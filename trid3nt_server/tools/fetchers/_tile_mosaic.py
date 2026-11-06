@@ -12,6 +12,8 @@ bbox-clipped grid, last source wins. Only the tile PICK is a row's own."""
 
 from __future__ import annotations
 
+from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
+
 import logging
 import math
 from typing import Any
@@ -67,7 +69,6 @@ def own_utm(bbox: tuple[float, float, float, float]) -> str:
 
 
 #: Metres in one degree of latitude: the length a geographic target's cell is read in.
-METRES_PER_DEGREE = 111320.0
 
 
 def _metres_per_unit(target_crs: str) -> float:
@@ -140,7 +141,7 @@ def _cell_m(ds: Any) -> float:
     try:
         if ds.crs is not None and ds.crs.is_geographic:
             lat = (ds.bounds.bottom + ds.bounds.top) / 2.0
-            return cell * 111320.0 * max(math.cos(math.radians(lat)), 0.1)
+            return cell * METRES_PER_DEGREE * max(math.cos(math.radians(lat)), 0.1)
     except Exception:  # noqa: BLE001
         pass
     return cell
