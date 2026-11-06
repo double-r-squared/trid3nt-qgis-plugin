@@ -169,3 +169,37 @@ def test_the_request_is_the_one_whole_world_file(spec):
     assert len(plans) == 1
     assert plans[0].url.endswith("gem_active_faults_harmonized.geojson")
     assert "User-Agent" in plans[0].headers
+
+
+_NO_DIP = {
+    "type": "FeatureCollection",
+    "features": [
+        {"type": "Feature", "properties": {"name": "Undipped", "net_slip_rate": "(3.0,,)",
+            "average_rake": "(90.0,,)", "upper_seis_depth": "(0.0,,)", "lower_seis_depth": "(12.0,,)"},
+         "geometry": {"type": "LineString", "coordinates": [[-122.50, 37.50], [-122.40, 37.65]]}},
+        {"type": "Feature", "properties": {"name": "Inverted", "net_slip_rate": "(3.0,,)",
+            "average_dip": "(60,,)", "average_rake": "(90.0,,)",
+            "upper_seis_depth": "(10.0,,)", "lower_seis_depth": "(5.0,,)"},
+         "geometry": {"type": "LineString", "coordinates": [[-122.45, 37.55], [-122.35, 37.70]]}},
+        {"type": "Feature", "properties": {"name": "Whole", "net_slip_rate": "(3.0,,)",
+            "average_dip": "(60,,)", "average_rake": "(90.0,,)",
+            "upper_seis_depth": "(1.0,,)", "lower_seis_depth": "(9.0,,)"},
+         "geometry": {"type": "LineString", "coordinates": [[-122.30, 37.60], [-122.20, 37.70]]}},
+    ],
+}
+
+
+def test_omitted_kinematics_are_never_defaulted(spec):
+    feats = fsh.parse_response(spec, {"bbox": _SF_BBOX}, [json.dumps(_NO_DIP).encode()])
+    by = {f["properties"]["name"]: f["properties"] for f in feats}
+    assert by["Undipped"]["dip_deg"] is None
+    assert "average_dip" in by["Undipped"]["dropped_reason"]
+    assert by["Inverted"]["lower_seis_depth_km"] is None
+    assert "not below" in by["Inverted"]["dropped_reason"]
+    assert by["Whole"]["dropped_reason"] is None
+    fgb = features_to_fgb_bytes(feats, spec, {"bbox": _SF_BBOX})
+    env = fsh.envelope(spec, {"bbox": _SF_BBOX}, None, fgb)
+    assert [r["name"] for r in env["faults"]] == ["Whole"]
+    assert env["fault_count"] == 1
+    assert "Undipped" in env["note"] and "Inverted" in env["note"]
+    assert "average_dip" in env["note"]

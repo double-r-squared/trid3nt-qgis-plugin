@@ -181,7 +181,7 @@ class FaultSourcesResult(LayerURI):
     fault_count: int = 0
     faults: list[dict] = []
     source: str = "GEM Global Active Faults (harmonized)"
-    #: Always None here: an empty AOI returns a bare record instead of a layer.
+    #: Names the traces carried without a source record; an empty AOI returns a bare record instead of a layer.
     note: str | None = None
 
 

@@ -5,8 +5,9 @@ request downloads once, and reads each fault's kinematics out of it. A zero-faul
 returns no feature, so the emptiness switch answers with a record."""
 
 # The kinematic parse is the irreducible step: the '(best,min,max)' triple, the
-# two-distinct-vertex and positive-slip gate, and the published depth, dip and rake
-# defaults. ``envelope`` reads the kinematic record, legend and count back off the
+# two-distinct-vertex and positive-slip gate, and the refusal to supply a dip, rake or
+# seismogenic depth the source omits (the fault is carried with the missing names, never
+# defaulted). ``envelope`` reads the kinematic record, legend and count back off the
 # produced FGB, and ``empty_record`` is the dict a zero-fault AOI answers with.
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ _SOURCE_LABEL = "GEM Global Active Faults (harmonized)"
 _PROPS = (
     "name", "net_slip_rate_mm_yr", "dip_deg", "rake_deg",
     "upper_seis_depth_km", "lower_seis_depth_km", "slip_type", "catalog_name",
+    "dropped_reason",
 )
 
 
@@ -98,13 +100,21 @@ def _parse_fault_feature(feature: dict[str, Any]) -> dict[str, Any] | None:
     if slip is None or slip <= 0:
         return None
 
-    dip = first_num(props.get("average_dip"), 90.0)
-    rake = first_num(props.get("average_rake"), 180.0)
-    usd = first_num(props.get("upper_seis_depth"), 0.0)
-    lsd = first_num(props.get("lower_seis_depth"), 12.0)
-    if lsd is None or usd is None or lsd <= usd:
-        usd = usd if usd is not None else 0.0
-        lsd = usd + 12.0
+    dip = first_num(props.get("average_dip"))
+    rake = first_num(props.get("average_rake"))
+    usd = first_num(props.get("upper_seis_depth"))
+    lsd = first_num(props.get("lower_seis_depth"))
+    missing = [
+        name for name, v in (
+            ("average_dip", dip), ("average_rake", rake),
+            ("upper_seis_depth", usd), ("lower_seis_depth", lsd),
+        ) if v is None
+    ]
+    reason = f"the source states no {', '.join(missing)}" if missing else None
+    if reason is None and lsd <= usd:
+        reason = "the source states a lower seismogenic depth not below the upper"
+    if reason is not None:
+        dip = rake = usd = lsd = None
 
     slip_type = props.get("slip_type")
     catalog_name = props.get("catalog_name")
@@ -112,12 +122,13 @@ def _parse_fault_feature(feature: dict[str, Any]) -> dict[str, Any] | None:
         "name": str(props.get("name") or "fault"),
         "geometry": pts,
         "net_slip_rate_mm_yr": float(slip),
-        "dip_deg": float(dip),
-        "rake_deg": float(rake),
-        "upper_seis_depth_km": float(usd),
-        "lower_seis_depth_km": float(lsd),
+        "dip_deg": dip,
+        "rake_deg": rake,
+        "upper_seis_depth_km": usd,
+        "lower_seis_depth_km": lsd,
         "slip_type": str(slip_type) if slip_type else None,
         "catalog_name": str(catalog_name) if catalog_name else None,
+        "dropped_reason": reason,
     }
 
 
@@ -205,12 +216,27 @@ def _faults_from_fgb(data: bytes) -> list[dict[str, Any]]:
     return recs
 
 
+def _dropped_note(dropped: list[dict[str, Any]]) -> str | None:
+    """One line naming each fault left out of ``faults`` and why."""
+    if not dropped:
+        return None
+    named = "; ".join(f"{r.get('name')!r}: {r['dropped_reason']}" for r in dropped)
+    return (
+        f"{len(dropped)} fault trace(s) in this AOI are drawn but carry no source "
+        f"record, because a dip, rake or seismogenic depth is never assumed - {named}."
+    )
+
+
 @_hooks.register_hook("fault_sources.envelope")
 def envelope(
     spec: SourceSpec, params: dict[str, Any], layer: Any, data: bytes | None
 ) -> dict[str, Any]:
     """The kinematic-record + legend + name envelope (-> FaultSourcesResult)."""
-    faults = _faults_from_fgb(data) if data else []
+    records = _faults_from_fgb(data) if data else []
+    faults = [r for r in records if not r.get("dropped_reason")]
+    for r in faults:
+        del r["dropped_reason"]
+    dropped = [r for r in records if r.get("dropped_reason")]
     n = len(faults)
     plural = "trace" if n == 1 else "traces"
     return {
@@ -220,7 +246,7 @@ def envelope(
         "fault_count": n,
         "faults": faults,
         "source": _SOURCE_LABEL,
-        "note": None,
+        "note": _dropped_note(dropped),
     }
 
 
