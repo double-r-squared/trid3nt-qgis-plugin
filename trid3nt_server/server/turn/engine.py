@@ -71,7 +71,6 @@ def _asks_for_data_or_analysis(user_text: Any) -> bool:
 #: toward the EARLIEST stage, so a multi-step turn reads as a forward march.
 _STAGE_ORDER: tuple[str, ...] = (
     "acquisition",
-    "preprocessing",
     "analysis",
     "visualization",
 )
@@ -81,8 +80,6 @@ def _stage_label_for_tool(tool_name: str) -> str:
     anything unrecognized falls back to ``"tool-selection"``."""
     if tool_name.startswith(("fetch_", "geocode_", "search_")):
         return "acquisition"
-    if tool_name.startswith(("merge_", "fill_")):
-        return "preprocessing"
     if tool_name.startswith("generate_"):
         return "visualization"
     if tool_name.startswith("run_"):

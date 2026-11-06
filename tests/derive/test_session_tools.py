@@ -164,10 +164,6 @@ def test_bad_arguments_refuse_before_the_wire(monkeypatch) -> None:
         asyncio.run(run_pyqgis("   ", confirmed=True))
 
 
-_WITHIN = {"type": "Polygon", "coordinates": [[
-    [-82.5, 42.99], [-82.49, 42.99], [-82.49, 43.0], [-82.5, 43.0], [-82.5, 42.99]]]}
-
-
 async def _a_qgis_output(monkeypatch, tmp_path, store, session: str):
     """One algorithm run over a fetched case layer, the QGIS side stubbed with
     the file it would have written -> (registry, the tool's return)."""
@@ -260,23 +256,6 @@ async def test_a_case_layer_rides_the_wire_as_its_store_uri(
     assert sent["INPUT"] == out.uri and out.uri.startswith("s3://")
     assert sent["MASK"] == "s3://bucket/dem.tif" and sent["Z_FIELD"] == "z"
     assert sent["LAYERS"] == [out.uri, "s3://bucket/dem.tif", "EPSG:4326"]
-
-
-@pytest.mark.asyncio
-async def test_a_second_derive_takes_a_qgis_output_by_its_id(
-        monkeypatch, tmp_path, fake_s3) -> None:
-    from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry
-    from trid3nt_server.tools.derive.fill_nodata.fill_nodata import fill_nodata
-
-    registry, out = await _a_qgis_output(monkeypatch, tmp_path, fake_s3, "qgis-chain")
-    token = activate_registry(registry)
-    try:
-        filled = await fill_nodata(layer=out.layer_id, within=_WITHIN, seed=1.0)
-    finally:
-        deactivate_registry(token)
-    assert filled.name == "Reprojected (filled)"
-    assert dict(filled.coverage)["filled"] > 0.0
-    assert filled.vertical_datum == "NAVD88" and filled.quantity == "elevation"
 
 
 @pytest.mark.asyncio

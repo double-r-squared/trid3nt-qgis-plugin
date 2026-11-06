@@ -45,17 +45,15 @@ def _cards(sock: _FakeSocket) -> list[dict]:
 
 # A pipeline ranking: one tool per stage, best-first. As each round dispatches
 # its tool, the exclusion advances the plurality (tie-broken to the earliest
-# remaining stage) acquisition -> preprocessing -> analysis -> visualization.
+# remaining stage) acquisition -> analysis -> visualization.
 _PIPELINE = [
     ("fetch_dem", 0.050),
-    ("merge_rasters", 0.040),
     ("run_solver", 0.030),
     ("generate_chart", 0.020),
 ]
 
 _SCRIPT = [
     {"text": "fetching", "tool_call": {"name": "fetch_dem", "args": {}}},
-    {"text": "clipping", "tool_call": {"name": "merge_rasters", "args": {}}},
     {"text": "analyzing", "tool_call": {"name": "run_solver", "args": {}}},
     {"text": "done."},
 ]
@@ -92,9 +90,8 @@ async def test_ask_mode_emits_stage_labeled_wave_per_round(monkeypatch, user_set
 
     labels = [(c.get("payload") or {}).get("stage_label") for c in _cards(sock)]
     # A forward-marching sequence of stage labels (the waves).
-    assert labels[:4] == [
+    assert labels[:3] == [
         "acquisition",
-        "preprocessing",
         "analysis",
         "visualization",
     ], labels
@@ -132,8 +129,7 @@ async def test_auto_mode_emits_no_per_round_waves(monkeypatch):
 
 def test_stage_label_from_candidate_categories_plurality():
     slc = agent_server._stage_label_for_candidates
-    assert slc([("fetch_dem", 1.0), ("fetch_landcover", 0.9), ("merge_rasters", 0.8)]) == "acquisition"
-    assert slc([("merge_rasters", 1.0), ("fill_nodata", 0.9), ("run_solver", 0.8)]) == "preprocessing"
+    assert slc([("fetch_dem", 1.0), ("fetch_landcover", 0.9), ("run_solver", 0.8)]) == "acquisition"
     assert slc([("run_solver", 1.0), ("run_qgis_algorithm", 0.9), ("run_pyqgis", 0.8)]) == "analysis"
     assert slc([("generate_chart", 1.0), ("generate_chart", 0.9), ("open_case_in_qgis", 0.8)]) == "visualization"
 
@@ -142,7 +138,7 @@ def test_stage_label_ties_break_to_earliest_stage():
     slc = agent_server._stage_label_for_candidates
     # one per stage -> tie -> earliest pipeline stage wins.
     assert slc(
-        [("fetch_dem", 1.0), ("merge_rasters", 0.9), ("run_solver", 0.8), ("generate_chart", 0.7)]
+        [("fetch_dem", 1.0), ("run_solver", 0.8), ("generate_chart", 0.7)]
     ) == "acquisition"
 
 

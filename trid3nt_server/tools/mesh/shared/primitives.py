@@ -32,7 +32,7 @@ def set_bed(mesh: Mesh, source: Any, interp: str | None = None,
     """Paint every node's elevation from the bed slot -> the mesh, bedded.
 
     ``source`` is ONE surface (fetcher name, object-store uri, raster layer, or a depth in metres below the free surface);
-    a bed of several is composed BEFORE here by merge_rasters and fill_nodata. A node the surface has nothing for refuses."""
+    a bed of several is laid into one by the bed slot BEFORE here. A node the surface has nothing for refuses."""
     import numpy as np
 
     interp = interp or setting("SAMPLE_INTERP")
@@ -77,9 +77,10 @@ def _reached(source: Any, values: Any, lonlat: Any, provenance: str) -> None:
         f"elevation from {provenance}: they stand between "
         f"({at[:, 0].min():.5f}, {at[:, 1].min():.5f}) and "
         f"({at[:, 0].max():.5f}, {at[:, 1].max():.5f}), on cells no row of this "
-        f"bed measured. {_feedback(source)} Name a surface that covers them, "
-        "compose one with merge_rasters and fill_nodata and hand its layer to "
-        "the bed, or state the depth this water body holds.")
+        f"bed measured. {_feedback(source)} Hand the bed a further surface "
+        "after this one that covers them (an ordered list, the first handed "
+        "winning), raise the setting FILL_MAX_DISTANCE so the fill reaches "
+        "them, or state the depth this water body holds.")
 
 
 def _feedback(source: Any) -> str:

@@ -56,7 +56,10 @@ class INPUTS:
 
     extent = Input(EXTENT)
     domain = Input(DOMAIN).need(at="seed")
-    bed = Input(BED).need("bathymetry")
+    bed = Input(BED, desc=(
+        "The fine rung of the bed over the deep one: ONE bathymetry or survey raster, or a layer name, on the "
+        "run's vertical frame - the engine takes the finest surface at each point, so the bed takes one surface; "
+        "unfilled, the run matches a source of bathymetry.")).need("bathymetry")
 
 
 class STEERING(GEO):

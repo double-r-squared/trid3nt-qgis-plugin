@@ -60,6 +60,8 @@ class Slot:
     #: The caller may state the value as the NUMBER itself - the level the
     #: water opens at, the depth of a pond - rather than a layer to read it off.
     number: bool = False
+    #: The caller may hand an ORDERED LIST of values, each one this type takes alone.
+    listed: bool = False
     #: The one shape this type's ingestion reads a matched source as, "" for any: a
     #: source publishing its class in another shape is never asked.
     reads: str = ""
@@ -92,10 +94,13 @@ DOMAIN = Slot("domain", ingestion="domain", classes=frozenset({"hydrography"}),
 #: frame refuses by name.
 BED = Slot("bed", ingestion="bed",
            classes=frozenset({"bathymetry", "terrain", "channel survey"}),
-           number=True,
+           number=True, listed=True,
            desc="what the domain's nodes carry for elevation: a DEM, a "
                 "bathymetry or survey raster, a layer of soundings, or a "
-                "depth in metres below the free surface",
+                "depth in metres below the free surface; or an ORDERED LIST "
+                "of surfaces - layer names, or {\"source\": fetcher} - the "
+                "first winning every cell it measured, a later one only the "
+                "cells left empty",
            states=(Input(
                name="vertical_frame", default="NAVD88",
                desc="Vertical datum the bed's elevations are counted from, and "

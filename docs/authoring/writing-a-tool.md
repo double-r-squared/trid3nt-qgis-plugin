@@ -20,8 +20,8 @@ already answered by one of those or by the user's QGIS session.
 
 ## The one real example
 
-Read `trid3nt_server/tools/derive/merge_rasters/` whole. It is a directory of
-three files - `merge_rasters.py`, `corpus.yaml`, `__init__.py` - and shows
+Read `trid3nt_server/tools/derive/probe_point/` whole. It is a directory of
+three files - `probe_point.py`, `corpus.yaml`, `__init__.py` - and shows
 every seam a derive touches:
 
 - the function under `@register_tool` with its `AtomicToolMetadata`, its
@@ -31,6 +31,6 @@ every seam a derive touches:
   decorator fire at startup;
 - the practitioner phrasings in `corpus.yaml` that retrieval ranks it by;
 - a refusal that names the missing input instead of guessing it, and a
-  layer result that carries its provenance.
+  result that reads a null with its reason rather than a fabricated number.
 
 Its test lives under `tests/derive/`, mirroring the product tree.

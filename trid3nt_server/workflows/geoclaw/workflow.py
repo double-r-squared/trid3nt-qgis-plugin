@@ -327,6 +327,7 @@ class GeoclawWorkflow(Workflow):
 
     engine = "geoclaw"
     solve_step = "solve"
+    lays_own_bed = True
     moment = EVENT_TIME.name
 
     def __init__(self, *, coerce: Sequence[Any] = (), **declared: Any) -> None:

@@ -161,11 +161,12 @@ class Input:
     @property
     def wire_type(self) -> Any:
         """The type the generated tool's signature takes for this input.
-        A row is always a string - the declared shape does not narrow it; a Point is
-        typed by the value it holds and takes every form its ingestion reads."""
+        A row is a string - the declared shape does not narrow it - or a list of them where its type takes
+        one; a Point is typed by the value it holds and takes every form its ingestion reads."""
         if self.is_row:
             # A schema advertising only a layer name would refuse a known level or a one-number pond.
-            return str | float | None if getattr(self.slot, "number", False) else str | None
+            one = str | float | None if getattr(self.slot, "number", False) else str | None
+            return one | list if getattr(self.slot, "listed", False) else one
         if self.type is not None:
             from .point import Point
 

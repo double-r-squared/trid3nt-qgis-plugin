@@ -24,16 +24,17 @@
       "shape": "",
       "size": 1,
       "unbounded": false,
-      "help": "The interpolator a hole is filled with: GDAL's inverse-distance weighting, the library's own.",
+      "help": "The interpolator a hole in the bed, and a seam MERGE_BUFFER_CELLS widens, is filled with: inverse_distance is GDAL FillNodata's own weighting; linear interpolates over the triangulation of the measured cells around the hole.",
       "rubrique": [
         "bed"
       ],
       "is_file": false,
       "mandatory": false,
       "default": "inverse_distance",
-      "source": "GDAL FillNodata (rasterio.fill.fillnodata), the library's native algorithm; the only one the fill implements. https://gdal.org/en/stable/programs/gdal_fillnodata.html",
+      "source": "GDAL FillNodata (rasterio.fill.fillnodata), the library's native algorithm. https://gdal.org/en/stable/programs/gdal_fillnodata.html",
       "choices": [
-        "inverse_distance"
+        "inverse_distance",
+        "linear"
       ]
     },
     {

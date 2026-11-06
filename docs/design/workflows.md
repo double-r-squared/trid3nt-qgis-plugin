@@ -16,8 +16,7 @@ The system performs no resample, reproject, clip, aggregate or unit conversion
 because an input or a row DECLARED it. QGIS, GRASS and Python are in the
 person's hands, so data that does not fit a slot is REFUSED by name with the
 step that makes it fit named as the remedy, and the person or the model runs
-that step first and hands the slot the layer it produced. A bed with water
-nothing measured refuses naming `merge_rasters` and `fill_nodata`; a layer of
+that step first and hands the slot the layer it produced. A layer of
 soundings refuses naming the derive that grids it; a place name handed to a
 Point or an Extent refuses naming `geocode_location`.
 
@@ -28,6 +27,24 @@ Three things are not operations and stay:
   frame, an upload onto the store's lon/lat frame, a MODFLOW raster onto the
   sheet's length and time units (a raster publishing no unit refuses). Each is
   the slot's own coercion, never a row a template writes.
+- LAYING THE BED (`inputs/bed.py`, `inputs/bed_merge.py`) - the bed slot's own
+  coercion. The slot takes one surface or an ORDERED LIST of them (layer names,
+  or `{"source": fetcher}`, each fetched through the match under the class it
+  serves): no workflow is baked in, the person or the model fetches, reads the
+  coverage, hands a further surface or stops. Each surface is read onto the
+  run's frame through its own offset row, then onto one grid - the finest
+  surface's CRS and cell over the union of the surfaces and the cut - the
+  earlier-handed winning every cell it measured (HydroMT `merge_method`
+  `first`), band 2 naming each cell's surface by its place. The seam is blended
+  over `MERGE_BUFFER_CELLS`; what nothing measured inside the cut is filled
+  from the cells inside the cut by `FILL_ALGORITHM` up to `FILL_MAX_DISTANCE`
+  pixels, each cell marked filled, and water past that reach refuses
+  `BED_WET_HOLE` naming the setting and a further surface. The coverage of each
+  surface over the water and the land, the filled share and the age between
+  the surfaces are cut-coverage lines: rows on the input review card in a gated
+  run, run notes in an auto one. An engine that lays its own ladder of
+  surfaces (`Workflow.lays_own_bed`, GeoClaw's topofiles, the finest at each
+  point) takes one surface on its bed row and neither merges nor fills.
 - A FETCH reading its source onto the asked window and spacing. The kernel a
   row states is how that source's pixels are read; a grid past the pixel
   budget refuses naming the spacing to re-ask at.

@@ -169,13 +169,14 @@ def test_a_raster_measurement_reaches_the_bed_without_being_gridded(world,
     assert out == "s3://b/fetch_soundings.tif"
 
 
-def test_a_wet_hole_is_refused_at_the_fill_naming_both_remedies(world,
-                                                                monkeypatch,
-                                                                tmp_path):
+def test_a_wet_hole_past_the_fill_s_reach_is_refused_naming_the_setting(world,
+                                                                       monkeypatch,
+                                                                       tmp_path):
     """The matched row measures the east half of water cut over the whole of
-    it, so the west half is a WET hole: the fill refuses by name and the remedy
-    is the two steps that compose a bed covering it."""
+    it, so the west half is a WET hole the fill reaches only so far: past the
+    stated reach the fill refuses by name, naming the setting and a further surface."""
     from trid3nt_server.inputs.user_input import UserInputError
+    from trid3nt_server.settings import bind_run, reset_run
 
     monkeypatch.setitem(SPECS, "fetch_soundings",
                         _Spec(coverage("bathymetry", res=1.0), "raster",
@@ -191,15 +192,76 @@ def test_a_wet_hole_is_refused_at_the_fill_naming_both_remedies(world,
         [-122.72, 45.56], [-122.72, 45.50]]]}
     token = bind_domain(Domain(bbox=(-122.72, 45.50, -122.62, 45.56),
                                geometry=water, label="reach"))
+    reach = bind_run({"FILL_MAX_DISTANCE": 3})
     try:
         with pytest.raises(UserInputError) as refused:
             asyncio.run(fill._matched(_env(), _row(Input(BED).need("bathymetry"), "bed")))
     finally:
+        reset_run(reach)
         reset_domain(token)
     said = str(refused.value)
     assert refused.value.error_code == "BED_WET_HOLE"
-    assert "merge_rasters" in said and "fill_nodata" in said
-    assert "50.0%" in said
+    assert "FILL_MAX_DISTANCE (now 3 px)" in said and "further surface" in said
+    assert "merge_rasters" not in said and "fill_nodata" not in said
+
+
+def _surface(tmp_path, name, value, cols):
+    """A lon/lat surface over the reach measuring ``value`` in the columns ``cols``."""
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    path = tmp_path / f"{name}.tif"
+    values = np.full((12, 20), np.nan, dtype="float32")
+    values[:, cols] = value
+    with rasterio.open(path, "w", driver="GTiff", width=20, height=12, count=1,
+                       dtype="float32", crs="EPSG:4326", nodata=np.nan,
+                       transform=from_origin(-122.72, 45.56, 0.005, 0.005)) as dst:
+        dst.write(values, 1)
+    return {"uri": str(path), "name": name, "vertical_datum": "NAVD88"}
+
+
+def test_an_ordered_list_handed_the_bed_fetches_each_named_source_in_order(
+        world, monkeypatch, tmp_path):
+    """A merge is a second fetch into the same slot: each named source is asked
+    under the class it serves, in the order handed, and the first wins."""
+    import numpy as np
+    import rasterio
+
+    from trid3nt_server.tools.derive import _hydrology_common as common
+
+    real = common.write_cog
+    monkeypatch.setattr(common, "write_cog", lambda band, **kw: real(
+        band, **{**kw, "output_dir": str(tmp_path)}))
+    made = {"fetch_bed_raster": _surface(tmp_path, "chart", -8.0, slice(10, 20)),
+            "fetch_terrain": _surface(tmp_path, "terrain", 3.0, slice(0, 20))}
+
+    async def _runner(runner, kwargs, label):
+        world.append((runner, dict(kwargs)))
+        return made[runner]
+
+    monkeypatch.setattr(fill, "_call_runner", _runner)
+    env = _env()
+    row = _row(Input(BED).need("bathymetry"), "bed")
+    fill._stated(env, row, [{"source": "fetch_bed_raster"}, {"source": "fetch_terrain"}])
+    laid = asyncio.run(fill._produce(env, row))
+    assert [runner for runner, _kw in world] == ["fetch_bed_raster", "fetch_terrain"]
+    assert laid.source.sources[:2] == ["chart", "terrain"]
+    with rasterio.open(laid.source.uri) as src:
+        values = src.read(1)
+    assert np.all(values[:, 10:] == -8.0) and np.all(values[:, :10] == 3.0)
+
+
+def test_a_named_source_serving_no_bed_class_refuses_rather_than_another_taking_its_place(
+        world):
+    from trid3nt_server.workflows.runtime.errors import StepFailedError
+
+    env = _env()
+    row = _row(Input(BED).need("bathymetry"), "bed")
+    fill._stated(env, row, [{"source": "fetch_bed_raster"}, {"source": "fetch_gauges"}])
+    with pytest.raises(StepFailedError) as refused:
+        asyncio.run(fill._produce(env, row))
+    assert "surface 2" in str(refused.value) and "fetch_gauges" in str(refused.value)
 
 
 def test_no_measurement_over_this_domain_refuses_rather_than_reaching_a_class(
@@ -471,3 +533,47 @@ def test_the_cut_domain_is_what_the_rest_of_the_run_is_bound_to(coastline):
     bound = asyncio.run(_fill_then_read())
     assert bound.geometry["type"] in ("Polygon", "MultiPolygon")
     assert bound.bbox[0] == pytest.approx(-122.67)
+
+
+def test_each_handed_surface_on_another_frame_is_asked_its_own_offset_off_its_record(
+        world, monkeypatch, tmp_path):
+    """A case layer handed by its handle states its zero on its record, so the runtime asks
+    the offset row for THAT surface and reads it onto the run's frame before it is laid."""
+    import numpy as np
+    import rasterio
+
+    from trid3nt_contracts.execution import LayerURI
+    from trid3nt_server.render.uri_registry import (
+        activate_registry, deactivate_registry, get_uri_registry)
+    from trid3nt_server.tools.derive import _hydrology_common as common
+
+    real = common.write_cog
+    monkeypatch.setattr(common, "write_cog", lambda band, **kw: real(
+        band, **{**kw, "output_dir": str(tmp_path)}))
+    chart = _surface(tmp_path, "chart", -8.0, slice(10, 20))
+    terrain = _surface(tmp_path, "terrain", 3.0, slice(0, 20))
+
+    async def _runner(runner, kwargs, label):
+        world.append((runner, dict(kwargs)))
+        return {"offset_m": 1.5, "from_frame": "igld85", "to_frame": "navd88",
+                "source": "NOAA VDatum"}
+
+    monkeypatch.setattr(fill, "_call_runner", _runner)
+    registry = get_uri_registry("bed-offset-per-surface")
+    registry.register_tool_result("fetch_chs_nonna", LayerURI(
+        layer_id="chart-1", name="chart", layer_type="raster", uri=chart["uri"],
+        vertical_datum="IGLD85"))
+    token = activate_registry(registry)
+    try:
+        env = _env()
+        row = _row(Input(BED).need("bathymetry"), "bed")
+        fill._stated(env, row, ["chart-1", terrain])
+        laid = asyncio.run(fill._produce(env, row))
+    finally:
+        deactivate_registry(token)
+    asked = [kw for runner, kw in world if runner == "fetch_vertical_datum_offset"]
+    assert [(kw["from_frame"], kw["to_frame"]) for kw in asked] == [("igld85", "navd88")]
+    assert "bed_1_datum_offset" in env.data
+    with rasterio.open(laid.source.uri) as src:
+        values = src.read(1)
+    assert np.allclose(values[:, 10:], -6.5) and np.allclose(values[:, :10], 3.0)

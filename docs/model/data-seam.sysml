@@ -436,21 +436,18 @@ package DataSeam {
 
     part def BedComposer {
         doc /*
-        A raster derive a person runs BEFORE the fill, over CASE LAYERS only,
-        producing a case layer a slot then takes by id; a derive never fetches.
-        Every fetched layer carries its vertical datum, its quantity and the
-        shift its source publishes about that datum as fields on the layer
-        record - a source whose rows each state their zero is stamped off what
-        its rows agree on - and a layer named by id brings them along. QGIS's
-        IDW, run through run_qgis_algorithm, grids soundings, and its output
-        is a case layer carrying the fields its input carried; merge_rasters lays its
-        inputs first wins, each read onto ONE zero - a surface counting DEPTHS
-        read as elevations up from its own datum, through the shift it publishes
-        or an offset record passed in - and refuses an input on another datum
-        with none, naming the offset fetch; fill_nodata paints the cells nothing
-        measured inside a polygon, its edge seeded at a STATED value. Both write
-        a second band naming where every cell came from, which the mesh reads
-        to journal the share of nodes each input painted.
+        The bed slot's own coercion over an ORDERED LIST of surfaces, each
+        already read on the run's frame: laid onto one grid, the earlier handed
+        winning every cell it measured, and what nothing measured inside the
+        cut filled by the bed settings. Every fetched layer carries its vertical
+        datum, its quantity and the shift its source publishes about that datum
+        as fields on the layer record - a source whose rows each state their
+        zero is stamped off what its rows agree on - and a layer named by id
+        brings them along. QGIS's IDW, run through run_qgis_algorithm, grids
+        soundings, and its output is a case layer carrying the fields its input
+        carried. The laid bed writes a second band naming where every cell came
+        from - a surface's place in the list, or filled - which the mesh reads
+        to journal the share of nodes each surface painted.
         */
     }
 
@@ -532,13 +529,7 @@ package DataSeam {
 
     part bedComposer : BedComposer {
         doc /*
-        code: trid3nt_server/tools/derive/merge_rasters/merge_rasters.py
-        */
-    }
-
-    part bedFiller : BedComposer {
-        doc /*
-        code: trid3nt_server/tools/derive/fill_nodata/fill_nodata.py
+        code: trid3nt_server/inputs/bed_merge.py
         */
     }
 
@@ -839,10 +830,10 @@ package DataSeam {
         */
     }
 
-    requirement def WaterNothingMeasuredIsPaintedOnlyWhenAskedFor {
+    requirement def WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach {
         doc /*
         NOTHING PAINTS SILENTLY. The bed lays the ONE row the match ranked
-        first and STATES WHAT IT COVERS - over the water the domain was cut with
+        first, or the ordered list of surfaces it was handed, and STATES WHAT IT COVERS - over the water the domain was cut with
         and over the land separately, what each row painted there and what
         nothing measured, and the rows that also matched and could cover the
         gap. A wider surface over the water measures its TOP, so it is not a bed
@@ -851,23 +842,27 @@ package DataSeam {
         BEFORE THE SOLVE where they meet the fill: on the run's own card beside
         the sources it matched, and on the journal.
 
-        A WET HOLE REFUSES BY NAME AT THE FILL. Water inside the cut that no
-        value of the surface reaches - including water past the surface's own
-        edge - has no bed, and the slot refuses naming the two derives that
-        compose one over it: merge_rasters, which lays further surfaces under
-        this one, and fill_nodata, which paints what is left within the domain
-        from the measurements to its edge. A DRY hole is stated and left to the
-        mesh, which refuses a node no value reaches.
+        A WET HOLE PAST THE FILL'S REACH REFUSES BY NAME AT THE FILL. Water
+        inside the cut that no surface measured - including water past every
+        surface's own edge - is filled from the cells measured inside the cut
+        alone, by the interpolator the FILL_ALGORITHM setting names, no farther
+        than FILL_MAX_DISTANCE pixels from a measured cell; each filled cell is
+        marked filled in the second band, so an interpolation is never read as
+        a sounding, and the share filled is stated with the coverage. Water
+        past that reach has no bed, and the slot refuses naming where it
+        stands, the setting that would reach it and a further surface handed
+        after these. A DRY hole is stated and left to the mesh, which refuses a
+        node no value reaches.
 
-        COMPOSING PAST ONE ROW IS THE PERSON'S STATEMENT, made as derives run
-        before the fill rather than as arguments on it. merge_rasters lays its
-        inputs in the order stated, each painting only the cells the ones before
-        it left; fill_nodata paints the cells nothing measured inside the
-        polygon it is handed, seeded at its edge at a value the person STATES -
-        never one read off a run - with no distance cap. Each writes a second
-        band naming which input every cell came from, a filled cell marked as
-        filled, so an interpolation is never read as a sounding. The slot takes
-        the layer they produce by id, like any slot.
+        A FURTHER SURFACE IS THE PERSON'S STATEMENT. No workflow is baked in:
+        the person or the model reads the coverage, hands the bed a further
+        surface in an ordered list - a layer, or a source fetched under the
+        class it serves - or stops. The earlier handed wins every cell it
+        measured and a later one paints only what the earlier left; the seam
+        between them is blended over the MERGE_BUFFER_CELLS setting. The age
+        between the surfaces is stated beside their coverage. An engine that
+        lays its own ladder of surfaces and takes the finest at each point takes
+        one surface on its bed row and neither merges nor fills.
         */
     }
 
@@ -940,11 +935,10 @@ package DataSeam {
         IGLD85, which the row's own datum vocabulary says and the survey's plot
         sheet states in its own sentence.
 
-        The same order holds wherever surfaces meet before a slot does:
-        merge_rasters reads EVERY INPUT onto the last input's own zero, each
-        through the shift it publishes or an offset record passed in, before
-        any of them paints a cell, and a pair nothing bridges refuses naming
-        both and the offset fetch. A surface counting DEPTHS down from its zero is one
+        The same order holds for every surface of an ordered list handed the
+        bed: EACH is read onto the run's frame through the shift it publishes or
+        its own offset row before any of them paints a cell, and a pair nothing
+        bridges refuses naming both. A surface counting DEPTHS down from its zero is one
         axis with a surface counting elevations up only through that shift, so
         it is read the other way round on the way - on its own grid, before
         either is read onto the common one.
@@ -954,10 +948,8 @@ package DataSeam {
         they are counted below and refuses without it, while an elevation
         surface somebody handed this run stands on the run's frame.
 
-        AN UNPLACEABLE INPUT REFUSES. An input whose zero nothing passed in
-        reaches the frame the merge lands on refuses by name, naming both zeros
-        and the offset fetch that measures one; the offset is a value a fetch
-        produced, handed to the merge, never fetched by it. The refusal is
+        AN UNPLACEABLE INPUT REFUSES. An input whose zero no offset row reaches
+        the run's frame from refuses by name, naming both zeros. The refusal is
         built ONCE, by the datum check that knows both zeros; a slot re-raises
         it under its own code rather than restating the surface and the two
         frames in its own words, since two statements of one fact are two
@@ -1280,20 +1272,20 @@ package DataSeam {
         doc /*
         The bed is one seam fed by whatever the user has: a fetched DEM, a
         bathymetry or survey raster, or a stated depth below the free surface.
-        The slot takes ONE source, and it is one row; a layer of soundings is
-        refused by name, naming the QGIS step that grids it.
+        It is one row; a layer of soundings is refused by name, naming the QGIS
+        step that grids it.
 
-        A bed built from a survey over a wider surface is EXISTING COMPOSITION,
-        not new vocabulary: merge_rasters lays the inputs first wins with a band
-        recording which won at each cell, and fill_nodata paints what is left
-        inside a polygon. Both are useful outside any slot, which is why they
-        are tools rather than arguments on the mesh op or on the slot. The slot
-        takes the one layer they produced, by id, and knows nothing of what
-        went into it.
+        A bed built from a survey over a wider surface is a SECOND SURFACE
+        HANDED THE SAME SLOT, not a tool: the slot takes an ordered list, lays
+        it first wins with a band recording which won at each cell, and fills
+        what is left inside the cut by the bed settings, as its own coercion -
+        no one would lay surfaces into a bed outside the slot. What the slot
+        hands on is one layer, so the mesh, a grid engine and the journal read
+        one surface and know nothing of what went into it.
 
-        A node the source does not cover REFUSES by name. Filling the hole with
-        the mean of what was covered is a bed nobody measured, and it reads as
-        data everywhere downstream.
+        A node no surface and no fill covers REFUSES by name. Filling the hole
+        with the mean of what was covered is a bed nobody measured, and it reads
+        as data everywhere downstream.
         */
     }
 
@@ -1403,25 +1395,24 @@ package DataSeam {
     verify requirement ACatalogReaderCarriesNoProvenance by
         "tests/fetchers/test_bathymetry_data_seam.py::test_every_bed_capable_row_states_its_vertical_datum";
 
-    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
+    verify requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by
         "tests/telemac/test_telemac_run_identity.py::test_what_the_cut_covers_is_on_the_card_before_the_solve";
-    satisfy requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by bedSlot;
-    satisfy requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by bedComposer;
-    satisfy requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by bedFiller;
-    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
-        "tests/derive/test_merge_and_fill.py::test_a_bed_whose_water_nothing_measured_is_refused_naming_both_remedies";
-    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
-        "tests/derive/test_merge_and_fill.py::test_water_past_the_surface_s_own_edge_is_a_wet_hole";
-    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
-        "tests/runtime/test_matched_slots.py::test_a_wet_hole_is_refused_at_the_fill_naming_both_remedies";
-    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
-        "tests/derive/test_merge_and_fill.py::test_the_fill_reaches_inside_within_alone_and_marks_what_it_painted";
-    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
-        "tests/derive/test_merge_and_fill.py::test_the_edge_of_within_is_seeded_at_the_stated_value";
-    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
-        "tests/derive/test_merge_and_fill.py::test_a_fill_with_no_seed_refuses_rather_than_reading_one_off_a_run";
-    verify requirement WaterNothingMeasuredIsPaintedOnlyWhenAskedFor by
-        "tests/derive/test_merge_and_fill.py::test_ops_is_on_no_signature";
+    satisfy requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by bedSlot;
+    satisfy requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by bedComposer;
+    verify requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by
+        "tests/inputs/test_bed_merge.py::test_a_hole_past_the_fill_s_reach_refuses_naming_the_setting_and_another_surface";
+    verify requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by
+        "tests/inputs/test_bed_merge.py::test_water_past_every_surface_s_edge_is_a_hole_the_fill_reaches_or_refuses";
+    verify requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by
+        "tests/runtime/test_matched_slots.py::test_a_wet_hole_past_the_fill_s_reach_is_refused_naming_the_setting";
+    verify requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by
+        "tests/inputs/test_bed_merge.py::test_a_hole_inside_the_cut_is_filled_and_marked_and_one_outside_is_left";
+    verify requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by
+        "tests/inputs/test_bed_merge.py::test_the_fill_reads_inside_the_cut_alone";
+    verify requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by
+        "tests/inputs/test_bed_merge.py::test_linear_is_one_setting_away";
+    verify requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by
+        "tests/inputs/test_bed_merge.py::test_an_engine_laying_its_own_ladder_neither_merges_nor_fills";
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeLevelDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by freeSurfaceReader;
@@ -1650,13 +1641,13 @@ package DataSeam {
     satisfy requirement TheRunHasOneVerticalFrame by bedSlot;
     satisfy requirement TheRunHasOneVerticalFrame by bedComposer;
     verify requirement TheRunHasOneVerticalFrame by
-        "tests/derive/test_merge_and_fill.py::test_a_survey_of_depths_is_read_onto_the_last_input_s_frame_through_its_own_shift";
+        "tests/inputs/test_bed_merge.py::test_a_survey_of_depths_is_read_onto_the_run_s_frame_through_its_own_shift";
     verify requirement TheRunHasOneVerticalFrame by
-        "tests/derive/test_merge_and_fill.py::test_a_stated_offset_moves_an_input_onto_the_frame";
+        "tests/inputs/test_bed_merge.py::test_each_surface_is_moved_onto_the_frame_by_its_own_offset";
     verify requirement TheRunHasOneVerticalFrame by
-        "tests/derive/test_merge_and_fill.py::test_the_datum_quantity_and_shift_survive_fetch_qgis_merge_and_fill";
+        "tests/inputs/test_bed_merge.py::test_the_datum_quantity_and_shift_survive_fetch_and_qgis_into_the_bed";
     verify requirement TheRunHasOneVerticalFrame by
-        "tests/derive/test_merge_and_fill.py::test_the_merged_surface_states_the_shift_its_zero_s_input_publishes";
+        "tests/inputs/test_bed_merge.py::test_a_surface_no_offset_bridges_refuses_naming_both_frames";
     verify requirement TheRunHasOneVerticalFrame by
         "tests/fetchers/test_router_ehydro_surveys.py::test_the_layer_records_the_datum_and_the_shift_its_surveys_publish";
     verify requirement TheRunHasOneVerticalFrame by
@@ -1748,29 +1739,28 @@ package DataSeam {
     satisfy requirement OneBedOverEverySourceAUserCanHave by bedSlot;
     satisfy requirement OneBedOverEverySourceAUserCanHave by bedPainter;
     satisfy requirement OneBedOverEverySourceAUserCanHave by bedComposer;
-    satisfy requirement OneBedOverEverySourceAUserCanHave by bedFiller;
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/derive/test_merge_and_fill.py::test_the_first_input_wins_where_it_measured_and_the_next_fills_the_rest";
+        "tests/inputs/test_bed_merge.py::test_the_first_surface_wins_where_it_measured_and_the_next_paints_the_rest";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/derive/test_session_tools.py::test_an_output_is_a_case_layer_carrying_what_its_input_carried";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/derive/test_session_tools.py::test_a_second_derive_takes_a_qgis_output_by_its_id";
+        "tests/runtime/test_matched_slots.py::test_an_ordered_list_handed_the_bed_fetches_each_named_source_in_order";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/derive/test_session_tools.py::test_the_bed_slot_takes_a_qgis_output_by_its_id";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/derive/test_merge_and_fill.py::test_the_order_of_the_list_is_the_priority";
+        "tests/inputs/test_bed_merge.py::test_the_order_of_the_list_is_the_priority";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/derive/test_merge_and_fill.py::test_surfaces_with_no_common_ground_refuse";
+        "tests/inputs/test_bed_merge.py::test_surfaces_with_no_common_ground_refuse";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/scripts/test_live_run_harness.py::test_the_calls_before_the_template_run_in_order_and_chain_their_layers";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/inputs/test_slot_inputs.py::test_the_bed_slot_takes_one_source_and_composes_nothing";
+        "tests/inputs/test_slot_inputs.py::test_the_bed_row_states_one_class_and_carries_no_surface_under_it";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/inputs/test_slot_inputs.py::test_the_bed_slot_says_which_shape_it_was_handed";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_stated_depth_is_a_flat_bed_below_the_free_surface";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/mesh/test_bed_sources_and_runs.py::test_the_bed_is_one_source_and_two_are_merged_before_the_op";
+        "tests/mesh/test_bed_sources_and_runs.py::test_the_bed_is_one_source_and_two_are_laid_by_the_slot_before_the_op";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_domain_no_source_covers_refuses_by_name";
     verify requirement OneBedOverEverySourceAUserCanHave by

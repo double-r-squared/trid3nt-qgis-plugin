@@ -86,6 +86,10 @@ class Workflow:
     #: The name of the input holding the moment a run opens at; a runtime that dates nothing names none.
     moment: str = ""
 
+    #: The engine lays its own ladder of bed surfaces and takes the finest at each point, so its bed slot
+    #: takes one surface and neither merges nor fills.
+    lays_own_bed: bool = False
+
     def input_schema(self) -> tuple[Path, str] | None:
         """Where this engine's template values read their schema off: the
         (directory, module) of the module input JSON, or None where a template

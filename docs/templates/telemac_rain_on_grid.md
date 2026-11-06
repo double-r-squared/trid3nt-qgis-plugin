@@ -15,7 +15,7 @@ How much RUNOFF a storm produces from the catchment a point drains, as an outlet
 | row | produced by | what it is | datum |
 |---|---|---|---|
 | `domain` | matched on a need for hydrography | the closed polygon this run solves over, as a uri, a layer name or a drawn shape; unfilled, the run matches a source of hydrography. | - |
-| `bed` | matched on a need for terrain | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of terrain. | - |
+| `bed` | matched on a need for terrain | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; or an ORDERED LIST of surfaces - layer names, or {"source": fetcher} - the first winning every cell it measured, a later one only the cells left empty; unfilled, the run matches a source of terrain. | - |
 | `rivers` | matched on a need for hydrography | the hydrography this run reads, as a uri or a layer name; unfilled, the run matches a source of hydrography. | - |
 | `landcover` | matched on a need for land cover | the land cover this run reads, as a uri or a layer name; unfilled, the run matches a source of land cover. | - |
 | `rain` | matched on a need for precipitation series | the precipitation series this run reads, as a uri or a layer name; unfilled, the run matches a source of precipitation series. | - |

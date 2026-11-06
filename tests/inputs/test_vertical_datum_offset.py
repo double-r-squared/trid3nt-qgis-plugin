@@ -80,15 +80,15 @@ def test_a_project_datum_reaches_through_the_shift_its_survey_publishes() -> Non
 
 def test_an_offset_between_two_other_frames_refuses() -> None:
     with pytest.raises(DatumError) as caught:
-        align(_CRD, _NAVD88, offset=_FETCHED, code_prefix="MERGE_RASTERS_")
-    assert caught.value.error_code == "MERGE_RASTERS_DATUM_OFFSET_MISMATCH"
+        align(_CRD, _NAVD88, offset=_FETCHED, code_prefix="BED_")
+    assert caught.value.error_code == "BED_DATUM_OFFSET_MISMATCH"
     assert "NAVD88 and EGM2008" in str(caught.value)
 
 
 def test_two_datums_and_no_offset_still_refuses() -> None:
     with pytest.raises(DatumError) as caught:
-        align(_CRD, _NAVD88, code_prefix="MERGE_RASTERS_")
-    assert caught.value.error_code == "MERGE_RASTERS_DATUMS_DIFFER"
+        align(_CRD, _NAVD88, code_prefix="BED_")
+    assert caught.value.error_code == "BED_DATUMS_DIFFER"
 
 
 def test_a_bare_shift_is_applied_and_said_out_loud() -> None:

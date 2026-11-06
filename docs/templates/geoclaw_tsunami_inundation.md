@@ -18,7 +18,7 @@ A TSUNAMI from a sea-floor rupture across the open sea to a coast, and how far i
 | `source` | supplied by the caller | a layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `approach` | supplied by the caller | a layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `domain` | supplied by the caller | the closed polygon this run solves over, as a uri, a layer name or a drawn shape. | - |
-| `bed` | matched on a need for bathymetry | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of bathymetry. | - |
+| `bed` | matched on a need for bathymetry | The fine rung of the bed over the deep one: ONE bathymetry or survey raster, or a layer name, on the run's vertical frame - the engine takes the finest surface at each point, so the bed takes one surface; unfilled, the run matches a source of bathymetry. | - |
 
 ## The inputs
 

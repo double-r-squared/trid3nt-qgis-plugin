@@ -122,6 +122,8 @@ class _Env:
     #: The unit each PUBLISHED variable is written in, by the name the result carries;
     #: a row that observes one is read in that unit.
     published_units: Mapping[str, str] = field(default_factory=dict)
+    #: The engine lays its own ladder of bed surfaces, so the bed slot neither merges nor fills.
+    lays_own_bed: bool = False
 
 
 def _data_step_label(name: str) -> str:
@@ -134,6 +136,8 @@ async def _produce(env: _Env, decl: Input) -> Any:
     An artifact nothing reads costs no fetch; a stated-only row nothing hands in is
     the run's own machinery's answer, and carries no verdict here."""
     handed_in = env.supplied.get(decl.name)
+    if handed_in is not None and decl.slot is BED and isinstance(handed_in, list):
+        return await _ingested(env, decl, await _bed_list(env, decl, handed_in))
     if handed_in is not None:
         _validate_supplied(env, decl, handed_in)
         return await _ingested(env, decl, handed_in)
@@ -237,6 +241,39 @@ async def _beside(env: _Env, decl: Input) -> dict[str, Any]:
                 step=_data_step_label(aside.name))
         held[name] = value
     return held
+
+
+async def _bed_list(env: _Env, decl: Input, listed: list[Any]) -> list[Any]:
+    """An ORDERED LIST handed the bed: each surface as it came, a ``{"source": name}`` among them fetched
+    through the match under its own row, in the order handed - which is the order they win."""
+    laid = []
+    for rank, item in enumerate(listed, start=1):
+        if not (isinstance(item, Mapping) and "source" in item):
+            _validate_supplied(env, decl, item)
+            laid.append(item)
+            continue
+        laid.append(await _named_surface(env, decl, rank, str(item["source"])))
+    return laid
+
+
+async def _named_surface(env: _Env, decl: Input, rank: int, named: str) -> Any:
+    """The surface the NAMED source holds for this bed, matched on the bed class it serves; one serving none
+    of them, or holding nothing here, refuses rather than another source taking its place in the order."""
+    served = next((c for c in (decl.data_class, *sorted(BED.classes))
+                   if c and _fetcher_row(named, c) is not None), "")
+    if not served:
+        raise StepFailedError(
+            f"surface {rank} of the {decl.name!r} names {named!r}, which serves none of the bed's classes "
+            f"({', '.join(sorted(BED.classes))}).", error_code="DATA_NEED_UNMATCHED",
+            step=_data_step_label(decl.name))
+    row = dataclasses.replace(decl, name=f"{decl.name}_{rank}", data_class=served)
+    env.picks[row.name] = named
+    choice, top = await _probe(env, row, served, f"{row.name} {served}")
+    if top is None or choice.picked != named:
+        raise StepFailedError(
+            f"surface {rank} of the {decl.name!r} names {named!r}, and it holds nothing here: "
+            f"{choice.sentence}", error_code="DATA_NEED_UNMATCHED", step=_data_step_label(decl.name))
+    return top
 
 
 async def _bed_surface(env: _Env, decl: Input) -> Any:
@@ -521,9 +558,10 @@ async def _ingested(env: _Env, decl: Input, value: Any,
     if beside:
         coercion["span_km"] = decl.span_km
     if decl.slot is BED:
-        # THE CUT IS WHERE THE WATER IS: the bed states its coverage over it and
-        # refuses a wet hole, and an empty one says the run was cut with none.
+        # THE CUT IS WHERE THE WATER IS: the bed states its coverage over it, fills
+        # inside it and refuses a wet hole, and an empty one says the run was cut with none.
         coercion["water"] = _cut_polygon() or {}
+        coercion["merge"] = not env.lays_own_bed
     if decl.slot is MESH:
         # The domain is filled before any other row, so a supplied mesh is held to the ground this run solves over.
         coercion["over"] = getattr(current_domain(), "bbox", None)
@@ -665,16 +703,24 @@ async def _on_the_run_s_frame(env: _Env, decl: Input,
         return {}
     frame = _frame(env)
     told = {"frame": frame} if decl.slot is BED else {"to_datum": frame}
+    if decl.slot is BED and isinstance(value, list):
+        # ONE OFFSET PER SURFACE, each asked where that surface has data.
+        return {**told, "offset": [await _offset_row(env, f"{decl.name}_{rank}", item, frame)
+                                   for rank, item in enumerate(value, start=1)]}
     measured = await _offset_row(env, decl.name, value, frame)
     return told if measured is None else {**told, "offset": measured}
 
 
 async def _datum_offset_ask(value: Any, frame: str,
                             seed: Any) -> Mapping[str, Any] | None:
-    """What the offset row asks for this source, off the loop: a footprint read."""
-    from trid3nt_server.inputs.vertical_datum import offset_ask
+    """What the offset row asks for this source, off the loop: a footprint read.
 
-    return await asyncio.to_thread(partial(offset_ask, value, frame, at=seed))
+    A case layer handed by its handle or uri is asked as the record its producer stated, which carries its zero."""
+    from trid3nt_server.inputs.vertical_datum import offset_ask
+    from trid3nt_server.render.uri_registry import lookup_layer_for_handle
+
+    held = lookup_layer_for_handle(value) if isinstance(value, str) else None
+    return await asyncio.to_thread(partial(offset_ask, held or value, frame, at=seed))
 
 
 async def _question_seed(env: _Env) -> Any:
@@ -1014,7 +1060,8 @@ def production(state: Fill) -> _Env:
             inputs=state.inputs,
             input_mode=state.carried.get("input_mode"), workflow=wf.name,
             window_s=wf.run_window_s(state.keywords), moment=wf.moment,
-            slot_units=wf.slot_units(), captions=wf.captions)
+            slot_units=wf.slot_units(), captions=wf.captions,
+            lays_own_bed=wf.lays_own_bed)
     state.env.run.update({row.name: getattr(state.inputs.get(row.name), "value", None)
                           for row in wf.inputs if not row.is_row})
     # A unit the run states is published under it, so the table is read off the values just seated.
@@ -1023,15 +1070,23 @@ def production(state: Fill) -> _Env:
 
 
 def _stated(env: _Env, decl: Input, value: Any) -> None:
-    if isinstance(value, Mapping) and "source" in value:
+    if decl.slot is BED and isinstance(value, (list, tuple)):
+        # AN ORDERED LIST OF SURFACES: each read as it would be alone, a source kept to be fetched.
+        env.supplied[decl.name] = [item if isinstance(item, Mapping) and "source" in item
+                                   else _handed(item) for item in value]
+    elif isinstance(value, Mapping) and "source" in value:
         env.picks[decl.name] = str(value["source"])
     elif value is not None:
-        # A mapping that names no layer IS the value: a drawn geometry arrives as one.
-        held = (value["layer"] if isinstance(value, Mapping)
-                and "layer" in value else value)
-        # A case layer named by its handle is read at its uri; any other string is the value as it came.
-        env.supplied[decl.name] = (lookup_uri_for_handle(held) or held
-                                   if isinstance(held, str) else held)
+        env.supplied[decl.name] = _handed(value)
+
+
+def _handed(value: Any) -> Any:
+    """One supplied value as the slot reads it."""
+    # A mapping that names no layer IS the value: a drawn geometry arrives as one.
+    held = (value["layer"] if isinstance(value, Mapping)
+            and "layer" in value else value)
+    # A case layer named by its handle is read at its uri; any other string is the value as it came.
+    return lookup_uri_for_handle(held) or held if isinstance(held, str) else held
 
 
 async def _row(state: Fill, decl: Input, value: Any) -> None:

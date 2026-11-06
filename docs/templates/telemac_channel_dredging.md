@@ -16,7 +16,7 @@ MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the b
 |---|---|---|---|
 | `domain` | matched on a need for hydrography | the closed polygon this run solves over, as a uri, a layer name or a drawn shape; unfilled, the run matches a source of hydrography. | - |
 | `line` | supplied by the caller | a polyline layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
-| `bed` | matched on a need for channel survey | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of channel survey. | - |
+| `bed` | matched on a need for channel survey | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; or an ORDERED LIST of surfaces - layer names, or {"source": fetcher} - the first winning every cell it measured, a later one only the cells left empty; unfilled, the run matches a source of channel survey. | - |
 | `discharge` | matched on a need for discharge series | the discharge series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of discharge series. | - |
 | `dredge_area` | supplied by the caller | a polygon layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `dump_area` | supplied by the caller | a polygon layer you supply, as a uri or a layer name; required - the template names no source for it. | - |

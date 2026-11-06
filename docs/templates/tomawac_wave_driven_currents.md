@@ -16,7 +16,7 @@ WAVE-DRIVEN CURRENTS: the current breaking waves drive along the shore - how fas
 |---|---|---|---|
 | `extent` | supplied by the caller | a rectangle layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `domain` | matched on a need for hydrography | the closed polygon this run solves over, as a uri, a layer name or a drawn shape; unfilled, the run matches a source of hydrography. | - |
-| `bed` | matched on a need for bathymetry | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; unfilled, the run matches a source of bathymetry. | - |
+| `bed` | matched on a need for bathymetry | what the domain's nodes carry for elevation: a DEM, a bathymetry or survey raster, a layer of soundings, or a depth in metres below the free surface; or an ORDERED LIST of surfaces - layer names, or {"source": fetcher} - the first winning every cell it measured, a later one only the cells left empty; unfilled, the run matches a source of bathymetry. | - |
 | `wave` | matched on a need for wave series | the wave series this run reads, as a uri or a layer name; unfilled, the run matches a source of wave series. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 | `observe` | matched on a need for wave series | the wave series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of wave series. | - |

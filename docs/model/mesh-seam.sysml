@@ -899,7 +899,7 @@ package MeshSeam {
     verify requirement CorrectDataClassAtSetBed by
         "tests/mesh/test_mesh_topology_and_bed.py::test_the_journal_names_the_rung_that_ACTUALLY_painted_the_bed";
     verify requirement CorrectDataClassAtSetBed by
-        "tests/mesh/test_bed_sources_and_runs.py::test_the_bed_is_one_source_and_two_are_merged_before_the_op";
+        "tests/mesh/test_bed_sources_and_runs.py::test_the_bed_is_one_source_and_two_are_laid_by_the_slot_before_the_op";
     verify requirement CorrectDataClassAtSetBed by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_domain_no_source_covers_refuses_by_name";
     verify requirement CorrectDataClassAtSetBed by

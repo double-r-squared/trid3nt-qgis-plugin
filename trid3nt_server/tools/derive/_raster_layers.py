@@ -1,8 +1,8 @@
-"""The case-layer raster the two raster derives read and write.
+"""The case-layer raster the bed is laid on and the readers of one read.
 
-An input is a case layer, by id or whole, carrying the datum and the quantity
-its producer stated; a derive never fetches. The output is ONE raster of two bands: the values, and where each cell came from -
-each input's place in the order it was laid, FILLED, or UNMEASURED.
+An input is a case layer, by id or whole, carrying the datum and the quantity its producer stated. A laid
+bed is ONE raster of two bands: the values, and where each cell came from - each surface's place in the
+order it was handed, FILLED, or UNMEASURED.
 """
 
 from __future__ import annotations
@@ -20,45 +20,14 @@ FILLED = 254
 UNMEASURED = 255
 
 
-class RasterLayerError(UserInputError):
-    """A raster derive's typed refusal, by its own code."""
-
-    def __init__(self, error_code: str, message: str) -> None:
-        super().__init__(message, code=error_code)
-
-
 class RasterLayerURI(LayerURI):
-    """A raster derive's output: band 1 the values, band 2 where each cell came
-    from, and the share of the cells each source reached - the feedback."""
+    """A laid bed: band 1 the values, band 2 where each cell came from, and the
+    share of the cells each source reached - the feedback."""
 
     #: Band 2's codes by place: ``sources[i]`` painted the cells coded ``i``.
     sources: list[str] = []
     coverage: list[tuple[str, float]] = []
     unmeasured_fraction: float = 0.0
-
-
-def case_layer(value: Any, role: str) -> Any:
-    """One input as the case layer it names - by id, with what its producer said
-    about it - or a layer handed over whole; anything else refuses by name.
-
-    A derive never fetches: a source is fetched first, and its layer named here."""
-    from trid3nt_server.render.uri_registry import lookup_layer_for_handle
-
-    if isinstance(value, str):
-        layer = lookup_layer_for_handle(value)
-        if layer is None:
-            raise RasterLayerError(
-                "RASTER_LAYER_UNKNOWN",
-                f"the {role} {value!r} names no layer in this case. Fetch the "
-                "source first and name the layer it produced.")
-        return layer
-    if isinstance(value, Mapping) and "source" in value:
-        raise RasterLayerError(
-            "RASTER_LAYER_UNKNOWN",
-            f"the {role} names the source {value['source']!r}: a derive reads "
-            "case layers and never fetches. Fetch it first and name the layer "
-            "it produced.")
-    return value
 
 
 def sources_of(layer: Any, won: Any) -> list[str]:
@@ -82,20 +51,19 @@ def staged(layer: Any, role: str, scratch: str) -> str:
 
     uri = str(source_uri(layer) or "").strip()
     if not uri:
-        raise RasterLayerError(
-            "RASTER_LAYER_NO_SOURCE", f"the {role} {layer!r} names no file to read.")
+        raise UserInputError(f"the {role} {layer!r} names no file to read.",
+                             code="RASTER_LAYER_NO_SOURCE")
     try:
         # A role is a layer's own name and reaches a FILENAME here.
         return _stage_uri_local(
             uri, scratch, "".join(c if c.isalnum() else "_" for c in role))
     except Exception as exc:  # noqa: BLE001 - every reader fault, named by source
-        raise RasterLayerError(
-            "RASTER_LAYER_UNREADABLE",
-            f"the {role} {uri!r} could not be read ({exc}).") from exc
+        raise UserInputError(f"the {role} {uri!r} could not be read ({exc}).",
+                             code="RASTER_LAYER_UNREADABLE") from exc
 
 
 def label_of(layer: Any, rank: int) -> str:
-    """What a derive CALLS one input: the name it carries, else its place."""
+    """What one input is CALLED: the name it carries, else its place."""
     name = (layer.get("name") if isinstance(layer, Mapping)
             else getattr(layer, "name", None))
     return str(name or "").strip() or f"input {rank + 1}"
@@ -187,7 +155,6 @@ def polygons(doc: Any) -> list[dict[str, Any]]:
             if str(g.get("type")) in ("Polygon", "MultiPolygon")]
 
 
-
 def over_the_cut(won: Any, crs: Any, transform: Any, polygon: Any
                  ) -> tuple[Any, Any]:
     """``won`` on a grid reaching over the raster AND the polygon -> ``(won, wet)``,
@@ -227,7 +194,6 @@ def over_the_cut(won: Any, crs: Any, transform: Any, polygon: Any
     return out, wet
 
 
-__all__ = ["FILLED", "NODATA", "RasterLayerError", "RasterLayerURI",
-           "UNMEASURED", "bbox_4326", "coverage", "label_of", "over_the_cut",
-           "percent", "polygons", "read", "case_layer", "share", "sources_of",
-           "staged", "stated", "written"]
+__all__ = ["FILLED", "NODATA", "RasterLayerURI", "UNMEASURED", "bbox_4326",
+           "coverage", "label_of", "over_the_cut", "percent", "polygons", "read",
+           "share", "sources_of", "staged", "stated", "written"]

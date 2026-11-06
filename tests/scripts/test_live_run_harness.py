@@ -188,9 +188,9 @@ def test_a_driven_arg_the_tool_reads_nowhere_refuses_rather_than_being_swallowed
 def test_an_arg_a_call_before_states_and_its_tool_reads_nowhere_refuses():
     """A call before the template is driven like the template: a value it states
     that its tool reads nowhere is swallowed, so the run refuses before it starts."""
-    with pytest.raises(LiveRunError, match="fill_nodata reads none of"):
+    with pytest.raises(LiveRunError, match="probe_point reads none of"):
         _drive(LiveRun(tool=_TOOL, args={}, case_title="c", before=(
-            Before("bed", "fill_nodata", {"layer": "x", "inside": "w"}),)))
+            Before("read", "probe_point", {"point": "x", "inside": "w"}),)))
 
 
 def test_a_constant_door_param_is_read_even_though_the_signature_omits_it():
@@ -340,30 +340,32 @@ def _turn(layers: list[dict]) -> list[dict]:
 
 
 def test_the_calls_before_the_template_run_in_order_and_chain_their_layers():
-    """Each call's NEW layer is named for every call after it: the merge reads
-    the fetch's id, and the fill reads the merge's."""
+    """Each call's NEW layer is named for every call after it: the reprojection
+    reads the fetch's id, the grid reads the reprojection's, and the bed's
+    ordered list reads the grid's and the fetch's."""
     water = {"layer_id": "water-1", "role": "primary"}
-    merged = {"layer_id": "merged-rasters-2", "role": "primary"}
-    filled = {"layer_id": "filled-nodata-3", "role": "primary"}
+    projected = {"layer_id": "projected-2", "role": "primary"}
+    grid = {"layer_id": "grid-3", "role": "primary"}
     beside = {"layer_id": "input-chs", "role": "input"}
-    ws = _FakeWS(_turn([water]) + _turn([water, beside, merged])
-                 + _turn([water, beside, merged, filled]))
-    run = LiveRun(tool="t", args={"bed": {"layer": "$bed"}}, case_title="c",
+    ws = _FakeWS(_turn([water]) + _turn([water, beside, projected])
+                 + _turn([water, beside, projected, grid]))
+    run = LiveRun(tool="t", args={"bed": ["$grid", "$water"]}, case_title="c",
                   timeout_s=5, before=(
                       Before("water", "fetch_water", {"seed_point": [0, 0]}),
-                      Before("merged", "merge_rasters", {"layers": ["a", "b"]}),
-                      Before("bed", "fill_nodata", {"layer": "$merged",
-                                                    "within": "$water",
-                                                    "seed": 176.041})))
+                      Before("projected", "run_qgis_algorithm",
+                             {"algorithm": "native:reprojectlayer",
+                              "params": {"INPUT": "$water"}}),
+                      Before("grid", "run_qgis_algorithm",
+                             {"algorithm": "gdal:gridinversedistance",
+                              "params": {"INPUT": "$projected"}})))
     made = asyncio.run(run_before(ws, "S", run, "C"))
-    assert made == {"water": "water-1", "merged": "merged-rasters-2",
-                    "bed": "filled-nodata-3"}
+    assert made == {"water": "water-1", "projected": "projected-2", "grid": "grid-3"}
     sent = [m["payload"] for m in ws.sent if m["type"] == "dev-tool-invoke"]
-    assert [p["name"] for p in sent] == ["fetch_water", "merge_rasters",
-                                         "fill_nodata"]
-    assert sent[2]["args"] == {"layer": "merged-rasters-2", "within": "water-1",
-                               "seed": 176.041}
-    assert placed(dict(run.args), made) == {"bed": {"layer": "filled-nodata-3"}}
+    assert [p["name"] for p in sent] == ["fetch_water", "run_qgis_algorithm",
+                                         "run_qgis_algorithm"]
+    assert sent[2]["args"] == {"algorithm": "gdal:gridinversedistance",
+                               "params": {"INPUT": "projected-2"}}
+    assert placed(dict(run.args), made) == {"bed": ["grid-3", "water-1"]}
 
 
 def test_a_placeholder_nothing_made_refuses_before_it_reaches_a_tool():

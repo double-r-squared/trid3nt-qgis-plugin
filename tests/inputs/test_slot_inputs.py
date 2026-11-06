@@ -114,10 +114,10 @@ def test_a_layer_of_points_is_refused_at_fill_naming_the_qgis_idw_step(value):
     assert "gdal:gridinversedistancenearestneighbor" in said
 
 
-def test_the_bed_slot_takes_one_source_and_composes_nothing():
-    """The measurement and the surface under it are composed by the slot's own
-    ingestion, so neither the slot nor the row that declares it carries the
-    surface underneath: the row states one class."""
+def test_the_bed_row_states_one_class_and_carries_no_surface_under_it():
+    """A further surface is handed the slot in an ordered list, so neither the
+    slot nor the row that declares it carries the surface underneath: the row
+    states one class."""
     import inspect
 
     from trid3nt_server.inputs.input import Input
@@ -327,5 +327,13 @@ def test_each_slot_module_imports_first_in_a_fresh_interpreter(module):
 def test_a_slot_that_takes_a_number_states_one_on_the_wire(slot):
     from trid3nt_server.inputs.input import Input
 
-    assert Input(name="x", slot=slot).wire_type == (str | float | None)
+    one = str | float | None
+    assert Input(name="x", slot=slot).wire_type == (one | list if slot.listed else one)
     assert Input(name="x", slot=DOMAIN).wire_type != (str | float | None)
+
+
+def test_only_the_bed_takes_an_ordered_list_on_the_wire():
+    from trid3nt_server.inputs import slots
+
+    assert sorted(slot.name for slot in vars(slots).values()
+                  if isinstance(slot, slots.Slot) and slot.listed) == ["bed"]
