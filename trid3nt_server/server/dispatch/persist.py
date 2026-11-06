@@ -49,6 +49,12 @@ _TURN_SEGMENTS_PERSISTED_BY_TASK: "weakref.WeakKeyDictionary[asyncio.Task, int]"
     weakref.WeakKeyDictionary()
 )
 
+#: One record per model round of the running turn task - {"prompt", "completion"} token counts as the
+#: provider reported them (None when it reported none) - carried on the turn-complete envelope.
+_TURN_USAGE_BY_TASK: "weakref.WeakKeyDictionary[asyncio.Task, list[dict[str, int | None]]]" = (
+    weakref.WeakKeyDictionary()
+)
+
 #: Per-task flag set True only when a row that snapshotted the turn's zoom-to
 #: and layer accumulator was actually persisted. The wrapper's finally reads it
 #: to decide whether a tool-terminal turn - one whose final round ended in tool

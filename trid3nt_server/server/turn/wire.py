@@ -192,9 +192,10 @@ async def _emit_turn_complete(
     *,
     pipeline_id: str | None = None,
     final_state: str | None = None,
+    usage: list[dict[str, int | None]] | None = None,
 ) -> None:
     """Emit the end-of-turn idle signal, so a client force-completes any card still rendering as
-    running."""
+    running. ``usage`` is the turn's per-model-round token counts, in round order."""
     # A terminal pipeline frame can be written onto a just-dropped socket and lost, leaving a card
     # spinning after its tool finished. Raw JSON, because the typed envelope forbids extra fields
     # and this payload has no contract model; the Case tag routes it to the owning Case's stream.
@@ -211,6 +212,7 @@ async def _emit_turn_complete(
                 "envelope_type": "turn-complete",
                 "pipeline_id": pipeline_id,
                 "final_state": final_state,
+                "usage": usage if usage is not None else [],
             },
         }
         await websocket.send(_json.dumps(env))

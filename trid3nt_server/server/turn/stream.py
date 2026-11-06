@@ -24,7 +24,7 @@ from trid3nt_server.model.guards.runaway_guard import ABORT_STEP_CAP, ABORT_WALL
 from trid3nt_server.server.config import _env_flag, _tool_retrieval_k
 from trid3nt_server.server.dispatch.emitter import _invoke_tool_via_emitter
 from trid3nt_server.server.dispatch.helpers import _DELIVERABLE_COMPLETE_DIRECTIVE, _DISCOVERY_EXPAND_CAP, _EMPTY_COMPLETION_NUDGE, _EMPTY_COMPLETION_RETRY_CAP, _POST_DELIVERABLE_WRAPUP_ROUNDS, _default_declarable_registry, _dispatch_made_progress, _gate_expander_tool_names, _is_terminal_composer, _tool_names_from_search_result
-from trid3nt_server.server.dispatch.persist import _TURN_NARRATION_BY_TASK, _TURN_OPEN_SEGMENT_BY_TASK, _TURN_SEGMENTS_PERSISTED_BY_TASK, _TURN_TERMINAL_ACC_PERSISTED_BY_TASK, _finalize_segment, _persist_chat_turn, _persist_terminal_failure_card
+from trid3nt_server.server.dispatch.persist import _TURN_NARRATION_BY_TASK, _TURN_OPEN_SEGMENT_BY_TASK, _TURN_SEGMENTS_PERSISTED_BY_TASK, _TURN_TERMINAL_ACC_PERSISTED_BY_TASK, _TURN_USAGE_BY_TASK, _finalize_segment, _persist_chat_turn, _persist_terminal_failure_card
 from trid3nt_server.server.dispatch.results import _maybe_emit_chart
 from trid3nt_server.server.session.case_state import _turn_case_bbox, _turn_case_id
 from trid3nt_server.server.session.state import SessionState
@@ -413,6 +413,11 @@ async def _stream_model_reply(
 
                 elif isinstance(event, UsageMetadataEvent):
                     last_usage = event
+                    _usage_task = asyncio.current_task()
+                    if _usage_task is not None:
+                        _TURN_USAGE_BY_TASK.setdefault(_usage_task, []).append({
+                            "prompt": event.prompt_token_count,
+                            "completion": event.candidates_token_count})
                     # PER-TURN: sum the reported counts across the turn's model rounds. A round that
                     # reports None for a figure leaves that accumulator untouched (null stays null
                     # when NO round reports it -- tolerate absent, never fabricate).
@@ -1297,11 +1302,13 @@ async def _dispatch_model_turn_and_persist(
             terminal_acc_persisted = _TURN_TERMINAL_ACC_PERSISTED_BY_TASK.pop(
                 _own_task, False
             )
+            turn_usage = _TURN_USAGE_BY_TASK.pop(_own_task, [])
         else:
             turn_narration = None
             open_segment = None
             segments_done = 0
             terminal_acc_persisted = False
+            turn_usage = []
         if turn_narration is None:
             turn_narration = state.current_turn_narration
         narration = "".join(turn_narration).strip()
@@ -1348,5 +1355,6 @@ async def _dispatch_model_turn_and_persist(
         # Fires on EVERY exit so the client settles cards still ``running`` (their terminal frame
         # may have died on a dropped socket); outside the case guard so a Case-less turn idles too.
         await _emit_turn_complete(
-            websocket, state, pipeline_id=state.current_turn_pipeline_id
+            websocket, state, pipeline_id=state.current_turn_pipeline_id,
+            usage=turn_usage,
         )
