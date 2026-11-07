@@ -42,7 +42,7 @@ def test_abort_messages_are_honest_and_distinct():
 
 
 def test_the_turn_bounds_are_settings_and_the_watchdog_a_constant(user_settings):
-    assert (setting("MAX_TURN_STEPS"), setting("MAX_TURN_SECONDS")) == (12, 420.0)
+    assert (setting("MAX_TURN_STEPS"), setting("MAX_TURN_SECONDS")) == (12, 0.0)
     assert LoopWatchdog()._threshold == LOOP_REPEAT_N == 4
     user_settings(MAX_TURN_STEPS=30, MAX_TURN_SECONDS=900.0)
     assert (setting("MAX_TURN_STEPS"), setting("MAX_TURN_SECONDS")) == (30, 900.0)
@@ -185,6 +185,35 @@ async def test_step_cap_guard_aborts_a_varied_runaway(monkeypatch, fake_llm, use
     assert dispatched == 3
     assert _abort_codes(sock) == ["MAX_ITERATIONS_REACHED"]
     assert _inflight_turn_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_zero_turn_seconds_is_no_wall_clock_limit(monkeypatch, fake_llm, user_settings):
+    """MAX_TURN_SECONDS 0 skips the deadline: slow rounds run to the step cap."""
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_contracts import new_ulid
+
+    fake_llm.on_call(
+        lambda i, _c: _fake_call_chunk("fetch_dem", {"n": i + 1}, f"c{i + 1}")
+    )
+    dispatched = 0
+
+    async def _slow_invoke(_ws, _state, name, args):
+        nonlocal dispatched
+        dispatched += 1
+        await asyncio.sleep(0.3)
+        return {"ok": True}
+
+    sock = _FakeSocket()
+    state = SessionState(session_id=new_ulid())
+    user_settings(MAX_TURN_STEPS=3, MAX_TURN_SECONDS=0.0)
+    with patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_slow_invoke), \
+         patch.object(agent_server, "build_tool_declarations", return_value=[]):
+        await agent_server._stream_model_reply(sock, state, _settings(), "x", "research")
+
+    assert dispatched == 3
+    assert ABORT_WALL_CLOCK not in _abort_codes(sock)
 
 
 @pytest.mark.asyncio

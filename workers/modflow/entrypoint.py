@@ -14,7 +14,6 @@ import logging
 import os
 import subprocess
 import sys
-import threading
 import time
 from pathlib import Path
 from typing import Any, Collection
@@ -43,14 +42,6 @@ _LISTING_TAIL_CHARS = 4000
 #: refusal, so a stale image surfaces as a drifted version rather than as a knob
 #: that silently did nothing.
 _PARSER_VERSION = "modflow-case-1"
-
-#: Wall-clock bound on ONE run. A wedged mf6 holds the run directory forever
-#: and the supervisor sees a container that never exits; the bound turns that
-#: into a typed metrics write. Sized as a ceiling, not an estimate: the first
-#: template's DISV solves in well under a second, and TDIS-based sizing belongs
-#: to the author that will exist.
-_SOLVE_TIMEOUT_ENV = "TRID3NT_MODFLOW_SOLVE_TIMEOUT"
-_SOLVE_TIMEOUT_DEFAULT_S = 86400.0
 
 #: The modules a case may name; the simulation itself is whatever mfsim.nam
 #: carries, and the word is provenance the metrics state.
@@ -125,48 +116,21 @@ def _reached_normal_termination(data_dir: Path) -> bool:
     return _NORMAL_TERMINATION in text
 
 
-def _solve_timeout_s() -> float:
-    """The wall-clock bound on one run, as the environment states it."""
-    raw = (os.environ.get(_SOLVE_TIMEOUT_ENV) or "").strip()
-    try:
-        return float(raw) if raw else _SOLVE_TIMEOUT_DEFAULT_S
-    except ValueError:
-        LOG.warning("%s=%r is not a number; the %.0f s default stands",
-                    _SOLVE_TIMEOUT_ENV, raw, _SOLVE_TIMEOUT_DEFAULT_S)
-        return _SOLVE_TIMEOUT_DEFAULT_S
-
-
 def _run_mf6(data_dir: Path, mode: str) -> int:
     """Run mf6 in the run directory; return its exit code.
 
     ``mf6`` takes no name-file argument: it reads ``mfsim.nam`` from its cwd,
-    and ``--mode validate`` is the same invocation one flag longer. The child
-    is bounded; an expiry KILLS it, because a wedged solve otherwise holds the
-    container open with no report written."""
+    and ``--mode validate`` is the same invocation one flag longer. The run
+    lasts until mf6 exits or the container is stopped from outside."""
     argv = ["mf6"] + (["--mode", "validate"] if mode == "validate" else [])
-    bound = _solve_timeout_s()
     child = subprocess.Popen(argv, cwd=str(data_dir), text=True, bufsize=1,
                              stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
-    expired: list[bool] = []
-    watchdog = threading.Timer(bound, lambda: (expired.append(True),
-                                               child.kill()))
-    watchdog.start()
-    try:
-        for line in child.stdout:
-            sys.stdout.write(line)
-            sys.stdout.flush()
-        child.stdout.close()
-        code = child.wait()
-    finally:
-        watchdog.cancel()
-    if expired:
-        raise CaseError(
-            "MODFLOW_SOLVE_TIMEOUT",
-            f"mf6 was killed after {bound:g} s without finishing; the bound is "
-            f"{_SOLVE_TIMEOUT_ENV} and {SIM_LISTING_FILENAME} carries how far "
-            "it got.")
-    return code
+    for line in child.stdout:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+    child.stdout.close()
+    return child.wait()
 
 
 def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]:

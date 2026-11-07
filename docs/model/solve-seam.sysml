@@ -588,14 +588,6 @@ package SolveSeam {
         */
     }
 
-    requirement def SolveTimeoutTypesNotHangs {
-        doc /*
-        A wedged solver is a typed report, not a container that never exits.
-        The bound is stated by an environment knob, and an expiry names that
-        knob in the error it writes.
-        */
-    }
-
     requirement def EmptyResultsRefuses {
         doc /*
         A case declaring no results collapses the success convention back to
@@ -1107,12 +1099,6 @@ package SolveSeam {
         "workers/telemac/test_entrypoint.py::test_the_frame_count_is_measured_off_the_file_the_facts_name";
     verify requirement ServerFactsDoctrine by
         "workers/telemac/test_entrypoint.py::test_an_unreadable_result_leaves_ntimestep_ABSENT_not_zero";
-
-    satisfy requirement SolveTimeoutTypesNotHangs by workerEntrypoint;
-    verify requirement SolveTimeoutTypesNotHangs by
-        "workers/telemac/test_entrypoint.py::test_the_solve_bound_defaults_to_a_day_and_the_knob_states_it";
-    verify requirement SolveTimeoutTypesNotHangs by
-        "workers/telemac/test_entrypoint.py::test_a_child_that_outruns_the_bound_is_killed_and_still_reports";
 
     satisfy requirement EmptyResultsRefuses by workerEntrypoint;
     verify requirement EmptyResultsRefuses by

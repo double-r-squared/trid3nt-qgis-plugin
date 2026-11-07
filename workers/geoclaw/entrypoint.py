@@ -18,7 +18,6 @@ import os
 import re
 import subprocess
 import sys
-import threading
 import time
 from pathlib import Path
 from typing import Any, Collection
@@ -39,14 +38,6 @@ METRICS_FILENAME = "geoclaw_metrics.json"
 #: refusal, so a stale image surfaces as a drifted version rather than as a knob
 #: that silently did nothing.
 _PARSER_VERSION = "geoclaw-case-2"
-
-#: Wall-clock bound on ONE run. A wedged xgeoclaw holds the run directory
-#: forever and the supervisor sees a container that never exits; the bound turns
-#: that into a typed metrics write. Sized as a ceiling, not an estimate: measured
-#: runs on this box land well under ten minutes, and an fgmax template's stop
-#: time belongs to the author that will exist.
-_SOLVE_TIMEOUT_ENV = "TRID3NT_GEOCLAW_SOLVE_TIMEOUT"
-_SOLVE_TIMEOUT_DEFAULT_S = 86400.0
 
 #: The keys a ``case`` section carries. tfinal is NOT one: it is the staged
 #: claw.data's own number, read there, so the manifest cannot restate a time
@@ -234,17 +225,6 @@ def _frame_count(data_dir: Path) -> int:
     return sum(1 for entry in data_dir.iterdir() if _FRAME_RE.fullmatch(entry.name))
 
 
-def _solve_timeout_s() -> float:
-    """The wall-clock bound on one run, as the environment states it."""
-    raw = (os.environ.get(_SOLVE_TIMEOUT_ENV) or "").strip()
-    try:
-        return float(raw) if raw else _SOLVE_TIMEOUT_DEFAULT_S
-    except ValueError:
-        LOG.warning("%s=%r is not a number; the %.0f s default stands",
-                    _SOLVE_TIMEOUT_ENV, raw, _SOLVE_TIMEOUT_DEFAULT_S)
-        return _SOLVE_TIMEOUT_DEFAULT_S
-
-
 def _engine_argv(module: str, cores: int, threads: int | None = None) -> list[str]:
     """The command that runs a module's prebuilt executable: the shallow-water one
     directly, the Boussinesq one under ``mpiexec -n <cores>``. A module with no
@@ -281,32 +261,18 @@ def _engine_env(threads: int | None) -> dict[str, str]:
 def _run_engine(data_dir: Path, argv: list[str], env: dict[str, str] | None = None) -> tuple[int, str]:
     """Run the prebuilt executable in the run directory; return its exit code and
     everything it said (stdout merged with stderr, so a runtime refusal on
-    either stream is read). The child is bounded; an expiry KILLS it, because a
-    wedged solve otherwise holds the container open with no report written."""
-    bound = _solve_timeout_s()
+    either stream is read). The run lasts until the child exits or the container
+    is stopped from outside."""
     child = subprocess.Popen(argv, cwd=str(data_dir), env=env, text=True,
                              bufsize=1, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
     lines: list[str] = []
-    expired: list[bool] = []
-    watchdog = threading.Timer(bound, lambda: (expired.append(True),
-                                               child.kill()))
-    watchdog.start()
-    try:
-        for line in child.stdout:
-            lines.append(line)
-            sys.stdout.write(line)
-            sys.stdout.flush()
-        child.stdout.close()
-        code = child.wait()
-    finally:
-        watchdog.cancel()
-    if expired:
-        raise CaseError(
-            "GEOCLAW_SOLVE_TIMEOUT",
-            f"{argv[-1]} was killed after {bound:g} s without finishing; the "
-            f"bound is {_SOLVE_TIMEOUT_ENV}.")
-    return code, "".join(lines)
+    for line in child.stdout:
+        lines.append(line)
+        sys.stdout.write(line)
+        sys.stdout.flush()
+    child.stdout.close()
+    return child.wait(), "".join(lines)
 
 
 def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]:

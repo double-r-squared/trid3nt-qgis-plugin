@@ -263,7 +263,8 @@ async def _stream_model_reply(
     # fires; the loop breaks and the post-loop block surfaces the honest
     # typed envelope (honesty floor) like the loop_exhausted fail-stop.
     _step_cap = setting("MAX_TURN_STEPS")
-    _turn_deadline = started_at + setting("MAX_TURN_SECONDS")
+    _turn_seconds = setting("MAX_TURN_SECONDS")
+    _turn_deadline = started_at + _turn_seconds if _turn_seconds else float("inf")
     _watchdog = LoopWatchdog()
     _agent_abort: tuple[str, str] | None = None
 

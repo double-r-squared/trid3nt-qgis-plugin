@@ -477,13 +477,13 @@
       "shape": "",
       "size": 1,
       "unbounded": false,
-      "help": "How long one turn runs before it stops and says so; checked before each model round, so a round under way finishes first.",
+      "help": "How long one turn runs before it stops and says so; checked before each model round, so a round under way finishes first. 0 means no limit: the step cap and the loop watchdog still end a runaway.",
       "rubrique": [
         "model"
       ],
       "is_file": false,
       "mandatory": false,
-      "default": 420.0,
+      "default": 0.0,
       "source": "TRID3NT engineering default."
     },
     {
