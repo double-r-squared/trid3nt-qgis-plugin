@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from trid3nt_server.workflows.geoclaw import progress as geoclaw
 from trid3nt_server.workflows.modflow import progress as modflow
 from trid3nt_server.workflows.telemac import progress as telemac
@@ -54,3 +56,48 @@ def test_modflow_states_the_stress_period_and_step_against_the_decks_tdis():
     assert modflow.step_of(line, adapted) == {"step": "stress period 2 of 2, step 3"}
     assert modflow.step_of(line, {}) == {"step": "stress period 2, step 3"}
     assert _fold(modflow, _filled(TDIS_NPER=1, TDIS_PERIODDATA=[[1.0, 1, 1.0]]), "modflow.stdout") == "stress period 1 of 1, step 1 of 1"
+
+
+def test_a_stopped_modflow_run_keeps_the_records_read_whole_and_refuses_when_none_is():
+    from trid3nt_server.workflows.modflow.modules.outputs import Solved
+    from trid3nt_server.workflows.runtime.primitives import OutputEmpty
+
+    stopped = Solved.__new__(Solved)
+    stopped.stopped = True
+
+    def read(t):
+        if t > 2:
+            raise ValueError("cut mid-record")
+        return t * 10
+
+    assert stopped._whole([1.0, 2.0, 3.0, 4.0], read) == ([1.0, 2.0], [10.0, 20.0])
+    with pytest.raises(OutputEmpty):
+        stopped._whole([3.0], read)
+    ended = Solved.__new__(Solved)
+    ended.stopped = False
+    with pytest.raises(ValueError):
+        ended._whole([3.0], read)
+
+
+def test_a_stopped_geoclaw_run_reads_only_the_fgout_frames_written_whole(monkeypatch):
+    from trid3nt_server.store import objects as storage
+    from trid3nt_server.workflows.geoclaw.modules.outputs import Solved
+    from trid3nt_server.workflows.runtime.primitives import OutputEmpty
+
+    class _S3:
+        def __init__(self, sizes):
+            self.sizes = sizes
+
+        def list_objects_v2(self, Bucket, Prefix):  # noqa: N803
+            return {"Contents": [{"Key": f"R/fgout0001.b{n:04d}", "Size": s} for n, s in self.sizes.items()]}
+
+    monkeypatch.setattr(storage, "runs_bucket", lambda: "b")
+    solved = Solved.__new__(Solved)
+    solved.run_id, solved.stopped = "R", True
+    monkeypatch.setattr(storage, "client", lambda: _S3({1: 100, 2: 100, 3: 100, 4: 60}))
+    assert solved.whole_frames("fgout0001", 19) == [1, 2, 3]
+    monkeypatch.setattr(storage, "client", lambda: _S3({}))
+    with pytest.raises(OutputEmpty):
+        solved.whole_frames("fgout0001", 19)
+    solved.stopped = False
+    assert solved.whole_frames("fgout0001", 3) == [1, 2, 3]

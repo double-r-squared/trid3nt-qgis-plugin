@@ -90,6 +90,7 @@ class Solved:
         self.body = body
         self.run_id = str(run["run_id"])
         self.utm_epsg = int(run["utm_epsg"])
+        self.stopped = bool(run.get("stopped"))
         self.mesh = run["mesh"]
         self.sheet = run["sheet"]
         self._filled = filled
@@ -252,6 +253,24 @@ class Solved:
             return _unsaved("OC_BUDGET_FILERECORD", "the run saved no budget file to read")
         return None
 
+    def _whole(self, times: list[float], read: Any) -> tuple[list[float], list[Any]]:
+        """Each time's data through ``read``. A stopped run's last record may be cut mid-write: the times read whole before the first
+        that fails are kept, and none whole refuses. A run that ended raises its failure."""
+        from trid3nt_server.workflows.runtime.primitives import OutputEmpty
+
+        kept, values = [], []
+        for t in times:
+            try:
+                values.append(read(t))
+            except Exception:  # noqa: BLE001 -- only a stopped run's cut record is tolerated
+                if not self.stopped:
+                    raise
+                break
+            kept.append(t)
+        if self.stopped and not kept:
+            raise OutputEmpty("the stopped run wrote no whole record of this file")
+        return kept, values
+
     def _saved_cells(self, key: str, layer: int) -> tuple[Any, Any]:
         import flopy
         import numpy as np
@@ -265,8 +284,8 @@ class Solved:
             heads = (flopy.utils.HeadFile(path) if text is None
                      else flopy.utils.HeadFile(path, text=text))
             try:
-                times = [float(t) for t in heads.get_times()]
-                values = [np.asarray(heads.get_data(totim=t))[layer - 1].ravel() for t in times]
+                times, values = self._whole([float(t) for t in heads.get_times()],
+                                            lambda t: np.asarray(heads.get_data(totim=t))[layer - 1].ravel())
             finally:
                 heads.file.close()
         finally:
@@ -286,15 +305,15 @@ class Solved:
         try:
             budget = flopy.utils.CellBudgetFile(path)
             try:
-                times = [float(t) for t in budget.get_times()]
-                steps = []
-                for t in times:
+                def cells_at(t: float) -> Any:
                     record = budget.get_data(text=text, totim=t)[0]
                     cells = np.full(self.nlay * ncpl, np.nan)
                     cells[record["node"] - 1] = (
                         record["sat"] if key == "SATURATION" else
                         np.sqrt(record["qx"] ** 2 + record["qy"] ** 2 + record["qz"] ** 2))
-                    steps.append(cells[(layer - 1) * ncpl:layer * ncpl])
+                    return cells[(layer - 1) * ncpl:layer * ncpl]
+
+                times, steps = self._whole([float(t) for t in budget.get_times()], cells_at)
             finally:
                 budget.file.close()
         finally:

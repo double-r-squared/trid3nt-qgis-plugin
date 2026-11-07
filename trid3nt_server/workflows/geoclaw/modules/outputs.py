@@ -67,6 +67,21 @@ class Solved:
         self.body = body
         self.run_id = str(run["run_id"])
         self.sheet = run["sheet"]
+        self.stopped = bool(run.get("stopped"))
+
+    def whole_frames(self, stem: str, count: int) -> list[int]:
+        """The frame numbers (from 1) of a grid the run wrote whole: a stopped run's last frame may be cut mid-write, so only the frames
+        as large as the first count. A run that ended wrote ``count`` frames."""
+        if not self.stopped:
+            return list(range(1, count + 1))
+        from trid3nt_server.store import objects as storage
+
+        listing = storage.client().list_objects_v2(Bucket=storage.runs_bucket(), Prefix=f"{self.run_id}/{stem}.b")
+        sizes = {int(item["Key"].rsplit(".b", 1)[1]): item["Size"] for item in listing.get("Contents", [])}
+        if not sizes:
+            raise OutputEmpty("the stopped run wrote no fgout frame")
+        whole = sizes.get(1)
+        return [n for n in range(1, count + 1) if sizes.get(n) == whole]
 
     def stated(self, identifier: str) -> Any:
         row = self.sheet.filled.get(identifier)
@@ -167,6 +182,8 @@ def _fgmax(solved: Solved, key: str, stage: _Stage) -> Any:
     from clawpack.geoclaw.fgmax_tools import FGmaxGrid
 
     fgno = int(solved.record(key)[0])
+    if solved.stopped:
+        raise OutputEmpty(f"the stopped run wrote no fgmax table for {key}: the engine writes it when the run ends")
     stage.fetch("fgmax_grids.data", f"fgmax{fgno:04d}.txt")
     grid = FGmaxGrid()
     grid.read_fgmax_grids_data(fgno, data_file=str(stage.work / "fgmax_grids.data"))
@@ -289,7 +306,7 @@ def read_field(primitive: Primitive, solved: Solved) -> Rasters:
         grid = _fgout(solved, key, stage)
         times = np.asarray(grid.times, dtype="float64")
         if primitive.t == "every":
-            numbers = list(range(1, times.size + 1))
+            numbers = solved.whole_frames(f"fgout{grid.fgno:04d}", times.size)
         else:
             index = (int(primitive.t) if isinstance(primitive.t, int) and not isinstance(primitive.t, bool)
                      else int(np.argmin(np.abs(times - float(primitive.t)))))
@@ -356,7 +373,12 @@ def read_series(primitive: Primitive, solved: Solved) -> Series:
     number, lon, lat = int(gauge[0]), float(gauge[1]), float(gauge[2])
     with solved.staged() as stage:
         stage.fetch(f"gauge{number:05d}.txt")
-        solution = GaugeSolution(number, path=str(stage.work))
+        try:
+            solution = GaugeSolution(number, path=str(stage.work))
+        except IndexError:
+            if not solved.stopped:
+                raise
+            raise OutputEmpty(f"gauge {number} wrote no instant before the stop.") from None
     if solution.q.shape[0] < 4:
         raise _refuse("OUTPUT_UNSAVED", f"gauge {number} wrote {solution.q.shape[0]} variables and surface elevation is "
                       "the fourth; GAUGE_Q_OUT_FIELDS states fewer.")

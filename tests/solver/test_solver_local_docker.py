@@ -567,7 +567,7 @@ async def test_a_stop_ends_the_wait_as_the_stop_with_the_last_step_and_what_the_
         await task
 
     assert stop.value.run_id == run_id and isinstance(stop.value, asyncio.CancelledError)
-    assert stop.value.at == "step 500, t = 367.5 s"
+    assert stop.value.at == "step 500, t = 367.5 s" and stop.value.started_at
     assert stop.value.sentence() == "stopped by the user at step 500, t = 367.5 s"
     completion = json.loads(s3.objects[("test-runs-bucket", f"{run_id}/completion.json")])
     assert completion["status"] == "cancelled"

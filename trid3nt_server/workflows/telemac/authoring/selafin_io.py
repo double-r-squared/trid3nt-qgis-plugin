@@ -19,7 +19,7 @@ from trid3nt_server.tools.mesh.shared.formats.tin_topology import (
 from .topology import FREE_EXIT_ROLE, RATING_CURVE_ROLE
 
 __all__ = ["BOUNDARY_CONDITIONS_FILE", "GEOMETRY_FILE", "telemac_boundary",
-           "write_telemac_pair", "read_selafin", "SelafinReadError"]
+           "write_telemac_pair", "read_selafin", "keep_whole_frames", "SelafinReadError"]
 
 # The steering keywords TELEMAC reads the pair under; a mesh's file map is keyed by them.
 GEOMETRY_FILE: str = "GEOMETRY FILE"
@@ -283,6 +283,30 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
             f"{cli.name} into {rundir}: {failure}") from failure
 
     return {"geo_slf": geo_slf, "cli": cli, "stats": walk["stats"]}
+
+
+def keep_whole_frames(path: str | Path) -> int:
+    """Cut a result file a killed run left mid-frame back to its last whole frame, in place -> the frames kept.
+    The frames before the cut are exactly what the engine wrote; a file with no whole frame refuses."""
+    import os
+
+    from serafin import SerafinHeader
+
+    slf = Path(path)
+    size = os.path.getsize(slf)
+    header = SerafinHeader()
+    with slf.open("rb") as fh:
+        try:
+            header.from_file(fh, size)
+        except Exception:  # noqa: BLE001 -- a partial last frame fails the size check after the sizes are set
+            if not getattr(header, "frame_size", 0) or not getattr(header, "header_size", 0):
+                raise SelafinReadError(f"{slf.name} holds no readable SELAFIN header, so the stopped run wrote no frame")
+    kept = max(0, (size - header.header_size) // header.frame_size)
+    if kept == 0:
+        raise SelafinReadError(f"{slf.name} holds no whole frame: the run was stopped before its first write")
+    with slf.open("r+b") as fh:
+        fh.truncate(header.header_size + kept * header.frame_size)
+    return kept
 
 
 def read_selafin(path: str | Path, *, quadrangles: bool = False) -> dict[str, Any]:

@@ -13,13 +13,14 @@ __all__ = ["SolveStopped", "Stopped", "finish"]
 
 class SolveStopped(asyncio.CancelledError):
     """The user stopped the wait on ``run_id`` and the container is down. ``at`` is the engine's last stated
-    step (``None`` before it stated one); ``solved`` is the run handle of what it wrote, which each layer
+    step (``None`` before it stated one) and ``started_at`` when the solve began, as the run's completion states it; ``solved`` is the run handle of what it wrote, which each layer
     up the stack completes in the shape its normal handle has."""
 
-    def __init__(self, run_id: str, at: str | None) -> None:
+    def __init__(self, run_id: str, at: str | None, started_at: str | None = None) -> None:
         super().__init__()
         self.run_id = run_id
         self.at = at
+        self.started_at = started_at
         self.solved: dict[str, Any] = {}
 
     def sentence(self) -> str:

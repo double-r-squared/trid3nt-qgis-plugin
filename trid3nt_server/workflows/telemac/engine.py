@@ -166,7 +166,7 @@ async def solve_case(*, run: dict[str, Any], cores: int) -> dict[str, Any]:
     except SolveStopped as stop:
         # The worker never reached its metrics: the handle states what a stop leaves, the result file as far as it was written.
         stop.solved = {"run_id": stop.run_id, "uri": _result_uri(stop.run_id, run), "utm_epsg": int(facts["utm_epsg"]),
-                       "metrics": {}, "started_at": None}
+                       "metrics": {}, "started_at": stop.started_at, "stopped": True}
         raise
     if run_result is None or run_result.status != "complete":
         raise TelemacError(

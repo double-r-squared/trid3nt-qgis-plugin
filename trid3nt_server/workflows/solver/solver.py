@@ -894,7 +894,8 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, cores: int,
     except asyncio.CancelledError:
         logger.info("%s %s solve cancelled awaiting solver", solver, label)
         await route_sim_terminal(emitter, sim_step_id, run_result=None)
-        raise SolveStopped(run_id, await finish(_stopped_at(local, steps))) from None
+        at, started_at = await finish(_stopped_at(handle, local, steps))
+        raise SolveStopped(run_id, at, started_at) from None
     finally:
         progress.cancel()
         try:
@@ -905,14 +906,16 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, cores: int,
     return run_result, (getattr(run_result, "run_id", None) or run_id)
 
 
-async def _stopped_at(local: _LocalRun | None, steps: Any) -> str | None:
-    """Once the supervisor has uploaded what a killed run wrote, the last step its stdout stated."""
+async def _stopped_at(handle: ExecutionHandle, local: _LocalRun | None,
+                      steps: Any) -> tuple[str | None, str | None]:
+    """Once the supervisor has uploaded what a killed run wrote: the last step its stdout stated and when the solve began."""
     if local is not None and local.supervisor is not None:
         await asyncio.to_thread(local.supervisor.join)
-    if steps is None:
-        return None
-    await asyncio.to_thread(steps.read)
-    return steps.step
+    manifest = await asyncio.to_thread(_try_get_completion_s3, storage.local_runs_bucket(), handle.run_id) or {}
+    started = _to_utc(manifest.get("started_at"))
+    if steps is not None:
+        await asyncio.to_thread(steps.read)
+    return (steps.step if steps is not None else None), (started.isoformat() if started else None)
 
 
 def download_result(run_id: str, basename: str) -> str:

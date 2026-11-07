@@ -29,6 +29,7 @@ from trid3nt_server.workflows.runtime.primitives import (
 from trid3nt_server.inputs.observation import Observation
 from trid3nt_server.workflows.telemac.authoring.selafin_io import (
     SelafinReadError,
+    keep_whole_frames,
     read_selafin,
 )
 
@@ -122,6 +123,8 @@ class Solved:
 
         local = download_result(self.run_id, self.result_file)
         try:
+            if self.run.get("stopped"):
+                keep_whole_frames(local)
             return read_selafin(local)
         finally:
             Path(local).unlink(missing_ok=True)
