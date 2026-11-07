@@ -348,11 +348,17 @@ def test_post_bytes_503_is_retried_by_the_one_policy(monkeypatch):
     assert body == b'{"ok": 1}' and calls == ["POST", "POST"] and slept == [0]
 
 
-def test_post_bytes_exhaustion_carries_the_provider_body(monkeypatch):
+def test_post_bytes_exhaustion_carries_the_provider_body(monkeypatch, user_settings):
     from trid3nt_server.tools.fetchers._router.transport import client as transport_client
     monkeypatch.setattr(transport_client, "_sleep_backoff", lambda a, _h: None)
     calls: list[str] = []
     with pytest.raises(TransportUpstreamError) as ei:
         transport.post_bytes(_flaky_client([503] * 99, b"", calls), "http://upstream.test/q")
     assert ei.value.status == 503 and "provider says down" in str(ei.value)
-    assert len(calls) == transport_client.MAX_RETRIES + 1
+    assert len(calls) == 4 + 1
+
+    user_settings(FETCH_RETRIES=1)
+    calls.clear()
+    with pytest.raises(TransportUpstreamError):
+        transport.post_bytes(_flaky_client([503] * 99, b"", calls), "http://upstream.test/q")
+    assert len(calls) == 1 + 1

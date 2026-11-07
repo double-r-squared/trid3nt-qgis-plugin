@@ -52,7 +52,7 @@ async def test_one_survivor_comes_back_with_the_call_it_is_ready_for(world):
     assert found["picked"] == "fetch_survey"
     assert not found["tie"]
     row = found["results"][0]
-    assert row["tool_name"] == "fetch_survey"
+    assert row["source"] == "fetch_survey"
     assert row["ask"] == {"purpose": "bathymetry", "bbox": PORTLAND_BOX}
     assert row["resolution"] == "1 m"
     assert "fetch_survey" in found["sentence"]
@@ -72,7 +72,7 @@ async def test_a_tie_says_so_and_every_survivor_carries_its_own_ask(world):
     world([("fetch_east", surface()), ("fetch_west", surface())])
     found = await find_sources("bathymetry", PORTLAND_BOX)
     assert found["tie"] is True
-    assert [row["tool_name"] for row in found["results"]] == ["fetch_east",
+    assert [row["source"] for row in found["results"]] == ["fetch_east",
                                                               "fetch_west"]
     assert all(row["ask"]["bbox"] == PORTLAND_BOX for row in found["results"])
 
@@ -160,7 +160,7 @@ async def test_the_gauges_and_the_portal_both_measure_a_sample_at_portland():
     discrete archive."""
     found = await find_sources("water quality sample", PORTLAND_BOX,
                                ["2026-09-17T00:00:00Z", "2026-09-20T00:00:00Z"])
-    named = [row["tool_name"] for row in found["results"]]
+    named = [row["source"] for row in found["results"]]
     assert "fetch_usgs_nwis_gauges" in named and "fetch_usgs_water_quality" in named
     assert named.index("fetch_usgs_nwis_gauges") < named.index("fetch_usgs_water_quality")
 
@@ -176,7 +176,7 @@ async def test_a_bed_asked_for_off_the_oregon_coast_excludes_the_lakes_by_name()
     dropped = {row["fetcher"]: row["excluded"] for row in found["choice"]["rows"]}
     assert "does not reach this place" in dropped["fetch_chs_nonna"]
     assert "the Great Lakes and the connecting channels" in dropped["fetch_chs_nonna"]
-    named = [row["tool_name"] for row in found["results"]]
+    named = [row["source"] for row in found["results"]]
     assert "fetch_bluetopo" in named and "fetch_cudem" in named
     # The global relief MODEL reaches everywhere and still ranks under every
     # measured row, so the coarse bed is offered and never picked first.

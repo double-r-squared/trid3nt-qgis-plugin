@@ -37,14 +37,16 @@ def _settings() -> ModelSettings:
 
 def _non_template_names() -> set[str]:
     """The names in the DEFAULT declarable registry: ``TOOL_REGISTRY`` minus the
-    pool-hidden ``internal`` tier. What reaches
+    pool-hidden ``internal`` tier and the data sources. What reaches
     ``build_tool_declarations`` is a NEW filtered dict, not the live registry."""
     from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
 
     return {
         name
         for name, entry in TOOL_REGISTRY.items()
         if getattr(entry.metadata, "tier", "general") != "internal"
+        and name not in registered_spec_names()
     }
 
 
@@ -135,7 +137,7 @@ async def test_enforce_subsets_registry_and_keeps_core_floor(fake_llm):
 
     # Pick a small real subset of registered tools that includes the core floor.
     floor = {t for t in CORE_FLOOR if t in TOOL_REGISTRY}
-    visible = set(floor) | {"fetch_dem"}
+    visible = set(floor) | {"probe_point"}
     visible &= set(TOOL_REGISTRY)
 
     with patch.object(tr, "retrieve_visible_tools", return_value=visible):
@@ -152,8 +154,8 @@ async def test_enforce_subsets_registry_and_keeps_core_floor(fake_llm):
     assert len(sent_names) < len(TOOL_REGISTRY)
     # CORE FLOOR is a subset of what was sent.
     assert floor <= sent_names
-    # fetch_dem (the requested tool) survived.
-    assert "fetch_dem" in sent_names
+    # probe_point (the requested tool) survived.
+    assert "probe_point" in sent_names
 
 
 @pytest.mark.asyncio
@@ -164,7 +166,7 @@ async def test_enforce_visible_set_is_monotonic_across_turns(fake_llm):
 
     state = SessionState(session_id=new_ulid())
 
-    real = [t for t in ("fetch_dem", "fetch_cudem", "geocode_location") if t in TOOL_REGISTRY]
+    real = [t for t in ("probe_point", "restyle_layer", "geocode_location") if t in TOOL_REGISTRY]
     assert real, "expected at least one real tool to test with"
 
     # Turn 1: retrieval surfaces real[0].

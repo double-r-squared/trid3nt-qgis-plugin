@@ -172,6 +172,7 @@ from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 
 from .search.search_tools import search_tools  # noqa: E402,F401
 from .search.find_sources import find_sources  # noqa: E402,F401
+from .search.fetch import fetch  # noqa: E402,F401
 from .search.describe_keywords.describe_keywords import describe_keywords  # noqa: E402,F401
 from .meta.set_config.set_config import set_config  # noqa: E402,F401
 from trid3nt_server.inputs.gate import spatial_input_tool  # noqa: E402,F401

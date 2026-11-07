@@ -1,5 +1,5 @@
-"""The ambiguity margin, an env knob, takes zero, which turns the ask off; a malformed one
-takes its default. A wait is a setting and refuses a value outside its range by name."""
+"""The ambiguity margin is a setting: zero turns the ask off and a value outside its range refuses by name.
+A wait is a setting and refuses a value outside its range by name."""
 from __future__ import annotations
 
 import pytest
@@ -16,13 +16,13 @@ SETTING_WAITS = [
 ]
 
 
-def test_ambiguity_margin_zero_turns_the_ask_off(monkeypatch):
-    monkeypatch.setenv("TRID3NT_AMBIGUITY_MARGIN", "0")
-    assert _ambiguity_margin_threshold() == 0.0
-    monkeypatch.setenv("TRID3NT_AMBIGUITY_MARGIN", "-1")
-    assert _ambiguity_margin_threshold() == 0.0
-    monkeypatch.setenv("TRID3NT_AMBIGUITY_MARGIN", "wide")
+def test_ambiguity_margin_zero_turns_the_ask_off(user_settings):
     assert _ambiguity_margin_threshold() == 0.01
+    user_settings(AMBIGUITY_MARGIN=0)
+    assert _ambiguity_margin_threshold() == 0.0
+    user_settings(AMBIGUITY_MARGIN=-1)
+    with pytest.raises(SlotRefused):
+        _ambiguity_margin_threshold()
 
 
 @pytest.mark.parametrize("name,read,default", SETTING_WAITS)

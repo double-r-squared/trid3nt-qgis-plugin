@@ -137,21 +137,13 @@ def _validate_row_notes(spec: SourceSpec, source_hint: str) -> None:
 
 
 def load_spec(data: dict, *, source_hint: str = "<dict>") -> SourceSpec:
-    """Validate a parsed row mapping into a :class:`SourceSpec`, raising :class:`SpecLoadError`;
-    a source carrying a row is never ``internal_only``."""
+    """Validate a parsed row mapping into a :class:`SourceSpec`, raising :class:`SpecLoadError`."""
     if not isinstance(data, dict):
         raise SpecLoadError(f"{source_hint}: row must be a mapping, got {type(data).__name__}")
     try:
         spec = SourceSpec.model_validate(data)
     except ValidationError as exc:
         raise SpecLoadError(f"{source_hint}: invalid SourceSpec: {exc}") from exc
-    if spec.coverage and spec.internal_only:
-        raise SpecLoadError(
-            f"{source_hint}: {spec.name} states {len(spec.coverage)} coverage row(s) "
-            "AND internal_only: a ROWED source is one the match may pick and the "
-            "gate hands the model on that pick, so it can never be tier=internal. "
-            "The internal tier is for an absorbed in-process seam that states NO "
-            "row: drop the rows or drop internal_only.")
     _validate_row_datums(spec, source_hint)
     _validate_row_notes(spec, source_hint)
     return spec

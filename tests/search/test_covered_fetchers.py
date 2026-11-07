@@ -1,9 +1,8 @@
-"""How a fetcher with a row reaches the model: the match, not a phrase.
+"""How a data source reaches the model: the door, not a phrase.
 
-A covered fetcher leaves the retrieval index, so no phrasing ranks it; the
-model asks ``find_sources`` for a class at a place and the survivors it names
-enter the turn's gate, which is where their schemas come from. A fetcher with
-no row - the overlay group - stays description-routed and indexed."""
+No source is a tool the model ranks or is told of: its phrasings index as documents
+named ``find_sources``, the model asks that door for a class at a place or for words,
+and calls the source through ``fetch``."""
 
 from __future__ import annotations
 
@@ -27,18 +26,11 @@ def registry():
     return TOOL_REGISTRY
 
 
-def test_the_match_is_a_gate_expander_beside_the_tool_search(registry):
+def test_only_the_tool_search_is_a_gate_expander(registry):
+    """find_sources hands back sources, which are called through fetch and never declared."""
     names = agent_server._gate_expander_tool_names()
-    assert FIND_SOURCES in names
     assert "search_tools" in names
-
-
-def test_the_survivors_it_names_are_what_the_gate_expands_on(registry):
-    found = {"results": [{"tool_name": "fetch_bluetopo", "ask": {}},
-                         {"tool_name": "fetch_ehydro_surveys", "ask": {}},
-                         {"tool_name": "fetch_bluetopo", "ask": {}}]}
-    assert agent_server._tool_names_from_search_result(found) == [
-        "fetch_bluetopo", "fetch_ehydro_surveys"]
+    assert FIND_SOURCES not in names
 
 
 def test_every_covered_source_is_a_registered_fetcher(registry):
@@ -76,13 +68,23 @@ async def _top(query: str, k: int = 8) -> list[str]:
     return [row["tool_name"] for row in found["results"]]
 
 
-def test_a_covered_fetcher_leaves_the_index_and_an_overlay_one_stays(index):
-    indexed = set(index.tool_names)
-    assert not indexed & covered_sources()
-    for overlay in ("fetch_naip", "fetch_opera_dswx", "fetch_nhd_waterbodies"):
-        assert overlay in indexed, (
-            f"{overlay} states no row and stays description-routed")
-    assert FIND_SOURCES in indexed
+def test_no_source_is_a_tool_of_the_index_and_each_has_documents_under_the_door(index, registry):
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+
+    assert not set(index.tool_names) & registered_spec_names()
+    assert FIND_SOURCES in index.tool_names
+    expected = len(_class_corpus()) + 1 + len(registered_spec_names())
+    assert index.tool_names.count(FIND_SOURCES) == expected
+
+
+def test_a_source_dropped_from_the_registry_takes_its_document_with_it(registry):
+    import trid3nt_server.tools.search.search_tools.search_tools as dd
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+
+    snapshot = {n: e for n, e in registry.items() if n != "fetch_fema_nfhl_zones"}
+    smaller = dd._build_index(registry_snapshot=snapshot)
+    assert smaller.tool_names.count(FIND_SOURCES) == (
+        len(_class_corpus()) + 1 + len(registered_spec_names()) - 1)
 
 
 def test_nothing_of_ours_grids_soundings(registry, index):
@@ -91,13 +93,6 @@ def test_nothing_of_ours_grids_soundings(registry, index):
     gone = "survey_" + "surface"
     assert gone not in registry
     assert gone not in set(index.tool_names)
-
-
-def test_each_class_is_its_own_document_under_the_match(index):
-    """A class's phrasings are ranked against their own length, not diluted by the
-    whole vocabulary folded into one document."""
-    corpus = _class_corpus()
-    assert index.tool_names.count(FIND_SOURCES) == len(corpus) + 1
 
 
 def test_the_class_corpus_covers_the_whole_vocabulary(index):
@@ -117,44 +112,53 @@ async def test_every_class_phrasing_routes_to_the_match(index):
 
 
 @pytest.mark.asyncio
-async def test_every_overlay_tool_is_still_reached_by_its_own_phrasings(registry,
-                                                                        index):
-    """A fetcher with no row is routed by description, so its own
-    corpus must still surface it: the class corpora never crowd it out."""
+async def test_every_source_phrasing_routes_to_the_door(registry, index):
+    """MODEL-FREE: a question in a source's own words ranks find_sources in the top 8."""
     import trid3nt_server.tools.search.search_tools.search_tools as dd
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
 
     corpus = dd._load_corpus()
-    covered = covered_sources()
-    unreachable = []
-    for tool in sorted(corpus):
-        if tool in covered or tool not in registry or tool == FIND_SOURCES:
-            continue
-        hit = False
-        for query in corpus[tool]:
-            if tool in await _top(query):
-                hit = True
-                break
-        if not hit:
-            unreachable.append(tool)
-    assert not unreachable, f"tools no phrasing of their own reaches: {unreachable}"
+    missed = [(name, query) for name in sorted(registered_spec_names())
+              for query in corpus.get(name, []) if FIND_SOURCES not in await _top(query)]
+    assert not missed, f"source phrasings that do not route to the door: {missed}"
 
 
-def test_the_model_is_given_the_match_with_the_vocabulary_on_it(registry):
+def test_the_model_is_given_the_door_with_the_vocabulary_on_it_and_no_source(registry):
     from trid3nt_server.model.adapters.adapter import build_tool_declarations
+    from trid3nt_server.server.dispatch.helpers import _default_declarable_registry
 
-    decls = {d.name: d for d in build_tool_declarations(dict(registry))}
-    assert FIND_SOURCES in decls
-    assert decls[FIND_SOURCES].schema["properties"]["need"]["enum"] == list(
-        DATA_CLASSES)
-    assert "fetch_ehydro_surveys" in decls, (
-        "a covered fetcher is still DECLARABLE once the gate expands on it")
+    decls = {d.name: d for d in build_tool_declarations(_default_declarable_registry())}
+    assert {FIND_SOURCES, "fetch"} <= set(decls)
+    assert decls[FIND_SOURCES].schema["properties"]["need"]["enum"] == list(DATA_CLASSES)
+    assert not [name for name in decls if name.startswith("fetch_")]
 
 
-def test_no_covered_fetcher_stands_on_the_always_visible_floor(registry):
-    """The floor is for tools needed on MOST turns whatever the place. A source
-    with a row is found where its row reaches the ground, so declaring
-    it every turn is the very claim the match exists to stop making."""
+def test_the_door_and_the_call_stand_on_the_floor_and_no_source_does(registry):
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
     from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 
-    assert not CORE_FLOOR & covered_sources()
-    assert "fetch_dem" not in CORE_FLOOR
+    assert {FIND_SOURCES, "fetch"} <= CORE_FLOOR
+    assert not CORE_FLOOR & registered_spec_names()
+
+
+def test_no_source_is_named_in_the_prompt_or_in_any_declared_set_for_thirty_messages(registry, index):
+    import trid3nt_server.tools.search.search_tools.search_tools as dd
+    from trid3nt_server.model.adapters.adapter import build_tool_section
+    from trid3nt_server.server.dispatch.helpers import _default_declarable_registry
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+    from trid3nt_server.tools.search.tool_retrieval import (
+        _full_registry_floor, retrieve_visible_tools)
+
+    sources = registered_spec_names()
+    corpus = dd._load_corpus()
+    messages = [corpus[name][0] for name in sorted(sources) if corpus.get(name)][:24]
+    messages += ["model a dye release in the Willamette", "map flood zones in Cape Coral",
+                 "what is the water table here", "show nws alerts", "how deep is the bay",
+                 "run a tsunami over Crescent City"]
+    assert len(messages) == 30
+    assert not sources & set(build_tool_section(registry).replace("- ", "\n").split(":"))
+    assert "fetch_" not in build_tool_section(registry)
+    assert not sources & set(_default_declarable_registry())
+    assert not sources & _full_registry_floor(set())
+    for message in messages:
+        assert not sources & retrieve_visible_tools(message, None), message

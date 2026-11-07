@@ -507,6 +507,15 @@ package DataSeam {
         */
     }
 
+    part def SourceDoor {
+        doc /*
+        The one way the model reaches a data source: find_sources names it
+        (a ranked class at a place, or free text), fetch calls it by that name
+        with the arguments the row handed back. A source is no tool of the
+        prompt, the retrieval index or a declared set.
+        */
+    }
+
     part def RankedSourceList {
         doc /*
         ONE object in three views: the card renders it with the pick
@@ -590,6 +599,18 @@ package DataSeam {
     part modelMatch : SourceMatch {
         doc /*
         code: trid3nt_server/tools/search/find_sources/find_sources.py
+        */
+    }
+
+    part sourceDoorFind : SourceDoor {
+        doc /*
+        code: trid3nt_server/tools/search/find_sources/find_sources.py
+        */
+    }
+
+    part sourceDoorFetch : SourceDoor {
+        doc /*
+        code: trid3nt_server/tools/search/fetch/fetch.py
         */
     }
 
@@ -1168,6 +1189,19 @@ package DataSeam {
         */
     }
 
+    requirement def ADataSourceIsReachedThroughOneDoor {
+        doc /*
+        No data source is a tool the model is told of or ranks: the prompt
+        list, the declared sets and the tool index skip every fetcher, and the
+        model reaches one by asking find_sources and calling fetch with the
+        row's source and ask. A call to fetch IS a call of the source it names,
+        translated before anything keys on a tool name, so the gates, the
+        cache, the reuse guard and the emission seam behave exactly as for a
+        direct call and a layer lands once. A source or an argument that does
+        not exist is refused by name with the nearest.
+        */
+    }
+
     requirement def ASeriesIsAlignedToTheRunsEventTime {
         doc /*
         A run opens at the moment it asks about, INSIDE the record: t=0 is that
@@ -1547,6 +1581,16 @@ package DataSeam {
     verify requirement ASlotStatesANeedAndTheMatchFillsIt by
         "tests/telemac/test_workflow_owns_its_stages.py::test_a_template_that_writes_no_mesh_row_fills_with_a_supplied_mesh";
 
+    satisfy requirement ADataSourceIsReachedThroughOneDoor by sourceDoorFind;
+    satisfy requirement ADataSourceIsReachedThroughOneDoor by sourceDoorFetch;
+    verify requirement ADataSourceIsReachedThroughOneDoor by
+        "tests/server/test_fetch_dispatch.py::test_a_wrapper_that_does_not_translate_emits_the_layer_twice";
+    verify requirement ADataSourceIsReachedThroughOneDoor by
+        "tests/server/test_fetch_dispatch.py::test_an_unknown_source_and_an_unknown_argument_are_refused_by_name_with_the_nearest";
+    verify requirement ADataSourceIsReachedThroughOneDoor by
+        "tests/search/test_find_sources_query.py::test_flood_zones_ranks_the_fema_zones_source_in_the_top_three";
+    verify requirement ADataSourceIsReachedThroughOneDoor by
+        "tests/search/test_covered_fetchers.py::test_no_source_is_named_in_the_prompt_or_in_any_declared_set_for_thirty_messages";
     satisfy requirement TheRankedListIsOneObjectInThreeViews by rankedListCard;
     satisfy requirement TheRankedListIsOneObjectInThreeViews by rankedListRecord;
     satisfy requirement TheRankedListIsOneObjectInThreeViews by coverageContract;

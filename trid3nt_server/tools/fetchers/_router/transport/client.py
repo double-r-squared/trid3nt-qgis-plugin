@@ -17,6 +17,8 @@ from typing import Any, Callable, TypeVar
 
 import httpx
 
+from trid3nt_server.settings import setting
+
 from .errors import TransportAuthError, TransportUpstreamError, classify_status
 
 logger = logging.getLogger(
@@ -25,10 +27,9 @@ logger = logging.getLogger(
 
 __all__ = [
     "get_client", "get_bytes", "get_once", "post_bytes",
-    "retried", "MAX_RETRIES", "RETRYABLE_STATUS",
+    "retried", "RETRYABLE_STATUS",
 ]
 
-MAX_RETRIES = 4
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 _BACKOFF_BASE = 0.5
 _BACKOFF_CAP = 20.0
@@ -88,11 +89,12 @@ def retried(call: Callable[[], T], *, transient: Callable[[Exception], bool],
             label: str) -> T:
     """Run ``call`` under this module's attempt budget and backoff for a library that owns its socket: only a ``transient``
     exception is retried, the last raises unchanged, and an exception's ``retry_after`` is honoured."""
-    for attempt in range(MAX_RETRIES + 1):
+    retries = int(setting("FETCH_RETRIES"))
+    for attempt in range(retries + 1):
         try:
             return call()
         except Exception as exc:
-            if attempt == MAX_RETRIES or not transient(exc):
+            if attempt == retries or not transient(exc):
                 raise
             logger.warning("transport.retried %s attempt=%d: %s: %s",
                            label, attempt, type(exc).__name__, exc)

@@ -12,6 +12,8 @@ from trid3nt_server.model.adapters.model_selection import ModelSettings
 from trid3nt_server.model.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_layers_present_note, build_tool_declarations, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result, system_prompt
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.render.charts import is_chart_emission_result
+from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+from trid3nt_server.tools.search.fetch import FETCH, resolve_fetch
 from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 from trid3nt_server.render.pipeline_emitter import bind_turn_case
 from trid3nt_server.server.turn.compaction import complete_compaction_card, mint_compaction_card
@@ -172,7 +174,8 @@ async def _stream_model_reply(
                 exc_info=True,
             )
             _allowed_snapshot = set(TOOL_REGISTRY)
-        _subset = _allowed_snapshot & set(TOOL_REGISTRY)
+        # A data source is called through fetch and never declared, whatever the Case accrued.
+        _subset = _allowed_snapshot & set(TOOL_REGISTRY) - registered_spec_names()
         if _subset:
             _retrieval_registry = {
                 name: entry
@@ -619,31 +622,36 @@ async def _stream_model_reply(
                 result: Any = None
                 _call_is_terminal_deliverable = False
                 _tool_start = asyncio.get_running_loop().time()
+                # A ``fetch`` call is the source it names from here on: the breaker, the visible set, the card and the
+                # summary all key on the source; only the Message pair below keeps ``fetch`` so the provider pairs call and result.
+                _name, _args = call.name, call.args
                 try:
+                    if _name == FETCH:
+                        _name, _args = resolve_fetch(_args or {})
                     # Per-session circuit breaker: short-circuit before dispatch if the tool has
                     # failed repeatedly this session.
-                    if state.circuit_breaker.is_tripped(call.name):
-                        remaining = state.circuit_breaker.cooldown_remaining_s(call.name)
-                        raise CircuitBreakerError(call.name, remaining)
+                    if state.circuit_breaker.is_tripped(_name):
+                        remaining = state.circuit_breaker.cooldown_remaining_s(_name)
+                        raise CircuitBreakerError(_name, remaining)
                     # A hallucinated name raises ToolNotFoundError here, surfaced to the model
                     # through summarize_tool_result(error=...).
                     result = await _invoke_tool_via_emitter(
-                        websocket, state, call.name, call.args
+                        websocket, state, _name, _args
                     )
                     # The tool has no websocket access; here the live socket is reachable, so the
                     # turn PAUSES for the drawn reply. Timeout/cancel/malformed draw all become a
                     # typed result, never a fabricated AOI.
                     if (
-                        call.name == "request_spatial_input"
+                        _name == "request_spatial_input"
                         and isinstance(result, dict)
                         and result.get(SPATIAL_INPUT_SENTINEL_KEY) is True
                     ):
                         result = await _handle_request_spatial_input(
-                            websocket, state, call.args or {}
+                            websocket, state, _args or {}
                         )
                     # Snap the map at once, before any downstream layer publish. Best-effort.
                     if (
-                        call.name == "geocode_location"
+                        _name == "geocode_location"
                         and isinstance(result, dict)
                         and result.get("bbox")
                         and state.emitter is not None
@@ -666,7 +674,7 @@ async def _stream_model_reply(
                     # ANY tool result carrying a usable bbox / aoi_bbox snaps the camera (the model
                     # skips geocode_location when given coordinates); a repeat of the turn's last
                     # zoom-to extent is deduped.
-                    if call.name != "geocode_location" and state.emitter is not None:
+                    if _name != "geocode_location" and state.emitter is not None:
                         aoi = _aoi_zoom_to_bbox(
                             result, state.current_turn_map_commands
                         )
@@ -686,7 +694,7 @@ async def _stream_model_reply(
                     # model a compact summary.
                     if is_chart_emission_result(result):
                         await _maybe_emit_chart(websocket, state, result)
-                    state.circuit_breaker.record_success(call.name)
+                    state.circuit_breaker.record_success(_name)
                     # Watchdog progress witness: a call that PRODUCED an artifact (layer, handle,
                     # feature set) resets the no-progress streak even when repeated; a bare ack
                     # does not.
@@ -696,15 +704,15 @@ async def _stream_model_reply(
                         _round_made_progress = True
                     # A top-level run-a-model composer's artifact IS the answer: latch it.
                     _call_is_terminal_deliverable = (
-                        _call_made_progress and _is_terminal_composer(call.name)
+                        _call_made_progress and _is_terminal_composer(_name)
                     )
                     if _call_is_terminal_deliverable:
                         _deliverable_done = True
                         _post_deliverable_idle = 0
-                    state.visible_tools.add(call.name)
+                    state.visible_tools.add(_name)
                     # Search hits join this turn's gate and the Case visible set for later rounds;
                     # only real, registered, not-yet-visible names count toward the cap.
-                    if call.name in _gate_expander_tool_names():
+                    if _name in _gate_expander_tool_names():
                         _hits = _tool_names_from_search_result(result)
                         _added_now: list[str] = []
                         for _cand in _hits:
@@ -712,6 +720,7 @@ async def _stream_model_reply(
                                 break
                             if (
                                 _cand in TOOL_REGISTRY
+                                and _cand not in registered_spec_names()
                                 and _cand not in _retrieval_registry
                                 and _cand not in _discovery_expanded
                             ):
@@ -729,7 +738,7 @@ async def _stream_model_reply(
                                 len(_added_now),
                                 len(_discovery_expanded),
                                 _DISCOVERY_EXPAND_CAP,
-                                call.name,
+                                _name,
                                 state.session_id,
                                 _added_now,
                             )
@@ -743,27 +752,27 @@ async def _stream_model_reply(
                             "tool declined at a gate card session=%s tool=%s "
                             "code=%s",
                             state.session_id,
-                            call.name,
+                            _name,
                             getattr(exc, "error_code", None),
                         )
                     else:
                         logger.exception(
                             "tool dispatch raised session=%s tool=%s err=%s",
                             state.session_id,
-                            call.name,
+                            _name,
                             exc,
                         )
                     # The breaker counts ONLY upstream/transient faults: model-side arg errors must
                     # not trip it and block the corrected retry; CircuitBreakerError never recounts.
                     if not isinstance(exc, CircuitBreakerError):
-                        state.circuit_breaker.record_failure(call.name, exc)
+                        state.circuit_breaker.record_failure(_name, exc)
                     dispatch_error = exc
                     # A failed call is the breaker's territory, not the watchdog's.
                     _round_had_failure = True
                 _tool_latency_ms = (asyncio.get_running_loop().time() - _tool_start) * 1000.0
 
                 summary = summarize_tool_result(
-                    call.name, result, error=dispatch_error
+                    _name, result, error=dispatch_error
                 )
                 _uri_reg = get_uri_registry(state.session_id)
                 # Only the LLM-facing summary shows short layer handles (L<n>) for registered URIs
@@ -772,7 +781,7 @@ async def _stream_model_reply(
                 # Geocode drift warning. A successful geocode_location pins this turn's geocoded
                 # bbox; any LATER call whose bbox arg intersects NEITHER that bbox NOR the active
                 # AOI gets an advisory WARNING appended to its function_response (never blocks).
-                if call.name == "geocode_location":
+                if _name == "geocode_location":
                     if dispatch_error is None and isinstance(result, dict):
                         _gc_bbox = as_bbox(result.get("bbox"))
                         if _gc_bbox is not None:
@@ -783,7 +792,7 @@ async def _stream_model_reply(
                     and _env_flag("TRID3NT_GEOCODE_DRIFT_WARN", True)
                 ):
                     _drift_note = _geocode_drift_note(
-                        call.args, _turn_geocode_bbox, state.active_aoi_bbox
+                        _args, _turn_geocode_bbox, state.active_aoi_bbox
                     )
                     if _drift_note:
                         summary["aoi_drift_warning"] = _drift_note
@@ -791,7 +800,7 @@ async def _stream_model_reply(
                             "geocode-drift WARNING session=%s tool=%s "
                             "geocoded=%s",
                             state.session_id,
-                            call.name,
+                            _name,
                             _turn_geocode_bbox,
                         )
                 # Surface the layer handles this dispatch registered so the model passes HANDLES --
@@ -817,7 +826,7 @@ async def _stream_model_reply(
                     "function-response queued session=%s iter=%d tool=%s summary_keys=%s",
                     state.session_id,
                     iterations,
-                    call.name,
+                    _name,
                     sorted(summary.keys()),
                 )
 
@@ -829,7 +838,7 @@ async def _stream_model_reply(
                 # Guard against a STALE last_tool_step: a dispatch that raised BEFORE the emitter
                 # created a step (ToolNotFoundError) leaves the prior tool's step on the accessor.
                 # Only stamp IO when the recorded step is THIS tool's step.
-                if _io_step is not None and _io_step.tool_name != call.name:
+                if _io_step is not None and _io_step.tool_name != _name:
                     _io_step = None
                 if _io_step is not None:
                     # The summary IS the verdict: a raised exception already
@@ -842,8 +851,8 @@ async def _stream_model_reply(
                     try:
                         await state.emitter.emit_tool_io(
                             step_id=_io_step.step_id,
-                            tool_name=call.name,
-                            raw_args=call.args,
+                            tool_name=_name,
+                            raw_args=_args,
                             function_response=summary,
                             is_error=_io_is_error,
                         )
@@ -851,7 +860,7 @@ async def _stream_model_reply(
                         logger.debug(
                             "tool-io emit failed session=%s tool=%s",
                             state.session_id,
-                            call.name,
+                            _name,
                             exc_info=True,
                         )
 
@@ -873,7 +882,7 @@ async def _stream_model_reply(
                 logger.info("tool_call %s", json.dumps({
                     "session_id": state.session_id,
                     "turn_id": pipeline_id,
-                    "tool_name": call.name,
+                    "tool_name": _name,
                     "model_id": _effective_model,
                     "success": _call_success,
                     "error_code": _call_error_code,
@@ -882,7 +891,7 @@ async def _stream_model_reply(
                         last_usage.cached_content_token_count
                         if last_usage is not None else None),
                     "result_usable": classify_result_usable(
-                        call.name, result, summary),
+                        _name, result, summary),
                 }, default=str))
                 _turn_tool_dispatch_count += 1
                 contents.append(

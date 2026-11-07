@@ -84,10 +84,13 @@ def _discoverable_names(n: int) -> list[str]:
     These are the candidates a search returns -- they must be OUTSIDE the
     trimmed visible set so the union actually adds them.
     """
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+
     out = [
         name
         for name in sorted(agent_tools.TOOL_REGISTRY)
         if name not in CORE_FLOOR and name != "search_tools"
+        and name not in registered_spec_names()
     ]
     return out[:n]
 

@@ -188,6 +188,27 @@
         0,
         1000000000000.0
       ]
+    },
+    "INPUT_DESC_CHARS": {
+      "unit": "chars",
+      "bounds": [
+        0,
+        1000000000000.0
+      ]
+    },
+    "AMBIGUITY_MARGIN": {
+      "unit": "share",
+      "bounds": [
+        0,
+        1
+      ]
+    },
+    "FETCH_RETRIES": {
+      "unit": "retries",
+      "bounds": [
+        0,
+        10
+      ]
     }
   }
 }

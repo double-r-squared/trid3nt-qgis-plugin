@@ -339,14 +339,13 @@ def test_a_lasting_timeout_is_the_upstream_error_after_every_attempt(spec, no_sl
     import dataretrieval.nwis as nwis
     from dataretrieval.exceptions import NetworkError
     from trid3nt_server.tools.fetchers._fetch_common import UpstreamAPIError
-    from trid3nt_server.tools.fetchers._router.transport.client import MAX_RETRIES
     said = ("Could not reach the service at https://waterservices.usgs.gov/nwis/iv: "
             "_ssl.c:993: The handshake operation timed out")
     calls = []
     monkeypatch.setattr(nwis, "get_iv", _flaky(calls, [NetworkError(said)] * 99, None))
     with pytest.raises(UpstreamAPIError) as ei:
         nwis_hooks.read(spec, {"bbox": [-77.9, 38.9, -77.0, 39.1]}, timeout_s=5.0)
-    assert len(calls) == MAX_RETRIES + 1 == 5
+    assert len(calls) == 4 + 1
     assert ei.value.error_code == "NWIS_GAUGES_UPSTREAM_ERROR" and ei.value.retryable
     assert str(ei.value) == f"NetworkError: {said}"
 

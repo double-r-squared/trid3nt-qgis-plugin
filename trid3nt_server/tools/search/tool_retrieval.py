@@ -38,12 +38,12 @@ MAX_K = 25
 # A browse TREE is refused: it multiplies wrong turns, each a full round trip, and grows dead ends faster than the corpus.
 
 #: The always-visible floor: tools that must NEVER be retrieved out - the prerequisite primitives, the discovery escape hatch, cross-cutting actions.
-#: No engine template (flooring one biases every turn), no publish tool (emission is automatic), no covered fetcher (found through the match at a place).
+#: No engine template (flooring one biases every turn), no publish tool (emission is automatic), no data source (found through find_sources, called through fetch).
 CORE_FLOOR: frozenset[str] = frozenset(
     {
         "geocode_location",
-        "fetch_nws_alerts_conus",
-        "fetch_nws_event",
+        "find_sources",
+        "fetch",
         "search_tools",
         "run_qgis_algorithm",
         "run_pyqgis",
@@ -194,11 +194,15 @@ def _full_registry_floor(floor: set[str]) -> set[str]:
         )
     # Engine templates (tier=template) are ordinary retrieval-pool members, so the
     # FAIL-OPEN dump INCLUDES them. Only tier="internal" (an absorbed in-process
-    # seam: registry-resolvable, never model-facing) stays out of the visible set.
+    # seam: registry-resolvable, never model-facing) stays out of the visible set, and so does a data source.
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+
+    sources = registered_spec_names()
     visible = {
         name
         for name, entry in TOOL_REGISTRY.items()
         if getattr(entry.metadata, "tier", "general") != "internal"
+        and name not in sources
     }
     return visible | floor
 
@@ -221,7 +225,10 @@ def retrieve_visible_tools(
     # no ranking channel can surface it.
     floor: set[str] = set(CORE_FLOOR) | set(mounted_tool_names())
     if accrued:
-        floor |= set(accrued)
+        # A data source a Case accrued before sources left the declared sets is not declared again.
+        from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+
+        floor |= set(accrued) - registered_spec_names()
 
     if not isinstance(user_text, str) or not user_text.strip():
         return floor

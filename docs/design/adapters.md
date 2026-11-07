@@ -65,12 +65,36 @@ window) and may supply an authoritative total via `wire_tokens` (the OpenAI
 path measures the real payload; the Anthropic path consults `count_tokens` once
 the estimate nears the window).
 
+## The data door - find_sources, then fetch
+
+No data source is a tool the model is told of or ranks. The prompt's tool list
+(`build_tool_section`), the declarable registry, the fail-open dump and the
+retrieval index all skip every spec-served fetcher (`registered_spec_names()`);
+what the model sees is two tools on the always-visible floor: `find_sources`
+(`need` a class, or `query` free text, at a `place` and `window`) and
+`fetch(source, args)`. Every source's phrasings index as documents named
+`find_sources`, so a message about its data ranks the door and spends one slot.
+
+`find_sources` rows key `source`; a query row is `unranked` (a source with no
+coverage row has no facts to weigh) and carries `about`, `params` and the `ask`
+to hand to `fetch`. A call to `fetch` is translated at the dispatch entry
+(`_invoke_tool_via_emitter`) and in the turn loop into a call of the source it
+names, so gates, cards, the cache, the reuse guard, the circuit breaker and the
+emit-on-fetch silence are the source's own. An argument the source does not take,
+or a source that does not exist, is refused by name with the nearest. All
+registered fetchers stay callable by name (`!run`, templates, composers).
+
+A template input is described in its schema as well as its docstring: the unit,
+range or shape first, then the first sentence of what it means, generated from the
+declaration (`Input.schema_description`) and cut to INPUT_DESC_CHARS.
+
 ## Settings and limits
 
 What a person may reasonably change about a turn is the `model` family of
 settings (`docs/design/settings.md`): MAX_TURN_STEPS, MAX_TURN_SECONDS,
 TEMPERATURE (sent where the model accepts one), TOOL_RESULT_CHARS, and the
-small-context wire's TOOL_DESC_CHARS / PARAM_DESC_CHARS. The internal limits are
+small-context wire's TOOL_DESC_CHARS / PARAM_DESC_CHARS, and INPUT_DESC_CHARS for the
+description each template input carries. The internal limits are
 one constant each where they are used: the provider retry count and backoff
 (`adapter.py`), the rate-limit wait cap (`openai_adapter.py`), the circuit
 breaker's threshold and cooldown, the loop watchdog's repeat count and the

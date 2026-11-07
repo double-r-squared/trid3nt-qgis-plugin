@@ -364,19 +364,6 @@ def test_a_row_stating_its_extent_in_one_sentence_loads():
                       "coverage": [row]}).coverage[0].extent.note == "y" * 200
 
 
-def test_a_rowed_source_is_never_the_internal_tier():
-    """A row makes a source pickable by the match, and a picked source
-    is handed to the model - which the internal tier exists to prevent."""
-    with pytest.raises(SpecLoadError, match="internal"):
-        load_spec({**raster_spec(), "internal_only": True,
-                   "coverage": [_coverage()]})
-
-
-def test_an_absorbed_seam_stating_no_row_still_loads_internal():
-    spec = load_spec({**raster_spec(), "internal_only": True})
-    assert spec.internal_only and spec.coverage == []
-
-
 def test_a_changed_vocabulary_misses_the_artifact_cached_under_the_old_one(fake_s3):
     """The statements that shape a record are IN its cache key, so a landed
     change to them invalidates the bytes fetched under the old ones by itself -

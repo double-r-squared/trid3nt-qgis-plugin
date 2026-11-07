@@ -176,9 +176,9 @@ async def test_confident_auto_does_not_emit(_scripted, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ambiguity_margin_zero_disables_auto_asks(_scripted, monkeypatch):
+async def test_ambiguity_margin_zero_disables_auto_asks(_scripted, monkeypatch, user_settings):
     monkeypatch.delenv("TRID3NT_MODE", raising=False)
-    monkeypatch.setenv("TRID3NT_AMBIGUITY_MARGIN", "0")
+    user_settings(AMBIGUITY_MARGIN=0)
     task, sock, state, captured = await _start_turn(monkeypatch, _NEAR_TIE)
     await asyncio.wait_for(task, timeout=5.0)
     assert _candidate_envelopes(sock) == []

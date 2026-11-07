@@ -9,6 +9,7 @@ from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.fetchers._fetch_common import KeyAskError, UpstreamAPIError
+from trid3nt_server.tools.search.fetch import FETCH, resolve_fetch
 from trid3nt_server.tools.tool_arg_normalizer import autofill_missing_bbox, normalize_args
 from trid3nt_server.render.pipeline_emitter import PipelineEmitter, bind_turn_case
 from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry, get_uri_registry
@@ -270,6 +271,10 @@ async def _invoke_tool_via_emitter(
         _maybe_gate_on_payload_warning,
     )
 
+    # A ``fetch`` call IS a call of the source it names: everything below - the gates, the cards, the reuse guard, the
+    # emission seam's dispatched name - keys on the source, so a fetch and a direct call cannot diverge.
+    if tool_name == FETCH:
+        tool_name, params = resolve_fetch(params)
     _ensure_emitter(websocket, state)
     if tool_name not in TOOL_REGISTRY:
         raise ToolNotFoundError(tool_name, list(TOOL_REGISTRY))
@@ -670,6 +675,8 @@ async def _dispatch_tool_and_persist(
     bind_turn_case(turn_case_id)  # envelope tagging
     try:
         try:
+            if tool_name == FETCH:
+                tool_name, params = resolve_fetch(params)
             if tool_name in TOOL_REGISTRY:
                 # A plain tool opens the one gate's card for the inputs its call
                 # left out or that refused; a workflow opens none, its fill refuses.

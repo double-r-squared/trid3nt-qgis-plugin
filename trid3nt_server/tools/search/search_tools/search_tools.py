@@ -71,6 +71,7 @@ class CorpusFormatError(SearchToolsError):
 
 _INDEX_LOCK = threading.Lock()
 _INDEX: "_DiscoverIndex | None" = None
+_SOURCE_INDEX: "_DiscoverIndex | None" = None
 
 
 class _DiscoverIndex:
@@ -322,69 +323,29 @@ def _select_dense_backend() -> tuple[Any, Any, str] | None:
     return None
 
 
-def _build_index(
-    corpus_path: Path | None = None,
-    registry_snapshot: dict[str, Any] | None = None,
-) -> _DiscoverIndex:
-    """The BM25 + dense index over the registry and the composed corpus."""
-    from trid3nt_contracts.coverage import DATA_CLASSES
-    from trid3nt_server.tools.search.find_sources.find_sources import FIND_SOURCES
-    from trid3nt_server.tools.search.match import covered_sources
+def _document(name: str, entry: Any, corpus: dict[str, list[str]]
+              ) -> tuple[str, list[str], str]:
+    """One tool's index entry as (payload snippet, phrasings, indexed body).
 
-    snapshot = registry_snapshot if registry_snapshot is not None else dict(TOOL_REGISTRY)
-    corpus = _load_corpus(corpus_path)
-    # A fetcher with a ROW is found, not ranked: its extent, window and cell decide which source measures a class at a place. It leaves the index,
-    # class phrasings route to find_sources, and a fetcher with no row stays here, routed by description.
-    covered = covered_sources()
+    ROUTING FRONT BLOCK ONLY for the snippet: the text an author wrote to win retrieval. A generated body - the keyword sheet,
+    a need row's sentence - describes a slot the MATCH fills, so its words are not the tool's routing words."""
+    doc = (getattr(entry.fn, "routing_doc", None)
+           or getattr(entry.fn, "__doc__", "") or "")
+    # The FULL docstring feeds BM25 and dense - a much richer signal than the
+    # first paragraph - while the short snippet is what the payload returns.
+    full_doc = " ".join((doc or "").split())
+    qs = corpus.get(name, [])
+    # The name is DOUBLED to bias BM25 toward an exact-name hit, which is
+    # cheaper than per-field weighting rank_bm25 does not offer.
+    body = "\n".join(p for p in [name, name, full_doc, *qs] if p)
+    return _short_description(doc), list(qs), body
 
-    tool_names: list[str] = []
-    descriptions: list[str] = []
-    synthetic_queries: list[list[str]] = []
-    documents: list[str] = []
-    corpus_tokens: list[list[str]] = []
 
-    for name in sorted(snapshot.keys()):
-        entry = snapshot[name]
-        # Templates (tier=template) index here; only tier=internal is withheld (registry-resolvable, not searchable).
-        if getattr(entry.metadata, "tier", "general") in ("internal",):
-            continue
-        if name in covered:
-            continue
-        # ROUTING FRONT BLOCK ONLY: the text an author wrote to win retrieval.
-        # A generated body - the keyword sheet, a need row's sentence - describes a
-        # slot the MATCH fills, so its words are not the tool's routing words.
-        doc = (getattr(entry.fn, "routing_doc", None)
-               or getattr(entry.fn, "__doc__", "") or "")
-        snippet = _short_description(doc)
-        # The FULL docstring feeds BM25 and dense - a much richer signal than the
-        # first paragraph - while the short snippet is what the payload returns.
-        full_doc = " ".join((doc or "").split())
-        qs = corpus.get(name, [])
-        # The name is DOUBLED to bias BM25 toward an exact-name hit, which is
-        # cheaper than per-field weighting rank_bm25 does not offer.
-        body_parts = [name, name, full_doc] + qs
-        body = "\n".join(p for p in body_parts if p)
-
-        tool_names.append(name)
-        descriptions.append(snippet)
-        synthetic_queries.append(list(qs))
-        documents.append(body)
-        corpus_tokens.append(_tokenize(body))
-
-    # A DATA CLASS indexes as its OWN document routing to the match: one class's
-    # phrasings ranked against their own length, never the whole vocabulary folded
-    # into a single document BM25's length normalization then dilutes.
-    if FIND_SOURCES in tool_names:
-        at = tool_names.index(FIND_SOURCES)
-        for cls in sorted(key for key in corpus if key in DATA_CLASSES):
-            queries = list(corpus[cls])
-            body = "\n".join([cls.replace("_", " "), *queries])
-            tool_names.append(FIND_SOURCES)
-            descriptions.append(descriptions[at])
-            synthetic_queries.append(queries)
-            documents.append(body)
-            corpus_tokens.append(_tokenize(body))
-
+def _assemble(names: list[str], descriptions: list[str],
+              synthetic_queries: list[list[str]], documents: list[str]
+              ) -> _DiscoverIndex:
+    """The BM25 + dense index over parallel per-document lists."""
+    corpus_tokens = [_tokenize(body) for body in documents]
     # The typo-expansion vocabulary REUSES the tokens the index already produced
     # rather than re-deriving them. Frozen per build, and the correction cache keys
     # on this object, so a rebuild with new content invalidates cleanly.
@@ -431,14 +392,14 @@ def _build_index(
             backend_name = None
 
     logger.info(
-        "search_tools index built: %d tools, bm25=%s, dense=%s",
-        len(tool_names),
+        "search_tools index built: %d documents, bm25=%s, dense=%s",
+        len(names),
         bm25 is not None,
         backend_name,
     )
 
     return _DiscoverIndex(
-        tool_names=tool_names,
+        tool_names=names,
         descriptions=descriptions,
         synthetic_queries=synthetic_queries,
         corpus_tokens=corpus_tokens,
@@ -448,6 +409,81 @@ def _build_index(
         backend_name=backend_name,
         vocabulary=vocabulary,
     )
+
+
+def _build_index(
+    corpus_path: Path | None = None,
+    registry_snapshot: dict[str, Any] | None = None,
+) -> _DiscoverIndex:
+    """The BM25 + dense index over the registry and the composed corpus."""
+    from trid3nt_contracts.coverage import DATA_CLASSES
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+    from trid3nt_server.tools.search.find_sources.find_sources import FIND_SOURCES
+
+    snapshot = registry_snapshot if registry_snapshot is not None else dict(TOOL_REGISTRY)
+    corpus = _load_corpus(corpus_path)
+    # A data source is reached through find_sources then fetch, never ranked as a tool: each source leaves the index as itself and
+    # comes back as a document named find_sources, so a message about its data ranks the door and spends one slot.
+    sources = registered_spec_names()
+
+    tool_names: list[str] = []
+    descriptions: list[str] = []
+    synthetic_queries: list[list[str]] = []
+    documents: list[str] = []
+
+    for name in sorted(snapshot.keys()):
+        entry = snapshot[name]
+        # Templates (tier=template) index here; only tier=internal is withheld (registry-resolvable, not searchable).
+        if getattr(entry.metadata, "tier", "general") in ("internal",):
+            continue
+        if name in sources:
+            continue
+        snippet, qs, body = _document(name, entry, corpus)
+        tool_names.append(name)
+        descriptions.append(snippet)
+        synthetic_queries.append(qs)
+        documents.append(body)
+
+    # A DATA CLASS and a SOURCE index as their OWN documents routing to the door: one class's (or one source's) phrasings ranked
+    # against their own length, never the whole vocabulary folded into a single document BM25's length normalization then dilutes.
+    if FIND_SOURCES in tool_names:
+        at = tool_names.index(FIND_SOURCES)
+        for cls in sorted(key for key in corpus if key in DATA_CLASSES):
+            queries = list(corpus[cls])
+            tool_names.append(FIND_SOURCES)
+            descriptions.append(descriptions[at])
+            synthetic_queries.append(queries)
+            documents.append("\n".join([cls.replace("_", " "), *queries]))
+        for name in sorted(sources & set(snapshot)):
+            _snippet, qs, body = _document(name, snapshot[name], corpus)
+            tool_names.append(FIND_SOURCES)
+            descriptions.append(descriptions[at])
+            synthetic_queries.append(qs)
+            documents.append(body)
+
+    return _assemble(tool_names, descriptions, synthetic_queries, documents)
+
+
+def _build_source_index(
+    corpus_path: Path | None = None,
+    registry_snapshot: dict[str, Any] | None = None,
+) -> _DiscoverIndex:
+    """The BM25 + dense index over the data sources alone: one document per spec-served fetcher."""
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+
+    snapshot = registry_snapshot if registry_snapshot is not None else dict(TOOL_REGISTRY)
+    corpus = _load_corpus(corpus_path)
+    names: list[str] = []
+    descriptions: list[str] = []
+    synthetic_queries: list[list[str]] = []
+    documents: list[str] = []
+    for name in sorted(registered_spec_names() & set(snapshot)):
+        snippet, qs, body = _document(name, snapshot[name], corpus)
+        names.append(name)
+        descriptions.append(snippet)
+        synthetic_queries.append(qs)
+        documents.append(body)
+    return _assemble(names, descriptions, synthetic_queries, documents)
 
 
 def _get_index() -> _DiscoverIndex:
@@ -461,11 +497,23 @@ def _get_index() -> _DiscoverIndex:
     return _INDEX
 
 
+def _get_source_index() -> _DiscoverIndex:
+    """Return the lazy-built source index, building once under the same lock."""
+    global _SOURCE_INDEX
+    if _SOURCE_INDEX is not None:
+        return _SOURCE_INDEX
+    with _INDEX_LOCK:
+        if _SOURCE_INDEX is None:
+            _SOURCE_INDEX = _build_source_index()
+    return _SOURCE_INDEX
+
+
 def _reset_index_for_tests() -> None:
-    """Clear the cached index. ONLY for tests."""
-    global _INDEX
+    """Clear the cached indexes. ONLY for tests."""
+    global _INDEX, _SOURCE_INDEX
     with _INDEX_LOCK:
         _INDEX = None
+        _SOURCE_INDEX = None
     # Content-keyed, so a stale entry can never be WRONG after a rebuild; clearing
     # only keeps memory and isolation tidy.
     _close_vocab_matches.cache_clear()

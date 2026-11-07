@@ -275,13 +275,14 @@ def test_promoted_signature_synthesized_from_spec(registered_spec):
         assert kinds[pn].default is inspect.Parameter.empty
 
 
-def test_promoted_tool_in_default_pool(registered_spec):
-    """tier=general -> the pool producer (_build_index) INCLUDES it by name."""
+def test_promoted_tool_is_a_document_of_the_source_index_and_no_tool_of_the_tool_index(registered_spec):
+    """A promoted row is found through find_sources: the source index holds it by name, the tool index never ranks it."""
     from trid3nt_server.tools.search.search_tools import search_tools as st
 
     spec, name = registered_spec
-    index = st._build_index(registry_snapshot={name: TOOL_REGISTRY[name]})
-    assert name in index.tool_names
+    snapshot = {name: TOOL_REGISTRY[name]}
+    assert name in st._build_source_index(registry_snapshot=snapshot).tool_names
+    assert name not in st._build_index(registry_snapshot=snapshot).tool_names
 
 
 def test_promoted_tool_carries_a_docstring(registered_spec):

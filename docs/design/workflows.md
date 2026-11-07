@@ -138,7 +138,10 @@ and a point that misses refuses `POINT_NOT_VIABLE`, naming what it missed and ca
 the nearest viable site as a hint. The point itself is never relocated: the deck states
 it where it was stated. A pure seed - a point read only to locate a fetched domain - is
 `stated()`: a supplied domain never reads it, and a domain the match must locate with
-no seed refuses `DATA_NEED_UNPLACED` naming what to pick or draw.
+no seed refuses `DATA_NEED_UNPLACED` naming what to pick or draw. While the run has no
+domain yet, the search that finds it (and any row asked before it) is placed in a box around
+the stated point: the row's own `span_km` either side, else the `AROUND_PLACE_DEG` margin a
+point is read with everywhere (`fill._about`). A bound domain's own box wins.
 
 TWO READS OF A POINT CARRY DIFFERENT WEIGHT. A SOURCE point - a release, an outfall -
 changes the physics, so it goes through the check above and refuses where it misses. A

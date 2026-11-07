@@ -98,23 +98,25 @@ def _tool_search_tool_names() -> frozenset[str]:
 def _default_declarable_registry() -> dict[str, Any]:
     """The DEFAULT per-turn declarable tool set, resolved by registry lookup:
     every tool except the ``catalog`` and ``internal`` tiers, which are
-    registry-resolvable but never declared to the model."""
+    registry-resolvable but never declared to the model, and every data source,
+    which the model reaches through ``find_sources`` and ``fetch``."""
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+
+    sources = registered_spec_names()
     _reg = {
         name: entry
         for name, entry in TOOL_REGISTRY.items()
         if getattr(entry.metadata, "tier", "general")
         not in ("catalog", "internal")
+        and name not in sources
     }
     return _reg
 
 
 def _gate_expander_tool_names() -> frozenset[str]:
     """The gate-expanders: calling one widens the turn's visible gate with the tool names its
-    result names. A fetcher with a row is never described to the model, so a match is an expander
-    beside the tool search: the sources it names carry that fetcher's schema into the turn."""
-    from trid3nt_server.tools.search.find_sources.find_sources import FIND_SOURCES
-
-    return _tool_search_tool_names() | {FIND_SOURCES}
+    result names."""
+    return _tool_search_tool_names()
 
 
 def _tool_names_from_search_result(result: Any) -> list[str]:

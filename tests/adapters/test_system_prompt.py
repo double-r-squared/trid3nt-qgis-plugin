@@ -50,8 +50,10 @@ def test_system_prompt_names_no_absent_tool() -> None:
 
 def test_the_tool_list_is_generated_from_the_registry() -> None:
     """Every model-facing tool the registry holds is named in the prompt beside
-    the first line of its routing docstring, and nothing else is."""
+    the first line of its routing docstring, and nothing else is: a data source
+    is reached through find_sources and fetch, so none is named."""
     import trid3nt_server.tools as agent_tools
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
 
     section = build_tool_section(agent_tools.TOOL_REGISTRY)
     assert section in SYSTEM_PROMPT
@@ -60,8 +62,11 @@ def test_the_tool_list_is_generated_from_the_registry() -> None:
         name
         for name, entry in agent_tools.TOOL_REGISTRY.items()
         if getattr(entry.metadata, "tier", "general") != "internal"
+        and name not in registered_spec_names()
     }
     assert named == facing
+    assert {"find_sources", "fetch"} <= named
+    assert not [name for name in named if name.startswith("fetch_")]
     for name in (
         "telemac_dye_release",
         "telemac_do_sag",
@@ -83,7 +88,7 @@ def test_a_tool_line_is_its_routing_docstrings_first_line() -> None:
     import trid3nt_server.tools as agent_tools
 
     section = build_tool_section(agent_tools.TOOL_REGISTRY)
-    for name in ("telemac_rain_on_grid", "fetch_hrrr_forecast"):
+    for name in ("telemac_rain_on_grid", "find_sources", "fetch"):
         fn = agent_tools.TOOL_REGISTRY[name].fn
         doc = getattr(fn, "routing_doc", None) or inspect.getdoc(fn)
         first = next(ln.strip() for ln in doc.splitlines() if ln.strip())
@@ -132,10 +137,11 @@ def test_system_prompt_forbids_ending_at_precursor() -> None:
 
 
 def test_system_prompt_carries_named_tool_example() -> None:
-    """A2 prompt must include at least one geocode → fetch_* → narrate example."""
+    """A2 prompt must include at least one geocode → find_sources → fetch → narrate example."""
     assert "geocode_location" in SYSTEM_PROMPT
-    # And the flood-zone pair that carries the precursor-then-tool shape.
-    assert "fetch_fema_nfhl_zones" in SYSTEM_PROMPT
+    # And the flood-zone chain that carries the precursor-then-door shape.
+    assert 'find_sources(query="flood zones"' in SYSTEM_PROMPT
+    assert "fetch(source=<the row's source>" in SYSTEM_PROMPT
     assert "Cape Coral" in SYSTEM_PROMPT
 
 
@@ -147,9 +153,9 @@ def test_system_prompt_has_geographic_clipping_section() -> None:
 
 
 def test_system_prompt_names_admin_polygon_clip_tools() -> None:
-    """The admin-polygon pattern names the boundary fetcher and the session
+    """The admin-polygon pattern finds the boundary source through the door and names the session
     clip algorithm."""
-    assert "fetch_administrative_boundaries" in SYSTEM_PROMPT
+    assert 'find_sources(query="administrative' in " ".join(SYSTEM_PROMPT.split())
     assert "run_qgis_algorithm" in SYSTEM_PROMPT
     assert "gdal:cliprasterbymasklayer" in SYSTEM_PROMPT
 

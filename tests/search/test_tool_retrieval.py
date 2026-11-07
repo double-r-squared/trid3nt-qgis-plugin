@@ -41,14 +41,14 @@ def test_core_floor_covers_render_and_analysis_slots():
 @pytest.mark.parametrize("accrued", [None, "fresh", "seeded"])
 def test_core_floor_always_subset(warm_index, query, accrued):
     a = None if accrued is None else (
-        set() if accrued == "fresh" else {"fetch_usgs_nwis_gauges"}
+        set() if accrued == "fresh" else {"compute_cross_section"}
     )
     res = retrieve_visible_tools(query, a, DEFAULT_K)
     assert CORE_FLOOR <= res
 
 
 def test_never_hide_mid_task(warm_index):
-    accrued = {"telemac_dye_release", "compute_cross_section", "fetch_usgs_nwis_gauges"}
+    accrued = {"telemac_dye_release", "compute_cross_section", "probe_point"}
     # a query about something UNRELATED to the accrued tools.
     res = retrieve_visible_tools("show me the lightning over the storm", accrued, DEFAULT_K)
     assert accrued <= res
@@ -60,18 +60,21 @@ def test_monotonic_growth_only_adds(warm_index):
     accrued: set[str] = set()
     r1 = retrieve_visible_tools("fetch the elevation DEM", accrued, DEFAULT_K)
     # the Case grows: a tool dispatched this session.
-    accrued.add("fetch_dem")
-    accrued.add("fetch_usgs_nwis_gauges")
+    accrued.add("probe_point")
+    accrued.add("restyle_layer")
     r2 = retrieve_visible_tools("fetch the elevation DEM", accrued, DEFAULT_K)
     # everything the Case accrued is visible; nothing accrued left the set.
     assert accrued <= r2
-    # A covered fetcher is never ranked in: it enters the set by being FOUND,
-    # and once accrued it stays.
-    assert "fetch_dem" not in r1 and "fetch_dem" in r2
+    assert "probe_point" not in r1 and "probe_point" in r2
+
+
+def test_a_data_source_a_case_accrued_is_never_declared_again(warm_index):
+    res = retrieve_visible_tools("show me the lightning over the storm", {"fetch_dem", "probe_point"}, DEFAULT_K)
+    assert "probe_point" in res and "fetch_dem" not in res
 
 
 def test_deterministic(warm_index):
-    accrued = {"fetch_dem"}
+    accrued = {"probe_point"}
     r1 = retrieve_visible_tools("show me the lightning over the storm", accrued, DEFAULT_K)
     r2 = retrieve_visible_tools("show me the lightning over the storm", accrued, DEFAULT_K)
     assert r1 == r2
@@ -108,9 +111,12 @@ def _pool_hidden_names() -> set[str]:
 def _assert_full_failopen(res):
     # The fail-open floor filters ONLY tier=internal (a cold index must not leak
     # the internal seam); engine templates are pool members and MUST appear.
-    # Expect the full registry MINUS the internal seam.
-    full = _full_registry_names() - _pool_hidden_names()
+    # Expect the full registry MINUS the internal seam and the data sources, which are called through fetch.
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+
+    full = _full_registry_names() - _pool_hidden_names() - registered_spec_names()
     assert full <= res, f"fail-open dropped: {sorted(full - res)}"
+    assert not (registered_spec_names() & res), "fail-open declared a data source"
     assert not (_pool_hidden_names() & res), (
         f"fail-open leaked pool-hidden internal tools: {sorted(_pool_hidden_names() & res)}"
     )
@@ -148,17 +154,15 @@ def test_cold_index_never_builds_on_hot_path(monkeypatch):
 
 def test_empty_query_returns_floor_only(warm_index):
     assert retrieve_visible_tools("   ", None, DEFAULT_K) == set(CORE_FLOOR)
-    accrued = {"fetch_dem"}
+    accrued = {"probe_point"}
     res = retrieve_visible_tools("", accrued, DEFAULT_K)
     assert res == accrued | set(CORE_FLOOR)
     assert set(TOOL_REGISTRY) - res  # full registry NOT dumped
 
 
 _RECALL_FIXTURE = [
-    ("show me the lightning over this storm from GOES", "fetch_glm_lightning"),
     ("get the elevation DEM for this area", "find_sources"),
     ("geocode this city to a bounding box", "geocode_location"),
-    ("fetch high resolution aerial imagery for this area", "fetch_naip"),
     ("how much does incoming swell amplify inside this harbour basin",
      "artemis_harbor_agitation"),
     ("how far downstream does a dye spill travel in this river",
@@ -171,17 +175,6 @@ _RECALL_FIXTURE = [
     ("how far inland would a Cascadia tsunami reach", "geoclaw_tsunami_inundation"),
     ("storm surge from Hurricane Ike at Galveston", "geoclaw_storm_surge"),
     ("how high would the surge get from a hurricane", "geoclaw_storm_surge"),
-    ("get the NOAA SIFT unit sources for a tsunami earthquake scenario", "fetch_sift_unit_sources"),
-    ("the USGS slip model of the 2011 Tohoku earthquake by event id", "fetch_finite_fault"),
-    ("how much did each patch of the fault slip in the Kamchatka 2025 earthquake", "fetch_finite_fault"),
-    ("USGS moment tensor nodal planes and scalar moment of the 2025 Kamchatka earthquake", "fetch_moment_tensor"),
-    ("strike dip rake and centroid depth of a real earthquake by event id", "fetch_moment_tensor"),
-    ("where did the 2025 Kamchatka earthquake start, its catalogue epicentre", "fetch_earthquake_epicentre"),
-    ("hypocentre depth and origin time of a real earthquake by ComCat event id", "fetch_earthquake_epicentre"),
-    ("what is mean high water above NAVD88 at the nearest tide station", "fetch_noaa_coops_datums"),
-    ("find a CO-OPS station publishing both NAVD88 and MHW near this point", "fetch_noaa_coops_datums"),
-    ("what are the depth, strike and dip of the Cascadia subduction interface", "fetch_slab_geometry"),
-    ("how deep is the subduction slab under this point for a hypothetical megathrust earthquake", "fetch_slab_geometry"),
     ("compute the slope from the DEM on the map", "run_qgis_algorithm"),
     ("run this pyqgis script in my qgis session", "run_pyqgis"),
     ("what telemac keyword controls the bottom friction law", "describe_keywords"),
@@ -197,11 +190,39 @@ _RECALL_FIXTURE = [
      "mark_lake_outlets"),
 ]
 
+#: A question in a data source's own words: it routes to the door, and the door's query names the source.
+_SOURCE_RECALL_FIXTURE = [
+    ("show me the lightning over this storm from GOES", "fetch_glm_lightning"),
+    ("fetch high resolution aerial imagery for this area", "fetch_naip"),
+    ("get the NOAA SIFT unit sources for a tsunami earthquake scenario", "fetch_sift_unit_sources"),
+    ("the USGS slip model of the 2011 Tohoku earthquake by event id", "fetch_finite_fault"),
+    ("how much did each patch of the fault slip in the Kamchatka 2025 earthquake", "fetch_finite_fault"),
+    ("USGS moment tensor nodal planes and scalar moment of the 2025 Kamchatka earthquake", "fetch_moment_tensor"),
+    ("strike dip rake and centroid depth of a real earthquake by event id", "fetch_moment_tensor"),
+    ("where did the 2025 Kamchatka earthquake start, its catalogue epicentre", "fetch_earthquake_epicentre"),
+    ("hypocentre depth and origin time of a real earthquake by ComCat event id", "fetch_earthquake_epicentre"),
+    ("what is mean high water above NAVD88 at the nearest tide station", "fetch_noaa_coops_datums"),
+    ("find a CO-OPS station publishing both NAVD88 and MHW near this point", "fetch_noaa_coops_datums"),
+    ("what are the depth, strike and dip of the Cascadia subduction interface", "fetch_slab_geometry"),
+    ("how deep is the subduction slab under this point for a hypothetical megathrust earthquake", "fetch_slab_geometry"),
+]
+
 
 @pytest.mark.parametrize("query,want", _RECALL_FIXTURE)
 def test_recall_surfaces_expected_tool(warm_index, query, want):
     res = retrieve_visible_tools(query, None, DEFAULT_K)
     assert want in res, f"recall miss: {want!r} not surfaced for {query!r}"
+
+
+@pytest.mark.parametrize("query,source", _SOURCE_RECALL_FIXTURE)
+def test_a_source_question_routes_to_the_door_and_the_door_names_the_source(warm_index, query, source):
+    import asyncio
+
+    from trid3nt_server.tools.search.find_sources.find_sources import find_sources
+
+    assert "find_sources" in retrieve_visible_tools(query, None, DEFAULT_K)
+    rows = asyncio.run(find_sources(query=query))["results"]
+    assert source in [row["source"] for row in rows], f"{source!r} not among {[r['source'] for r in rows]}"
 
 
 def _load_corpus():
@@ -222,16 +243,16 @@ def _full_registry_names() -> set[str]:
 
 
 def test_every_registered_tool_has_corpus_queries():
-    from trid3nt_server.tools.search.match import covered_sources
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
 
     corpus = _load_corpus()
     # Engine templates ARE required to have corpus queries -- their co-located
     # workflows/<engine>/<template>/corpus.yaml is walked into the composed
     # corpus. tier=internal (never model-facing) carries no corpus, and neither
-    # does a fetcher with a row: its phrasings are its CLASS's, which
-    # route to find_sources, and it is never ranked by phrase at all.
+    # does a data source: it is never ranked as a tool, its documents are named
+    # find_sources, and the door's own pins cover it.
     missing = sorted(_full_registry_names() - _pool_hidden_names()
-                     - covered_sources() - set(corpus))
+                     - registered_spec_names() - set(corpus))
     assert not missing, (
         "these registered tools have NO tool_query_corpus.yaml entry -- add 5-8 "
         f"routing queries each so retrieve_visible_tools can recall them: {missing}"

@@ -25,7 +25,7 @@ from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
 from trid3nt_server.render.pipeline_emitter import current_emitter, substep
 from trid3nt_server.render.uri_registry import lookup_uri_for_handle
 from trid3nt_server.tools.search.match import (
-    Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
+    AROUND_PLACE_DEG, Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
 
 from .data import Producer, refuse_wrong_shape
 from .sheet import Keyword
@@ -506,7 +506,8 @@ async def _ask_for(env: _Env, choice: SourceChoice,
     opens = _opens(env, decl)
     return ask_for(choice, base_ask(
         choice, decl.name.replace("_", " "),
-        _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox else None,
+        _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox
+        else None if lon is None or lat is None else _about(lon, lat, decl.span_km),
         lon, lat, str(opens) if opens else None,
         _closes(opens, _window(env, decl))), lon, lat,
         {"span_km": decl.span_km, "of": _asked_of(decl, seed) or None,
@@ -522,6 +523,15 @@ def _around(bbox: Sequence[float], mesh_m: float | None) -> list[float]:
     pad = max(3.0 * float(mesh_m or 0.0), 100.0) / METRES_PER_DEGREE
     lon_pad = pad / max(math.cos(math.radians((south + north) / 2.0)), 0.1)
     return [west - lon_pad, south - pad, east + lon_pad, north + pad]
+
+
+def _about(lon: float, lat: float, span_km: float | None) -> list[float]:
+    """The box a search is placed in while the run has no domain: the stated point, reached the row's own span.
+
+    A row stating no span asks the ground the point stands on, the margin a point is read with everywhere."""
+    pad = AROUND_PLACE_DEG if span_km is None else float(span_km) * 1000.0 / METRES_PER_DEGREE
+    lon_pad = pad / max(math.cos(math.radians(lat)), 0.1)
+    return [lon - lon_pad, lat - pad, lon + lon_pad, lat + pad]
 
 
 async def _domain_companion(env: _Env, named: str) -> Any:

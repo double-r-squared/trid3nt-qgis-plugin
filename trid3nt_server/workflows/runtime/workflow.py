@@ -516,6 +516,15 @@ _CONTROL_DOCS: tuple[tuple[str, str], ...] = (
 )
 
 
+#: The wire's one-line description of each control, unit or shape first; the framework's, stated once for every template.
+_CONTROL_SCHEMA: dict[str, str] = {
+    "input_mode": 'text, "user_gated" or "auto"; pause the run for review of its inputs, or go on with every assumption labeled',
+    "restart_clean": "true/false; build the mesh again even where a kept one matches",
+    "keywords": "object, keyword name to value; the engine keywords this run states beyond the template",
+    "picks": "object, input name to source; the source this run names for a matched input",
+}
+
+
 def _routing_doc(template: Any) -> dict[str, str]:
     """A template's own prose, off its package's routing.yaml: summary, routing,
     not_for and returns. The file is the declaration - a template package
@@ -571,6 +580,9 @@ def register_workflow(
     _run.__signature__ = sig  # type: ignore[attr-defined]
     _run.__annotations__ = dict(annotations)
     _run.workflow = workflow  # type: ignore[attr-defined]
+    _run.param_descriptions = {  # type: ignore[attr-defined]
+        **{row.name: row.schema_description for row in workflow.inputs if row.fills_from_user},
+        **_CONTROL_SCHEMA}
     from .docstring import render_docstring
 
     # The doc describes THIS wire, so it renders from the inputs the signature carries; the SHEET line is the

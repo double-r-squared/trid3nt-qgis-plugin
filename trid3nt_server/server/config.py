@@ -25,16 +25,6 @@ def _tool_retrieval_k() -> int:
         return DEFAULT_K
 
 
-def _env_float(name: str, default: float, *, positive: bool = True) -> float:
-    """A float env knob read LIVE: unset, malformed or - when ``positive`` - a
-    non-positive value takes ``default``, never an unbounded or zero wait."""
-    try:
-        value = float(os.environ[name])
-    except (KeyError, TypeError, ValueError):
-        return default
-    return default if positive and value <= 0 else value
-
-
 def _env_flag(name: str, default: bool = True) -> bool:
     """Boolean env flag, read LIVE: '0'/'off'/'false'/'no' -> False,
     '1'/'on'/'true'/'yes' -> True, unset/unknown -> ``default``."""
@@ -47,13 +37,11 @@ def _env_flag(name: str, default: bool = True) -> bool:
 
 
 def _ambiguity_margin_threshold() -> float:
-    """Measured-ambiguity threshold (``TRID3NT_AMBIGUITY_MARGIN``): the relative
-    top-1 vs top-2 margin under which AUTO mode still surfaces the candidates
-    card; ``0`` disables ambiguity asks and a malformed value takes the default."""
+    """The AMBIGUITY_MARGIN setting: the relative top-1 vs top-2 margin under which AUTO mode still surfaces the candidates card; 0 asks never."""
     # RRF fused scores are rank-compressed: a tool that is rank-1 on every channel beats a
     # consistent rank-2 by only ~1.6% relative, while a genuine cross-channel tie lands well under
     # ~1%. The 0.01 default fires only on real channel disagreement, not a consistent ranking.
-    return max(0.0, _env_float("TRID3NT_AMBIGUITY_MARGIN", 0.01, positive=False))
+    return float(setting("AMBIGUITY_MARGIN"))
 
 
 def _tool_choice_timeout_s() -> float:

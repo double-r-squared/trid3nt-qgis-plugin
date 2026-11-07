@@ -53,9 +53,9 @@ def test_retryable_status_recovers(monkeypatch):
     assert calls["n"] == 3
 
 
-def test_a_transient_status_is_retried_under_the_shared_budget(monkeypatch):
+def test_a_transient_status_is_retried_under_the_shared_budget(monkeypatch, user_settings):
     monkeypatch.setattr(transport_client.time, "sleep", lambda _d: None)
-    monkeypatch.setattr(transport_client, "MAX_RETRIES", 1)
+    user_settings(FETCH_RETRIES=1)
     calls = {"n": 0}
 
     def busy():

@@ -70,11 +70,10 @@ def _run_top_k(query: str, k: int = 5) -> list[str]:
 @pytest.mark.parametrize(
     "query,expected_tool",
     [
-        ("weather alerts", "fetch_nws_alerts_conus"),
-        ("show flood zones", "fetch_fema_nfhl_zones"),
-        ("national wetlands inventory polygons", "fetch_nwi_wetlands"),
-        # A fetcher with a row is not ranked by phrase at all: an
-        # elevation question routes to the match, which names the source.
+        # A data source is never ranked as a tool: a question about its data routes to the door, which names the source.
+        ("weather alerts", "find_sources"),
+        ("show flood zones", "find_sources"),
+        ("national wetlands inventory polygons", "find_sources"),
         ("elevation data for this place", "find_sources"),
         # Door dissolution: a template is an ordinary retrieval-pool
         # member. A bare "model flooding" is genuinely ambiguous across the
@@ -247,8 +246,8 @@ def test_matched_queries_populated_for_corpus_hit():
     """A query that lexically overlaps a synthetic-corpus entry surfaces it
     via ``matched_queries`` (diagnostic for the LLM)."""
     out = asyncio.run(search_tools("show me wetlands", top_k=3))
-    nwi = [r for r in out["results"] if r["tool_name"] == "fetch_nwi_wetlands"]
-    assert nwi, "expected fetch_nwi_wetlands in top results"
+    nwi = [r for r in out["results"] if r["tool_name"] == "find_sources"]
+    assert nwi, "expected find_sources in top results"
     matched = nwi[0]["matched_queries"]
     assert isinstance(matched, list) and len(matched) > 0
 
@@ -280,7 +279,7 @@ def test_extra_kwargs_ignored():
 def test_typo_wetlnds_routes_without_exact_corpus_queries(
     tmp_path, monkeypatch
 ):
-    """A typo'd ask still surfaces ``fetch_nwi_wetlands`` in the top 5.
+    """A typo'd ask still surfaces the door (``find_sources``, where the wetlands source's documents live) in the top 5.
 
     Its exact corpus queries are stripped, so the correct token has to survive in the
     vocabulary through other tools for the fuzzy correction to fire."""
@@ -309,8 +308,8 @@ def test_typo_wetlnds_routes_without_exact_corpus_queries(
 
     # Ranking: the raw typo phrase lands the target in the top-5.
     top = _run_top_k("map the wetlnds inside this area", k=5)
-    assert "fetch_nwi_wetlands" in top, (
-        f"expected fetch_nwi_wetlands in top-5 for typo query; got {top}"
+    assert "find_sources" in top, (
+        f"expected find_sources in top-5 for typo query; got {top}"
     )
 
 
@@ -320,7 +319,7 @@ def test_typo_wetlnds_routes_without_exact_corpus_queries(
         # "wetlnds" is the discriminating case: WITHOUT expansion it misses
         # the top-5 entirely; with expansion the correction "wetlands" carries
         # BM25 + name-substring.
-        ("wetlnds along this shoreline", "fetch_nwi_wetlands"),
+        ("wetlnds along this shoreline", "find_sources"),
     ],
 )
 def test_typo_queries_route_to_target_tools(query: str, expected_tool: str):

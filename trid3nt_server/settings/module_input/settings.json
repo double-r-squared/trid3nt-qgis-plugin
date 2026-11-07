@@ -549,6 +549,54 @@
       "mandatory": false,
       "default": 200,
       "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "INPUT_DESC_CHARS",
+      "identifier": "INPUT_DESC_CHARS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How many characters of each template input's schema description a call carries, its unit, range or shape first; 0 sends each whole.",
+      "rubrique": [
+        "model"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 120,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "AMBIGUITY_MARGIN",
+      "identifier": "AMBIGUITY_MARGIN",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How close, as a share of the top score, the first two tools of a turn's ranking have to rank before the tool-candidates card asks which to use; 0 never asks.",
+      "rubrique": [
+        "search"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.01,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "FETCH_RETRIES",
+      "identifier": "FETCH_RETRIES",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How many more times a data source's request is tried after a network failure or a 429/5xx answer, with a backoff between; 0 tries once.",
+      "rubrique": [
+        "transport"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 4,
+      "source": "TRID3NT engineering default."
     }
   ]
 }

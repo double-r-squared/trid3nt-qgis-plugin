@@ -75,7 +75,7 @@ _NO_DISPATCH = object()
 
 
 def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
-    """Synthesize ``AtomicToolMetadata`` from the row; an ``internal_only`` row is tier="internal" (off the pool and the index)."""
+    """Synthesize ``AtomicToolMetadata`` from the row."""
     return AtomicToolMetadata(
         name=spec.name,
         ttl_class=spec.cache.ttl_class,
@@ -83,7 +83,7 @@ def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
         supports_global_query=spec.supports_global_query,
         payload_mb_estimator_name="estimate_payload_mb",
         open_world_hint=True,
-        tier="internal" if spec.internal_only else "general",
+        tier="general",
         gate_spec=_gate_spec_for_source(spec),
     )
 

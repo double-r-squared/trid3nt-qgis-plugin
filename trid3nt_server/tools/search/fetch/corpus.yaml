@@ -1,0 +1,6 @@
+fetch:
+- fetch the data from that source
+- call the source find_sources named with its arguments
+- get the layer from this source for my area
+- pull the data the top row names
+- call the data source with the arguments its row listed

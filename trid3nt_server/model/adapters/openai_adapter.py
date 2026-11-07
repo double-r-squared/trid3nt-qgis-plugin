@@ -25,6 +25,7 @@ from .adapter import (
     ThinkingDeltaEvent,
     UpstreamProviderError,
     UsageMetadataEvent,
+    _truncate_word_boundary,
     provider_backoff_wait,
     provider_retries,
 )
@@ -112,8 +113,6 @@ def openai_model(session_model: str | None = None) -> str:
 # Word-boundary cut with a trailing "..." marker. LOCAL-path only: the shared declarations are
 # NOT touched.
 
-_TRUNC_MARKER = "..."
-
 # One INFO stats line per process (startup/first-build), not per round.
 _SCHEMA_STATS_LOGGED = False
 
@@ -126,22 +125,6 @@ def tool_desc_cap() -> int:
 def param_desc_cap() -> int:
     """Per-parameter description cap in chars; 0 disables the param-level cap only."""
     return int(setting("PARAM_DESC_CHARS"))
-
-
-def _truncate_word_boundary(text: str, cap: int) -> str:
-    """Truncate ``text`` to at most ``cap`` chars, cutting at a word boundary and appending a
-    trailing ``...`` marker. Text that already fits is returned unchanged (identity, no marker)."""
-    if cap <= 0 or len(text) <= cap:
-        return text
-    room = max(cap - len(_TRUNC_MARKER), 1)
-    cut = text[:room]
-    space = cut.rfind(" ")
-    # Back up to the last space so we never cut mid-word; but if the text has
-    # no usable space in the back half (e.g. one giant token), hard-cut
-    # rather than throwing away most of the budget.
-    if space > room // 2:
-        cut = cut[:space]
-    return cut.rstrip() + _TRUNC_MARKER
 
 
 def _cap_schema_descriptions(schema: Any, cap: int) -> None:

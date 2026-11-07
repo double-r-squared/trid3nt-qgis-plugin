@@ -349,9 +349,6 @@ class SourceSpec(ContractModel):
     shape: SourceShape
     supports_global_query: bool = False
 
-    #: Register at ``tier="internal"``: resolvable in-process but excluded from the declarable pool and the retrieval index.
-    internal_only: bool = False
-
     #: ``source_class`` is the cache prefix; set this when error codes stamp from a different token (default ``source_class.upper()``).
     error_prefix: str | None = None
 

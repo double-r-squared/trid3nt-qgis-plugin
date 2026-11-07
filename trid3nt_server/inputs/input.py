@@ -9,6 +9,7 @@ schema and prose: ``hydrate`` takes it onto the body before the body is declared
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import MappingProxyType
@@ -236,6 +237,43 @@ class Input:
         return f"{shape} you supply, as a uri or a layer name; {tail}."
 
     @property
+    def schema_description(self) -> str:
+        """The wire's one-line description of this input: its unit, range or shape first, then what it means.
+        Whole here; the adapter cuts it to the INPUT_DESC_CHARS setting."""
+        slot = self.slot
+        meaning = self.desc or (getattr(slot, "desc", "") if slot is not None else "")
+        if not meaning and self.data_class:
+            meaning = f"the {self.data_class} this run reads"
+        meaning = _first_sentence(meaning)
+        lead = self._schema_lead()
+        return f"{lead}; {meaning}" if meaning else lead
+
+    def _schema_lead(self) -> str:
+        """What the value looks like on the wire: a row's shape, or a value's unit and range, else its type word."""
+        if self.is_row:
+            slot = self.slot
+            shape = self.geometry or getattr(slot, "geometry", "")
+            if getattr(slot, "number", False):
+                return "layer name, uri or number"
+            if shape:
+                return f"{'raster' if shape == 'raster' else shape + ' layer'} name or uri"
+            return "layer name or uri"
+        bits = []
+        if self.units:
+            bits.append(self.units)
+        if self.bounds is not None:
+            bits.append("-".join(_plain(b) for b in self.bounds))
+        if bits:
+            return ", ".join(bits)
+        from .point import Point
+
+        if self.type is Point:
+            return "point [lon, lat]"
+        if isinstance(self.default, bool) or self.type is bool:
+            return "true/false"
+        return {int: "integer", float: "number"}.get(self.type, "text")
+
+    @property
     def _unfilled(self) -> str:
         """What a row with no producer says about how it fills itself."""
         if not self.data_class:
@@ -292,6 +330,22 @@ class Input:
                 f"Input {self.name!r}: need(geometry={geometry!r}) is not a "
                 f"declared shape; the shapes are {sorted(GEOMETRY_CLASS)}.")
         return geometry
+
+
+#: A period closing a lower-case word or a digit, before a capital: "E. coli" and "e.g. the" do not end a sentence.
+_SENTENCE_END = re.compile(r"(?<=[a-z0-9\)])\.\s+(?=[A-Z])")
+
+
+def _plain(number: float) -> str:
+    """A bound as a person writes it: a whole number without an exponent, any other with up to six significant digits."""
+    return str(int(number)) if float(number).is_integer() else f"{number:g}"
+
+
+def _first_sentence(text: str) -> str:
+    """The first sentence of ``text`` on one line, without its closing period."""
+    flat = " ".join(str(text).split())
+    end = _SENTENCE_END.search(flat)
+    return (flat if end is None else flat[:end.start()]).rstrip(".")
 
 
 def declared(body: Any) -> tuple[Input, ...]:

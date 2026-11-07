@@ -256,15 +256,15 @@ Key behaviors:
 - When a tool result contains a flood depth layer, describe the results from
   the returned metrics - do not invent values.
 - Keep responses concise and focused on the geospatial task at hand.
-- Key-gated tools (e.g. fetch_airnow_air_quality, fetch_era5_reanalysis): CALL
+- Key-gated sources (e.g. AirNow air quality, ERA5 reanalysis): CALL
   them normally even if you think an API key may be missing. With no key the
-  tool REFUSES by name before it calls anything, and the refusal names the key
+  source REFUSES by name before it calls anything, and the refusal names the key
   and where it is entered -- relay that; never substitute a sibling tool just to
   avoid a possible key prompt.
 
 The QGIS session runs the geoprocessing and the follow-ups (CRITICAL):
 Two tools run in the user's own QGIS session through the plugin, over the
-layers ALREADY on the map. Fetch first (fetch_*), then run over the fetched
+layers ALREADY on the map. Fetch first (find_sources, then fetch), then run over the fetched
 layer by its canvas NAME from the [Case state] note; never hand either tool a
 bbox or a URI to fetch from.
 - run_qgis_algorithm(algorithm, params): one QGIS Processing algorithm -
@@ -300,17 +300,17 @@ exists to feed the named tool.
 
 Example: user asks "show me flood zones in Cape Coral"
   1. Call geocode_location for "Cape Coral" (precursor) →
-  2. THEN call fetch_fema_nfhl_zones with the geocoded bbox →
+  2. THEN call find_sources(query="flood zones", place=<geocoded bbox>), and
+     fetch(source=<the row's source>, args=<the row's ask>) →
   3. THEN narrate the result.
 
 If a precursor tool succeeds, the named follow-on tool is still pending - keep
 going until the named tool has been dispatched and narrated. Ending the turn
 after only the precursor is a dispatch failure.
 
-When the user has already NAMED the tool or the data source, dispatch it - do
-not call search_tools first. The tool list above IS the discovery layer; a named
-source that appears there is dispatched directly, after a geocode only when the
-call needs a location it does not have.
+When the user has already NAMED the data source, find it with
+find_sources(query=<its name>) and fetch it - do not call search_tools first;
+geocode first only when the call needs a location it does not have.
 
 Geographic clipping pattern - "in [admin-region]" (Stage 0 anchor A5):
 When a user prompt says "in [admin-region]" where the region is an
@@ -318,8 +318,9 @@ administrative polygon (state, county, city, ZCTA, watershed, parish,
 borough, etc. - NOT a free-form bbox), prefer polygon-clip over bbox
 approximation:
   1. Call geocode_location for the named region to obtain its bbox →
-  2. Call fetch_administrative_boundaries with level=<state|county|place|zcta>
-     and bbox=<geocoded bbox> to obtain the true polygon geometry →
+  2. Find administrative boundaries with find_sources(query="administrative
+     boundaries"), then fetch them with level=<state|county|place|zcta> and
+     bbox=<geocoded bbox> to obtain the true polygon geometry →
   3. Fetch the dataset (raster or vector) at the same bbox →
   4. THEN clip to the admin polygon in the session: for RASTER outputs
      run_qgis_algorithm("gdal:cliprasterbymasklayer", {"INPUT": <raster layer
@@ -335,8 +336,10 @@ explicitly says "bounding box of" or "rectangle around" - then bbox is fine.
 
 Example: user asks "fetch population in Miami-Dade County"
   1. Call geocode_location(query="Miami-Dade County, FL") to get bbox →
-  2. Call fetch_administrative_boundaries(level="county", bbox=<bbox>) →
-  3. Call fetch_hrsl_population(bbox=<bbox>) →
+  2. find_sources(query="administrative boundaries"), then fetch it with
+     args {level: "county", bbox: <bbox>} →
+  3. find_sources(query="population"), then fetch the row's source with
+     args {bbox: <bbox>} →
   4. Call run_qgis_algorithm("gdal:cliprasterbymasklayer", {"INPUT": <the
      population layer's canvas name>, "MASK": <the admin boundaries layer's
      canvas name>}) →
@@ -344,7 +347,7 @@ Example: user asks "fetch population in Miami-Dade County"
 
 REUSE BEFORE RE-RUN - HARD RULE (CRITICAL, NON-NEGOTIABLE,
 supersedes every softer reuse clause below):
-Before you call ANY simulation, ANY fetch_*, ANY compute_*, or
+Before you call ANY simulation, ANY fetch, ANY compute_*, or
 run_qgis_algorithm, you MUST FIRST check the "[Case state]" note for the
 layers ALREADY produced and on the map for this Case. If a layer or result
 that ALREADY ANSWERS the user's request is present, you MUST REUSE it - pass
@@ -445,7 +448,7 @@ moves the camera to it as it lands. So when the user asks to fit, zoom, or
 "resize the box to encompass all the <features>" (buildings, points, polygons,
 the whole layer extent) for data ALREADY on the map: READ that layer's bbox=
 off the [Case state] note and say what the extent is - do NOT call a tool, and
-do NOT call the fetch_* tool again. Re-fetching a layer already present mints a
+do NOT call fetch again. Re-fetching a layer already present mints a
 SECOND identical layer (e.g. two identical flood-zone choropleths stacked on the
 map), which is FORBIDDEN. Only fetch fresh data when the user names a genuinely
 DIFFERENT or LARGER area than the loaded extent, a different source, or
@@ -568,11 +571,15 @@ def build_tool_section(tool_registry: dict[str, Any]) -> str:
     """The prompt's tool list, from the registry: every model-facing tool the
     daemon registered, named beside what it routes. Generated, never written - a
     tool that lands is reachable the moment it registers, and one that leaves
-    stops being named."""
+    stops being named. A data source is not named: ``find_sources`` finds it and ``fetch`` calls it."""
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+
+    sources = registered_spec_names()
     return "\n".join(
         f"- {name}: {_routing_line(entry.fn)}"
         for name, entry in sorted(tool_registry.items())
         if getattr(entry.metadata, "tier", "general") != "internal"
+        and name not in sources
     )
 
 
@@ -677,6 +684,30 @@ def _parameter_schema(annotation: Any, default: Any) -> tuple[dict[str, Any], bo
     return _json_schema_for_annotation(annotation), unfilled
 
 
+_TRUNC_MARKER = "..."
+
+
+def _truncate_word_boundary(text: str, cap: int) -> str:
+    """Truncate ``text`` to at most ``cap`` chars, cutting at a word boundary and appending a
+    trailing ``...`` marker. Text that already fits is returned unchanged (identity, no marker)."""
+    if cap <= 0 or len(text) <= cap:
+        return text
+    room = max(cap - len(_TRUNC_MARKER), 1)
+    cut = text[:room]
+    space = cut.rfind(" ")
+    # Back up to the last space so we never cut mid-word; but if the text has
+    # no usable space in the back half (e.g. one giant token), hard-cut
+    # rather than throwing away most of the budget.
+    if space > room // 2:
+        cut = cut[:space]
+    return cut.rstrip() + _TRUNC_MARKER
+
+
+def input_desc_cap() -> int:
+    """Per-input schema description cap in chars; 0 sends each whole."""
+    return int(setting("INPUT_DESC_CHARS"))
+
+
 def _tool_schema(fn: Any) -> dict[str, Any]:
     """Build the JSON Schema of a tool callable's public parameters. Underscore-prefixed injection
     kwargs never reach the model; an unresolvable forward reference types as text."""
@@ -703,6 +734,10 @@ def _tool_schema(fn: Any) -> dict[str, Any]:
         properties[name], is_required = _parameter_schema(annotation, param.default)
         if is_required:
             required.append(name)
+    cap = input_desc_cap()
+    for name, text in (getattr(fn, "param_descriptions", None) or {}).items():
+        if name in properties:
+            properties[name]["description"] = _truncate_word_boundary(text, cap)
     schema: dict[str, Any] = {"type": "object", "properties": properties}
     if required:
         schema["required"] = required
@@ -972,7 +1007,7 @@ def build_layers_present_note(
             "that SAME data (e.g. 'resize the bbox to encompass all the "
             "buildings' when an INPUT[buildings] layer is already listed) is NOT a fetch - "
             "read that layer's own bbox= off the line above; the canvas fits itself. "
-            "Re-calling the fetch_* tool produces a SECOND identical layer "
+            "Calling fetch again produces a SECOND identical layer "
             "(a real duplicate on the map), which is FORBIDDEN. Only re-fetch when "
             "the user names a DIFFERENT area that pokes OUTSIDE the existing "
             "extent, a different data source / kind, or explicitly asks to "
