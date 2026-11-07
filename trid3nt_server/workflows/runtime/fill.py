@@ -873,8 +873,8 @@ class Fill:
             v.reason + (f" Remedies: {', '.join(v.remedies)}." if v.remedies
                         else "") for _n, v in held if v.code != _WAITS)
         if waiting:
-            said[f"{', '.join(waiting)} are produced once the refused "
-                 "inputs above are stated again."] = None
+            said[f"{', '.join(waiting)} {'are' if len(waiting) > 1 else 'is'} "
+                 "produced once the refused inputs above are stated again."] = None
         return code, " ".join([*said, *self.moved])
 
     @property
