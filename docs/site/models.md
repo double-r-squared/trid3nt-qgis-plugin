@@ -55,7 +55,7 @@ name-substring + local dense embeddings, fused with RRF, reusing
 `discover_dataset`'s cached index) and only the top-K tools (plus a hot-set floor,
 union-ed monotonically per Case) are declared to the model.
 
-- `TRID3NT_TOOL_RETRIEVAL_K=8` locally (code default K=25). There is no on/off knob:
+- The `TOOL_RETRIEVAL_K` setting (default 8). There is no on/off knob:
   the off and shadow modes were removed and retrieval always enforces.
 - **Fail-open**: a cold index, an error, or an empty ranking shows the full registry -- the
   layer can never hide every tool.

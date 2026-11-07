@@ -10,19 +10,9 @@ import os
 
 from trid3nt_server.settings import setting
 
-# Tool-retrieval K, the discover top-k for retrieve_visible_tools. Surfacing is
-# unconditional; K is the only lever (retrieve_visible_tools clamps it).
 def _tool_retrieval_k() -> int:
-    """Resolve TRID3NT_TOOL_RETRIEVAL_K (default 25); fall back to the default on any parse error. Read per call so a test can override via the env."""
-    from ..tools.search.tool_retrieval import DEFAULT_K
-
-    raw = os.environ.get("TRID3NT_TOOL_RETRIEVAL_K")
-    if raw is None:
-        return DEFAULT_K
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return DEFAULT_K
+    """The TOOL_RETRIEVAL_K setting: the discover top-k for retrieve_visible_tools, which clamps it."""
+    return int(setting("TOOL_RETRIEVAL_K"))
 
 
 def _env_flag(name: str, default: bool = True) -> bool:

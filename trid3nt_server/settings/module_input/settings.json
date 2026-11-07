@@ -583,6 +583,22 @@
       "source": "TRID3NT engineering default."
     },
     {
+      "keyword": "TOOL_RETRIEVAL_K",
+      "identifier": "TOOL_RETRIEVAL_K",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How many tools the search ranks into a turn beside the always-present core set; more widens what the model can pick from and lengthens every call.",
+      "rubrique": [
+        "search"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 8,
+      "source": "TRID3NT engineering default."
+    },
+    {
       "keyword": "FETCH_RETRIES",
       "identifier": "FETCH_RETRIES",
       "type": "INTEGER",

@@ -203,6 +203,13 @@
         1
       ]
     },
+    "TOOL_RETRIEVAL_K": {
+      "unit": "tools",
+      "bounds": [
+        1,
+        200
+      ]
+    },
     "FETCH_RETRIES": {
       "unit": "retries",
       "bounds": [

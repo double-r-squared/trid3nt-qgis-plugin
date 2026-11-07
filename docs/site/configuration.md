@@ -149,7 +149,6 @@ QGIS profile when the daemon's MinIO uses different ones.
 
 | Variable | Shipped value | What it does |
 |----------|---------------|--------------|
-| `TRID3NT_TOOL_RETRIEVAL_K` | `8` | Top-K for `retrieve_visible_tools` (code default 25). K=8 is the benchmarked local setting -- see [Models](models.md#tool-retrieval-top-k). |
 
 ## Loop hygiene
 
