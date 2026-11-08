@@ -180,11 +180,11 @@ def test_layers_present_note_lists_layers() -> None:
         _layer("wdpa-fm", "Protected areas", "vector"),
     ])
     assert note is not None
-    assert "ALREADY produced" in note
+    assert "already on the map for this Case" in note
     # The note forbids re-RUN as well as re-fetch/recompute and tags each layer
     # RESULT / INPUT so the model recognizes an existing output and never
     # re-launches the work that made it.
-    assert "do NOT re-run, re-fetch, or recompute" in note
+    assert "do not re-run, re-fetch or recompute" in note
     # The per-layer line surfaces the reusable handle (== layer_id), the
     # underlying uri, AND the role label. The fixture marks every layer
     # role="primary", which IS the RESULT label.
@@ -197,9 +197,7 @@ def test_layers_present_note_lists_layers() -> None:
         "uri=gs://bucket/wdpa-fm.tif)"
     ) in note
     # The firm reuse / no-refetch / no-rerun instruction is appended.
-    assert "REUSE these" in note
-    assert "Do NOT re-fetch or recompute a layer" in note
-    assert "FORBIDDEN" in note
+    assert "Reuse them by handle" in note
 
 
 def test_layers_present_note_none_when_empty() -> None:
@@ -213,14 +211,14 @@ def test_layers_present_note_includes_aoi_bbox() -> None:
     assert note is not None
     assert "Case AOI bbox" in note
     assert "-82.0" in note and "26.7" in note
-    assert "do NOT re-derive or re-geocode" in note
+    assert "do not re-geocode the area" in note
     # With BOTH layers and bbox, the note carries both segments.
     both = build_layers_present_note(
         [_layer("flood-depth-01HX", "Flood depth", "raster")],
         case_bbox=(-82.0, 26.5, -81.8, 26.7),
     )
     assert both is not None
-    assert "ALREADY produced" in both and "Case AOI bbox" in both
+    assert "already on the map for this Case" in both and "Case AOI bbox" in both
 
 
 def test_layers_present_note_ignores_malformed_bbox() -> None:
@@ -310,7 +308,7 @@ def test_case_open_injects_layers_present_note(
     assert note_turn["role"] == "model"
     assert "flood-depth-01HX" in note_turn["text"]
     assert "hillshade-01HY" in note_turn["text"]
-    assert "do NOT re-run, re-fetch, or recompute" in note_turn["text"]
+    assert "do not re-run, re-fetch or recompute" in note_turn["text"]
     # F20 / panel-fix: the Case AOI bbox (from session_state.case.bbox) flows
     # all the way through _emit_case_open into the note.
     assert "Case AOI bbox" in note_turn["text"]

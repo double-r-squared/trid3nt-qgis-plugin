@@ -66,14 +66,17 @@ async def run_pyqgis(
     algorithm covers - read or edit the features and attributes of a canvas
     layer, chain several algorithms, style or group layers, compute a number or
     a table over a layer's own data, drive the temporal controller. NOT for
-    fetching data (fetch_* tools) and NOT for one standard algorithm
+    fetching data (`find_sources` then `fetch`) and NOT for one standard algorithm
     (run_qgis_algorithm).
 
     The code runs in the session's Python with `iface`, `QgsProject`,
     `processing` and the qgis.core names available; reach a layer by its canvas
     name through QgsProject.instance().mapLayersByName(name). Assign the answer
     to `result` (a JSON-serializable value); what the snippet prints comes back
-    as stdout. A short `rationale` captions the approval card.
+    as stdout. A short `rationale` captions the approval card. Example, a number
+    over a result layer: `layer = QgsProject.instance().mapLayersByName("Flood depth (peak)")[0]`,
+    `stats = layer.dataProvider().bandStatistics(1, QgsRasterBandStats.All)`,
+    `result = {"max_m": stats.maximumValue, "mean_m": stats.mean}`.
 
     Returns {status, result, stdout} or the session's error verbatim. A denied
     card is a refusal: never re-issue the same snippet unless the user asks.

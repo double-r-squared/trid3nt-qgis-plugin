@@ -113,16 +113,6 @@ async def test_stream_events_yields_text_delta_event(fake_llm):
 
 
 
-def test_system_prompt_routes_the_registered_templates():
-    """The prompt's tool list is built from the registry, so every registered
-    template is reachable from it by name."""
-    prompt = system_prompt()
-    assert "telemac_rain_on_grid" in prompt
-    assert _TEMPLATE in prompt
-
-
-
-
 def test_template_docstring_covers_user_intent():
     """The docstring must carry the question's own words - it is the routing signal."""
     from trid3nt_server.tools import TOOL_REGISTRY

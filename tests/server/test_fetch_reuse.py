@@ -155,7 +155,7 @@ def test_the_case_state_note_tags_a_fetched_layer_with_its_dataset() -> None:
     assert "INPUT[buildings]" in note
     assert "handle=L-buildings" in note
     assert "bbox=" in note
-    assert "FETCHED LAYER REUSE" in note
+    assert "INPUT[<dataset>]" in note
 
 
 def test_a_layer_that_was_not_fetched_is_a_plain_input_or_a_result() -> None:

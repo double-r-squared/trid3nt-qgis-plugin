@@ -1,15 +1,14 @@
 """System-prompt snapshot tests.
 
-The prompt carries its named-tool follow-on dispatch instruction, so a turn does
-not stop at a geocode precursor, and its geographic-clipping instruction, so an
-admin-region ask is clipped to the boundary rather than a bbox. These are text
-snapshots: a substantive rewording updates the prompt and the assertion together."""
+The prompt is a small static core: honesty rules, the data-and-place recipes that span tools,
+scope and narration. It carries no tool list. These are text snapshots: a substantive
+rewording updates the prompt and the assertion together."""
 
 from __future__ import annotations
 
 import re
 
-from trid3nt_server.model.adapters.adapter import build_tool_section, system_prompt
+from trid3nt_server.model.adapters.adapter import system_prompt
 
 SYSTEM_PROMPT = system_prompt()
 
@@ -48,265 +47,74 @@ def test_system_prompt_names_no_absent_tool() -> None:
             raise AssertionError(f"prompt names {token!r}, absent from the registry")
 
 
-def test_the_tool_list_is_generated_from_the_registry() -> None:
-    """Every model-facing tool the registry holds is named in the prompt beside
-    the first line of its routing docstring, and nothing else is: a data source
-    is reached through find_sources and fetch, so none is named."""
-    import trid3nt_server.tools as agent_tools
-    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
-
-    section = build_tool_section(agent_tools.TOOL_REGISTRY)
-    assert section in SYSTEM_PROMPT
-    named = {ln.split(":", 1)[0][2:] for ln in section.splitlines()}
-    facing = {
-        name
-        for name, entry in agent_tools.TOOL_REGISTRY.items()
-        if getattr(entry.metadata, "tier", "general") != "internal"
-        and name not in registered_spec_names()
-    }
-    assert named == facing
-    assert {"find_sources", "fetch"} <= named
-    assert not [name for name in named if name.startswith("fetch_")]
-    for name in (
-        "telemac_dye_release",
-        "telemac_do_sag",
-        "telemac_rain_on_grid",
-        "telemac3d_stratified_flow",
-        "artemis_harbor_agitation",
-        "modflow_water_table",
-        "modflow_plume",
-        "geoclaw_tsunami_inundation",
-        "geoclaw_storm_surge",
-    ):
-        assert f"- {name}: " in section, f"live template {name!r} is not listed"
+PROMPT_CHAR_CEILING = 4000
 
 
-def test_a_tool_line_is_its_routing_docstrings_first_line() -> None:
-    """The line a tool gets is the one IT declares - nothing is written here."""
-    import inspect
-
-    import trid3nt_server.tools as agent_tools
-
-    section = build_tool_section(agent_tools.TOOL_REGISTRY)
-    for name in ("telemac_rain_on_grid", "find_sources", "fetch"):
-        fn = agent_tools.TOOL_REGISTRY[name].fn
-        doc = getattr(fn, "routing_doc", None) or inspect.getdoc(fn)
-        first = next(ln.strip() for ln in doc.splitlines() if ln.strip())
-        assert f"- {name}: {first}" in section
+def test_the_prompt_is_a_small_static_core() -> None:
+    """No tool list rides the prompt: it is the same text whatever the registry holds."""
+    assert len(SYSTEM_PROMPT) <= PROMPT_CHAR_CEILING
+    assert "<<TOOLS>>" not in SYSTEM_PROMPT
+    assert "YOUR TOOLS" not in SYSTEM_PROMPT
 
 
-def test_system_prompt_fidelity_ladder_is_engine_name_free() -> None:
-    """The ladder survives as a PRINCIPLE - rung chosen by the question, with
-    calibration last - so it stops rotting as the engine roster changes."""
+def test_the_prompt_sends_the_model_to_search_tools() -> None:
+    assert "search_tools" in SYSTEM_PROMPT
+    assert "find_sources, then fetch" in SYSTEM_PROMPT
+
+
+def test_the_prompt_carries_no_history_or_labels() -> None:
+    for phrase in ("Stage 0", "anchor A", "Invariant 7", "Seattle", "KANSAS", "live agent",
+                   "assumptions_summary", "code_exec", "<thinking>"):
+        assert phrase not in SYSTEM_PROMPT, phrase
+
+
+def test_the_prompt_forbids_ending_at_a_precursor() -> None:
     flat = " ".join(SYSTEM_PROMPT.split())
-    assert "Fidelity ladder" in flat
-    assert "Choose the rung by the QUESTION" in flat
-    assert "BELOW the useful range of a depth-averaged 2D run" in flat
-    assert "CALIBRATION is the crux and comes LAST" in flat
+    assert "Never end a turn at a precursor" in flat
 
 
-
-
-def test_system_prompt_has_named_tool_followon_section() -> None:
-    """Prompt must carry the Stage-0 anchor A2 routing fix."""
-    assert "Named-tool follow-on dispatch" in SYSTEM_PROMPT
-
-
-def test_system_prompt_lists_named_data_source_triggers() -> None:
-    """A2 fix must name the verbatim dataset keywords the user types."""
-    # A representative subset — full keyword list is in the prompt; the test
-    # just guards against accidental deletion of the trigger vocabulary.
-    for keyword in (
-        "FEMA NFHL",
-        "NWS alerts",
-        "NLCD",
-        "MRMS",
-        "NWI",
-        "MTBS",
-        "LANDFIRE",
-    ):
-        assert keyword in SYSTEM_PROMPT, (
-            f"named-data-source keyword {keyword!r} missing — A2 routing weakens"
-        )
-
-
-def test_system_prompt_forbids_ending_at_precursor() -> None:
-    """The 'DO NOT end the turn at the precursor' instruction is the load-bearing
-    sentence that fixes Stage-0 anchor A2."""
-    assert "DO NOT end the turn at the precursor" in SYSTEM_PROMPT
-
-
-def test_system_prompt_carries_named_tool_example() -> None:
-    """A2 prompt must include at least one geocode → find_sources → fetch → narrate example."""
-    assert "geocode_location" in SYSTEM_PROMPT
-    # And the flood-zone chain that carries the precursor-then-door shape.
-    assert 'find_sources(query="flood zones"' in SYSTEM_PROMPT
-    assert "fetch(source=<the row's source>" in SYSTEM_PROMPT
-    assert "Cape Coral" in SYSTEM_PROMPT
-
-
-
-
-def test_system_prompt_has_geographic_clipping_section() -> None:
-    """Prompt must carry the Stage-0 anchor A5 polygon-clip instruction."""
-    assert "Geographic clipping pattern" in SYSTEM_PROMPT
-
-
-def test_system_prompt_names_admin_polygon_clip_tools() -> None:
-    """The admin-polygon pattern finds the boundary source through the door and names the session
-    clip algorithm."""
-    assert 'find_sources(query="administrative' in " ".join(SYSTEM_PROMPT.split())
-    assert "run_qgis_algorithm" in SYSTEM_PROMPT
-    assert "gdal:cliprasterbymasklayer" in SYSTEM_PROMPT
-
-
-def test_system_prompt_lists_admin_region_kinds() -> None:
-    """A5 fix must name the admin-region categories that trigger the pattern."""
+def test_the_prompt_clips_an_admin_region_by_polygon() -> None:
+    flat = " ".join(SYSTEM_PROMPT.split())
+    assert "means the polygon, not its bbox" in flat
+    assert "gdal:cliprasterbymasklayer" in flat
+    assert "native:clip" in flat
     for kind in ("state", "county", "city", "ZCTA", "watershed"):
-        assert kind in SYSTEM_PROMPT, (
-            f"admin-region kind {kind!r} missing — A5 trigger vocabulary weakens"
-        )
+        assert kind in flat, kind
 
 
-def test_system_prompt_forbids_bbox_approximation() -> None:
-    """A5 fix must explicitly reject bbox-as-region for admin-polygon prompts."""
-    # The load-bearing prohibition: "DO NOT just hand the dataset's bbox..."
-    assert "DO NOT just hand the dataset's bbox" in SYSTEM_PROMPT
-
-
-def test_system_prompt_carries_admin_clipping_example() -> None:
-    """A5 fix must include a Miami-Dade-style worked example."""
-    assert "Miami-Dade" in SYSTEM_PROMPT
-
-
-# The compact layer-handle block replaces the handle-indirection,
-# publish-discipline and full-AOI-extent prose.
-# The harness now enforces these structurally: short handles (L1, L2, ...),
-# typed rejection of unknown URIs, auto-publish/emit seams, and bbox
-# auto-fill from the active AOI / case bbox.
-
-
-def test_system_prompt_has_compact_layer_handle_block() -> None:
-    """The compact replacement block states the handle contract positively."""
+def test_the_prompt_states_the_layer_handle_contract() -> None:
     flat = " ".join(SYSTEM_PROMPT.split())
     assert "short handles (L1, L2, ...)" in flat
-    assert "pass the handle exactly as it appeared in a prior tool result" in flat
-    assert "never retype or construct a URI" in flat
+    assert "exactly as a prior tool result gave it" in flat
+    assert "never retype a URI" in flat
 
 
-def test_system_prompt_says_layers_reach_map_automatically() -> None:
-    """Map delivery is automatic — the prompt no longer begs for publish calls."""
+def test_the_prompt_keeps_the_honesty_rules() -> None:
     flat = " ".join(SYSTEM_PROMPT.split())
-    assert "reach the user's map automatically" in flat
+    assert "Never fabricate numbers" in flat
+    assert "Never supply a physical model input" in flat
+    assert "the template's starting values" in flat
+    assert "screening-grade unless calibrated" in flat
+    assert '"display artifact"' in flat
 
 
-def test_system_prompt_says_omitted_bbox_autofills() -> None:
-    """Omitted bbox args auto-fill from the active map extent / case area."""
+def test_the_prompt_keeps_scope_location_and_fit_rules() -> None:
     flat = " ".join(SYSTEM_PROMPT.split())
-    assert "If you omit a bbox argument, it is auto-filled" in flat
-    assert "active map extent or the case area" in flat
+    assert "never resume an earlier one" in flat
+    assert "Every request stands alone for WHERE" in flat
+    assert "read its bbox= off the [Case state] note" in flat
 
 
-def test_system_prompt_removed_blocks_stay_removed() -> None:
-    """Regression lock: the four prompt cuts must not creep back.
-    The harness enforces these structurally; re-adding the prose re-spends
-    ~1.6k tokens per turn for no behavior change."""
-    flat = " ".join(SYSTEM_PROMPT.split())
-    for phrase in (
-        "Layer-handle indirection",          # handle-indirection block
-        "URI_HANDLE_UNRESOLVED",
-        "layer_handles",
-        "Publish-to-map discipline",          # publish-discipline block
-        "NOT pixels on the user's map",
-        "publish_layer(layer_uri=<handle>",
-        "Full-AOI extent for every overlay",  # full-AOI publish paragraph
-        "It NEVER means shrink the area or the bbox",
-        "ELEVATION colors",                   # trailing colored-relief note
-        # Hand-written tool lists: the registry-built section carries these now,
-        # and a second list of the same tools rots the moment one changes.
-        "New Wave 4.10 endpoints",
-        "OVERLAP routing",
-        "Satellite fire-animation routing",
-        "Tool-signature note",
-        "Skip discovery. Dispatch directly",
-    ):
-        assert phrase not in flat, (
-            f"removed-block phrase {phrase!r} reappeared - the publish-discipline block is cut"
-        )
-
-
-def test_system_prompt_keeps_always_narrate_section() -> None:
-    """Guard that the A1 always-narrate section header survived the splice."""
-    assert "Always-narrate after tools complete" in SYSTEM_PROMPT
-
-
-
-
-def test_system_prompt_still_routes_rainfall_runoff() -> None:
-    """The live rainfall-runoff question routes to the registered template
-    directly, with no dissolved door name in front of it."""
-    assert "telemac_rain_on_grid" in SYSTEM_PROMPT
-    assert "run_sfincs" not in SYSTEM_PROMPT
-
-
-def test_system_prompt_still_forbids_fabricated_numbers() -> None:
-    """anti-fabrication guard survives the amendment."""
-    assert "Never fabricate numbers" in SYSTEM_PROMPT
-
-
-def test_system_prompt_forbids_inventing_physical_inputs() -> None:
-    """The ask-dont-invent rule for physical MODEL INPUTS must be present.
-
-    The model asks for a physical parameter it cannot fetch or derive, and names
-    template-value versus user, produced or derived provenance in its narration."""
-    assert "Never invent PHYSICAL MODEL INPUTS" in SYSTEM_PROMPT
-    assert "synthetic_inputs" in SYSTEM_PROMPT
-    assert "the template's starting values" in SYSTEM_PROMPT
-
-
-def test_system_prompt_has_input_review_instruction() -> None:
-    """Two-mode input gate: the prompt must instruct the agent how to
-    handle a user-gated INPUT REVIEW card -- present the resolved input table,
-    collect edits, confirm before running."""
-    assert "INPUT REVIEW card" in SYSTEM_PROMPT
-    assert "param = value [origin, source]" in SYSTEM_PROMPT
-    # "Do not run the solver until the user has approved" -- fragment avoids the
-    # source line-wrap between "has" and "approved".
-    flat = " ".join(SYSTEM_PROMPT.split())
-    assert "Do not run the solver until the user has approved" in flat
-
-
-
-
-def test_system_prompt_steers_self_correct_on_arg_error() -> None:
-    """On an ARG/VALIDATION error the agent must SELF-CORRECT and retry — never
-    tell the user to wait. This is the steer half of the Oklahoma-tornado fix."""
-    flat = " ".join(SYSTEM_PROMPT.split())
-    assert "SELF-CORRECT" in flat
-    assert "do not tell the user to wait" in flat
-
-
-def test_system_prompt_says_full_state_name_accepted() -> None:
-    """State-keyed tools now accept a full US state name, not only ISO codes —
-    the agent must know it can pass 'Oklahoma' (not just 'OK')."""
-    flat = " ".join(SYSTEM_PROMPT.split())
-    assert "full US state name is accepted" in flat
-    assert "Oklahoma" in flat
-
-
-# Narration conciseness — be concise; do not re-explain the
-# same thing across retries or recap every step verbosely each turn.
-
-
-def test_system_prompt_has_narration_conciseness_section() -> None:
-    """Prompt must carry the narration-conciseness rule."""
-    assert "Narration conciseness" in SYSTEM_PROMPT
-
-
-def test_system_prompt_says_do_not_re_explain_across_retries() -> None:
-    """The load-bearing instruction: do not re-explain across retries / recap
-    every step verbosely each turn."""
+def test_the_prompt_keeps_the_narration_rules() -> None:
     flat = " ".join(SYSTEM_PROMPT.split())
     assert "Be concise" in flat
-    assert "re-explain the same thing across retries" in flat
-    assert "recap every" in flat or "recap" in flat
+    assert "one short sentence" in flat
+    assert "never end silently" in flat
+    assert "cite its error_code" in flat
+    assert "correct the argument and call again" in flat
+    assert "never ask for a key in chat" in flat
+    assert "No emojis" in flat
+
+
+def test_the_prompt_still_names_no_absent_tool_in_fixed_text() -> None:
+    assert "run_sfincs" not in SYSTEM_PROMPT

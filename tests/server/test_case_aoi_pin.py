@@ -226,4 +226,4 @@ def test_the_case_state_note_carries_the_pinned_extent_literally(
     note = build_layers_present_note([], case_bbox=_turn_case_bbox(state))
     assert note is not None
     assert f"[{_DOMAIN[0]}, {_DOMAIN[1]}, {_DOMAIN[2]}, {_DOMAIN[3]}]" in note
-    assert "REUSE this exact extent" in note
+    assert "Use this extent for follow-up fetches" in note

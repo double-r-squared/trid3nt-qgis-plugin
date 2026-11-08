@@ -143,7 +143,7 @@ def test_the_door_and_the_call_stand_on_the_floor_and_no_source_does(registry):
 
 def test_no_source_is_named_in_the_prompt_or_in_any_declared_set_for_thirty_messages(registry, index):
     import trid3nt_server.tools.search.search_tools.search_tools as dd
-    from trid3nt_server.model.adapters.adapter import build_tool_section
+    from trid3nt_server.model.adapters.adapter import system_prompt
     from trid3nt_server.server.dispatch.helpers import _default_declarable_registry
     from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
     from trid3nt_server.tools.search.tool_retrieval import (
@@ -156,8 +156,9 @@ def test_no_source_is_named_in_the_prompt_or_in_any_declared_set_for_thirty_mess
                  "what is the water table here", "show nws alerts", "how deep is the bay",
                  "run a tsunami over Crescent City"]
     assert len(messages) == 30
-    assert not sources & set(build_tool_section(registry).replace("- ", "\n").split(":"))
-    assert "fetch_" not in build_tool_section(registry)
+    prompt = system_prompt()
+    assert not [name for name in sources if name in prompt]
+    assert "fetch_" not in prompt
     assert not sources & set(_default_declarable_registry())
     assert not sources & _full_registry_floor(set())
     for message in messages:

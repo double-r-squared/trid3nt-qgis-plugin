@@ -1192,7 +1192,7 @@ package DataSeam {
     requirement def ADataSourceIsReachedThroughOneDoor {
         doc /*
         No data source is a tool the model is told of or ranks: the prompt
-        list, the declared sets and the tool index skip every fetcher, and the
+        names none, the declared sets and the tool index skip every fetcher, and the
         model reaches one by asking find_sources and calling fetch with the
         row's source and ask. A call to fetch IS a call of the source it names,
         translated before anything keys on a tool name, so the gates, the

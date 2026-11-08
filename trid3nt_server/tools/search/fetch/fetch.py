@@ -115,7 +115,9 @@ def fetch(
 
     `source` is a name from a `find_sources` row; `args` is that source's parameters as an
     object (bbox, dates, ids - its row lists them, * marks required). An argument the
-    source does not take is refused by name with the nearest parameter.
+    source does not take is refused by name with the nearest parameter. A long
+    animation series: show the user the AOI and the planned frame list first, and do
+    not pull every frame on the first turn.
 
     Returns what the source returns: a layer already on the user's map, or a record.
     """

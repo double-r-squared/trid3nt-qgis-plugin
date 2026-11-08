@@ -111,8 +111,9 @@ async def run_qgis_algorithm(
     gdal:contour), clip or mask (gdal:cliprasterbymasklayer, native:clip), zonal
     statistics (native:zonalstatisticsfb), raster calculator (native:rastercalc),
     buffer, dissolve, reproject, resample, polygonize, NDVI or any band math.
-    NOT for fetching data: call the fetch_* tool first, then run over the fetched
-    layer. NOT for a simulation.
+    NOT for fetching data: `find_sources` then `fetch` first, then run over the
+    fetched layer by its canvas name; never pass a bbox or a URI to fetch from.
+    NOT for a simulation.
 
     `algorithm` is the Processing id `provider:name` as the QGIS Processing
     algorithm reference lists it; `params` are that algorithm's own parameters,

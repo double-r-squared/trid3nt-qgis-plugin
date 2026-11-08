@@ -6,7 +6,7 @@ surface the turn engine drives regardless of backend.
 
 ## What lives here
 
-- `adapter.py` -- the shared surface: `SYSTEM_PROMPT`,
+- `adapter.py` -- the shared surface: `system_prompt()` (a small static core, no tool list: a tool reaches the model through the per-request declarations and `search_tools`),
   `build_contents_from_history`, `build_tool_declarations`,
   `summarize_tool_result`, `UsageMetadataEvent`, error classification. Builds
   turns from the `trid3nt_contracts.message` IR. A tool's result reaches the
@@ -83,8 +83,7 @@ within `SOURCE_MARGIN` of its top row on the same similarity. A cold index or a 
 
 ## The data door - find_sources, then fetch
 
-No data source is a tool the model is told of or ranks. The prompt's tool list
-(`build_tool_section`), the declarable registry, the fail-open dump and the
+No data source is a tool the model is told of or ranks. The declarable registry, the fail-open dump and the
 retrieval index all skip every spec-served fetcher (`registered_spec_names()`);
 what the model sees is two tools on the always-visible floor: `find_sources`
 (`need` a class, or `query` free text, at a `place` and `window`) and

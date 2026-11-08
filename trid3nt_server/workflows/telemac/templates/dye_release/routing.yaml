@@ -13,4 +13,5 @@ not_for: an OIL slick (`telemac_oil_spill`); bed SCOUR, deposition, grain sortin
   plumes, dam-break and tsunami run-up are not modeled here
 returns: 'On success the run''s record (a `LayerURI`): every variable its modules wrote, styled
   on one mesh layer, animated where it varies, plus the dye series charted. On failure a dict
-  with `status="error"` + `error_code`.'
+  with `status="error"` + `error_code`. A stream much narrower than a few element edges sits BELOW the
+  useful range of a depth-averaged 2D run: say so plainly.'

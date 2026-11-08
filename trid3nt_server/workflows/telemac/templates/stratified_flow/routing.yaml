@@ -13,4 +13,5 @@ returns: 'On success the run''s record (a `LayerURI`): every variable its module
   on one mesh layer, animated where it varies, plus the temperature column at the deepest
   node charted against the prescribed initial column. The run exchanges NO heat with the atmosphere,
   so a falling surface temperature is downward MIXING and never the water cooling - narrate
-  it that way. On failure a dict with `status="error"` + `error_code`.'
+  it that way. 3D is right only when the VERTICAL structure IS the answer (a thermocline, a salt wedge, a return
+  flow at depth); a question a map answers costs less and is as accurate in 2D. On failure a dict with `status="error"` + `error_code`.'
