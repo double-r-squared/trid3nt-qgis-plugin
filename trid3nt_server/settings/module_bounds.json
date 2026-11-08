@@ -196,7 +196,21 @@
         1000000000000.0
       ]
     },
-    "AMBIGUITY_MARGIN": {
+    "MATCH_MARGIN": {
+      "unit": "share",
+      "bounds": [
+        0,
+        1
+      ]
+    },
+    "MIN_MATCH_SIMILARITY": {
+      "unit": "cosine",
+      "bounds": [
+        0,
+        1
+      ]
+    },
+    "SOURCE_MARGIN": {
       "unit": "share",
       "bounds": [
         0,

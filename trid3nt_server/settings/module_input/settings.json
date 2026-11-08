@@ -567,19 +567,51 @@
       "source": "TRID3NT engineering default."
     },
     {
-      "keyword": "AMBIGUITY_MARGIN",
-      "identifier": "AMBIGUITY_MARGIN",
+      "keyword": "MATCH_MARGIN",
+      "identifier": "MATCH_MARGIN",
       "type": "REAL",
       "shape": "",
       "size": 1,
       "unbounded": false,
-      "help": "How close, as a share of the top score, the first two tools of a turn's ranking have to rank before the tool-candidates card asks which to use; 0 never asks.",
+      "help": "How close to a step's best tool, as a share of its embedding similarity, another tool has to match to be offered beside it; 0 offers the best alone.",
       "rubrique": [
         "search"
       ],
       "is_file": false,
       "mandatory": false,
-      "default": 0.01,
+      "default": 0.35,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "MIN_MATCH_SIMILARITY",
+      "identifier": "MIN_MATCH_SIMILARITY",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The embedding similarity a step's best tool has to reach before any tool is offered for that step; below it the model has search_tools.",
+      "rubrique": [
+        "search"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.3,
+      "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "SOURCE_MARGIN",
+      "identifier": "SOURCE_MARGIN",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How close to the top row of a find_sources query, as a share of its embedding similarity, another source has to match to be returned beside it; 0 returns the top row alone.",
+      "rubrique": [
+        "search"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 0.3,
       "source": "TRID3NT engineering default."
     },
     {

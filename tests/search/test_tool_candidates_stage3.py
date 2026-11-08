@@ -1,7 +1,6 @@
-"""The tool-candidates ambiguity / ask gate.
+"""The tool-candidates ask gate.
 
-Ask mode emits the card before dispatch and waits; auto mode emits ONLY on a
-measured near-tie and a confident auto never does; an unanswered card times out
+Ask mode emits the card of the matched tools before dispatch and waits; auto mode never emits one, near-tie or not; an unanswered card times out
 BOUNDED and the turn proceeds with a note; a ``tool_name`` reply pins that tool,
 a ``free_text`` reply is a clarification. Ranking is patched so margins are exact."""
 
@@ -87,7 +86,7 @@ def _scripted(monkeypatch):
 
 async def _start_turn(monkeypatch, ranked, user_text="map the coast"):
     """Launch one scripted turn as a task; return (task, sock, state, captured)."""
-    monkeypatch.setattr(tr, "retrieve_ranked_tools", lambda text, k=25: list(ranked))
+    monkeypatch.setattr(tr, "retrieve_matched_tools", lambda text, k=8: list(ranked))
     captured: dict = {"contents": None}
     real_stream = agent_server.stream_events_with_contents
 
@@ -154,17 +153,6 @@ async def test_ask_mode_emits_card_and_choice_pins_tool(_scripted, monkeypatch):
     assert any(
         "Use the tool 'fetch_dem'" in t for t in texts
     ), texts
-    assert "fetch_dem" in state2.visible_tools
-
-
-@pytest.mark.asyncio
-async def test_auto_near_tie_emits_ambiguity_card(_scripted, monkeypatch, user_settings):
-    monkeypatch.delenv("TRID3NT_MODE", raising=False)  # auto default
-    user_settings(TOOL_CHOICE_TIMEOUT_S=0.2)
-    task, sock, state, captured = await _start_turn(monkeypatch, _NEAR_TIE)
-    card = await _wait_for_card(sock)
-    assert (card.get("payload") or {}).get("reason") == "ambiguity"
-    await asyncio.wait_for(task, timeout=5.0)
 
 
 @pytest.mark.asyncio
@@ -176,12 +164,23 @@ async def test_confident_auto_does_not_emit(_scripted, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ambiguity_margin_zero_disables_auto_asks(_scripted, monkeypatch, user_settings):
+async def test_auto_never_emits_a_card_on_a_near_tie(_scripted, monkeypatch):
     monkeypatch.delenv("TRID3NT_MODE", raising=False)
-    user_settings(AMBIGUITY_MARGIN=0)
     task, sock, state, captured = await _start_turn(monkeypatch, _NEAR_TIE)
     await asyncio.wait_for(task, timeout=5.0)
     assert _candidate_envelopes(sock) == []
+
+
+@pytest.mark.asyncio
+async def test_the_card_lists_every_matched_tool(_scripted, monkeypatch):
+    monkeypatch.setenv("TRID3NT_MODE", "ask")
+    many = [(f"tool_{i}", 0.5 - i * 0.01) for i in range(7)]
+    task, sock, state, captured = await _start_turn(monkeypatch, many)
+    card = await _wait_for_card(sock)
+    assert [c["tool_name"] for c in card["payload"]["candidates"]] == [n for n, _ in many]
+    _PENDING_TOOL_CHOICES.resolve(state.session_id, card["payload"]["request_id"],
+                                  {"request_id": card["payload"]["request_id"]})
+    await asyncio.wait_for(task, timeout=5.0)
 
 
 @pytest.mark.asyncio

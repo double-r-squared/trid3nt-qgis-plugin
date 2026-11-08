@@ -66,7 +66,7 @@ async def test_ask_mode_emits_stage_labeled_wave_per_round(monkeypatch, user_set
     # Each unanswered wave times out fast and proceeds (never hangs).
     user_settings(TOOL_CHOICE_TIMEOUT_S=0.1)
     set_script(_SCRIPT)
-    monkeypatch.setattr(tr, "retrieve_ranked_tools", lambda text, k=25: list(_PIPELINE))
+    monkeypatch.setattr(tr, "retrieve_matched_tools", lambda text, k=8: list(_PIPELINE))
 
     # Stub dispatch so no real tool runs (the round's requested names are still
     # recorded in _turn_tools_dispatched before dispatch, which drives the
@@ -104,7 +104,7 @@ async def test_auto_mode_emits_no_per_round_waves(monkeypatch):
     monkeypatch.delenv("TRID3NT_MODE", raising=False)  # auto default
     set_script(_SCRIPT)
     # Confident ranking (relative top-1 vs top-2 margin 20% >> 1% threshold).
-    monkeypatch.setattr(tr, "retrieve_ranked_tools", lambda text, k=25: list(_PIPELINE))
+    monkeypatch.setattr(tr, "retrieve_matched_tools", lambda text, k=8: list(_PIPELINE))
 
     async def _noop_invoke(ws, state, name, args):
         return {"ok": True}

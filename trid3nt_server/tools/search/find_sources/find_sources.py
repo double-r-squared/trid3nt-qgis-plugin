@@ -3,7 +3,8 @@
 The model's face on THE MATCH: the same filter, sort and ask a template's need row resolves through, so a free run and a
 template run never disagree about the world. What comes back is the ranked list the card renders plus, per survivor, the
 arguments that source is ready to be called with through ``fetch``; a query ranks the sources by name and words and returns
-them unranked on the facts the match weighs, since a source with no coverage row has none to weigh.
+them unranked on the facts the match weighs, since a source with no coverage row has none to weigh; only the sources
+within SOURCE_MARGIN of the best match are returned.
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.extent import extent as ingest_extent
 from trid3nt_server.inputs.instant import instant as ingest_instant
 from trid3nt_server.inputs.point import point as ingest_point
+from trid3nt_server.settings import setting
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.search.match import (
     AROUND_PLACE_DEG, RANKED_ROWS, Need, ask_for, base_ask, match,
@@ -79,7 +81,7 @@ async def find_sources(
 
     Pass `need` ONE class of the coverage vocabulary (the kind of thing measured) for
     a ranked list at a place, or `query` free text (what you want, in your own words)
-    for the sources whose names and descriptions match, unranked. `place` is a point, a
+    for the sources whose names and descriptions match best, unranked. `place` is a point, a
     [west, south, east, north] box or a drawn area - a point is read as the ground it
     stands on, so pass a box to ask over an area. `window` is the moment or the
     [opens, closes] a series has to cover; `frame` is the vertical datum of the run.
@@ -126,15 +128,20 @@ async def find_sources(
 async def _query(text: str, place: Any, window: Any) -> dict[str, Any]:
     """The sources whose words match ``text``, each with the call it is ready for; none is ranked on the match's facts."""
     from trid3nt_server.tools.search.search_tools import search_tools as st
-    from trid3nt_server.tools.search.tool_retrieval import ranked_docs
+    from trid3nt_server.tools.search.tool_retrieval import doc_similarities, ranked_docs
 
     index = st._get_source_index()
     bbox, lon, lat = await _place(place)
     opens, until = _window(window)
+    sims = doc_similarities(text, index)
+    # Rows are cut on embedding similarity, not the fused rank score: the sources within SOURCE_MARGIN of the top row, in rank order.
+    floor = max(sims) * (1.0 - float(setting("SOURCE_MARGIN"))) if sims else None
     rows: list[dict[str, Any]] = []
     for at, _score in ranked_docs(text, index):
         if len(rows) >= RANKED_ROWS:
             break
+        if floor is not None and sims[at] < floor:
+            continue
         rows.append(_source_row(index.tool_names[at], index.descriptions[at],
                                 bbox, lon, lat, opens, until))
     return {"results": rows}

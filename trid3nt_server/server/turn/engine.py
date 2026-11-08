@@ -11,7 +11,7 @@ from trid3nt_contracts.ws import AgentMessageChunkPayload, SessionStatePayload
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.render.pipeline_emitter import current_turn_case
 from trid3nt_server.settings import setting
-from trid3nt_server.server.config import _ambiguity_margin_threshold, _tool_choice_timeout_s
+from trid3nt_server.server.config import _tool_choice_timeout_s
 from trid3nt_server.inputs.extent import bbox_overlaps
 from trid3nt_server.server.dispatch.emitter import _ensure_emitter
 from trid3nt_server.server.dispatch.persist import _persist_chat_turn
@@ -39,7 +39,7 @@ def _session_routing_mode(state: "SessionState") -> str:
     env = (os.environ.get("TRID3NT_MODE") or "auto").strip().lower()
     return env if env in ("auto", "ask") else "auto"
 
-#: Max candidates surfaced on one tool-candidates card (avoid flooding).
+#: How many of the top candidates name the card's stage.
 _TOOL_CANDIDATES_MAX = 4
 
 #: Continuation nudge, injected at most ONCE per turn as user-role content when
@@ -142,11 +142,9 @@ def _union_pinned_tool(
     retrieval_registry: dict,
     state: SessionState,
 ) -> dict:
-    """Union a user-pinned tool into both the monotonic visible set and the retrieval-visible
-    registry, so it stays visible and its declaration is built. Returns a NEW registry only when
-    the pin widened it."""
+    """Union a user-pinned tool into the retrieval-visible registry, so its declaration is built
+    this turn. Returns a NEW registry only when the pin widened it."""
     if pinned and pinned in TOOL_REGISTRY:
-        state.visible_tools.add(pinned)
         if pinned not in retrieval_registry:
             retrieval_registry = dict(retrieval_registry)
             retrieval_registry[pinned] = TOOL_REGISTRY[pinned]
@@ -203,20 +201,18 @@ async def _maybe_emit_tool_candidates(
     user_text: str,
     exclude_tools: "set[str] | None" = None,
 ) -> tuple[str | None, list[str]]:
-    """Surface the retrieval-ranked candidates BEFORE dispatch and wait, under a
+    """Surface the tools the message matched BEFORE dispatch (ask mode) and wait, under a
     bounded timeout, for the user's pick; returns that pin, if any, and the
     notes to ride into the turn."""
-    # It fires in ask mode, or in auto when the top-1 against top-2 margin is
-    # under the ambiguity threshold. On timeout or fault the turn proceeds
-    # AUTONOMOUSLY: the picker is an optimization, never a wall.
-    mode = _session_routing_mode(state)
-    threshold = _ambiguity_margin_threshold()
-    if mode != "ask" and threshold <= 0.0:
+    # It fires in ask mode only: auto offers the same matched set to the model and lets it pick.
+    # On timeout or fault the turn proceeds AUTONOMOUSLY: the picker is an optimization, never a wall.
+    if _session_routing_mode(state) != "ask":
         return None, []
 
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_ranked_tools
+    from trid3nt_server.server.config import _tool_retrieval_k
+    from trid3nt_server.tools.search.tool_retrieval import retrieve_matched_tools
 
-    ranked = retrieve_ranked_tools(user_text, k=8)
+    ranked = retrieve_matched_tools(user_text, _tool_retrieval_k())
     if exclude_tools:
         # Drop this turn's already-dispatched tools, so each later round
         # advances the stage label instead of re-offering the same picks.
@@ -225,15 +221,7 @@ async def _maybe_emit_tool_candidates(
         # Cold index / no match / all excluded: nothing to offer -- autonomous.
         return None, []
 
-    reason: str | None = None
-    if mode == "ask":
-        reason = "ask_mode"
-    elif len(ranked) >= 2 and ranked[0][1] > 0.0:
-        margin = (ranked[0][1] - ranked[1][1]) / ranked[0][1]
-        if margin < threshold:
-            reason = "ambiguity"
-    if reason is None:
-        return None, []
+    reason = "ask_mode"
 
     candidates = [
         {
@@ -241,7 +229,7 @@ async def _maybe_emit_tool_candidates(
             "summary": _tool_summary_line(TOOL_REGISTRY.get(name)),
             "score": round(float(score), 6),
         }
-        for name, score in ranked[:_TOOL_CANDIDATES_MAX]
+        for name, score in ranked
     ]
     timeout_s = _tool_choice_timeout_s()
     request_id = new_ulid()

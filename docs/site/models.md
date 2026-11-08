@@ -51,13 +51,13 @@ system-suffix seam -- harmless for models that ignore it).
 An 8B model cannot reliably pick the right tool out of a registry this size (147 tools
 today, 176 when the bench below ran), so the local build always runs the retrieval
 layer: each turn, the user text is ranked against the tool corpus (BM25 +
-name-substring + local dense embeddings, fused with RRF, reusing
-`discover_dataset`'s cached index) and only the top-K tools (plus a hot-set floor,
-union-ed monotonically per Case) are declared to the model.
+name-substring + local dense embeddings, fused with RRF) and only the tools within
+`MATCH_MARGIN` of each step's best match (at most `TOOL_RETRIEVAL_K`, plus a hot-set floor and the
+tools the model has called this Case) are declared to the model.
 
-- The `TOOL_RETRIEVAL_K` setting (default 8). There is no on/off knob:
+- The `TOOL_RETRIEVAL_K` setting (default 8) is the ceiling. There is no on/off knob:
   the off and shadow modes were removed and retrieval always enforces.
-- **Fail-open**: a cold index, an error, or an empty ranking shows the full registry -- the
+- **Fail-open**: a cold index or an error shows the full registry -- the
   layer can never hide every tool.
 - The index is warmed at startup (`asyncio.to_thread`); until the warm completes, retrieval
   logs `discover index COLD; FAIL-OPEN to full registry` and the model faces the whole

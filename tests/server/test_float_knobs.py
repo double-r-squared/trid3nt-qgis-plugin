@@ -1,4 +1,4 @@
-"""The ambiguity margin is a setting: zero turns the ask off and a value outside its range refuses by name.
+"""The match margins are settings: a value outside the range refuses by name.
 A wait is a setting and refuses a value outside its range by name."""
 from __future__ import annotations
 
@@ -6,7 +6,8 @@ import pytest
 
 from trid3nt_server.inputs.gate.confirm import _code_exec_approval_timeout_s
 from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.server.config import _ambiguity_margin_threshold, _tool_choice_timeout_s
+from trid3nt_server.server.config import _tool_choice_timeout_s
+from trid3nt_server.settings import setting
 from trid3nt_server.server.processing import _timeout_s
 
 SETTING_WAITS = [
@@ -16,13 +17,16 @@ SETTING_WAITS = [
 ]
 
 
-def test_ambiguity_margin_zero_turns_the_ask_off(user_settings):
-    assert _ambiguity_margin_threshold() == 0.01
-    user_settings(AMBIGUITY_MARGIN=0)
-    assert _ambiguity_margin_threshold() == 0.0
-    user_settings(AMBIGUITY_MARGIN=-1)
+@pytest.mark.parametrize("name", ["MATCH_MARGIN", "SOURCE_MARGIN", "MIN_MATCH_SIMILARITY"])
+def test_a_match_margin_reads_the_user_file_and_refuses_outside_its_range(user_settings, name):
+    user_settings(**{name: 0})
+    assert setting(name) == 0.0
+    user_settings(**{name: -1})
     with pytest.raises(SlotRefused):
-        _ambiguity_margin_threshold()
+        setting(name)
+    user_settings(**{name: 1.5})
+    with pytest.raises(SlotRefused):
+        setting(name)
 
 
 @pytest.mark.parametrize("name,read,default", SETTING_WAITS)

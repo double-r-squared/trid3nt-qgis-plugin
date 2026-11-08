@@ -156,24 +156,12 @@ async def _stream_model_reply(
 
         _retrieval_k = _tool_retrieval_k()
         _visible = retrieve_visible_tools(
-            user_text, state.visible_tools, _retrieval_k
+            user_text, state.called_tools, _retrieval_k
         )
         if not _visible:
             # FAIL-OPEN: an empty result must never trim the catalog.
             raise ValueError("retrieve_visible_tools returned empty")
-        # UNION the visible set into the Case's monotonic visible set FIRST (so it never shrinks
-        # across turns), then subset the registry to the CORE_FLOOR + accrued snapshot intersected
-        # with the registry (real, registered tools only).
-        try:
-            state.visible_tools |= set(_visible)
-            _allowed_snapshot = set(CORE_FLOOR) | set(state.visible_tools)
-        except Exception:  # noqa: BLE001 -- never shrink on a snapshot fault
-            logger.warning(
-                "tool-retrieval: visible-set union failed; "
-                "FAIL-OPEN to full registry",
-                exc_info=True,
-            )
-            _allowed_snapshot = set(TOOL_REGISTRY)
+        _allowed_snapshot = set(CORE_FLOOR) | set(_visible)
         # A data source is called through fetch and never declared, whatever the Case accrued.
         _subset = _allowed_snapshot & set(TOOL_REGISTRY) - registered_spec_names()
         if _subset:
@@ -596,6 +584,7 @@ async def _stream_model_reply(
                 break
             _turn_ever_called_tool = True
             _turn_tools_dispatched.update(c.name for c in turn_function_calls)
+            state.called_tools.update(c.name for c in turn_function_calls)
 
             # The round signature is fed to the watchdog AFTER dispatch with a progress witness;
             # recording late costs at most one extra identical round before the trip.
@@ -709,8 +698,7 @@ async def _stream_model_reply(
                     if _call_is_terminal_deliverable:
                         _deliverable_done = True
                         _post_deliverable_idle = 0
-                    state.visible_tools.add(_name)
-                    # Search hits join this turn's gate and the Case visible set for later rounds;
+                    # Search hits join this turn's gate for later rounds;
                     # only real, registered, not-yet-visible names count toward the cap.
                     if _name in _gate_expander_tool_names():
                         _hits = _tool_names_from_search_result(result)
@@ -730,7 +718,6 @@ async def _stream_model_reply(
                             _retrieval_registry = dict(_retrieval_registry)
                             for _cand in _added_now:
                                 _retrieval_registry[_cand] = TOOL_REGISTRY[_cand]
-                            state.visible_tools.update(_added_now)
                             _tool_decls_dirty = True
                             logger.info(
                                 "discovery-expand: +%d tool(s) into the gate "

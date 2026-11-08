@@ -133,8 +133,8 @@ async def test_first_call_to_real_non_hot_set_tool_dispatches(fake_llm) -> None:
     assert name == "compute_cross_section"
     assert payload.get("error_code") != "OUT_OF_ALLOWED_SET"
     assert payload.get("status") == "ok"
-    # It persists in the Case's monotonic visible set (never hidden mid-task).
-    assert "compute_cross_section" in state.visible_tools
+    # A tool the model called stays offered for the Case.
+    assert "compute_cross_section" in state.called_tools
 
 
 

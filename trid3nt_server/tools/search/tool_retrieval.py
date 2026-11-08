@@ -1,14 +1,16 @@
-"""Which subset of the tool catalog the model sees for a turn: CORE_FLOOR, UNION
-the Case's accrued visible set, UNION the top-k ranking of the turn's text.
-Composing by UNION is what makes it DETERMINISTIC and monotonic - a tool never
-leaves mid-task. Nothing here builds the index; a cold index, a fault or an empty
-ranking FAILS OPEN to the full registry, since dropping a tool is a silent break."""
+"""Which subset of the tool catalog the model sees for a turn: CORE_FLOOR, UNION the
+tools the model has called this Case, UNION for each step of the message its best match
+and every tool within MATCH_MARGIN of it by embedding similarity, capped at the
+TOOL_RETRIEVAL_K ceiling. Nothing here builds the index; a cold index or a fault FAILS
+OPEN to the full registry, since dropping a tool is a silent break."""
 
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
+from trid3nt_server.settings import setting
 from trid3nt_server.tools import TOOL_REGISTRY, mounted_tool_names
 from trid3nt_server.tools.search.search_tools import search_tools as _dd
 from trid3nt_server.tools.search.search_tools.search_tools import (
@@ -21,8 +23,10 @@ from trid3nt_server.tools.search.search_tools.search_tools import (
 
 __all__ = [
     "retrieve_visible_tools",
-    "retrieve_ranked_tools",
+    "retrieve_matched_tools",
     "ranked_docs",
+    "doc_similarities",
+    "split_steps",
     "CORE_FLOOR",
     "DEFAULT_K",
     "MAX_K",
@@ -30,9 +34,9 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.tools.search.tool_retrieval")
 
-#: Top-k default and clamp ceiling for the turn's ranking.
-DEFAULT_K = 25
-MAX_K = 25
+#: The ceiling on the tools a turn's matches add, and the clamp on the TOOL_RETRIEVAL_K setting.
+DEFAULT_K = 8
+MAX_K = 200
 
 # Search is the front door: a large, documented surface touched occasionally is ranked; a small one needed on most turns is enumerated.
 # A browse TREE is refused: it multiplies wrong turns, each a full round trip, and grows dead ends faster than the corpus.
@@ -51,6 +55,37 @@ CORE_FLOOR: frozenset[str] = frozenset(
         "generate_chart",
     }
 )
+
+
+def doc_similarities(query_clean: str, index: Any) -> "list[float] | None":
+    """The cosine similarity of the query to every document of the index (its best row's), or ``None`` with no dense channel.
+
+    The dense matrix and the query vector are both normalized, so the product IS the cosine: the confidence a match is cut on."""
+    # A positive allowlist of CPU-local backends excludes any future network-backed one by default; a per-query network encode would be hot-path I/O.
+    if (
+        index.dense_matrix is None
+        or index.dense_encode_fn is None
+        or getattr(index, "backend_name", None)
+        not in ("sentence_transformers", "hashed", None)
+    ):
+        return None
+    try:
+        import numpy as _np
+
+        q_vec = index.dense_encode_fn([query_clean])
+        qn = _np.linalg.norm(q_vec, axis=1, keepdims=True)
+        qn[qn == 0.0] = 1.0
+        q_vec = q_vec / qn
+        rows = index.dense_matrix @ q_vec[0]
+        owner = getattr(index, "dense_owner", None)
+        if owner is None:
+            return [float(v) for v in rows]
+        best = _np.full(len(index.tool_names), -1.0, dtype="float32")
+        _np.maximum.at(best, _np.asarray(owner), rows)
+        return [float(v) for v in best]
+    except Exception:  # noqa: BLE001
+        logger.warning("tool_retrieval: dense channel failed", exc_info=True)
+        return None
 
 
 def _build_channel_rankings(
@@ -74,26 +109,11 @@ def _build_channel_rankings(
                 logger.warning("tool_retrieval: BM25 channel failed", exc_info=True)
                 bm25_ranking = []
 
-    # A positive allowlist of CPU-local backends excludes any future network-backed one by default; a per-query network encode would be hot-path I/O.
-    if (
-        index.dense_matrix is not None
-        and index.dense_encode_fn is not None
-        and getattr(index, "backend_name", None)
-        in ("sentence_transformers", "hashed", None)
-    ):
-        try:
-            import numpy as _np
-
-            q_vec = index.dense_encode_fn([query_clean])
-            qn = _np.linalg.norm(q_vec, axis=1, keepdims=True)
-            qn[qn == 0.0] = 1.0
-            q_vec = q_vec / qn
-            sims = (index.dense_matrix @ q_vec[0]).astype("float32")
-            dense_ranking = sorted(range(len(sims)), key=lambda i: float(sims[i]), reverse=True)
-            if dense_ranking:
-                rankings.append(dense_ranking)
-        except Exception:  # noqa: BLE001
-            logger.warning("tool_retrieval: dense channel failed", exc_info=True)
+    sims = doc_similarities(query_clean, index)
+    if sims is not None:
+        dense_ranking = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)
+        if dense_ranking:
+            rankings.append(dense_ranking)
 
     q_content = [
         t for t in _tokenize(query_clean)
@@ -144,40 +164,76 @@ def ranked_docs(query_clean: str, index: Any) -> list[tuple[int, float]]:
         _reciprocal_rank_fusion(rankings, k=60), bm25_ranking, k=60)
 
 
-def retrieve_ranked_tools(
-    user_text: str, k: int = DEFAULT_K
-) -> list[tuple[str, float]]:
-    """The SCORED face of the ranking ``retrieve_visible_tools`` uses. Scores are
-    rank-derived, NOT probabilities, so only ordering and relative margin mean
-    anything. ``[]`` on a cold index or no match, and the caller MUST fail open."""
+#: Words that open an action phrase: an "and" followed by one joins two steps, not two nouns.
+_STEP_VERBS = (
+    "fetch|get|pull|download|load|find|search|show|map|plot|draw|chart|graph|display|compute|calculate|run|simulate|model|"
+    "clip|mask|overlay|intersect|buffer|reproject|convert|export|extract|summari[sz]e|compare|generate|build|make|create|"
+    "route|geocode|locate|estimate|derive|rank|count|measure|mosaic|merge|resample|classify"
+)
+_STEP_SPLIT = re.compile(
+    rf"\s*(?:;|,?\s+and then\s+|,?\s+then\s+|,?\s+after that\s+|\s+and\s+(?=(?:{_STEP_VERBS})\b))\s*",
+    re.IGNORECASE,
+)
+
+
+def split_steps(text: str) -> list[str]:
+    """The message cut into its steps at "then", "and then", "after that", ";" and an "and" that joins two action phrases.
+
+    No model reads it: a message with none of those is one step, and each step is ranked on its own."""
+    parts = [p.strip(" ,.") for p in _STEP_SPLIT.split(text.strip())]
+    steps = [p for p in parts if p]
+    return steps or [text.strip()]
+
+
+def _step_matches(step: str, index: Any, margin: float, minimum: float) -> list[tuple[str, float]]:
+    """One step's tools: the best by similarity and every tool within ``margin`` of it, best RRF order first; none below ``minimum``.
+
+    A tool with several documents (find_sources has one per data class and source) counts at its best one."""
+    sims = doc_similarities(step, index)
+    if sims is None:
+        return []
+    best: dict[str, float] = {}
+    for at, name in enumerate(index.tool_names):
+        if sims[at] > best.get(name, -1.0):
+            best[name] = sims[at]
+    top = max(best.values())
+    if top < minimum:
+        return []
+    kept = {name for name, sim in best.items() if sim >= top * (1.0 - margin)}
+    ordered: list[str] = []
+    for at, _score in ranked_docs(step, index):
+        name = index.tool_names[at]
+        if name in kept and name not in ordered:
+            ordered.append(name)
+    ordered += sorted(kept - set(ordered), key=lambda n: -best[n])
+    return [(name, best[name]) for name in ordered]
+
+
+def retrieve_matched_tools(user_text: str, k: int = DEFAULT_K) -> list[tuple[str, float]]:
+    """The tools the message's steps match, as ``[(name, similarity)]``, at most ``k``.
+
+    The steps' matches are taken in turn, one from each step per round, so a late step's best match is not crowded out by an early step's runners-up.
+    ``[]`` on a cold index, no dense channel or no step above the minimum similarity; a fault raises."""
     if not isinstance(user_text, str) or not user_text.strip():
         return []
     index = _dd._INDEX  # live module global; None until the orchestrator warms it
     if index is None or not getattr(index, "tool_names", None):
-        return []  # cold -- never build on the hot path; caller fails open
+        return []  # cold -- never build on the hot path
     try:
-        k = int(k)
+        k = max(1, min(int(k), MAX_K))
     except (TypeError, ValueError):
         k = DEFAULT_K
-    k = max(1, min(k, len(index.tool_names)))
-    try:
-        fused = ranked_docs(user_text.strip(), index)
-    except Exception:  # noqa: BLE001 -- fail open, never break dispatch
-        logger.warning("retrieve_ranked_tools: ranking failed", exc_info=True)
-        return []
-    # The index carries a document per DATA CLASS under the match's own name, so
-    # k counts distinct TOOLS - a class document never spends a slot twice.
-    ranked: list[tuple[str, float]] = []
+    margin = float(setting("MATCH_MARGIN"))
+    minimum = float(setting("MIN_MATCH_SIMILARITY"))
+    per_step = [_step_matches(step, index, margin, minimum) for step in split_steps(user_text)]
+    matched: list[tuple[str, float]] = []
     seen: set[str] = set()
-    for idx, score in fused:
-        if len(ranked) >= k:
-            break
-        name = index.tool_names[idx]
-        if name in seen:
-            continue
-        seen.add(name)
-        ranked.append((name, float(score)))
-    return ranked
+    for rank in range(max((len(rows) for rows in per_step), default=0)):
+        for rows in per_step:
+            if rank < len(rows) and rows[rank][0] not in seen and len(matched) < k:
+                seen.add(rows[rank][0])
+                matched.append(rows[rank])
+    return matched
 
 
 def _full_registry_floor(floor: set[str]) -> set[str]:
@@ -209,36 +265,31 @@ def _full_registry_floor(floor: set[str]) -> set[str]:
 
 def retrieve_visible_tools(
     user_text: str,
-    accrued: "set[str] | frozenset[str] | None",
+    called: "set[str] | frozenset[str] | None",
     k: int = DEFAULT_K,
 ) -> set[str]:
-    """The set of tool names to make visible for one turn. ``accrued`` is the
-    Case's monotonic visible set, ``None`` on a brand-new turn; ``k`` is clamped to
-    ``[1, MAX_K]``. An empty query returns the floor, never the full catalog."""
-    try:
-        k = int(k)
-    except (TypeError, ValueError):
-        k = DEFAULT_K
-    k = max(1, min(k, MAX_K))
+    """The set of tool names to make visible for one turn: the floor, the tools ``called`` this Case, and what the message's steps match.
 
-    # The accrued set carries every tool made visible this Case (never hide mid-task). A MOUNTED tool joins the floor while its session is open:
-    # no ranking channel can surface it.
+    ``k`` is the ceiling on the matches, clamped to ``[1, MAX_K]``, never a fill. A message that matches nothing gets the floor
+    and the called tools, with ``search_tools`` to reach the rest; a cold index or a fault gets the full registry."""
+    # A MOUNTED tool joins the floor while its session is open: no ranking channel can surface it.
     floor: set[str] = set(CORE_FLOOR) | set(mounted_tool_names())
-    if accrued:
-        # A data source a Case accrued before sources left the declared sets is not declared again.
+    if called:
+        # A data source a Case called before sources left the declared sets is not declared again.
         from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
 
-        floor |= set(accrued) - registered_spec_names()
+        floor |= set(called) - registered_spec_names()
 
     if not isinstance(user_text, str) or not user_text.strip():
         return floor
 
-    # A cold index, a fault or an empty ranking FAIL OPEN to the full registry.
-    ranked = retrieve_ranked_tools(user_text, k)
-    if not ranked:
-        logger.info(
-            "tool_retrieval: no ranking for %r (cold index, fault or no match); "
-            "FAIL-OPEN to full registry", user_text[:80],
-        )
+    index = _dd._INDEX
+    if index is None or not getattr(index, "tool_names", None) or index.dense_matrix is None:
+        logger.info("tool_retrieval: no dense index; FAIL-OPEN to full registry")
         return _full_registry_floor(floor)
-    return floor | {name for name, _score in ranked}
+    try:
+        matched = retrieve_matched_tools(user_text, k)
+    except Exception:  # noqa: BLE001 -- fail open, never break dispatch
+        logger.warning("tool_retrieval: matching failed; FAIL-OPEN to full registry", exc_info=True)
+        return _full_registry_floor(floor)
+    return floor | {name for name, _sim in matched}

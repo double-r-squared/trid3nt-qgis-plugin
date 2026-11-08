@@ -123,10 +123,9 @@ class SessionState:
     # ``tool_name``, ``estimated_mb``, ``threshold_mb``, ``decision`` (set on confirmation), and the
     # ULID timestamps. Persisted to the active Case with the chat turn record (best-effort).
     payload_warning_audit_log: list[dict] = field(default_factory=list)
-    # Monotonic visible-tool accumulator: every tool once made visible stays in
-    # it, so a once-visible tool never leaves mid-task. It grows within a
-    # session and a new session starts fresh.
-    visible_tools: set[str] = field(default_factory=set)
+    # The tools the model has called this session: they stay offered every later turn, while a tool
+    # offered and never called drops. A new session starts fresh.
+    called_tools: set[str] = field(default_factory=set)
     # Per-session circuit breaker, tripped by consecutive per-tool failures and enforcing a
     # cooldown. The stream checks it before every dispatch; a tripped breaker raises and the result
     # summary surfaces a structured envelope the model narrates.

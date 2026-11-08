@@ -65,6 +65,22 @@ window) and may supply an authoritative total via `wire_tokens` (the OpenAI
 path measures the real payload; the Anthropic path consults `count_tokens` once
 the estimate nears the window).
 
+## Tools offered by confidence
+
+A turn is offered the core floor, the tools the model has CALLED this Case, and what the message matches. The message is
+split by rule (no model call) at "then", "and then", "after that", ";" and an "and" that joins two action phrases; each
+step is ranked on its own, and a step's matches are its best tool plus every tool within `MATCH_MARGIN` of it by
+embedding similarity (all-MiniLM-L6-v2, normalized cosine, on the CPU so it works while the local model holds the GPU).
+Below `MIN_MATCH_SIMILARITY` a step adds nothing and the model has `search_tools`. The steps' matches are taken one per
+step in turn and capped at `TOOL_RETRIEVAL_K`, a ceiling and never a fill. RRF still orders; the cut is on similarity.
+
+The dense channel embeds a document as rows - a head (name and description) and one per corpus phrasing - and a document's
+similarity is its best row's, because the encoder reads 256 tokens and a docstring fills them before the phrasings begin.
+
+AUTO offers the matched set to the model; ASK shows the same set on the tool-candidates card. A tool offered and never
+called drops next turn; a called one stays (`SessionState.called_tools`). `find_sources(query=...)` returns the sources
+within `SOURCE_MARGIN` of its top row on the same similarity. A cold index or a fault fails open to the full registry.
+
 ## The data door - find_sources, then fetch
 
 No data source is a tool the model is told of or ranks. The prompt's tool list

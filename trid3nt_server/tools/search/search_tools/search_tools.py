@@ -78,7 +78,8 @@ class _DiscoverIndex:
     """In-memory hybrid retrieval index.
 
     Every per-tool list is PARALLEL to ``tool_names``; ``dense_encode_fn`` must match the modality ``dense_matrix`` was built with,
-    and ``bm25`` or ``dense_matrix`` may each be ``None``."""
+    and ``bm25`` or ``dense_matrix`` may each be ``None``. A document owns several dense rows (its head, then one per phrasing):
+    ``dense_owner[row]`` is the document a row belongs to, and a document's similarity is its best row's."""
 
     def __init__(
         self,
@@ -91,6 +92,7 @@ class _DiscoverIndex:
         dense_encode_fn: Any,
         backend_name: str | None,
         vocabulary: frozenset[str] = frozenset(),
+        dense_owner: "list[int] | None" = None,
     ) -> None:
         self.tool_names = tool_names
         self.descriptions = descriptions
@@ -98,6 +100,7 @@ class _DiscoverIndex:
         self.corpus_tokens = corpus_tokens
         self.bm25 = bm25
         self.dense_matrix = dense_matrix
+        self.dense_owner = dense_owner
         self.dense_encode_fn = dense_encode_fn
         self.backend_name = backend_name
         self.vocabulary = vocabulary
@@ -260,7 +263,9 @@ _DEFAULT_SENTENCE_TRANSFORMERS_MODEL = "all-MiniLM-L6-v2"
 
 
 def _try_sentence_transformers_backend() -> tuple[Any, Any, str] | None:
-    """``(encode_fn, np_module, backend_name)``, or ``None`` when the library is absent; the model LOAD is deferred to the first encode."""
+    """``(encode_fn, np_module, backend_name)``, or ``None`` when the library is absent; the model LOAD is deferred to the first encode.
+
+    The model loads on the CPU: the GPU belongs to the local LLM, and a retrieval encode that finds it full would disable the dense channel."""
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
         import numpy as np  # noqa: F401
@@ -275,7 +280,7 @@ def _try_sentence_transformers_backend() -> tuple[Any, Any, str] | None:
 
         if "model" not in model_holder:
             logger.info("loading sentence-transformers model %r (first call)", model_id)
-            model_holder["model"] = SentenceTransformer(model_id)
+            model_holder["model"] = SentenceTransformer(model_id, device="cpu")
         emb = model_holder["model"].encode(texts, convert_to_numpy=True, normalize_embeddings=True)
         return _np.asarray(emb, dtype="float32")
 
@@ -367,12 +372,23 @@ def _assemble(names: list[str], descriptions: list[str],
 
     dense_matrix = None
     dense_encode_fn = None
+    dense_owner: list[int] | None = None
     backend_name = None
     backend = _select_dense_backend()
     if backend is not None and documents:
         encode_fn, _np, backend_name = backend
         try:
-            dense_matrix = encode_fn(documents)
+            # The encoder reads only the first 256 tokens, which a document's name and docstring fill before its phrasings
+            # begin; so a document's rows are its head and each phrasing alone, never the whole body.
+            texts: list[str] = []
+            dense_owner = []
+            for at, name in enumerate(names):
+                for text in (f"{name.replace('_', ' ')}. {descriptions[at]}", *synthetic_queries[at]):
+                    texts.append(text)
+                    dense_owner.append(at)
+            unique = sorted(set(texts))
+            encoded = dict(zip(unique, encode_fn(unique)))
+            dense_matrix = _np.stack([encoded[t] for t in texts])
             dense_encode_fn = encode_fn
             if backend_name == "hashed":
                 # Typo-expand queries for the lexical hashed fallback ONLY: the
@@ -389,6 +405,7 @@ def _assemble(names: list[str], descriptions: list[str],
             )
             dense_matrix = None
             dense_encode_fn = None
+            dense_owner = None
             backend_name = None
 
     logger.info(
@@ -408,6 +425,7 @@ def _assemble(names: list[str], descriptions: list[str],
         dense_encode_fn=dense_encode_fn,
         backend_name=backend_name,
         vocabulary=vocabulary,
+        dense_owner=dense_owner,
     )
 
 
@@ -658,12 +676,12 @@ async def search_tools(
     top_k: int = 5,
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Route a free-text need to the atomic tools that answer it.
+    """When your next step needs a tool you do not have, search for that step in a few words.
 
-    ROUTING: a free-text need with no obvious tool in mind - "show me flood zones",
-    "hurricane wind probabilities" - where a narrow shortlist beats scanning the
-    whole surface. NOT for enumerating every tool (the registry is the inventory)
-    and NOT to dispatch a run.
+    ROUTING: a step with no tool in hand - "flood zones", "hurricane wind
+    probabilities", "refine the mesh" - where a narrow shortlist beats scanning the
+    whole surface. Search one step at a time. NOT for enumerating every tool (the
+    registry is the inventory) and NOT to dispatch a run.
 
     `query` is required and non-empty; `top_k` is clamped to [1, 25]. A degenerate
     empty query returns an empty result rather than raising.

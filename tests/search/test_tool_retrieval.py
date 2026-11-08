@@ -56,7 +56,7 @@ def test_never_hide_mid_task(warm_index):
     assert "compute_cross_section" in res  # explicit stays
 
 
-def test_monotonic_growth_only_adds(warm_index):
+def test_called_tools_only_add(warm_index):
     accrued: set[str] = set()
     r1 = retrieve_visible_tools("fetch the elevation DEM", accrued, DEFAULT_K)
     # the Case grows: a tool dispatched this session.
@@ -135,9 +135,10 @@ def test_fail_open_on_cold_index(monkeypatch):
     _assert_full_failopen(retrieve_visible_tools("show me the lightning", None, DEFAULT_K))
 
 
-def test_fail_open_on_empty_ranking(warm_index, monkeypatch):
-    monkeypatch.setattr(trmod, "ranked_docs", lambda *a, **k: [])
-    _assert_full_failopen(retrieve_visible_tools("zzqqxx-nomatch", None, DEFAULT_K))
+def test_a_message_that_matches_nothing_gets_the_floor_and_the_called_tools(warm_index, monkeypatch):
+    monkeypatch.setattr(trmod, "retrieve_matched_tools", lambda *a, **k: [])
+    res = retrieve_visible_tools("zzqqxx-nomatch", {"probe_point"}, DEFAULT_K)
+    assert res == set(CORE_FLOOR) | {"probe_point"}
 
 
 def test_cold_index_never_builds_on_hot_path(monkeypatch):
