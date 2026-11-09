@@ -46,9 +46,9 @@ logger = logging.getLogger("trid3nt_server.workflows.runtime.workflow")
 #: need at its own parameter, so an undated run proceeds and a dated one is asked.
 EVENT_TIME = Input(
     name="event_time",
-    desc="The moment the scenario is read at - an ISO date or datetime "
-         "(YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ), from phrasing like "
-         "'during last Tuesday's storm', or 'now' for the present. Each source keeps its own "
+    desc="The moment the scenario is read at: 'now' for the present (never a date for it), or an "
+         "ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ) from phrasing like "
+         "'during last Tuesday's storm'. Each source keeps its own "
          "retention, and a request deeper than one refuses typed").stated()
 
 
