@@ -694,7 +694,8 @@ def _what_the_record_reports(env: _Env, decl: Input,
         # A SLOT THAT STATED A NEED names no column: which column carries the
         # reading, the window and the zero is the source's own statement.
         told.update(column_units=dict(row.units), field=row.value_column,
-                    series_field=row.series_column, above_field=row.above_column)
+                    series_field=row.series_column, above_field=row.above_column,
+                    stamp_field=row.stamp_column)
     # HOW THE RECORD MOVES IN TIME is the source's own class where the row that
     # answered states one, else the slot's role: a flow is a per-time total and a
     # level is read at an instant. No author states it.

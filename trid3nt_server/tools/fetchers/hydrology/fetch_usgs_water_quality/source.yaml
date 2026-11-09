@@ -125,6 +125,7 @@ coverage:
   units:
     value: record
   value_column: value
+  stamp_column: result_date
   # THE MEASUREMENT this row is asked for, in WQP's own CharacteristicName
   # vocabulary: the slot names the variable its run publishes and this table is
   # where that name becomes the word the service answers to. A variable with no

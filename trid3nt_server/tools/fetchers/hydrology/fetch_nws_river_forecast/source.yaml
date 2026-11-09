@@ -146,12 +146,14 @@ coverage:
   window:
     series: true
     cadence: 15-min observed samples, 6-hour forecast cycles
+    series_param: include_series
   datum: null
   units:
     fcst_stage_ft: ft
     fcst_series_json: record
   value_column: fcst_stage_ft
   series_column: fcst_series_json
+  stamp_column: fcst_valid_time
 - data_class: discharge series
   kind: predicted
   reach_km: 25
@@ -169,12 +171,14 @@ coverage:
   window:
     series: true
     cadence: 15-min observed samples, 6-hour forecast cycles
+    series_param: include_series
   datum: null
   units:
     fcst_flow_kcfs: kcfs
     fcst_series_json: record
   value_column: fcst_flow_kcfs
   series_column: fcst_series_json
+  stamp_column: fcst_valid_time
 
 caveats:
 - NWS/NWPS (AHPS) river-forecast gauges with observed + forecast stage and flood category.

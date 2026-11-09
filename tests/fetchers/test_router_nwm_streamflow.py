@@ -136,6 +136,27 @@ def test_resolve_nwm_key_not_available_raises(monkeypatch) -> None:
 
 
 
+def test_an_asked_cycle_not_yet_published_steps_back_one_cycle(monkeypatch) -> None:
+    """The 19z cycle is not out at 19:40; the 18z file answers and the resolved time is 18z."""
+    published = {"nwm.20261109/analysis_assim/nwm.t18z.analysis_assim.channel_rt.tm00.conus.nc"}
+    monkeypatch.setattr(ns, "_list_s3_keys",
+                        lambda prefix, max_keys=1000: [k for k in published if k.startswith(prefix)])
+    key, dt = ns._resolve_nwm_key(
+        "analysis_assim", _dt.datetime(2026, 11, 9, 19, 40, tzinfo=_dt.timezone.utc), 0)
+    assert key.endswith("nwm.t18z.analysis_assim.channel_rt.tm00.conus.nc")
+    assert dt == _dt.datetime(2026, 11, 9, 18, tzinfo=_dt.timezone.utc)
+
+
+def test_a_cycle_missing_two_cadences_back_still_refuses(monkeypatch) -> None:
+    published = {"nwm.20261109/analysis_assim/nwm.t17z.analysis_assim.channel_rt.tm00.conus.nc"}
+    monkeypatch.setattr(ns, "_list_s3_keys",
+                        lambda prefix, max_keys=1000: [k for k in published if k.startswith(prefix)])
+    with pytest.raises(NWMStreamflowNotAvailableError) as caught:
+        ns._resolve_nwm_key(
+            "analysis_assim", _dt.datetime(2026, 11, 9, 19, 40, tzinfo=_dt.timezone.utc), 0)
+    assert "t19z" in str(caught.value)
+
+
 def test_load_streamflow_reads_the_real_nc_time_coordinate(tmp_path) -> None:
     """The time coordinate is read off the real file dtype.
 

@@ -40,7 +40,7 @@ def _fc(*features: dict) -> dict:
 
 
 def test_one_value_off_a_narrowed_layer() -> None:
-    found = observation(_fc(_site("A", -122.68, 45.51, 9.5)))
+    found = observation(_fc(_site("A", -122.68, 45.51, 9.5)), stamp_field="result_date")
     assert found.value == pytest.approx(9.5)
     assert found.site_id == "A"
     assert found.sampled == "2026-03-04"
@@ -105,7 +105,7 @@ def test_a_sample_from_another_decade_is_not_this_runs_water() -> None:
                 _site("gauge", -122.6692, 45.5175, 7.2,
                       result_date="2023-12-18"))
     found = observation(layer, near=[-122.6698, 45.5185],
-                        at="2024-01-14T12:00:00Z")
+                        at="2024-01-14T12:00:00Z", stamp_field="result_date")
     assert found.site_id == "gauge"
     assert found.value == pytest.approx(7.2)
     assert found.sampled == "2023-12-18"
@@ -116,7 +116,7 @@ def test_nothing_sampled_in_the_window_refuses_rather_than_reaching_back() -> No
                       result_date="1974-05-10"))
     with pytest.raises(ObservationError) as caught:
         observation(layer, near=[-122.6698, 45.5185], at="2024-01-14T12:00:00Z",
-                    caption="a water temperature", label="the sample layer",
+                    stamp_field="result_date", caption="a water temperature", label="the sample layer",
                     code="TELEMAC_WATER_TEMPERATURE_UNMEASURED")
     assert caught.value.error_code == "TELEMAC_WATER_TEMPERATURE_UNMEASURED"
     assert "within 30 days" in str(caught.value)
@@ -129,7 +129,8 @@ def test_a_row_that_states_no_moment_ranks_every_sample_it_fetched() -> None:
 
 
 def test_the_note_names_the_site_the_distance_and_the_moment() -> None:
-    found = observation(_fc(_site("A", -122.68, 45.51, 9.5)), near=[-122.67, 45.51])
+    found = observation(_fc(_site("A", -122.68, 45.51, 9.5)), near=[-122.67, 45.51],
+                        stamp_field="result_date")
     said = note(found, opens="the reach opens at")
     assert "A site" in said and "2026-03-04" in said and "SAMPLE" in said
 
@@ -375,3 +376,26 @@ def test_a_reading_keeps_where_its_site_stands_what_it_is_and_its_own_zero() -> 
 def test_a_stated_number_stands_at_no_site_and_states_no_quantity() -> None:
     found = observation(2.0)
     assert (found.lon, found.lat, found.quantity) == (None, None, None)
+
+
+def test_a_reading_is_stamped_by_the_column_its_row_declares() -> None:
+    """The NWS row stamps its forecast by ``fcst_valid_time``, which no guess names: the
+    reading is dated by the declared column and read at the moment asked."""
+    from trid3nt_server.tools.fetchers._router.registration import get_spec
+
+    row = next(r for r in get_spec("fetch_nws_river_forecast").coverage
+               if r.data_class == "water level series")
+    gauge = {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-122.67, 45.51]},
+             "properties": {"lid": "PRTO3", "fcst_stage_ft": 6.1,
+                            "fcst_valid_time": "2026-11-09T18:00:00Z"}}
+    found = observation(_fc(gauge), field=row.value_column, series_field=row.series_column,
+                        stamp_field=row.stamp_column, column_units=dict(row.units),
+                        at="2026-11-09T19:40:00Z")
+    assert found.value == pytest.approx(6.1)
+    assert found.sampled == "2026-11-09T18:00:00Z"
+
+
+def test_a_stamp_in_a_column_nobody_declared_is_undated() -> None:
+    layer = _fc(_site("A", -122.68, 45.51, 9.5))
+    with pytest.raises(ObservationError):
+        observation(layer, at="2026-03-04T12:00:00Z")

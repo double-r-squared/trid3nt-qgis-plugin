@@ -105,7 +105,7 @@ _SITES = {"type": "FeatureCollection", "features": [
 
 def test_the_nearest_site_the_unit_and_the_age_are_the_slots_own_ingestion():
     found = observation(_SITES, near=(-122.65, 45.53), to_units="degC",
-                        caption="a water temperature")
+                        stamp_field="result_date", caption="a water temperature")
     assert found.site_id == "NEAR"
     assert found.value == pytest.approx(10.0)
     assert found.units == "degC"

@@ -78,13 +78,15 @@ def test_a_snapshot_naming_no_input_refuses():
 
 
 def test_the_reading_carries_the_instant_it_was_asked_at():
-    found = observation(_wells(), near=(-70.56, 41.6), at="1994-06-01T00:00:00Z")
+    found = observation(_wells(), near=(-70.56, 41.6), at="1994-06-01T00:00:00Z",
+                        stamp_field="result_date")
     assert found.site_id == "NEAR"
     assert found.asked == "1994-06-01T00:00:00+00:00"
 
 
 def test_a_stated_set_takes_every_site_its_window_holds_nearest_first():
     found = observation(_wells(), near=(-70.56, 41.6), at="1994-06-01T00:00:00Z",
+                        stamp_field="result_date",
                         to_units="mg/L", every=True)
     assert isinstance(found, tuple) and sited(found)
     assert [one.site_id for one in found] == ["NEAR", "FAR"]
@@ -93,7 +95,8 @@ def test_a_stated_set_takes_every_site_its_window_holds_nearest_first():
 
 
 def test_the_nearest_site_alone_is_read_by_default():
-    found = observation(_wells(), near=(-70.56, 41.6), at="1994-06-01T00:00:00Z")
+    found = observation(_wells(), near=(-70.56, 41.6), at="1994-06-01T00:00:00Z",
+                        stamp_field="result_date")
     assert isinstance(found, Observation)
 
 

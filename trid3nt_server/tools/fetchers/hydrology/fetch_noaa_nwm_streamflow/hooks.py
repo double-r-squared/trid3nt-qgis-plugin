@@ -276,25 +276,38 @@ def _resolve_nwm_key(
     if product == "short_range":
         cycle_dt = cycle_dt - _dt.timedelta(hours=forecast_hour)
 
+    asked = _cycle_key(product, cycle_dt, forecast_hour)
+    # A cycle is published about an hour after it is valid, so the asked one may not be
+    # out yet: the cycle ONE cadence earlier answers, and the reach's own valid_time
+    # column is read off that file, so the reading is stamped with the hour it holds.
+    for cycle in (cycle_dt, cycle_dt - _NWM_CYCLE):
+        key = _cycle_key(product, cycle, forecast_hour)
+        if key in _list_s3_keys(key, max_keys=1):
+            return key, cycle + (_dt.timedelta(hours=forecast_hour)
+                                 if product == "short_range" else _dt.timedelta(0))
+    raise NWMStreamflowNotAvailableError(
+        f"NWM file not found: {asked}, nor the cycle an hour before it; may be "
+        f"outside the bucket retention window (~30 days) or not yet published"
+    )
+
+
+#: The spacing of NWM's channel_rt cycles in the bucket, for both products read here.
+_NWM_CYCLE = _dt.timedelta(hours=1)
+
+
+def _cycle_key(product: str, cycle_dt: _dt.datetime, forecast_hour: int) -> str:
+    """The bucket key of one cycle's channel_rt file."""
     date_str = cycle_dt.strftime("%Y%m%d")
     cycle_hh = cycle_dt.strftime("%H")
     if product == "analysis_assim":
-        key = (
+        return (
             f"nwm.{date_str}/analysis_assim/"
             f"nwm.t{cycle_hh}z.analysis_assim.channel_rt.tm00.conus.nc"
         )
-    else:
-        key = (
-            f"nwm.{date_str}/short_range/"
-            f"nwm.t{cycle_hh}z.short_range.channel_rt.f{forecast_hour:03d}.conus.nc"
-        )
-    probe = _list_s3_keys(key, max_keys=1)
-    if not probe or key not in probe:
-        raise NWMStreamflowNotAvailableError(
-            f"NWM file not found: {key}; may be outside the bucket "
-            f"retention window (~30 days) or not yet published"
-        )
-    return key, valid_time
+    return (
+        f"nwm.{date_str}/short_range/"
+        f"nwm.t{cycle_hh}z.short_range.channel_rt.f{forecast_hour:03d}.conus.nc"
+    )
 
 
 

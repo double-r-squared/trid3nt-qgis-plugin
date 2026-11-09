@@ -37,9 +37,7 @@ logger = logging.getLogger("trid3nt_server.inputs.observation")
 
 _CODE = "OBSERVATION_INVALID"
 
-#: What a source calls the MOMENT it reported, and what it calls the thing that
-#: reported; the journal note needs both to find the number again.
-_STAMP_FIELDS = ("result_date", "valid_time", "datetime", "date_time")
+#: What a source calls the thing that reported; the journal note needs it to find the number again.
 _SITE_FIELDS = ("site_id", "station_id", "feature_id")
 
 #: How far AHEAD of the asked moment a record may be read when it sampled nothing before
@@ -189,10 +187,12 @@ def _pick(rows: list[tuple[str, float]],
 
 
 def _reading(props: Mapping[str, Any], field: str, series_field: str,
-             at: Any = None) -> tuple[str | None, float, dt.timedelta] | None:
+             at: Any = None, stamp_field: str = ""
+             ) -> tuple[str | None, float, dt.timedelta] | None:
     """One feature's value, the stamp it carries and the cadence it speaks at.
 
-    A windowed record is read AT the moment asked; a single-number column is read at the lone cadence."""
+    A windowed record is read AT the moment asked; a single-number column is read at the lone cadence,
+    stamped by the column the source declares, and undated where it declares none."""
     if series_field and props.get(series_field):
         rows = _samples(str(props[series_field]))
         found = _pick(rows, at)
@@ -201,7 +201,8 @@ def _reading(props: Mapping[str, Any], field: str, series_field: str,
     direct = props.get(field)
     if direct is not None:
         try:
-            return (_text(props, *_STAMP_FIELDS), float(direct), _LONE_CADENCE)
+            stamp = _text(props, stamp_field) if stamp_field else None
+            return (stamp, float(direct), _LONE_CADENCE)
         except (TypeError, ValueError):
             return None
     return None
@@ -236,7 +237,7 @@ def _in_window(sampled: Any, at: Any,
 
 def observation(source: Any, *, near: Any = None, field: str = "value",
                 units_field: str = "unit", to_units: Any = None,
-                series_field: str = "time_series_csv",
+                series_field: str = "time_series_csv", stamp_field: str = "",
                 record_units: Any = None, column_units: Any = None,
                 above_field: str = "", at: Any = None, window_s: Any = None,
                 to_datum: Any = None, offset: Any = None, caption: str = "",
@@ -262,7 +263,7 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
     candidates: list[tuple[float, dict[str, Any], tuple[str | None, float]]] = []
     for feature in _features(source):
         props = feature.get("properties") or {}
-        reading = _reading(props, field, series_field, at)
+        reading = _reading(props, field, series_field, at, stamp_field)
         if reading is None:
             continue
         candidates.append((_distance_km(feature, near), feature, reading))

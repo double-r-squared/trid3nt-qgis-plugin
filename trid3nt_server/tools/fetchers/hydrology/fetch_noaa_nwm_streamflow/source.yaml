@@ -98,6 +98,7 @@ coverage:
     units:
       streamflow_cms: m3/s
     value_column: streamflow_cms
+    stamp_column: valid_time
 
 caveats:
 - NOAA National Water Model channel_rt streamflow (the operational CONUS hydrologic forecast,

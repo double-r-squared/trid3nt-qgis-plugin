@@ -1009,8 +1009,8 @@ package DataSeam {
         stage in feet, and a slot that read either in the unit it wanted would
         be reading a different river. A source that serves two classes carries
         ONE ROW PER CLASS AND KIND rather than a hybrid word, and each row names
-        the columns its value, its window and the zero it is counted from arrive
-        under - a slot that states a need cannot name a column of a source it
+        the columns its value, its window, the zero it is counted from and the
+        moment a single reading was taken arrive under - a slot that states a need cannot name a column of a source it
         did not choose. A gauge that reports a measured series and a predicted
         one of the same class carries a row for each, and each row carries the
         request values it is fetched under, because the row is what the match

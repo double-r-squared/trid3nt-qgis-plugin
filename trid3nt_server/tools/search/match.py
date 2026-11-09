@@ -288,12 +288,17 @@ _A_DAY = dt.timedelta(days=1)
 def base_ask(choice: SourceChoice, purpose: str, bbox: Sequence[float] | None,
              lon: float | None, lat: float | None, opens: str | None,
              until: str | None) -> dict[str, Any]:
-    """The place and the window in the params THIS source states them in; a SERIES window BRACKETS the run by one cadence each side."""
+    """The place and the window in the params THIS source states them in; a SERIES window BRACKETS the run by one cadence each side.
+
+    A span asks a series for its whole record through the param its row switches it on with; a moment leaves it off."""
     from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
 
     spec = _SPEC_REGISTRY.get(choice.picked)
     params = dict(getattr(spec, "params", {}) or {})
     ask: dict[str, Any] = {"purpose": purpose}
+    switch = getattr(getattr(_picked_row(choice), "window", None), "series_param", "")
+    if switch in params and opens and until and instant(until) != instant(opens):
+        ask[switch] = True
     if "bbox" in params and bbox is not None:
         ask["bbox"] = [float(v) for v in bbox]
     if "seed_point" in params and lon is not None and lat is not None:

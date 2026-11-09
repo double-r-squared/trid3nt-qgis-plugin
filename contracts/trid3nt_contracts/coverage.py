@@ -237,6 +237,18 @@ class CoverageWindow(ContractModel):
     #: The longest window ONE call may ask for, from the service's own cap.
     max_span_days: float | None = None
     cadence: str = Field(default="", max_length=120)
+    #: The request param that asks a series source for its whole record: set true when the
+    #: window is a span, left off for a moment, which the source answers with its latest reading.
+    series_param: str = ""
+
+    @model_validator(mode="after")
+    def _validate_series_param(self) -> "CoverageWindow":
+        """Only a series has a record to switch on."""
+        if self.series_param and not self.series:
+            raise ValueError(
+                f"series_param={self.series_param!r} on a window that is not a "
+                "series: a surface has no record to ask for")
+        return self
 
 
 class Coverage(ContractModel):
@@ -267,6 +279,8 @@ class Coverage(ContractModel):
     value_column: str = ""
     series_column: str = ""
     above_column: str = ""
+    #: Which record column carries the moment a single reading was taken; "" where the record states none.
+    stamp_column: str = ""
     #: This source's own word for each published variable, by the variable's name; a variable with no word here
     #: is a measurement the source does not take, and the match excludes it.
     vocabulary: dict[str, str] = Field(default_factory=dict)

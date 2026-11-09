@@ -768,3 +768,28 @@ def test_a_row_stating_its_cell_ranks_before_one_stating_none_all_else_tied(mesh
     for order in ([("a_unstated", unstated), ("z_stated", stated)],
                   [("z_stated", stated), ("a_unstated", unstated)]):
         assert match(need, order).picked == "z_stated"
+
+
+def test_a_span_asks_a_series_for_its_record_and_a_moment_does_not(monkeypatch):
+    """The row names the param that switches its series on; a span sets it, a moment leaves the source's latest reading."""
+    from types import SimpleNamespace
+
+    from trid3nt_contracts.coverage import SourceChoice, SourceOption
+    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt_server.tools.search.match import base_ask
+
+    row = gauges(data_class="water level series", kind="predicted")
+    row.window.series_param = "include_series"
+    monkeypatch.setitem(registration._SPEC_REGISTRY, "fetch_forecast", SimpleNamespace(
+        params={"bbox": {}, "include_series": {}}, coverage=[row]))
+    choice = SourceChoice(slot="level", need="water level series", picked="fetch_forecast",
+                          rows=[SourceOption(fetcher="fetch_forecast", kind="predicted")])
+    span = base_ask(choice, "level", None, None, None, DURING, UNTIL)
+    moment = base_ask(choice, "level", None, None, None, DURING, None)
+    assert span["include_series"] is True
+    assert "include_series" not in moment
+
+
+def test_a_series_switch_on_a_surface_is_refused():
+    with pytest.raises(ValueError):
+        CoverageWindow(series=False, series_param="include_series")
