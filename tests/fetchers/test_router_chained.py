@@ -457,3 +457,13 @@ def _err_http(name, raw, url_map):
     with pytest.raises(Exception) as ei:
         _run_http(name, raw, url_map)
     return ei.value
+
+
+def test_a_layer_is_stamped_by_the_time_column_its_rows_declare(monkeypatch):
+    from trid3nt_server.tools.cache import ReadThroughResult
+    from trid3nt_server.tools.fetchers._router import router
+
+    monkeypatch.setattr(router, "read_through", lambda **kw: ReadThroughResult(
+        uri="s3://b/k.fgb", data=b"", hit=False))
+    layer = router.route(_spec("fetch_nws_river_forecast"), {"bbox": (-91.5, 30.0, -90.0, 31.0)})
+    assert layer.stamp_column == "fcst_valid_time"

@@ -141,6 +141,8 @@ class LayerURI(ContractModel):
     #: ``vertical_datum`` reads it on ``datum_offset_frame``. The two ride together; None is none published.
     datum_offset_m: float | None = None
     datum_offset_frame: str | None = None
+    #: The record column that carries the moment a single reading was taken; None where the producer states none.
+    stamp_column: str | None = None
 
     @classmethod
     def published(cls, prefix: str, *, seed: str, **fields: Any) -> "LayerURI":

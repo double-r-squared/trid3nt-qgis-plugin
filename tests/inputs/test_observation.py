@@ -399,3 +399,21 @@ def test_a_stamp_in_a_column_nobody_declared_is_undated() -> None:
     layer = _fc(_site("A", -122.68, 45.51, 9.5))
     with pytest.raises(ObservationError):
         observation(layer, at="2026-03-04T12:00:00Z")
+
+
+def test_a_handed_in_layer_states_its_own_time_column() -> None:
+    layer = {**_fc(_site("A", -122.68, 45.51, 9.5)), "stamp_column": "result_date"}
+    found = observation(layer, at="2026-03-04T12:00:00Z")
+    assert found.value == pytest.approx(9.5)
+    assert found.sampled == "2026-03-04"
+
+
+def test_a_layer_stating_no_time_column_refuses_naming_the_field_to_state() -> None:
+    with pytest.raises(ObservationError, match="stamp_column"):
+        observation(_fc(_site("A", -122.68, 45.51, 9.5)), at="2026-03-04T12:00:00Z")
+
+
+def test_a_rows_declared_column_wins_over_the_layer_record() -> None:
+    layer = {**_fc(_site("A", -122.68, 45.51, 9.5, other_date="2020-01-01")), "stamp_column": "other_date"}
+    found = observation(layer, at="2026-03-04T12:00:00Z", stamp_field="result_date")
+    assert found.sampled == "2026-03-04"

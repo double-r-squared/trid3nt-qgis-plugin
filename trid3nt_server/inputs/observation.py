@@ -235,6 +235,19 @@ def _in_window(sampled: Any, at: Any,
     return taken - asked <= cadence
 
 
+def _recorded_stamp(source: Any) -> str:
+    """The time column a handed-in layer's own record states, "" where it states none.
+
+    A layer named by its uri is looked up as the record its producer returned."""
+    if isinstance(source, str):
+        from trid3nt_server.render.uri_registry import lookup_layer_for_handle
+
+        source = lookup_layer_for_handle(source) or {}
+    stated = (source.get("stamp_column") if isinstance(source, Mapping)
+              else getattr(source, "stamp_column", None))
+    return str(stated or "").strip()
+
+
 def observation(source: Any, *, near: Any = None, field: str = "value",
                 units_field: str = "unit", to_units: Any = None,
                 series_field: str = "time_series_csv", stamp_field: str = "",
@@ -260,6 +273,7 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
                             datum=str(to_datum) if to_datum is not None else None)
         _journal(found, opens=opens, stated=True)
         return found
+    stamp_field = stamp_field or _recorded_stamp(source)
     candidates: list[tuple[float, dict[str, Any], tuple[str | None, float]]] = []
     for feature in _features(source):
         props = feature.get("properties") or {}
@@ -269,13 +283,16 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
         candidates.append((_distance_km(feature, near), feature, reading))
     within = [row for row in candidates if _in_window(row[2][0], at, row[2][2])]
     if candidates and not within:
+        undated = ("" if stamp_field or not any(row[2][0] is None for row in candidates) else
+                   f" {label} states no column carrying the moment a reading was taken, so its "
+                   "readings are undated: state that column as the layer's stamp_column.")
         raise ObservationError(
             code,
             f"{label} reports {measures} near this domain, but nothing sampled "
             f"within {setting("OBSERVATION_WINDOW_DAYS"):g} days of {at}: the nearest reading is from "
             "another moment, and a sample outside the window this run is about "
             "is not this run's water. State the value on the call, or ask about "
-            "a moment a sample was taken near.")
+            "a moment a sample was taken near." + undated)
     candidates = within
     if not candidates:
         raise ObservationError(

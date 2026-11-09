@@ -459,6 +459,9 @@ def _route(
     layer = build_layer_uri(spec, params, result.uri)
     if result.data and any(row.datum == PER_RECORD for row in spec.coverage):
         layer = layer.model_copy(update=_stated_by_records(result.data))
+    stamps = {row.stamp_column for row in spec.coverage if row.stamp_column}
+    if len(stamps) == 1:
+        layer = layer.model_copy(update={"stamp_column": stamps.pop()})
     # bbox_from_features reads the produced FGB so the stamp is consistent across cache paths.
     bff = spec.output.bbox_from_features
     if bff is not None and result.data:
