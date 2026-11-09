@@ -90,3 +90,11 @@ def test_a_stated_value_is_already_on_the_slot_s_datum() -> None:
     found = observation(2.776, to_datum=_NAVD88, to_units="m")
     assert found.value == pytest.approx(2.776)
     assert found.datum == _NAVD88
+
+
+def test_a_gauge_known_by_its_lid_names_the_site():
+    layer = _gauge(2.0)
+    props = layer["features"][0]["properties"]
+    del props["site_id"]
+    props["lid"] = "PRTO3"
+    assert observation(layer, near=[-122.669, 45.518]).site_id == "PRTO3"

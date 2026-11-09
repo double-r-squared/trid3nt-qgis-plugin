@@ -446,3 +446,64 @@ def test_a_source_on_the_runs_own_frame_declares_no_offset_row(monkeypatch):
         {"uri": "s3://b/k/dem.tif", "vertical_datum": "NAVD88 (metres, positive up)",
          "bbox": (-123.22, 45.48, -123.19, 45.50)}))
     assert told == {"frame": "NAVD88"} and not env.data
+
+
+def _gauges(tmp_path, datums) -> str:
+    """A fetched level record whose gauges each state their own zero, the first the nearest."""
+    import json
+
+    features = [{"type": "Feature",
+                 "geometry": {"type": "Point", "coordinates": [-122.67 + 0.1 * i, 45.52]},
+                 "properties": {"lid": f"G{i}", "value": 2.0, "unit": "m",
+                                **({"vertical_datum": d} if d else {})}}
+                for i, d in enumerate(datums)]
+    path = tmp_path / "gauges.geojson"
+    path.write_text(json.dumps({"type": "FeatureCollection", "features": features}))
+    return str(path)
+
+
+def _level_told(fill, tmp_path, datums, monkeypatch, *, record_datum=None):
+    from trid3nt_server.inputs.slots import LEVEL
+
+    asked: list[dict] = []
+
+    async def _call(runner, kwargs, label):
+        asked.append(dict(kwargs))
+        return {"offset_m": 0.1, "from_frame": "NGVD29", "to_frame": "NAVD88"}
+
+    monkeypatch.setattr(fill, "_call_runner", _call)
+    source = _gauges(tmp_path, datums)
+    value = {"uri": source, "vertical_datum": record_datum} if record_datum else source
+    env = fill._Env(run={}, data={})
+    told = asyncio.run(fill._on_the_run_s_frame(
+        env, _elevation_slot(LEVEL), value,
+        {"near": (-122.67, 45.52), "field": "value", "series_field": "none"}))
+    return told, asked
+
+
+def test_a_level_gauge_stating_its_own_datum_is_bridged_though_the_record_states_two(
+        monkeypatch, tmp_path):
+    from trid3nt_server.workflows.runtime import fill
+
+    told, asked = _level_told(fill, tmp_path, ["NGVD29", "NAVD88"], monkeypatch)
+    assert told["offset"]["offset_m"] == 0.1
+    (one,) = asked
+    assert one["from_frame"] == "ngvd29" and one["to_frame"] == "navd88"
+    assert one["point"] == pytest.approx([-122.67, 45.52])
+
+
+def test_a_level_gauge_stating_no_datum_asks_no_offset(monkeypatch, tmp_path):
+    from trid3nt_server.workflows.runtime import fill
+
+    told, asked = _level_told(fill, tmp_path, ["", "NAVD88"], monkeypatch)
+    assert told == {"to_datum": "NAVD88"} and not asked
+
+
+def test_a_level_record_stating_one_datum_on_the_layer_is_still_bridged(
+        monkeypatch, tmp_path):
+    from trid3nt_server.workflows.runtime import fill
+
+    _standing_on()
+    told, asked = _level_told(fill, tmp_path, ["", ""], monkeypatch,
+                              record_datum="NGVD29")
+    assert "offset" in told and asked[0]["from_frame"] == "ngvd29"

@@ -596,8 +596,8 @@ async def _ingested(env: _Env, decl: Input, value: Any,
     coercion.update(_what_the_run_calls_it(
         env, decl, _asked_of(decl, coercion.get("near"))))
     coercion.update(_the_window_it_is_cut_from(decl))
-    coercion.update(await _on_the_run_s_frame(env, decl, value))
     coercion.update(_what_the_record_reports(env, decl, row))
+    coercion.update(await _on_the_run_s_frame(env, decl, value, coercion))
     # WHAT THE SLOT DECLARED BESIDE the matched row, and how far the question
     # reaches: the ingestion that states a need is the ingestion that reads it.
     coercion.update(dict(beside or {}))
@@ -745,12 +745,13 @@ def _window(env: _Env, decl: Input) -> float | None:
     return None if named and env.run.get(named) else env.window_s
 
 
-async def _on_the_run_s_frame(env: _Env, decl: Input,
-                              value: Any) -> dict[str, Any]:
+async def _on_the_run_s_frame(env: _Env, decl: Input, value: Any,
+                              told_so_far: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """What an ELEVATION slot is told about the run's own vertical frame.
 
     Only the bed and the level are elevations; another slot handed a frame would demand a
-    datum of a temperature. A source on ANOTHER frame is bridged by the offset row."""
+    datum of a temperature. A source on ANOTHER frame is bridged by the offset row; a level
+    record is bridged for the gauge the reading picks, which states its own datum."""
     if decl.slot not in (BED, LEVEL):
         return {}
     frame = _frame(env)
@@ -759,8 +760,29 @@ async def _on_the_run_s_frame(env: _Env, decl: Input,
         # ONE OFFSET PER SURFACE, each asked where that surface has data.
         return {**told, "offset": [await _offset_row(env, f"{decl.name}_{rank}", item, frame)
                                    for rank, item in enumerate(value, start=1)]}
-    measured = await _offset_row(env, decl.name, value, frame)
+    chosen = await _picked_gauge(decl, value, told_so_far or {}) if decl.slot is LEVEL else None
+    source, at = chosen if chosen else (value, None)
+    measured = await _offset_row(env, decl.name, source, frame, at=at)
     return told if measured is None else {**told, "offset": measured}
+
+
+async def _picked_gauge(decl: Input, value: Any, told: Mapping[str, Any]) -> Any:
+    """The level reading's own datum and its site's point, to ask the offset row of, or ``None``.
+
+    A record's gauges each state a zero, so the one the reading picks is known only by
+    reading; a record whose picked reading states none is left to the record's own datum."""
+    from trid3nt_server.inputs.observation import ObservationError
+    from trid3nt_server.inputs.slots import ingest_slot
+
+    kept = {k: v for k, v in told.items() if k not in ("to_datum", "caption", "label")}
+    try:
+        found = await asyncio.to_thread(ingest_slot, decl.slot, value,
+                                        label=decl.name, **kept)
+    except ObservationError:
+        return None
+    if found is None or not getattr(found, "datum", None) or found.lon is None:
+        return None
+    return {"vertical_datum": found.datum}, (found.lon, found.lat)
 
 
 async def _datum_offset_ask(value: Any, frame: str,
@@ -788,14 +810,15 @@ async def _question_seed(env: _Env) -> Any:
     return lonlat_of(await _seed(env, row))
 
 
-async def _offset_row(env: _Env, owner: str, value: Any, frame: str) -> Any:
+async def _offset_row(env: _Env, owner: str, value: Any, frame: str,
+                      at: Any = None) -> Any:
     """The measured shift onto the run's frame, as a DATA row the RUNTIME declares.
 
     Asked like any fact about the world, with a journal line naming the service. ``None``
     where no row is owed, which leaves the alignment to refuse. ``owner`` names the row."""
     from trid3nt_server.inputs.vertical_datum import OFFSET_FETCH
 
-    ask = await _datum_offset_ask(value, frame, await _question_seed(env))
+    ask = await _datum_offset_ask(value, frame, at or await _question_seed(env))
     if ask is None:
         return None
     name = f"{owner}_datum_offset"
