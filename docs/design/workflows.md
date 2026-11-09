@@ -320,8 +320,15 @@ conversion. A slot whose ingestion reads one shape states it once (`reads=`):
 the weather reads station points and the rain a record, so a gridded product
 serving the same class is excluded before it is fetched. The match (`tools/search/match.py`) filters the rows on
 class and place, holds a series source to the run's window, ranks on the cell
-against the mesh, on recency and on the native datum, and calls the survivors
-in rank order. The window comes off `event_time`, which the engine declares,
+against the mesh (a row that states no cell ranks after every row that does),
+on recency and on the native datum, and calls the survivors in rank order. A
+survivor whose answer holds nothing - a call that raised, or a vector layer the
+slot's ingestion finds carrying zero features - is dropped and the next ranked
+row takes its turn, in the one walk every need shares (`fill.py::_probe`); the
+run note names the rows that held nothing and the one that filled the slot, and
+when every askable row held nothing the single `DATA_NEED_UNMATCHED` refusal
+names each row and what it returned. A refusal of the ask itself (a malformed
+value) is not an empty answer and stops the walk. The window comes off `event_time`, which the engine declares,
 and the frame off `vertical_frame`, which the bed declares, so a template states
 neither.
 

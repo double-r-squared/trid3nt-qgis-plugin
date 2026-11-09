@@ -25,7 +25,7 @@ from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
 from trid3nt_server.render.pipeline_emitter import current_emitter, substep
 from trid3nt_server.render.uri_registry import lookup_uri_for_handle
 from trid3nt_server.tools.search.match import (
-    AROUND_PLACE_DEG, Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
+    AROUND_PLACE_DEG, HELD_NOTHING, Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
 
 from .data import Producer, refuse_wrong_shape
 from .sheet import Keyword
@@ -321,7 +321,7 @@ async def _probe(env: _Env, decl: Input, data_class: str, label: str, *,
             logger.info("%s: %s held nothing (%s); the next survivor takes its "
                         "turn", label, choice.picked, exc)
             choice = dropped_from(choice, choice.picked,
-                                  f"held nothing here ({exc})")
+                                  f"{HELD_NOTHING} ({exc})")
             continue
         slot_choice(choice)
         journal_note(choice.sentence)
@@ -765,12 +765,14 @@ def _malformed_ask(exc: BaseException) -> bool:
     """Is this the ASK being wrong rather than the source holding nothing?
 
     A producer's refusal arrives inside the step that called it, so the whole chain is read."""
-    from trid3nt_server.inputs.user_input import UserInputError
+    from trid3nt_server.inputs.user_input import EmptyResultError, UserInputError
     from trid3nt_server.tools.fetchers._router.errors import RouterInputError
 
     seen: set[int] = set()
     found: BaseException | None = exc
     while found is not None and id(found) not in seen:
+        if isinstance(found, EmptyResultError):
+            return False
         if isinstance(found, (UserInputError, RouterInputError)):
             return True
         seen.add(id(found))

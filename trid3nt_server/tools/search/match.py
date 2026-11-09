@@ -24,7 +24,7 @@ from trid3nt_server.workflows.runtime.errors import DeclarationError
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["LOOSEN_DATUM", "LOOSEN_WINDOW", "NO_MOMENT", "Need", "RANKED_ROWS",
+__all__ = ["HELD_NOTHING", "LOOSEN_DATUM", "LOOSEN_WINDOW", "NO_MOMENT", "Need", "RANKED_ROWS",
            "ask_for", "base_ask", "covered_sources", "dropped_from", "instant",
            "match", "sources_with_coverage"]
 
@@ -451,6 +451,8 @@ def _excluded(need: Need, coverage: Coverage, name: str = "",
 #: The head of the reason a series source is not asked at all, which is also how
 #: the refusal names it: one phrasing, so the row and the sentence cannot drift.
 NO_MOMENT = "no moment was stated"
+#: What a row says once it was ASKED and answered nothing; the probe writes it and the sentence reads it back.
+HELD_NOTHING = "held nothing here"
 
 
 def _no_moment(need: Need, coverage: Coverage) -> str:
@@ -558,9 +560,11 @@ def _distance_km(need: Need, coverage: Coverage) -> float:
 
 
 def _cell_rank(need: Need, coverage: Coverage) -> float:
-    """Where this source's cell stands against the mesh the run resolves."""
+    """Where this source's cell stands against the mesh the run resolves; a source stating no cell ranks after every one that does."""
     cell = coverage.resolution_m
-    if cell is None or need.mesh_m is None:
+    if cell is None:
+        return float("inf")
+    if need.mesh_m is None:
         return 0.0
     if cell <= float(need.mesh_m):
         return -1.0 / cell
@@ -651,9 +655,15 @@ def _sentence(need: Need, survivors: Sequence[SourceOption],
 def _probe_sentence(choice: SourceChoice, rows: Sequence[SourceOption],
                     fetcher: str, nxt: str) -> str:
     """What the run says once the world has answered."""
+    tried = [row for row in rows if row.excluded.startswith(HELD_NOTHING)]
     if nxt:
-        return f"{choice.slot}: {fetcher} held nothing, so {nxt} fills the slot."
-    named = _named_exclusions([row for row in rows if row.excluded])
-    return (f"{choice.slot}: nothing measures {choice.need} here - {named}. "
-            "State the value on the call, or ask about a place or a moment a "
-            "source reaches.")
+        names = ", ".join(row.fetcher for row in tried)
+        return f"{choice.slot}: {names} held nothing, so {nxt} fills the slot."
+    each = "; ".join(f"{row.fetcher} {row.excluded}" for row in tried)
+    named = _named_exclusions([row for row in rows if row.excluded
+                               and not row.excluded.startswith(HELD_NOTHING)])
+    return (f"{choice.slot}: nothing measures {choice.need} here - every source "
+            f"asked held nothing: {each}"
+            + (f"; not asked: {named}" if named else "")
+            + ". State the value on the call, or ask about a place or a "
+              "moment a source reaches.")

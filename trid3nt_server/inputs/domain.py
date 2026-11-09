@@ -15,7 +15,7 @@ from typing import Any, Mapping
 
 from .boundary import RUN_TYPES, WALL, BoundaryRun, boundary_runs
 from .geometry import flatten_geometries, read_geometry_doc, source_uri
-from .user_input import UserInputError, polygon_ring
+from .user_input import EmptyResultError, UserInputError, polygon_ring
 
 __all__ = ["Domain", "domain", "domain_ring", "measured_footprint",
            "needs_beside", "place_kind"]
@@ -227,6 +227,8 @@ def _carried_by(doc: Any, name: str | None, uri: str | None,
                       stated or _prescribed(doc, label, code), _companions(doc))
     if not any(str(g.get("type")) in ("LineString", "MultiLineString")
                for g in geometries):
+        if not geometries:
+            raise EmptyResultError(_nothing_closed(geometries, uri, label), code=code)
         raise UserInputError(_nothing_closed(geometries, uri, label), code=code)
     return Domain(_water_left_by(doc, extent, label, code), name, uri)
 

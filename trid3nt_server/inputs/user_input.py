@@ -12,6 +12,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from trid3nt_server.errors import DeclarativeError
 
 __all__ = [
+    "EmptyResultError",
     "PlaceNameError",
     "UserInputError",
     "WireArgsError",
@@ -41,6 +42,10 @@ class UserInputError(DeclarativeError):
     def __init__(self, message: str, *, code: str = _DEFAULT_CODE) -> None:
         super().__init__(message)
         self.error_code = code
+
+
+class EmptyResultError(UserInputError):
+    """A producer RAN and its artifact carries nothing: the source held nothing here, the ask was not wrong."""
 
 
 class PlaceNameError(UserInputError):

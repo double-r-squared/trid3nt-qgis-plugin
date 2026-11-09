@@ -577,3 +577,71 @@ def test_each_handed_surface_on_another_frame_is_asked_its_own_offset_off_its_re
     with rasterio.open(laid.source.uri) as src:
         values = src.read(1)
     assert np.allclose(values[:, 10:], -6.5) and np.allclose(values[:, :10], 3.0)
+
+
+#: The Hawthorne Bridge, where the coastline row holds nothing.
+_HAWTHORNE = (-122.6709588, 45.513235)
+_NOTHING = {"type": "FeatureCollection", "features": []}
+_REACH = {"type": "Polygon", "coordinates": [[
+    [-122.68, 45.50], [-122.66, 45.50], [-122.66, 45.53], [-122.68, 45.53],
+    [-122.68, 45.50]]]}
+
+
+@pytest.fixture
+def hydrography(world, monkeypatch):
+    """Two hydrography rows over one place: a coastline row (no cell stated) and a river-area row (5 m)."""
+    from trid3nt_server.tools.fetchers._router import registration
+
+    answers = {"fetch_coastline": _NOTHING, "fetch_reach": _REACH}
+    coast = coverage("hydrography", res=None, datum=None, latest=None).model_copy(
+        update={"vocabulary": {"coastline": "coastline"}})
+    reach = coverage("hydrography", res=5.0, datum=None)
+    for name, row in (("fetch_coastline", coast), ("fetch_reach", reach)):
+        spec = _Spec(row, "vector", {"bbox": None})
+        monkeypatch.setitem(SPECS, name, spec)
+        monkeypatch.setitem(registration._SPEC_REGISTRY, name, spec)
+
+    async def _runner(runner, kwargs, label):
+        world.append((runner, dict(kwargs)))
+        return answers[runner]
+
+    monkeypatch.setattr(fill, "_call_runner", _runner)
+
+    async def _seed(env, decl):
+        return list(_HAWTHORNE)
+
+    monkeypatch.setattr(fill, "_seed", _seed)
+    return world, answers
+
+
+def test_the_row_stating_a_cell_is_asked_before_the_coastline_row_and_fills_the_domain(hydrography):
+    called, _answers = hydrography
+    out = asyncio.run(fill._matched(
+        _env(), _row(Input(DOMAIN).need("hydrography", at="release"), "domain")))
+    assert out.geometry["type"] == "Polygon"
+    assert [runner for runner, _kw in called] == ["fetch_reach"]
+
+
+def test_a_domain_need_falls_to_the_next_ranked_row_when_the_first_holds_zero_features(hydrography):
+    called, answers = hydrography
+    answers["fetch_reach"], answers["fetch_coastline"] = _NOTHING, _REACH
+    row = _row(Input(DOMAIN).need("hydrography", at="release"), "domain")
+    out = asyncio.run(fill._matched(_env(), row))
+    assert out.geometry["type"] == "Polygon"
+    assert [runner for runner, _kw in called] == ["fetch_reach", "fetch_coastline"]
+    assert "fetch_reach held nothing, so fetch_coastline fills the slot" in run_choices()[-1].sentence
+
+
+def test_every_row_empty_is_one_refusal_naming_each_row_tried(hydrography):
+    from trid3nt_server.workflows.runtime.errors import StepFailedError
+
+    _called, answers = hydrography
+    answers["fetch_reach"] = _NOTHING
+    row = _row(Input(DOMAIN).need("hydrography", at="release"), "domain")
+    with pytest.raises(StepFailedError) as refused:
+        asyncio.run(fill._matched(_env(), row))
+    assert refused.value.error_code == "DATA_NEED_UNMATCHED"
+    text = str(refused.value)
+    assert "fetch_coastline held nothing here" in text and "fetch_reach held nothing here" in text
+    assert "carries no polygon geometry" in text
+

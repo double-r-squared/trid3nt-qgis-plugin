@@ -757,3 +757,14 @@ def test_a_series_row_stating_its_moment_in_one_param_is_asked_the_runs_opening(
     assert choice.picked == fetcher, choice.sentence
     ask = base_ask(choice, "probe", None, *_DES_MOINES, DURING, UNTIL)
     assert ask[param] == asked
+
+
+@pytest.mark.parametrize("mesh_m", [None, 20.0])
+def test_a_row_stating_its_cell_ranks_before_one_stating_none_all_else_tied(mesh_m):
+    """Everything but the stated cell is equal, and the unstated row is the more recent (it reports to now)."""
+    unstated = surface(data_class="hydrography", res=None, latest=None, datum=None)
+    stated = surface(data_class="hydrography", res=5.0, datum=None)
+    need = bed_need(slot="domain", data_class="hydrography", mesh_m=mesh_m, frame=None)
+    for order in ([("a_unstated", unstated), ("z_stated", stated)],
+                  [("z_stated", stated), ("a_unstated", unstated)]):
+        assert match(need, order).picked == "z_stated"
