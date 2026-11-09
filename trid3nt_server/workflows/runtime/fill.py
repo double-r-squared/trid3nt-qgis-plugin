@@ -513,6 +513,15 @@ async def _ask_for(env: _Env, choice: SourceChoice,
          "seed_point": None if lon is None or lat is None else [lon, lat]})
 
 
+async def _searched_in(env: _Env, decl: Input) -> list[float] | None:
+    """The box a need is asked in: the bound domain's box with its margin, else the stated point reached the row's span."""
+    dom = current_domain()
+    if dom is not None and dom.bbox:
+        return _around(dom.bbox, _mesh_m(env))
+    lon, lat = _place(await _seed(env, decl))
+    return None if lon is None or lat is None else _about(lon, lat, decl.span_km)
+
+
 def _around(bbox: Sequence[float], mesh_m: float | None) -> list[float]:
     """The domain's box with a MARGIN, which is what a slot asks a source for.
 
@@ -571,11 +580,11 @@ async def _ingested(env: _Env, decl: Input, value: Any,
         # inside it and refuses a wet hole, and an empty one says the run was cut with none.
         coercion["water"] = _cut_polygon() or {}
         coercion["merge"] = not env.lays_own_bed
-    if decl.slot is DOMAIN and row is not None and current_domain() is None:
+    if decl.slot is DOMAIN and row is not None:
         # A domain the run's own SEARCH found is cut to the box it was searched in; one handed in is never cut.
-        lon, lat = _place(await _seed(env, decl))
-        if lon is not None and lat is not None:
-            coercion["window"] = _about(lon, lat, decl.span_km)
+        searched = await _searched_in(env, decl)
+        if searched is not None:
+            coercion["window"] = searched
     if decl.slot is MESH:
         # The domain is filled before any other row, so a supplied mesh is held to the ground this run solves over.
         coercion["over"] = getattr(current_domain(), "bbox", None)

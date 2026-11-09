@@ -277,6 +277,8 @@ class Workflow:
         """The absorbed tool body: fill every input, then launch when READY."""
         from .fill import Fill, fill
 
+        # Each call starts from no domain: a domain bound by an earlier call of the same turn is not this run's place.
+        token = bind_domain(None)
         try:
             state = await fill(Fill(workflow=self), wire)
         except asyncio.CancelledError:
@@ -286,6 +288,8 @@ class Workflow:
                 raise
             logger.exception("%s fill failed", self.name)
             return self._error(f"{self.error_prefix}_INTERNAL_ERROR", exc)
+        finally:
+            reset_domain(token)
         if not state.ready:
             code, sentence = state.refusal()
             logger.warning("%s %s: %s", self.name, code, sentence)
