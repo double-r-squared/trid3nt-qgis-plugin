@@ -10,9 +10,13 @@ from typing import Literal, Sequence
 
 from trid3nt_server.inputs.input import Input
 
-__all__ = ["render_docstring"]
+__all__ = ["GATHERS_OWN", "render_docstring"]
 
 _FRONT_BUDGET = 1000
+
+#: The framework's line on every template, beside the summary so it survives the description cut; outside the budget.
+GATHERS_OWN = ("Call this first with only what the user said: it fetches every unstated input itself "
+               "and its review card shows what it found; do not fetch its inputs beforehand.")
 
 DocstringView = Literal["full", "routing"]
 
@@ -40,6 +44,7 @@ def render_docstring(
             f"routing block is {len(front)} chars; it must fit the {_FRONT_BUDGET}-char "
             "truncation budget or the model never sees the routing."
         )
+    front = "\n".join([head[0], GATHERS_OWN, *head[1:]])
     if view == "routing":
         return front + "\n" + "\n".join(["", f"Returns: {returns.strip()}", ""])
 

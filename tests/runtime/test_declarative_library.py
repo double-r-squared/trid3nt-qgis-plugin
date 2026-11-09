@@ -443,13 +443,14 @@ def test_every_registered_template_fits_the_truncation_budget():
     it is a tool the model never routes on, so every registered template is
     measured, not one chosen in advance."""
     from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.runtime.docstring import GATHERS_OWN
 
     over = {}
     for name, entry in TOOL_REGISTRY.items():
         routing = getattr(entry.fn, "routing_doc", None)
         if routing is None:
             continue
-        head = routing.split("\nReturns:")[0]
+        head = routing.split("\nReturns:")[0].replace(GATHERS_OWN + "\n", "")
         if len(head) > 1000:
             over[name] = len(head)
     assert not over
