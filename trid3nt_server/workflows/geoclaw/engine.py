@@ -118,6 +118,7 @@ def _spec() -> LocalSolverSpec:
         stderr_uri_field=f"{GEOCLAW_SOLVER_NAME}_stderr_uri",
         classify_exit=classify_exit,
         progress=step_of,
+        log_name=f"{GEOCLAW_SOLVER_NAME}.stdout",
     )
 
 

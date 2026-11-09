@@ -126,6 +126,7 @@ def _spec() -> LocalSolverSpec:
         stderr_uri_field=f"{MODFLOW_SOLVER_NAME}_stderr_uri",
         classify_exit=classify_exit,
         progress=step_of,
+        log_name="mfsim.lst",
     )
 
 

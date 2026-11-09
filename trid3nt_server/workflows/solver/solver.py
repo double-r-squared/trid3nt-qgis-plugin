@@ -161,6 +161,25 @@ class LocalSolverSpec:
     """The docker network this solver's container runs on. ``"none"`` is the
     ENGINE-ROOM posture - a fully staged run directory and nothing reachable - and
     is per-spec; a spec whose ``build_argv`` writes its own must leave this unset."""
+    log_name: str | None = None
+    """The run-directory file that holds the engine's own words (its listing, or the stdout it
+    prints them on). The tail of it rides into every failed run's error."""
+
+
+#: How much of an engine's log rides into a failed run's error - enough for the engine's own
+#: error block, not so much that the refusal becomes the log.
+LISTING_TAIL_CHARS = 4000
+
+
+def _log_tail(run: "_LocalRun") -> str:
+    """The end of the engine's own log in the run directory, or ``""`` where the spec names none or it holds nothing."""
+    if not run.spec.log_name:
+        return ""
+    try:
+        text = (run.rundir / run.spec.log_name).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    return text.strip()[-LISTING_TAIL_CHARS:]
 
 
 def _with_declared_network(spec: LocalSolverSpec, cmd: list[str]) -> list[str]:
@@ -301,6 +320,11 @@ def _supervise_local_run(run: _LocalRun) -> None:
         if run.cancel_requested.is_set():
             status = "cancelled"
             error_msg = "run cancelled (docker kill)"
+        elif status == "error":
+            tail = _log_tail(run)
+            if tail:
+                error_msg = f"{error_msg or run.spec.solver + ' failed'}\n{run.spec.solver} listing tail:\n{tail}"
+                completion_extra = {"listing_tail": tail, **completion_extra}
     except Exception as exc:  # noqa: BLE001 -- defensive: wait() itself failed
         logger.exception("local-docker supervisor wait failed run_id=%s", run.run_id)
         status = "error"

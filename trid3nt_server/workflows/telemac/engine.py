@@ -115,6 +115,7 @@ def _spec() -> LocalSolverSpec:
         stderr_uri_field=f"{TELEMAC_SOLVER_NAME}_stderr_uri",
         classify_exit=classify_exit,
         progress=step_of,
+        log_name="full_listing.log",
     )
 
 
