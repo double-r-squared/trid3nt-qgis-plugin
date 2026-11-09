@@ -49,3 +49,14 @@ def test_the_wire_coercion_pins_the_cycle() -> None:
     assert event_time()({"event_time": "2026-01-02"}) == {
         "event_time": "2026-01-02T00:00:00+00:00"}
     assert event_time()({}) == {"event_time": None}
+
+
+def test_now_is_the_current_utc_minute():
+    import datetime as dt
+
+    from trid3nt_server.inputs.instant import instant
+
+    before = dt.datetime.now(dt.timezone.utc).replace(second=0, microsecond=0)
+    read = dt.datetime.fromisoformat(instant(" Now "))
+    assert read.tzinfo is not None and read.second == 0
+    assert before <= read <= dt.datetime.now(dt.timezone.utc)
