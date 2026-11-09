@@ -4,7 +4,7 @@ The request template, the row walk, the geometry and the column projection are d
 in source.yaml. Three steps are not a plain row walk and stay here: the bbox-or-lid
 selector, the detail endpoint answering with ONE gauge where the list endpoint answers
 with many, and the two conditional detail families whose merge reduces a forecast crest
-and packs two series. A detail failure keeps its gauge with null detail."""
+and packs the series. A detail failure keeps its gauge with null detail."""
 
 from __future__ import annotations
 
@@ -103,7 +103,7 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
 def enrich_plan(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]]) -> list[tuple[str, "_hooks.RequestPlan"]]:
     """Two detail families under their own caps: the flood-category thresholds (bbox
     mode only -- the detail body already carries them when a lid was named) and the
-    stageflow observed + forecast series."""
+    stageflow observed + forecast series, whose gauge zero comes from the detail body."""
     headers = {"User-Agent": spec.auth.user_agent}
     plans: list[tuple[str, "_hooks.RequestPlan"]] = []
     if params.get("include_thresholds") and not params.get("gauge_id"):
@@ -111,6 +111,8 @@ def enrich_plan(spec: SourceSpec, params: dict[str, Any], features: list[dict[st
             plans.append((f"thr:{lid}", _hooks.RequestPlan(url=_detail_url(spec, lid), headers=headers)))
     if params.get("include_series"):
         for lid in _lids(features, _MAX_SERIES_GAUGES):
+            if not params.get("gauge_id"):
+                plans.append((f"zero:{lid}", _hooks.RequestPlan(url=_detail_url(spec, lid), headers=headers)))
             plans.append((f"ser:{lid}", _hooks.RequestPlan(url=_detail_url(spec, lid) + "/stageflow", headers=headers)))
     return plans
 
@@ -121,6 +123,16 @@ def _lids(features: list[dict[str, Any]], cap: int) -> list[str]:
 
 def _body(result: Any) -> bytes | None:
     return getattr(result, "body", None) if result is not None else None
+
+
+def _decoded(body: bytes | None) -> dict[str, Any] | None:
+    if not body:
+        return None
+    try:
+        obj = json.loads(body.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    return obj if isinstance(obj, dict) else None
 
 
 def _parse_stageflow(body: bytes | None) -> dict[str, Any]:
@@ -156,11 +168,21 @@ def _parse_stageflow(body: bytes | None) -> dict[str, Any]:
     return {"observed": observed, "forecast": forecast, "fcst_crest_stage_ft": crest_stage, "fcst_crest_time": crest_time}
 
 
-def _series_to_json(points: list[tuple[str, float | None, float | None]]) -> str:
-    return json.dumps(
-        {"t": [p[0] for p in points], "stage_ft": [p[1] for p in points], "flow_kcfs": [p[2] for p in points]},
-        separators=(",", ":"),
-    )
+def _series_lines(points: list[tuple[str, float | None, float | None]], index: int) -> str:
+    """One quantity of a series as ``stamp,value`` lines, the points that report it only."""
+    return "".join(f"{p[0]},{p[index]:.6f}\n" for p in points if p[index] is not None)
+
+
+def _gauge_zero(detail: dict[str, Any]) -> tuple[float | None, str | None]:
+    """The gauge's zero elevation and its frame from the detail ``datums.vertical`` block.
+    A block listing more than one frame does not say which one the zero is counted
+    from, so it states none."""
+    entries = ((detail.get("datums") or {}).get("vertical") or {}).get("value") or []
+    if len(entries) != 1 or not isinstance(entries[0], dict):
+        return None, None
+    zero = _coerce_float(entries[0].get("value"))
+    name = str(entries[0].get("abbrev") or "").strip()
+    return (zero, name) if zero is not None and name else (None, None)
 
 
 @_hooks.register_hook("nws_river_forecast.enrich_merge")
@@ -169,7 +191,7 @@ def enrich_merge(
 ) -> list[dict[str, Any]]:
     """Fold both families onto the RAW row the column map still has to read: the
     threshold block lands at the path a gauge_id body already carries it under, so one
-    declared rule serves both modes; the crest and the two series packs land under
+    declared rule serves both modes; the crest, the gauge zero and the four series packs land under
     their own output names. Every gauge survives a failed detail."""
     for feat in features:
         props = feat.get("properties") or {}
@@ -184,11 +206,16 @@ def enrich_merge(
                 detail = None
             if isinstance(detail, dict) and detail.get("flood"):
                 props["flood"] = detail["flood"]
+        zero_detail = _decoded(_body(results.get(f"zero:{lid}"))) or props
+        props["gauge_datum_ft"], props["vertical_datum"] = _gauge_zero(zero_detail)
         ser_key = f"ser:{lid}"
         if ser_key in results:
             series = _parse_stageflow(_body(results[ser_key]))
             props["fcst_crest_stage_ft"] = series["fcst_crest_stage_ft"]
             props["fcst_crest_time"] = series["fcst_crest_time"]
-            props["obs_series_json"] = _series_to_json(series["observed"][-_MAX_OBS_SERIES_POINTS:])
-            props["fcst_series_json"] = _series_to_json(series["forecast"])
+            observed = series["observed"][-_MAX_OBS_SERIES_POINTS:]
+            props["obs_stage_series"] = _series_lines(observed, 1)
+            props["obs_flow_series"] = _series_lines(observed, 2)
+            props["fcst_stage_series"] = _series_lines(series["forecast"], 1)
+            props["fcst_flow_series"] = _series_lines(series["forecast"], 2)
     return features

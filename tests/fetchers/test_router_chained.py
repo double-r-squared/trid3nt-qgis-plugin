@@ -197,6 +197,36 @@ def test_river_threshold_enrichment_joins_stages():
     assert row["action_stage_ft"] == 5.0 and row["major_stage_ft"] == 12.0
 
 
+def _datums(*entries):
+    return {"datums": {"vertical": {"value": [{"abbrev": a, "value": v} for a, v in entries]}}}
+
+
+_STAGEFLOW = {"observed": {"data": [{"validTime": "2026-11-09T19:00:00Z", "primary": 2.5, "secondary": -999}]},
+              "forecast": {"data": [{"validTime": "2026-11-09T20:00:00Z", "primary": 3.0, "secondary": 1.5},
+                                     {"validTime": "2026-11-09T21:00:00Z", "primary": 3.5, "secondary": -999}]}}
+
+
+def test_river_series_are_stamp_value_lines_per_quantity_with_the_gauge_zero():
+    gdf = _run("fetch_nws_river_forecast",
+               {"bbox": [-91.5, 30.0, -90.0, 31.0], "include_series": True},
+               {"stageflow": _STAGEFLOW, "gauges/ABCI1": {**_datums(("NGVD29", 1.55))},
+                "v1/gauges": {"gauges": [_gauge("ABCI1")]}})
+    row = gdf.iloc[0]
+    assert row["fcst_stage_series"].splitlines() == ["2026-11-09T20:00:00Z,3.000000", "2026-11-09T21:00:00Z,3.500000"]
+    assert row["fcst_flow_series"].splitlines() == ["2026-11-09T20:00:00Z,1.500000"]
+    assert row["obs_stage_series"].splitlines() == ["2026-11-09T19:00:00Z,2.500000"]
+    assert row["gauge_datum_ft"] == 1.55 and row["vertical_datum"] == "NGVD29"
+
+
+def test_river_gauge_zero_is_not_stated_when_the_record_lists_two_frames():
+    gdf = _run("fetch_nws_river_forecast",
+               {"bbox": [-91.5, 30.0, -90.0, 31.0], "include_series": True},
+               {"stageflow": _STAGEFLOW, "gauges/ABCI1": _datums(("NGVD29", 1.55), ("NAVD88", 1.2)),
+                "v1/gauges": {"gauges": [_gauge("ABCI1")]}})
+    row = gdf.iloc[0]
+    assert row["gauge_datum_ft"] is None and row["vertical_datum"] is None
+
+
 def test_river_gauge_id_detail_mode():
     detail = {"lid": "CIDI4", "name": "gauge", "latitude": 30.5, "longitude": -91.0,
               "status": {"observed": {"primary": 3.0, "floodCategory": "action"}, "forecast": {}},

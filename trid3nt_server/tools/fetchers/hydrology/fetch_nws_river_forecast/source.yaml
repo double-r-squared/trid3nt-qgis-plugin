@@ -92,8 +92,12 @@ ingest:
     obs_valid_time: {from: status.observed.validTime, kind: str}
     fcst_valid_time: {from: status.forecast.validTime, kind: str}
     fcst_crest_time: {from: fcst_crest_time, kind: str}
-    obs_series_json: {from: obs_series_json, kind: str}
-    fcst_series_json: {from: fcst_series_json, kind: str}
+    obs_stage_series: {from: obs_stage_series, kind: str}
+    obs_flow_series: {from: obs_flow_series, kind: str}
+    fcst_stage_series: {from: fcst_stage_series, kind: str}
+    fcst_flow_series: {from: fcst_flow_series, kind: str}
+    gauge_datum_ft: {from: gauge_datum_ft, kind: float}
+    vertical_datum: {from: vertical_datum, kind: str}
     obs_stage_ft: {from: status.observed.primary, kind: float, null_below: -999.0}
     obs_flow_kcfs: {from: status.observed.secondary, kind: float, null_below: -999.0}
     fcst_stage_ft: {from: status.forecast.primary, kind: float, null_below: -999.0}
@@ -150,9 +154,11 @@ coverage:
   datum: null
   units:
     fcst_stage_ft: ft
-    fcst_series_json: record
+    fcst_stage_series: ft
+    gauge_datum_ft: ft
   value_column: fcst_stage_ft
-  series_column: fcst_series_json
+  series_column: fcst_stage_series
+  above_column: gauge_datum_ft
   stamp_column: fcst_valid_time
 - data_class: discharge series
   kind: predicted
@@ -175,12 +181,13 @@ coverage:
   datum: null
   units:
     fcst_flow_kcfs: kcfs
-    fcst_series_json: record
+    fcst_flow_series: kcfs
   value_column: fcst_flow_kcfs
-  series_column: fcst_series_json
+  series_column: fcst_flow_series
   stamp_column: fcst_valid_time
 
 caveats:
+- "a stage is a height above the gauge's own zero: ``gauge_datum_ft`` is that zero's elevation and ``vertical_datum`` the frame it is counted from (NGVD29 or NAVD88), both off the gauge's NWPS detail record and stated only when the record lists one frame; the NWPS API schema gives the value no unit, and the NWPS Product and Users Guide v2.1 (weather.gov/media/owp/operations/nwps_user_guide.pdf, p.8) gives absolute elevation on NAVD 88 or NGVD 29 in feet, which is the unit stated here"
 - NWS/NWPS (AHPS) river-forecast gauges with observed + forecast stage and flood category.
   Optional per-gauge threshold + stageflow-series enrichment (bounded, best-effort). A bbox with
   no forecast gauge -> a typed NO_GAUGES empty answer; a named lid that does not exist ->
@@ -205,10 +212,7 @@ docstring: "Fetch NWS river-forecast gauges + flood categories as a Point FlatGe
   \        endpoint; ``bbox`` is then optional/ignored. Use a bbox query\n        first to discover lids.\n\
   \    include_series: when True, fetch each gauge's ``/stageflow`` observed\n        + forecast time\
   \ series (bounded to the first ~12 gauges) and add:\n        ``fcst_crest_stage_ft`` / ``fcst_crest_time``\
-  \ (the forecast CREST\n        - the max forecast stage and when it occurs) plus\n        ``obs_series_json``\
-  \ (most-recent ~96 observed points) and\n        ``fcst_series_json`` (full forecast series) as compact\n\
-  \        column-oriented JSON strings ``{\"t\": [...], \"stage_ft\": [...],\n        \"flow_kcfs\":\
-  \ [...]}`` for charting. OFF by default.\n\nReturns:\n    A vector ``LayerURI`` (FlatGeobuf, Point,\
+  \ (the forecast CREST\n        - the max forecast stage and when it occurs) plus\n        ``obs_stage_series`` / ``obs_flow_series`` (most-recent ~96 observed\n        points) and ``fcst_stage_series`` / ``fcst_flow_series`` (full forecast)\n        as ``stamp,value`` lines, one quantity each, plus the gauge zero\n        ``gauge_datum_ft`` (ft) and its frame ``vertical_datum``. OFF by default.\n\nReturns:\n    A vector ``LayerURI`` (FlatGeobuf, Point,\
   \ EPSG:4326).\n\nRaises:\n    NwsRiverForecastInputError: bbox and gauge_id both missing / malformed.\n\
   \    NwsRiverForecastBboxTooLargeError: bbox implausibly large.\n    NwsRiverForecastNoGaugesError:\
   \ zero forecast gauges in the bbox, or\n        an unknown gauge_id.\n    NwsRiverForecastUpstreamError:\
