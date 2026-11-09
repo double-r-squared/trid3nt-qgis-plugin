@@ -8,6 +8,7 @@ it was filled. A body of water that exists in no fetcher is filled the same way.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -145,11 +146,12 @@ def needs_beside(kind: str) -> tuple[tuple[str, str, str], ...]:
 
 def domain(value: Any, *, label: str = "domain", code: str = _CODE,
            extent: Any = None, banks: Any = None, span_km: Any = None,
-           near: Any = None) -> Domain | None:
+           near: Any = None, window: Any = None) -> Domain | None:
     """THE ingestion: a drawing, a layer, a fetched polygon, a ring -> Domain.
 
     ``None`` only when nothing came; anything not a closed polygon refuses typed.
-    ``extent`` cuts a land-water edge; ``banks``, ``span_km`` and ``near`` close a line."""
+    ``extent`` cuts a land-water edge; ``banks``, ``span_km`` and ``near`` close a line;
+    ``window`` is the box a searched polygon is cut to."""
     if value is None or isinstance(value, Domain):
         return value
     if banks is not None:
@@ -164,10 +166,10 @@ def domain(value: Any, *, label: str = "domain", code: str = _CODE,
         doc = read_geometry_doc(uri.strip())
         logger.info("%s: read from %s", label, uri)
         return _carried_by(doc, _named(value), uri.strip(),
-                           _runs_of(value, label, code), extent, label, code)
+                           _runs_of(value, label, code), extent, label, code, window)
     if isinstance(value, Mapping):
         return _carried_by(value, _named(value), _uri_of(value),
-                           _runs_of(value, label, code), extent, label, code)
+                           _runs_of(value, label, code), extent, label, code, window)
     ring = polygon_ring(value, label=label, code=code)
     return Domain(_closed(ring or []))
 
@@ -217,11 +219,16 @@ def _rings(geometry: Mapping[str, Any]) -> list[list[Any]]:
 
 def _carried_by(doc: Any, name: str | None, uri: str | None,
                 stated: tuple[BoundaryRun, ...], extent: Any, label: str,
-                code: str) -> Domain:
+                code: str, window: Any = None) -> Domain:
     """The domain one document carries; a document of LINES is a land-water edge cut against ``extent``."""
     geometries = list(flatten_geometries(read_geometry_doc(doc)))
     polygons = [g for g in geometries
                 if str(g.get("type")) in ("Polygon", "MultiPolygon")]
+    if polygons and window is not None:
+        polygons = _cut_to(polygons, window)
+        if not polygons:
+            raise EmptyResultError(
+                f"the {label} produced by {uri} holds no water inside the box it was searched in.", code=code)
     if polygons:
         return Domain(_one_polygon(polygons), name, uri,
                       stated or _prescribed(doc, label, code), _companions(doc))
@@ -231,6 +238,20 @@ def _carried_by(doc: Any, name: str | None, uri: str | None,
             raise EmptyResultError(_nothing_closed(geometries, uri, label), code=code)
         raise UserInputError(_nothing_closed(geometries, uri, label), code=code)
     return Domain(_water_left_by(doc, extent, label, code), name, uri)
+
+
+def _cut_to(polygons: list[dict[str, Any]], window: Any) -> list[dict[str, Any]]:
+    """Each polygon's part inside the window, as polygons; a part that is not an area is dropped."""
+    from shapely.geometry import box, mapping, shape
+
+    cut = box(*(float(v) for v in window))
+    out: list[dict[str, Any]] = []
+    for g in polygons:
+        part = shape(g).intersection(cut)
+        for piece in getattr(part, "geoms", [part]):
+            if piece.geom_type == "Polygon" and not piece.is_empty and piece.area > 0:
+                out.append(json.loads(json.dumps(mapping(piece))))
+    return out
 
 
 def _nothing_closed(geometries: list[dict[str, Any]], uri: str | None,

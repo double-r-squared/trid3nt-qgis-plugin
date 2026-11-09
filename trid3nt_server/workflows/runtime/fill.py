@@ -571,6 +571,11 @@ async def _ingested(env: _Env, decl: Input, value: Any,
         # inside it and refuses a wet hole, and an empty one says the run was cut with none.
         coercion["water"] = _cut_polygon() or {}
         coercion["merge"] = not env.lays_own_bed
+    if decl.slot is DOMAIN and row is not None and current_domain() is None:
+        # A domain the run's own SEARCH found is cut to the box it was searched in; one handed in is never cut.
+        lon, lat = _place(await _seed(env, decl))
+        if lon is not None and lat is not None:
+            coercion["window"] = _about(lon, lat, decl.span_km)
     if decl.slot is MESH:
         # The domain is filled before any other row, so a supplied mesh is held to the ground this run solves over.
         coercion["over"] = getattr(current_domain(), "bbox", None)
