@@ -16,7 +16,7 @@ from trid3nt_server.inputs.gate.errors import UserDeclinedError
 from trid3nt_server.inputs.gate.input_review import GateCard, gate_input_review
 from trid3nt_server.inputs.user_input import UserInputError
 from trid3nt_server.settings import (
-    entry, resolve, session_run, state_session_run, typed, user_values, write_user)
+    entry, refuse_person_only, resolve, session_run, state_session_run, typed, user_values, write_user)
 from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.runtime.module import SlotRefused
 
@@ -76,6 +76,8 @@ async def set_config(name: str, value: float | int | str | bool | None = None,
     ident = slot.identifier
     if not reset and value is None:
         raise SlotRefused(f"{ident} needs a value, or reset=True to drop it.")
+    if scope == "run":
+        refuse_person_only(ident)
     new = None if reset else typed(slot, value)
     was = resolve(ident)
     picked: dict[str, Any] = {"value": new}

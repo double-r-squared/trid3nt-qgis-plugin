@@ -35,12 +35,11 @@ _NAMING = frozenset({"name", "label", "layer_id", "title"})
 
 
 async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
-                              input_mode: str | None = None,
                               fresh: bool = False) -> dict[str, Any]:
     """The mesh a solve runs on -> the accepted mesh's record, with its ``key``.
 
     One KEPT under this recipe's content key is reused unless ``fresh``;
-    otherwise one is built, gated in the run's mode."""
+    otherwise one is built, gated unless AUTO is on."""
     from trid3nt_server.render.pipeline_emitter import current_turn_case
     from trid3nt_server.tools.mesh.gate import gate_mesh_build
     from trid3nt_server.tools.mesh.session import MeshSession
@@ -65,8 +64,7 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
     session = await asyncio.to_thread(
         MeshSession, recipe, case_id=current_turn_case(),
         name=_session_name(name, recipe.mesher))
-    art = await gate_mesh_build(session, tool_name=GATE_LABEL,
-                                input_mode=input_mode)
+    art = await gate_mesh_build(session, tool_name=GATE_LABEL)
     logger.info("mesh accepted: %s -> %d nodes / %d elements, min edge %s m",
                 art.mesh_id, art.node_count, art.element_count,
                 measured_min_edge_m(art))

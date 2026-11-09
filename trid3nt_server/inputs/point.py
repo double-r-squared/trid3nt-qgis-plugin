@@ -317,8 +317,7 @@ def point_arg(param: str, *, tool: str, prompt: str | None, code: str = _CODE
         value = args.get(param)
         if value is None and prompt is not None:
             value = await draw_on_canvas("point", tool=tool, param=param,
-                                         prompt=prompt,
-                                         input_mode=args.get("input_mode"))
+                                         prompt=prompt)
         return {param: await point(value, label=param, code=code)}
 
     _coerce.__name__ = f"point:{param}"

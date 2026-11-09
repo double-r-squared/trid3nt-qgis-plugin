@@ -392,7 +392,8 @@ def test_the_timestep_falls_back_to_the_ask_when_no_mesh_exists_yet():
 
 
 @pytest.mark.asyncio
-async def test_a_bbox_at_the_door_becomes_the_recipes_extent(monkeypatch):
+async def test_a_bbox_at_the_door_becomes_the_recipes_extent(monkeypatch, user_settings):
+    user_settings(AUTO=True)
     from trid3nt_server.tools.mesh.meshers import MeshToolError
 
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
@@ -405,14 +406,14 @@ async def test_a_bbox_at_the_door_becomes_the_recipes_extent(monkeypatch):
     monkeypatch.setattr(MeshSession, "accept", _accept)
     with pytest.raises(MeshToolError):
         await TOOL_REGISTRY["build_mesh"].fn(
-            mesher="reg_grid", bbox=(-75.8, 36.1, -75.7, 36.2), resolution_m=200.0,
-            input_mode="auto")
+            mesher="reg_grid", bbox=(-75.8, 36.1, -75.7, 36.2), resolution_m=200.0)
     assert seen["recipe"].extent == (-75.8, 36.1, -75.7, 36.2)
     assert seen["recipe"].resolution_m == 200.0
 
 
 @pytest.mark.asyncio
-async def test_wire_ops_become_recipe_entries(monkeypatch):
+async def test_wire_ops_become_recipe_entries(monkeypatch, user_settings):
+    user_settings(AUTO=True)
     """The ops list off the wire is the same ordered program a template writes."""
     from trid3nt_server.tools.mesh.meshers import MeshToolError
 
@@ -428,7 +429,7 @@ async def test_wire_ops_become_recipe_entries(monkeypatch):
         await TOOL_REGISTRY["build_mesh"].fn(
             mesher="reg_grid", bbox=(-75.8, 36.1, -75.7, 36.2), resolution_m=200.0,
             ops=[{"fn": "set_bed", "source": "fetch_cudem",
-                  "interp": "bilinear"}], input_mode="auto")
+                  "interp": "bilinear"}])
     ops = seen["recipe"].ops
     assert [op.fn for op in ops] == ["set_bed"]
     assert dict(ops[0].kwargs) == {"source": "fetch_cudem",

@@ -135,10 +135,11 @@ def test_a_misspelled_keyword_names_the_nearest_spelling():
     assert "LAW OF BOTTOM FRICTION" in verdict.reason
 
 
-def test_a_failed_launch_does_not_say_the_engine_check_was_out_of_reach(monkeypatch):
+def test_a_failed_launch_does_not_say_the_engine_check_was_out_of_reach(monkeypatch, user_settings):
     """The note rides a run that launches; a launch that raises reads its own
     error and nothing about the fill's check."""
     monkeypatch.delenv("HOMETEL", raising=False)
+    user_settings(AUTO=True)
 
     async def _launch(self, state):
         raise SlotRefused("the deck refused")
@@ -149,7 +150,7 @@ def test_a_failed_launch_does_not_say_the_engine_check_was_out_of_reach(monkeypa
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = _wf()
     monkeypatch.setattr(type(wf), "launch", _launch)
-    out = asyncio.run(wf.run({**_DYE, "input_mode": "auto",
+    out = asyncio.run(wf.run({**_DYE,
                               "keywords": {"LAW OF BOTTOM FRICTION": 4}}))
     assert out["status"] == "error" and "the deck refused" in out["error_message"]
     assert ENGINE_UNAVAILABLE not in out["error_message"]
@@ -180,14 +181,15 @@ def test_a_required_input_nothing_filled_is_missing_and_not_ready():
 
 
 @pytest.mark.parametrize("mode", ["auto", "user_gated"])
-def test_a_required_param_left_unstated_refuses_in_every_mode(mode):
+def test_a_required_param_left_unstated_refuses_in_every_mode(mode, user_settings):
     """No default and not optional is the whole floor: the fill refuses before
     any launch, and no mode shows the input to anybody to approve instead."""
     from trid3nt_server.inputs.input import Input
 
+    user_settings(AUTO=(mode == "auto"))
     wf = _skeleton(Input(name="wave_height_m", desc="d", bounds=(0.01, 10.0)),
                    Input(name="grade", desc="d", default=0.2, bounds=(0.05, 0.5)))
-    state = asyncio.run(fill(Fill(workflow=wf), {"input_mode": mode}))
+    state = asyncio.run(fill(Fill(workflow=wf), {}))
     assert state.inputs["wave_height_m"].state == MISSING and not state.ready
     code, sentence = state.refusal()
     assert code == "GATE_REFUSED"
@@ -210,10 +212,11 @@ def test_a_sourced_input_is_fetched_before_it_answers(monkeypatch):
 
 
 def test_a_stated_row_the_template_names_is_produced_once_and_a_refused_one_stops_the_rest(
-        monkeypatch):
+        monkeypatch, user_settings):
     """A row the caller states AND the template names is read once, and a stated
     row that is refused leaves the rows the template names unasked."""
     asked = []
+    user_settings(AUTO=True)
 
     async def _produce(env, decl):
         asked.append(decl.name)
@@ -226,7 +229,7 @@ def test_a_stated_row_the_template_names_is_produced_once_and_a_refused_one_stop
     assert wf.named_rows() == ("domain", "dredge_area", "dump_area", "bed", "level",
                                "discharge", "line")
     refused = None
-    stated = {"dredge_area": "L1", "bed": 3.0, "input_mode": "auto",
+    stated = {"dredge_area": "L1", "bed": 3.0,
               "seed_point": [0.5, 0.5], "event_time": "2024-06-01T00:00:00Z"}
     state = asyncio.run(fill(Fill(workflow=wf), stated))
     assert state.ready and sorted(asked) == [
@@ -239,7 +242,7 @@ def test_a_stated_row_the_template_names_is_produced_once_and_a_refused_one_stop
 
 
 def test_a_user_gated_engine_run_with_no_session_is_refused_at_the_fill_and_fetches_nothing(
-        monkeypatch):
+        monkeypatch, user_settings):
     asked = []
 
     async def _produce(env, decl):
@@ -248,12 +251,12 @@ def test_a_user_gated_engine_run_with_no_session_is_refused_at_the_fill_and_fetc
 
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     state = asyncio.run(fill(Fill(workflow=_wf()), {}))
-    refused = state.inputs["input_mode"]
-    assert refused.code == "NO_SESSION" and "input_mode='auto'" in refused.reason
+    refused = state.inputs["AUTO"]
+    assert refused.code == "NO_SESSION" and "AUTO on" in refused.reason
     assert not state.ready and asked == []
-    state = asyncio.run(fill(Fill(workflow=_wf()),
-                             {**_DYE, "input_mode": "auto"}))
-    assert "input_mode" not in state.inputs and "domain" in asked
+    user_settings(AUTO=True)
+    state = asyncio.run(fill(Fill(workflow=_wf()), dict(_DYE)))
+    assert "AUTO" not in state.inputs and "domain" in asked
 
 
 def test_a_layer_by_id_is_supplied_and_ingested_before_it_answers(monkeypatch):
@@ -329,7 +332,7 @@ def test_a_card_edit_refills_through_the_modules_accept_rule(monkeypatch):
     monkeypatch.setitem(sys.modules["trid3nt_server.inputs.gate.input_review"].__dict__,
                         "gate_input_review", _gate)
     sheet = asyncio.run(tw._review(_fill, {}, steering=steering, workflow="w",
-                                   title="", input_mode="user_gated", spent=()))
+                                   title="", spent=()))
     assert seen == ["LAW OF BOTTOM FRICTION"]
     assert sheet.edits == {"LAW OF BOTTOM FRICTION": 4}
 
@@ -394,11 +397,12 @@ def test_a_refusal_keeps_the_code_of_its_reason_through_the_review(
     monkeypatch.setitem(input_review.__dict__, "gate_input_review", _gate)
     with pytest.raises(DeclarativeError) as caught:
         asyncio.run(tw._review(_fill, {}, steering=_wf().steering, workflow="w",
-                               title="", input_mode="auto", spent=()))
+                               title="", spent=()))
     assert caught.value.error_code == code
 
 
-def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch):
+def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch, user_settings):
+    user_settings(AUTO=True)
     """The fill runs before the run's channels open, so the site a row chose
     and what a cut covers reach the run only because the launch restates them."""
     from trid3nt_server.inputs import run_notes
@@ -420,7 +424,7 @@ def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch):
     wf = TOOL_REGISTRY["telemac_ice_cover"].fn.workflow
     monkeypatch.setattr(type(wf), "launch", _launch)
     state = asyncio.run(fill(Fill(workflow=wf), {
-        "input_mode": "auto", "seed": [0.5, 0.5],
+        "seed": [0.5, 0.5],
         "event_time": "2024-06-01T00:00:00Z"}))
     run = asyncio.run(wf._launched(state))
     rows = ["domain", "observe", "bed", "weather", "level", "discharge"]
@@ -439,10 +443,11 @@ _STATED = {"structure": [[-122.6700, 45.5160], [-122.6700, 45.5190]],
 
 
 @pytest.mark.parametrize("order", [("structure", "domain"), ("domain", "structure")])
-def test_the_order_inputs_are_stated_in_does_not_decide_the_fill(order):
+def test_the_order_inputs_are_stated_in_does_not_decide_the_fill(order, user_settings):
+    user_settings(AUTO=True)
     wf = TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow
     values = {name: _STATED[name] for name in order}
-    values.update(_STATED, input_mode="auto")
+    values.update(_STATED)
     state = asyncio.run(fill(Fill(workflow=wf), values))
     assert state.ready, {n: v.reason for n, v in state.inputs.items()
                          if v.state == REJECTED}

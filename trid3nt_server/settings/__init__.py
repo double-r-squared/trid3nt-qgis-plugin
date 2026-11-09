@@ -5,12 +5,12 @@
 
 from .reader import (
     SettingsFileError, bind_run, clear_session_run, dictionary, entry,
-    input_dir, listing, reset_run, resolve, session_run, setting, split_keywords,
+    input_dir, listing, refuse_person_only, reset_run, resolve, session_run, setting, split_keywords,
     state_session_run, typed, user_file, user_values, write_user)
 
 __all__ = [
     "SettingsFileError", "bind_run", "clear_session_run", "dictionary", "entry",
-    "input_dir", "listing", "reset_run", "resolve", "session_run", "setting",
-    "split_keywords", "state_session_run", "typed", "user_file", "user_values",
+    "input_dir", "listing", "refuse_person_only", "reset_run", "resolve", "session_run",
+    "setting", "split_keywords", "state_session_run", "typed", "user_file", "user_values",
     "write_user",
 ]

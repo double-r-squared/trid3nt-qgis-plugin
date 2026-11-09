@@ -15,11 +15,14 @@ callbacks and nothing else:
 - `blocked` - what keeps a proceed from launching, in words; a proceed while it
   answers anything launches nothing and the card is drawn again.
 
-The mode is the run's own: `auto` only when the call states
-`input_mode='auto'`, otherwise `user_gated`. Auto launches a ready run at once;
+The mode is the person's alone: the boolean `AUTO` setting (off by default: the run pauses for a person; on: the system proceeds without one),
+changed at user level in Settings. No call carries it and no run states it: a call naming
+`input_mode` refuses as an unknown argument, and a `settings: AUTO` statement on a run
+or a `set_config(scope="run")` refuses by name. Auto launches a ready run at once;
 user-gated parks the turn on the card, and with no live session to present on it
-refuses by name rather than runs. A workflow says that refusal at its fill
-(`NO_SESSION` on `input_mode`), before any unstated row is fetched or a mesh built; the
+refuses by name rather than runs. A gate that must always ask (`set_config`, the key ask,
+the inputs card) forces `user_gated` over the setting. A workflow says that refusal at its fill
+(`NO_SESSION` on `AUTO`), before any unstated row is fetched or a mesh built; the
 gate's own is what a tool with no workflow gets.
 
 ## The inputs card

@@ -344,13 +344,14 @@ def test_geocode_upstream_failure_raises_upstream_error(monkeypatch):
         geocode_location("Fort Myers, FL")
 
 
-def test_geocode_auto_mode_labels_the_match_auto_accepted(monkeypatch):
+def test_geocode_auto_mode_labels_the_match_auto_accepted(monkeypatch, user_settings):
+    user_settings(AUTO=True)
     _bind_geocode_cache(monkeypatch)
     _geocode_stub(monkeypatch, _FakeLocation(
         {"display_name": "Fort Myers, FL", "boundingbox": ["26.55", "26.71", "-81.93", "-81.78"]},
         26.64, -81.87,
     ))
-    result = geocode_location("Fort Myers, FL", input_mode="auto")
+    result = geocode_location("Fort Myers, FL")
     assert result["match_mode"] == "auto-accepted"
 
 
@@ -362,7 +363,7 @@ def test_geocode_user_gated_labels_pending_confirm(monkeypatch):
         {"display_name": "Fort Myers, FL", "boundingbox": ["26.55", "26.71", "-81.93", "-81.78"]},
         26.64, -81.87,
     ))
-    result = geocode_location("Fort Myers, FL", input_mode="user_gated")
+    result = geocode_location("Fort Myers, FL")
     assert result["match_mode"] == "pending-confirm"
 
 

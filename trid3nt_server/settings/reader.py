@@ -20,10 +20,13 @@ if TYPE_CHECKING:
 
 __all__ = [
     "SettingsFileError", "bind_run", "clear_session_run", "dictionary", "entry",
-    "input_dir", "listing", "reset_run", "resolve", "session_run", "setting",
-    "split_keywords", "state_session_run", "typed", "user_file", "user_values",
+    "input_dir", "listing", "refuse_person_only", "reset_run", "resolve", "session_run",
+    "setting", "split_keywords", "state_session_run", "typed", "user_file", "user_values",
     "write_user",
 ]
+
+#: Settings only the person changes: a run, whether stated on a call or bound to a session, is refused them by name.
+_PERSON_ONLY = ("AUTO",)
 
 #: The body word a run states a setting under: ``keywords={"settings: FILL_MAX_DISTANCE": 200}``.
 _QUALIFIER = "settings"
@@ -144,9 +147,20 @@ def _session_id() -> str | None:
     return getattr(emitter, "session_id", None) if emitter is not None else None
 
 
+def refuse_person_only(ident: str) -> None:
+    """Refuse by name a setting only the person changes, where a run would state it."""
+    from trid3nt_server.workflows.runtime.module import SlotRefused
+
+    if ident in _PERSON_ONLY:
+        raise SlotRefused(
+            f"{ident} is the person's own setting: no run states it. The person sets it "
+            "in Settings, at user level.")
+
+
 def state_session_run(session_id: str, name: str, value: Any | None) -> None:
     """Bind ``name`` to this session's next run, or with ``None`` unbind it."""
     slot = entry(name)
+    refuse_person_only(slot.identifier)
     held = _SESSION.setdefault(session_id, {})
     if value is None:
         held.pop(slot.identifier, None)
@@ -211,6 +225,7 @@ def split_keywords(keywords: Mapping[str, Any] | None
             continue
         try:
             slot = entry(tail.strip())
+            refuse_person_only(slot.identifier)
             stated[slot.identifier] = typed(slot, value)
         except SlotRefused as exc:
             refused[name] = str(exc)

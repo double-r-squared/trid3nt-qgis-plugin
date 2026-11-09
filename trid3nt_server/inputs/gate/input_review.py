@@ -32,11 +32,11 @@ __all__ = [
 InputGateMode = Literal["auto", "user_gated"]
 
 
-def resolve_input_gate_mode(mode: str | None) -> InputGateMode:
-    """The run's own mode: ``auto`` only when the call states it, else ``user_gated``.
+def resolve_input_gate_mode(forced: InputGateMode | None = None) -> InputGateMode:
+    """The mode in force: ``forced`` where a gate must always ask, else ``auto`` where the person's AUTO setting is on.
 
-    A ready run launches on an act, so nothing but the call itself opts out of it."""
-    return "auto" if str(mode or "").strip().lower() == "auto" else "user_gated"
+    The setting is the person's alone - no call and no run states it - so a ready run launches on an act the person chose to skip."""
+    return forced or ("auto" if setting("AUTO") else "user_gated")
 
 
 def _entry_field(e: Any, name: str) -> Any:
@@ -169,25 +169,25 @@ class ReviewOutcome:
     rounds_used: int = 0
 
 
-def no_session(tool_name: str, mode: str | None) -> str | None:
+def no_session(tool_name: str, forced: InputGateMode | None = None) -> str | None:
     """What a user-gated run with no live session refuses on, or ``None`` where it may launch: a workflow says it at its fill, the gate where a card would have opened."""
     from trid3nt_server.render.pipeline_emitter import current_emitter
 
-    if resolve_input_gate_mode(mode) == "auto" or current_emitter() is not None:
+    if resolve_input_gate_mode(forced) == "auto" or current_emitter() is not None:
         return None
     return (
         f"NO_SESSION: {tool_name} did not run - it waits for a person "
         "to proceed on its review card and no session is open. Open a "
-        "session to review and launch it, or state input_mode='auto' on "
-        "the call to launch it at once.")
+        "session to review and launch it, or turn AUTO on in "
+        "Settings to launch it at once.")
 
 
 async def gate_input_review(
     *,
     tool_name: str,
-    mode: str | None,
     entries: list[SyntheticInput],
     params: dict[str, Any],
+    mode: InputGateMode | None = None,
     max_rounds: int | None = None,
     ttl_seconds: int | None = None,
     param_sheet: "ParamSheet | None" = None,
@@ -198,7 +198,7 @@ async def gate_input_review(
 ) -> ReviewOutcome:
     """Present what is under review before it runs, and ask.
 
-    ``auto`` proceeds at once; ``user_gated`` with no live session REFUSES. ``present``/``apply_revision``/``blocked`` let a caller that owns the
+    The mode is the AUTO setting unless ``mode`` forces one: ``auto`` proceeds at once; ``user_gated`` with no live session REFUSES. ``present``/``apply_revision``/``blocked`` let a caller that owns the
     thing reviewed build the card, take a reply as a change, and name what blocks a proceed.
     Unstated, ``max_rounds`` and ``ttl_seconds`` are the MAX_ROUNDS and TTL_S settings; a ``provide values`` reply consumes a round and running out of either is a typed cancel."""
     max_rounds = max_rounds or setting("MAX_ROUNDS")

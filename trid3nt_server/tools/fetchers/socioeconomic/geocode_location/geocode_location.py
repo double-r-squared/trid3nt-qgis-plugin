@@ -118,9 +118,7 @@ def _fetch_nominatim_geocode_bytes(query: str) -> bytes:
     # destructiveHint=False, idempotentHint=True (cache shim deduplicates).
     open_world_hint=True,
 )
-def geocode_location(
-    query: str, input_mode: str | None = None, **_extra_ignored: Any
-) -> dict[str, Any]:
+def geocode_location(query: str) -> dict[str, Any]:
     """Forward-geocode a free-text place name through OSM Nominatim (via
     geopy): the query travels AS WRITTEN and the answer is exactly what the
     service gives back -- its own matched name, its own bounding box.
@@ -139,16 +137,14 @@ def geocode_location(
     publishes for the matched feature, so a county or a state comes back very
     large -- narrow it before handing it to a heavy download.
 
-    Params: ``query``, a non-empty free-text place name. ``input_mode``
-    (``"auto"`` | ``"user_gated"``, default the session's), read the same
-    lever every other input gate reads.
+    Params: ``query``, a non-empty free-text place name.
 
     Returns the canonical ``name``, a ``[min_lon, min_lat, max_lon, max_lat]``
     ``bbox``, a centroid, the source, ``place_class`` and ``place_type`` - the
     service's own two words for what the place IS, a river or a reservoir or a
     city - and ``match_mode``: ``"auto-accepted"``
-    in auto mode (the top match, labeled as such in the journal) or
-    ``"pending-confirm"`` in user-gated mode -- the case-AOI-commit step is
+    when the person has input review off (the top match, labeled as such in the journal) or
+    ``"pending-confirm"`` when it is on -- the case-AOI-commit step is
     what shows the confirm gate on that label; this call always returns its
     match at once, never waiting on a turn.
     """
@@ -156,7 +152,7 @@ def geocode_location(
         raise BboxInvalidError("geocode_location requires a non-empty string query")
     text = query.strip()
 
-    mode = resolve_input_gate_mode(input_mode)
+    mode = resolve_input_gate_mode()
 
     result = read_through(
         metadata=_GEOCODE_LOCATION_METADATA,

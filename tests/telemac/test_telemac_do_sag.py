@@ -29,6 +29,11 @@ _PORTLAND = (-122.6735, 45.5175)
 
 
 # --- COMMITTED live V&V: WAQTEL O2 solve vs Streeter-Phelps ------------------ #
+@pytest.fixture(autouse=True)
+def _auto_input_mode(user_settings):
+    user_settings(AUTO=True)
+
+
 def test_waqtel_o2_reproduces_streeter_phelps():
     """The landed worker's WAQTEL O2 solve (committed profile) matches the S-P
     closed form to well under 0.05 mg/L at the sag minimum - the machinery V&V."""
@@ -173,7 +178,7 @@ def test_an_absent_outfall_is_refused_naming_the_need():
     naming outfall_coords - it is never derived from the domain's centreline."""
     from trid3nt_server.workflows.runtime.fill import Fill, fill
 
-    state = asyncio.run(fill(Fill(workflow=_workflow()), {"input_mode": "auto"}))
+    state = asyncio.run(fill(Fill(workflow=_workflow()), {}))
     code, sentence = state.refusal()
     assert code == "GATE_REFUSED" and "outfall_coords" in sentence
 
@@ -240,7 +245,7 @@ def _filled(*, keywords=None, **supplied):
                   "source": {"at": [0.0, 0.0], "name": None}},
         params=values_of(resolved, value_inputs(_workflow())),
         workflow="telemac_do_sag", title="",
-        keywords=dict(keywords or {}), input_mode="auto"))
+        keywords=dict(keywords or {})))
 
 
 def test_the_deck_opens_at_the_derived_depth_and_the_declared_oxygen():
@@ -436,7 +441,7 @@ async def _normalized(workflow, args):
         return decl.name
 
     with patch.object(fill_mod, "_produce", _held):
-        state = await fill(Fill(workflow=workflow), {"input_mode": "auto", **args})
+        state = await fill(Fill(workflow=workflow), dict(args))
     declared = {prm.name for prm in value_inputs(workflow)}
     refused = [v.reason for v in state.inputs.values() if v.state == REJECTED]
     return ({n: v.value for n, v in state.inputs.items()

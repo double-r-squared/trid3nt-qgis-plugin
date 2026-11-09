@@ -18,6 +18,11 @@ from seated import row_inputs, value_inputs
 _PORTLAND = (-122.6735, 45.5175)  # the Willamette at USGS 14211720
 
 
+@pytest.fixture(autouse=True)
+def _auto_input_mode(user_settings):
+    user_settings(AUTO=True)
+
+
 def _workflow():
     from trid3nt_server.tools import TOOL_REGISTRY
 
@@ -26,7 +31,7 @@ def _workflow():
 
 def _norm(**kw):
     base: dict[str, Any] = {
-        "release": None, "input_mode": "auto",
+        "release": None,
     }
     base.update(kw)
     return asyncio.run(_normalized(_workflow(), base))

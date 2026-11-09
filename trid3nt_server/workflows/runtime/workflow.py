@@ -155,9 +155,8 @@ class Workflow:
         from trid3nt_server.inputs.gate.input_review import no_session
         from .fill import REJECTED, Verdict
 
-        mode = state.carried.get("input_mode")
-        sentence = no_session(self.name, mode) if self.engine else None
-        return {} if sentence is None else {"input_mode": Verdict(REJECTED, mode, reason=sentence, code="NO_SESSION")}
+        sentence = no_session(self.name) if self.engine else None
+        return {} if sentence is None else {"AUTO": Verdict(REJECTED, None, reason=sentence, code="NO_SESSION")}
 
     def unnamed(self) -> tuple[str, ...]:
         """Every input the template names as a plain string that nothing of
@@ -486,10 +485,9 @@ class Workflow:
         clear_session_run()
 
 
-#: Controls every workflow carries: whether the run pauses, whether a kept mesh is rebuilt, the raw keyword floor,
+#: Controls every workflow carries: whether a kept mesh is rebuilt, the raw keyword floor,
 #: and the source a caller names for a matched slot. None is a physical value, so none is an Input.
 _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
-    ("input_mode", str | None, None),
     ("restart_clean", bool, False),
     ("keywords", dict | None, None),
     ("picks", dict | None, None),
@@ -498,10 +496,6 @@ _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
 #: What each control does, stated once here rather than restated per template. A control is
 #: never a physical value, so neither sentence ever offers a range or a default.
 _CONTROL_DOCS: tuple[tuple[str, str], ...] = (
-    ("input_mode",
-     '"user_gated" presents the resolved inputs for review/edit before the '
-     'solve and pauses; "auto" (session default) proceeds with every '
-     'assumption labeled. Not a physical value.'),
     ("restart_clean",
      "True builds the mesh again even where one built from the same domain, "
      "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
@@ -518,7 +512,6 @@ _CONTROL_DOCS: tuple[tuple[str, str], ...] = (
 
 #: The wire's one-line description of each control, unit or shape first; the framework's, stated once for every template.
 _CONTROL_SCHEMA: dict[str, str] = {
-    "input_mode": 'text, "user_gated" or "auto"; pause the run for review of its inputs, or go on with every assumption labeled',
     "restart_clean": "true/false; build the mesh again even where a kept one matches",
     "keywords": "object, keyword name to value; the engine keywords this run states beyond the template",
     "picks": "object, input name to source; the source this run names for a matched input",

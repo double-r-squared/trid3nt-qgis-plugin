@@ -902,7 +902,7 @@ def test_a_floor_that_is_not_a_mapping_refuses_by_name():
 
     with pytest.raises(SlotRefused) as caught:
         asyncio.run(fill_sheet(steering=T2D, produced={}, params={},
-                               workflow="probe", title="", input_mode="auto",
+                               workflow="probe", title="",
                                keywords='{"LAW OF BOTTOM FRICTION": 4}'))
     assert "mapping" in str(caught.value) and "got str" in str(caught.value)
 
@@ -1184,7 +1184,7 @@ class _CARD(T2D):
     storm = Storm(mm_per_day="storm_mm_per_day", hours=None)
 
 
-def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None,
+def _card_run(monkeypatch, *replies, spent=(), seat=None,
               write=None, rate=6.0, user=()):
     import asyncio
 
@@ -1199,7 +1199,7 @@ def _card_run(monkeypatch, *replies, spent=(), input_mode=None, seat=None,
         try:
             return await fill_sheet(
                 steering=_CARD, produced=_SETTLED, params={"storm_mm_per_day": rate},
-                workflow="probe", title="", keywords={}, input_mode=input_mode,
+                workflow="probe", title="", keywords={},
                 spent=spent, seat=seat, write=write, user=user)
         finally:
             answering.cancel()
@@ -1338,13 +1338,14 @@ def test_an_unstated_mode_with_no_session_refuses_and_fills_nothing(monkeypatch)
     with pytest.raises(DeclarativeError) as caught:
         asyncio.run(fill_sheet(steering=_CARD, produced=_SETTLED,
                                params={"storm_mm_per_day": 6.0}, workflow="probe",
-                               title="", keywords={}, input_mode=None))
+                               title="", keywords={}))
     assert caught.value.error_code == "NO_SESSION"
-    assert "input_mode='auto'" in str(caught.value)
+    assert "AUTO on" in str(caught.value)
 
 
-def test_auto_launches_at_once_with_no_card(monkeypatch):
-    sheet, emitter = _card_run(monkeypatch, input_mode="auto")
+def test_auto_launches_at_once_with_no_card(monkeypatch, user_settings):
+    user_settings(AUTO=True)
+    sheet, emitter = _card_run(monkeypatch)
     assert emitter.sent == [] and dict(sheet.resolved())["DURATION"] == 600.0
 
 

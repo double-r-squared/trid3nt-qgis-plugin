@@ -536,6 +536,9 @@ def typed_setting(row: dict, text: str):
             return int(text)
         if row["type"] == "REAL":
             return float(text)
+        if row["type"] == "LOGICAL":
+            word = text.strip().lower()
+            return True if word in ("true", "on", "yes", "1") else False if word in ("false", "off", "no", "0") else None
     except ValueError:
         return None
     return text.strip() or None

@@ -16,10 +16,15 @@ _STATED = {
     "background_concentration": 0.007, "porosity": 0.39,
     "longitudinal_dispersivity": 1.0, "transverse_dispersivity": 0.1,
     "snapshot": "1994-10-31", "solute": "Boron", "concentration_units": "mg/L",
-    "until": "1994-10-31", "time_steps": 118, "input_mode": "auto"}
+    "until": "1994-10-31", "time_steps": 118}
 _BED_RING = {"type": "Polygon", "coordinates": [[[-70.547, 41.64], [-70.545, 41.64],
                                                   [-70.545, 41.641], [-70.547, 41.641],
                                                   [-70.547, 41.64]]]}
+
+
+@pytest.fixture(autouse=True)
+def _auto_input_mode(user_settings):
+    user_settings(AUTO=True)
 
 
 def _workflow():
@@ -64,7 +69,7 @@ def test_the_source_polygon_is_the_recharge_that_carries_the_effluent_concentrat
                 "water_table_depth": 2.0, "bed": 0.0, "streams": None,
                 "event_time": "1936-01-01T00:00:00Z", **{
                     k: _STATED[k] for k in _STATED
-                    if k not in ("snapshot", "solute", "concentration_units", "input_mode")}}
+                    if k not in ("snapshot", "solute", "concentration_units")}}
     sheet = fill(steering, produced=produced)
     natural, source = sheet.filled["RCH_STRESS_PERIOD_DATA"].value["statements"]
     assert natural["values"] == {"rate": 5.0e-4, "concentration": 0.007}

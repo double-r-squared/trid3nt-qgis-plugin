@@ -184,7 +184,7 @@ def ingest_slot(slot: Slot | None, value: Any, *, label: str = "",
 
 
 async def ask_on_canvas(slot: Slot | None, *, geometry: str = "", tool: str,
-                        param: str, input_mode: Any = None) -> Any:
+                        param: str) -> Any:
     """Ask the canvas for a shape the caller did not fill -> the typed value.
 
     The shape is the row's own ``need(geometry=)``, else the shape its slot states.
@@ -196,20 +196,18 @@ async def ask_on_canvas(slot: Slot | None, *, geometry: str = "", tool: str,
         return None
     purpose, prompt = offer
     drawn = await draw_on_canvas(shape, tool=tool, param=param,
-                                 prompt=prompt, purpose=purpose or None,
-                                 input_mode=input_mode)
+                                 prompt=prompt, purpose=purpose or None)
     return None if drawn is None else ingest_slot(slot, drawn, label=param)
 
 
 async def draw_on_canvas(geometry: str, *, tool: str, param: str, prompt: str,
-                         purpose: str | None = None,
-                         input_mode: Any = None) -> Any:
+                         purpose: str | None = None) -> Any:
     """The one canvas ask: the drawn value as it came, or ``None`` - outside a
     live ``user_gated`` session, or when nothing was drawn."""
     from trid3nt_server.inputs.gate.input_review import resolve_input_gate_mode
     from trid3nt_server.render.pipeline_emitter import current_emitter
 
-    if resolve_input_gate_mode(input_mode) != "user_gated" \
+    if resolve_input_gate_mode() != "user_gated" \
             or current_emitter() is None:
         return None
     from trid3nt_server.inputs.gate.draw_input import gate_draw_input

@@ -117,7 +117,8 @@ def test_the_record_lists_the_settings_the_run_read():
     assert rec["settings"] == [{"name": "FILL_MAX_DISTANCE", "value": 200, "level": "run"}]
 
 
-def test_a_keyword_run_states_a_setting_and_the_run_journals_it_read(monkeypatch):
+def test_a_keyword_run_states_a_setting_and_the_run_journals_it_read(monkeypatch, user_settings):
+    user_settings(AUTO=True)
     """The fill and the launch each read what they read; the run holds both, at the level the run stated."""
     async def _produce(env, decl):
         settings.setting("SAMPLE_INTERP")
@@ -132,7 +133,7 @@ def test_a_keyword_run_states_a_setting_and_the_run_journals_it_read(monkeypatch
     wf = TOOL_REGISTRY["telemac_ice_cover"].fn.workflow
     monkeypatch.setattr(type(wf), "launch", _launch)
     state = asyncio.run(fill(Fill(workflow=wf), {
-        "input_mode": "auto", "seed": [0.5, 0.5], "event_time": "2024-06-01T00:00:00Z",
+        "seed": [0.5, 0.5], "event_time": "2024-06-01T00:00:00Z",
         "keywords": {"settings: FILL_MAX_DISTANCE": 200}}))
     run = asyncio.run(wf._launched(state))
     assert state.settings == {"FILL_MAX_DISTANCE": 200}
@@ -141,11 +142,34 @@ def test_a_keyword_run_states_a_setting_and_the_run_journals_it_read(monkeypatch
     assert state.settings_read["SAMPLE_INTERP"]["level"] == "default"
 
 
-def test_a_setting_stated_out_of_range_is_a_refused_keyword_not_a_run():
+def test_a_setting_stated_out_of_range_is_a_refused_keyword_not_a_run(user_settings):
+    user_settings(AUTO=True)
     wf = TOOL_REGISTRY["telemac_ice_cover"].fn.workflow
     state = asyncio.run(fill(Fill(workflow=wf), {
-        "input_mode": "auto", "seed": [0.5, 0.5], "event_time": "2024-06-01T00:00:00Z",
+        "seed": [0.5, 0.5], "event_time": "2024-06-01T00:00:00Z",
         "keywords": {"settings: FILL_MAX_DISTANCE": 0}}))
     verdict = state.inputs["settings: FILL_MAX_DISTANCE"]
     assert verdict.code == "KEYWORD_REFUSED" and "FILL_MAX_DISTANCE" in verdict.reason
     assert not state.ready
+
+
+def test_auto_defaults_off_and_the_person_sets_it_at_user_level(user_settings):
+    assert settings.resolve("AUTO") == (False, "default")
+    user_settings(AUTO=True)
+    assert settings.resolve("AUTO") == (True, "user")
+    with pytest.raises(SlotRefused):
+        settings.typed(settings.entry("AUTO"), "sometimes")
+
+
+def test_a_run_cannot_state_auto_on_a_call_or_bind_it_to_a_session(user_settings):
+    stated, refused, rest = settings.split_keywords({"settings: AUTO": True, "X": 1})
+    assert stated == {} and rest == {"X": 1}
+    assert "person's own setting" in refused["settings: AUTO"]
+    with pytest.raises(SlotRefused, match="person's own setting"):
+        settings.state_session_run("s1", "AUTO", True)
+    assert settings.resolve("AUTO") == (False, "default")
+
+
+def test_set_config_refuses_auto_for_a_run_before_any_card_opens():
+    with pytest.raises(SlotRefused, match="person's own setting"):
+        asyncio.run(TOOL_REGISTRY["set_config"].fn(name="AUTO", value=True, scope="run"))

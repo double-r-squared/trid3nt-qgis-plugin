@@ -39,7 +39,7 @@ def active_mesh_session(mesh_id: str | None = None) -> MeshSession:
         raise MeshToolError(
             "MESH_NO_ACTIVE_SESSION",
             "no mesh is open at the gate, so there is no recipe to edit; build "
-            "one with build_mesh(input_mode='user_gated') first.")
+            "one with build_mesh first, with AUTO off.")
     if mesh_id and str(mesh_id) != session.mesh_id:
         raise MeshToolError(
             "MESH_SESSION_CLOSED",
@@ -109,7 +109,6 @@ _REFUSALS = {
 
 
 async def gate_mesh_build(session: MeshSession, *, tool_name: str,
-                          input_mode: str | None = None,
                           max_rounds: int | None = None) -> MeshArtifact:
     """Build the demanded mesh under the gate -> the accepted :class:`MeshArtifact`.
 
@@ -138,7 +137,7 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
     _AT_GATE = session
     try:
         outcome = await gate_input_review(
-            tool_name=tool_name, mode=input_mode, entries=[], params={},
+            tool_name=tool_name, entries=[], params={},
             max_rounds=max_rounds,
             present=card, apply_revision=revise)
     finally:

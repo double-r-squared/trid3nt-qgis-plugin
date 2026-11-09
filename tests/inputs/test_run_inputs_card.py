@@ -18,7 +18,7 @@ from trid3nt_server.inputs.slots import EXTENT
 
 def _tool(mesher: Literal["om2d", "reg_grid"] = "reg_grid",
           extent: Annotated[Any, EXTENT] = None,
-          resolution_m: float | None = None, input_mode: str | None = None) -> None:
+          resolution_m: float | None = None) -> None:
     """A tool with an enumerated input, a slot-typed input and a typed one."""
 
 
@@ -129,10 +129,10 @@ def test_a_pick_goes_through_the_accept_rule(layers) -> None:
                         "resolution_m": 25.0}
 
 
-def test_a_stated_value_the_rule_refuses_opens_the_card(layers) -> None:
+def test_a_stated_value_the_rule_refuses_opens_the_card_even_in_auto(layers, user_settings) -> None:
+    user_settings(AUTO=True)
     emitter, _ = asyncio.run(_run(
-        {"mesher": "om2d", "extent": "L-junk", "resolution_m": 1.0,
-         "input_mode": "auto"}, layers, ("cancel", None)))
+        {"mesher": "om2d", "extent": "L-junk", "resolution_m": 1.0}, layers, ("cancel", None)))
     rows = _rows(emitter)
     assert list(rows) == ["extent"]
     assert "extent does not take 'depth raster'" in rows["extent"].note

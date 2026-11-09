@@ -372,7 +372,8 @@ def test_a_lasting_upstream_failure_reaches_the_step_and_the_wire_as_upstream():
 
 
 @pytest.mark.asyncio
-async def test_a_lasting_upstream_failure_on_the_invoke_path_goes_out_as_upstream(monkeypatch):
+async def test_a_lasting_upstream_failure_on_the_invoke_path_goes_out_as_upstream(monkeypatch, user_settings):
+    user_settings(AUTO=True)
     import json
     from trid3nt_contracts import new_ulid
     from trid3nt_server.server import SessionState
@@ -393,7 +394,7 @@ async def test_a_lasting_upstream_failure_on_the_invoke_path_goes_out_as_upstrea
     sock = _Socket()
     await emitter._dispatch_tool_and_persist(sock, SessionState(session_id=new_ulid()),
                                              "fetch_usgs_nwis_gauges",
-                                             {"input_mode": "auto"}, "!run")
+                                             {}, "!run")
     [err] = [m["payload"] for m in sock.sent if m.get("type") == "error"]
     assert err["error_code"] == "UPSTREAM_API_ERROR" and err["retryable"] is True
     assert err["message"] == ("[NWIS_GAUGES_UPSTREAM_ERROR] NetworkError: "

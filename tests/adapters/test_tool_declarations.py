@@ -154,3 +154,13 @@ def test_a_custom_class_crosses_as_text_and_is_never_required() -> None:
     from trid3nt_contracts.execution import ExecutionHandle
 
     assert _parameter_schema(ExecutionHandle, None) == ({"type": "string"}, False)
+
+
+def test_no_model_facing_declaration_names_input_mode(all_declarations: dict[str, Any]) -> None:
+    """AUTO is the person's setting; input_mode is gone from the surface: no schema, parameter or description the model reads carries it."""
+    named = [name for name, d in all_declarations.items()
+             if "input_mode" in json.dumps(d.schema, default=str).lower()
+             or "input_mode" in str(getattr(d, "description", "")).lower()]
+    assert named == []
+    assert [n for n, t in TOOL_REGISTRY.items()
+            if "input_mode" in (getattr(t.fn, "__doc__", None) or "").lower()] == []

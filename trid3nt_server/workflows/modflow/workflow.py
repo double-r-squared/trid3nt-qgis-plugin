@@ -428,7 +428,7 @@ class ModflowWorkflow(Workflow):
         if "mesh" not in run:
             await stage("mesh", build_declared_mesh,
                         mesh=await self._recipe(env, self.template.MESH, set()),
-                        name=await read(env, domain), input_mode=env.input_mode,
+                        name=await read(env, domain),
                         fresh=bool(state.carried.get("restart_clean")))
         await keep_mesh(run["mesh"])
         for name in self.named_rows(run):
@@ -467,7 +467,7 @@ class ModflowWorkflow(Workflow):
                         params={key: run[key] for key in declared},
                         workflow=self.name,
                         title=self._states("REVIEW_TITLE", ""), keywords=keywords,
-                        input_mode=env.input_mode, seat=_seat_on(env), write=write,
+                        seat=_seat_on(env), write=write,
                         user=[key for key, verdict in env.inputs.items()
                               if verdict.origin is Origin.USER])
         except BaseException:

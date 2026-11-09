@@ -479,7 +479,7 @@ class GeoclawWorkflow(Workflow):
         if "mesh" not in run:
             asked = await self._recipe(env, self.template.MESH, set())
             await stage("mesh", build_declared_mesh, mesh={**asked, "ops": asked["ops"] if regions is None else regions},
-                        name=await read(env, domain), input_mode=env.input_mode,
+                        name=await read(env, domain),
                         fresh=bool(state.carried.get("restart_clean")))
         await keep_mesh(run["mesh"])
         run_id = new_ulid()
@@ -510,7 +510,7 @@ class GeoclawWorkflow(Workflow):
                         produced={**run, **{slot.name: run[held] for slot, held in slots.items() if held in run}},
                         params={key: run[key] for key in declared}, workflow=self.name,
                         title=self._states("REVIEW_TITLE", ""), keywords={**keywords, **grid},
-                        input_mode=env.input_mode, seat=_seat_on(env), write=write,
+                        seat=_seat_on(env), write=write,
                         user=[key for key, verdict in env.inputs.items() if verdict.origin is Origin.USER])
         except BaseException:
             # A run that does not reach the box leaves no staged copy behind.

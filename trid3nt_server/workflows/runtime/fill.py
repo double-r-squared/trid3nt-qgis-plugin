@@ -94,7 +94,6 @@ class _Env:
     data: dict[str, Input]
     #: Every input's verdict, by name - the fill's own mapping, stamped here as well by a row first read during the launch.
     inputs: dict[str, "Verdict"] = field(default_factory=dict)
-    input_mode: str | None = None
     #: The workflow this fill belongs to - what a gate card names as the asker.
     workflow: str = ""
     #: The source the run NAMES for a slot, by slot name. It picks among the
@@ -174,8 +173,7 @@ async def _produce(env: _Env, decl: Input) -> Any:
         from trid3nt_server.inputs.slots import ask_on_canvas
 
         drawn = await ask_on_canvas(decl.slot, geometry=decl.geometry or "",
-                                    tool=env.workflow, param=decl.name,
-                                    input_mode=env.input_mode)
+                                    tool=env.workflow, param=decl.name)
         if drawn is not None:
             return drawn
     if producer is None:
@@ -813,9 +811,8 @@ def _validate_supplied(env: _Env, decl: Input, supplied: Any) -> None:
 ACCEPTED, REJECTED, MISSING, DEFAULTED = (
     "accepted", "rejected", "missing", "defaulted")
 
-#: What rides a fill beside its inputs and is carried as stated: how the run is
-#: reviewed, and whether a kept mesh is rebuilt.
-_CARRIED = ("input_mode", "restart_clean")
+#: What rides a fill beside its inputs and is carried as stated: whether a kept mesh is rebuilt.
+_CARRIED = ("restart_clean",)
 
 #: The code of a row that was not produced because a param it stands on was refused.
 _WAITS = "FILL_NOT_READY"
@@ -1036,7 +1033,7 @@ def restate(state: Fill) -> None:
 async def _coerced(state: Fill) -> tuple[dict[str, Any], set[str]]:
     """Every stated value through the workflow's coercions -> what each value input answers
     on, and the names a coercion refused: its typed refusal is that input's verdict."""
-    args = {**state.stated, "input_mode": state.carried.get("input_mode")}
+    args = dict(state.stated)
     refused: set[str] = set()
     for coercion in state.workflow.coercions:
         try:
@@ -1110,7 +1107,7 @@ def production(state: Fill) -> _Env:
         state.env = _Env(
             data={row.name: row for row in wf.inputs if row.is_row},
             inputs=state.inputs,
-            input_mode=state.carried.get("input_mode"), workflow=wf.name,
+            workflow=wf.name,
             window_s=wf.run_window_s(state.keywords), moment=wf.moment,
             slot_units=wf.slot_units(), captions=wf.captions,
             lays_own_bed=wf.lays_own_bed)

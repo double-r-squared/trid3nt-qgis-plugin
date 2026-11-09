@@ -90,17 +90,19 @@ def test_a_value_of_no_readable_shape_refuses_under_the_callers_code(bad):
 
 # -- the pick-or-wire coercion ---------------------------------------------------- #
 
-def test_the_coercion_reads_the_wire_value_and_never_asks_in_auto(monkeypatch):
+def test_the_coercion_reads_the_wire_value_and_never_asks_in_auto(monkeypatch, user_settings):
     from trid3nt_server.inputs.gate import draw_input
+
+    user_settings(AUTO=True)
 
     async def _never(**_kw):
         raise AssertionError("auto mode asks nobody")
 
     monkeypatch.setattr(draw_input, "gate_draw_input", _never)
     coerce = point_arg("release", tool="t", prompt="click")
-    out = asyncio.run(coerce({"release": [-114.31, 42.58], "input_mode": "auto"}))
+    out = asyncio.run(coerce({"release": [-114.31, 42.58]}))
     assert out == {"release": Point(-114.31, 42.58)}
-    assert asyncio.run(coerce({"input_mode": "auto"})) == {"release": None}
+    assert asyncio.run(coerce({})) == {"release": None}
 
 
 def test_the_coercion_asks_the_canvas_only_when_gated_live_and_empty(monkeypatch):
@@ -117,11 +119,11 @@ def test_the_coercion_asks_the_canvas_only_when_gated_live_and_empty(monkeypatch
     monkeypatch.setattr(draw_input, "gate_draw_input", _gate)
     monkeypatch.setattr(pipeline_emitter, "current_emitter", lambda: object())
     coerce = point_arg("release", tool="telemac_dye_release", prompt="click")
-    out = asyncio.run(coerce({"input_mode": "user_gated"}))
+    out = asyncio.run(coerce({}))
     assert out == {"release": Point(-114.31, 42.58, "point-1")}
     assert asked == [("telemac_dye_release", "release")]
     # a value on the wire is never second-guessed by a card
-    asyncio.run(coerce({"release": [-1.0, 1.0], "input_mode": "user_gated"}))
+    asyncio.run(coerce({"release": [-1.0, 1.0]}))
     assert len(asked) == 1
 
 
@@ -136,7 +138,7 @@ def test_a_point_and_a_drawn_slot_ask_through_the_one_canvas_ask(monkeypatch):
 
     monkeypatch.setattr(slots, "draw_on_canvas", _draw)
     coerce = point_arg("release", tool="t", prompt="click")
-    assert asyncio.run(coerce({"input_mode": "user_gated"})) == {"release": None}
+    assert asyncio.run(coerce({})) == {"release": None}
     assert asyncio.run(slots.ask_on_canvas(slots.DOMAIN, tool="t", param="domain")) is None
     assert asked == [("point", "release"), ("polygon", "domain")]
 
@@ -149,8 +151,8 @@ def test_a_point_with_no_prompt_is_read_and_never_asked_for(monkeypatch):
 
     monkeypatch.setattr(slots, "draw_on_canvas", _draw)
     coerce = point_arg("well", tool="t", prompt=None)
-    assert asyncio.run(coerce({"input_mode": "user_gated"})) == {"well": None}
-    assert asyncio.run(coerce({"well": [-1.0, 1.0], "input_mode": "user_gated"})) \
+    assert asyncio.run(coerce({})) == {"well": None}
+    assert asyncio.run(coerce({"well": [-1.0, 1.0]})) \
         == {"well": Point(-1.0, 1.0)}
 
 
@@ -164,7 +166,7 @@ def test_a_declined_pick_leaves_the_slot_empty(monkeypatch):
     monkeypatch.setattr(draw_input, "gate_draw_input", _gate)
     monkeypatch.setattr(pipeline_emitter, "current_emitter", lambda: object())
     coerce = point_arg("release", tool="t", prompt="click")
-    assert asyncio.run(coerce({"input_mode": "user_gated"})) == {"release": None}
+    assert asyncio.run(coerce({})) == {"release": None}
 
 
 # -- the shared viability check: a point is checked, never moved ------------------ #

@@ -60,3 +60,9 @@ class TestTypedSetting(unittest.TestCase):
         self.assertIsNone(tc.typed_setting(row, "five"))
         self.assertEqual(tc.typed_setting({"type": "REAL", "value": 1.0}, "7"), 7.0)
         self.assertEqual(tc.typed_setting({"type": "STRING", "value": "viridis"}, " magma "), "magma")
+
+    def test_a_logical_setting_takes_on_or_off_and_nothing_else(self):
+        row = {"type": "LOGICAL", "value": False}
+        self.assertIs(tc.typed_setting(row, "on"), True)
+        self.assertIs(tc.typed_setting(row, " False "), False)
+        self.assertIsNone(tc.typed_setting(row, "maybe"))

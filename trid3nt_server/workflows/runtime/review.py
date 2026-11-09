@@ -76,7 +76,7 @@ def _coverage_rows() -> list[ParamSheetRow]:
 
 async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
                   params: Mapping[str, Any], *, steering: type, workflow: str,
-                  title: str, input_mode: str | None,
+                  title: str,
                   spent: Sequence[str],
                   seat: Callable[[Mapping[str, Any]], None] | None = None,
                   user: Sequence[str] = ()) -> Sheet:
@@ -128,7 +128,7 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
         sheet = await fill(values, edits)
 
     outcome = await gate_input_review(
-        tool_name=workflow, mode=input_mode, entries=_entries(rows()),
+        tool_name=workflow, entries=_entries(rows()),
         params={}, present=card, apply_revision=revise)
     if not outcome.proceed:
         # A refusal keeps its reason's code; only a person's own cancel is the decline code every gate cancels under.
@@ -229,7 +229,7 @@ def _group(slot: Any) -> str:
 async def fill_sheet(*, engine: str, floor: Callable[[type, Mapping[str, Any]], tuple[dict[str, Any], dict[str, dict[str, Any]]]],
                      steering: type, produced: Mapping[str, Any], params: Mapping[str, Any],
                      settled: Mapping[str, Any] | None = None, workflow: str, title: str,
-                     keywords: Mapping[str, Any], input_mode: str | None, spent: Sequence[str] = (),
+                     keywords: Mapping[str, Any], spent: Sequence[str] = (),
                      compose: Callable[[Sheet, Mapping[str, Mapping[str, Any]], Mapping[str, Any]], Sheet] | None = None,
                      seat: Callable[[Mapping[str, Any]], None] | None = None,
                      write: Callable[[Sheet], Any] | None = None, user: Sequence[str] = ()) -> Sheet:
@@ -261,7 +261,7 @@ async def fill_sheet(*, engine: str, floor: Callable[[type, Mapping[str, Any]], 
         return sheet
 
     sheet = await _review(fill, params, steering=steering, workflow=workflow,
-                          title=title, input_mode=input_mode, spent=spent,
+                          title=title, spent=spent,
                           seat=seat, user=user)
     logger.info("%s sheet filled: %s states %d keywords, %d open (%d required)",
                 engine, sheet.body.__name__, len(sheet.filled),

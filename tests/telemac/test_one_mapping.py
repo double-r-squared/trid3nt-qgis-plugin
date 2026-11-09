@@ -22,6 +22,11 @@ from trid3nt_server.workflows.telemac.workflow import (Measured, _names,
 from seated import value_inputs, row_inputs
 
 
+@pytest.fixture(autouse=True)
+def _auto_input_mode(user_settings):
+    user_settings(AUTO=True)
+
+
 def _workflow(name: str):
     return TOOL_REGISTRY[name].fn.workflow
 
@@ -131,8 +136,7 @@ _STATED = {"pour_point": [-82.42, 43.0],
 def _stated(workflow):
     """The share of them this template declares: one it does not is refused."""
     declared = {prm.name for prm in value_inputs(workflow)}
-    return {"input_mode": "auto",
-            **{name: value for name, value in _STATED.items() if name in declared}}
+    return {name: value for name, value in _STATED.items() if name in declared}
 
 
 def _filled_with(monkeypatch, workflow, produce):

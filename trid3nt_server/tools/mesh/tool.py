@@ -91,7 +91,6 @@ async def build_mesh(
     resolution_m: float | None = None,
     build: dict | None = None,
     ops: list[dict] | None = None,
-    input_mode: str | None = None,
 ) -> Any:
     """BUILD A COMPUTATIONAL MESH for a domain -> a mesh layer + a solver-ready artifact.
 
@@ -124,8 +123,6 @@ async def build_mesh(
         ops: the ordered program, [{"fn": name, ...kwargs}], calling the mesh
             library's own functions plus set_bed and set_boundary_roles. Omit for
             the mesher's defaults; refine a built one with mesh_op.
-        input_mode: user_gated presents the mesh at the gate to edit and accept;
-            auto accepts inline.
     """
     import asyncio
 
@@ -156,7 +153,7 @@ async def build_mesh(
     session = MeshSession(recipe, case_id=current_turn_case(), name=name)
     # user_gated stops at the gate - presented, editable, accepted by the reply;
     # auto and a headless call accept inline. The gate owns both.
-    await gate_mesh_build(session, tool_name="build_mesh", input_mode=input_mode)
+    await gate_mesh_build(session, tool_name="build_mesh")
     return session.snapshot()
 
 

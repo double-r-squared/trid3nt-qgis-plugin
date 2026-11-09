@@ -543,7 +543,6 @@ class TelemacWorkflow(Workflow):
             await stage("mesh", build_declared_mesh,
                         mesh=await self._recipe(env, mesh, untaken),
                         name=await read(env, self._states("MESH_ON", "") or domain),
-                        input_mode=env.input_mode,
                         fresh=bool(state.carried.get("restart_clean")))
         else:
             self._say_what_no_build_read(env, mesh)
@@ -612,7 +611,6 @@ class TelemacWorkflow(Workflow):
                         settled=run[_SETTLED].get("keywords") or {},
                         workflow=self.name,
                         title=self._states("REVIEW_TITLE", ""), keywords=keywords,
-                        input_mode=env.input_mode,
                         spent=sorted(mark.name for mark in placed),
                         seat=_seat_on(env), write=write,
                         user=[name for name, verdict in env.inputs.items()

@@ -74,14 +74,15 @@ async def _drive(
 
 
 def test_mode_default_is_user_gated() -> None:
-    assert resolve_input_gate_mode(None) == "user_gated"
-    assert resolve_input_gate_mode("garbage") == "user_gated"
+    assert resolve_input_gate_mode() == "user_gated"
 
 
-def test_only_the_call_states_auto(monkeypatch) -> None:
+def test_only_the_persons_setting_states_auto(monkeypatch, user_settings) -> None:
     monkeypatch.setenv("TRID3NT_INPUT_GATE_MODE", "auto")
-    assert resolve_input_gate_mode(None) == "user_gated"
-    assert resolve_input_gate_mode(" Auto ") == "auto"
+    assert resolve_input_gate_mode() == "user_gated"
+    user_settings(AUTO=True)
+    assert resolve_input_gate_mode() == "auto"
+    assert resolve_input_gate_mode("user_gated") == "user_gated"
 
 
 def test_render_lines_one_per_input() -> None:
@@ -116,7 +117,7 @@ async def test_user_gated_no_session_refuses_by_name(monkeypatch, mode) -> None:
     assert out.proceed is False and out.cancelled is True
     assert out.mode == "user_gated" and out.cancel_code == "no_session"
     assert out.cancel_reason.startswith("NO_SESSION: geoclaw_inundation did not run")
-    assert "input_mode='auto'" in out.cancel_reason
+    assert "AUTO on" in out.cancel_reason
 
 
 @pytest.mark.asyncio

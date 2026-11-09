@@ -335,6 +335,22 @@
       "source": "TRID3NT engineering default."
     },
     {
+      "keyword": "AUTO",
+      "identifier": "AUTO",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Off, a run pauses for the person to review its inputs, drop points, draw and accept the mesh. On, the system proceeds without a person, filling from its own defaults with every assumption labeled. The person's switch alone: no call and no run states it.",
+      "rubrique": [
+        "gate"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": false,
+      "source": "TRID3NT engineering default."
+    },
+    {
       "keyword": "PROCESSING_TIMEOUT_S",
       "identifier": "PROCESSING_TIMEOUT_S",
       "type": "REAL",

@@ -159,8 +159,7 @@ async def test_the_gate_card_names_the_finest_cell_and_the_cells_per_level(
     session = MeshSession(_recipe(mesh_op("flagregion", **_COAST)), workdir=tmp_path)
     driver = asyncio.create_task(_proceed())
 
-    await mesh_gate.gate_mesh_build(session, tool_name="geoclaw_probe",
-                                    input_mode="user_gated")
+    await mesh_gate.gate_mesh_build(session, tool_name="geoclaw_probe")
     await driver
 
     envelope = fake.sent[0]

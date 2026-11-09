@@ -18,9 +18,6 @@ from .user_input import UserInputError
 
 __all__ = ["InputRefused", "accept", "choices_of", "inputs_of", "layers_taking", "offers"]
 
-#: What rides a call beside its inputs and is never an input to supply.
-_CARRIED = ("input_mode",)
-
 
 class InputRefused(UserInputError):
     """One input's value refused by its own accept rule, by name."""
@@ -32,7 +29,7 @@ class InputRefused(UserInputError):
 def inputs_of(fn: Any) -> list[str]:
     """The inputs a caller supplies to ``fn``, in its signature's order."""
     return [name for name, prm in inspect.signature(fn).parameters.items()
-            if not name.startswith("_") and name not in _CARRIED
+            if not name.startswith("_")
             and prm.kind not in (prm.VAR_POSITIONAL, prm.VAR_KEYWORD)]
 
 

@@ -98,15 +98,14 @@ def test_the_generated_signature_is_the_declaration_plus_controls():
     )
     sig, annotations = _wire_signature(params)
     assert list(sig.parameters) == ["location", "depth_m", "armed",
-                                    "solver_dt_s", "input_mode", "restart_clean", "keywords",
+                                    "solver_dt_s", "restart_clean", "keywords",
                                     "picks", "_extra_ignored"]
     assert annotations["depth_m"] == (float | None)      # bounded -> float
     assert annotations["armed"] == bool                  # declared type wins, and it is required
     assert annotations["location"] == str                # inferred, and required
     assert sig.parameters["restart_clean"].default is False
     assert all(sig.parameters[n].default is None
-               for n in ("location", "depth_m", "armed", "input_mode",
-                         "keywords"))
+               for n in ("location", "depth_m", "armed", "keywords"))
     # The absorber is the channel, not a tolerance: what it carries is refused.
     assert sig.parameters["_extra_ignored"].kind is inspect.Parameter.VAR_KEYWORD
 
@@ -129,6 +128,17 @@ def test_an_argument_the_tool_does_not_declare_is_refused_by_name():
     assert "'description' is not an input of telemac_dye_release " \
         "(none is close)." in said
     assert said.count("inside keywords") == 1
+
+
+def test_a_call_carrying_input_mode_is_refused_by_name():
+    """The mode is the person's setting, so a call stating it is an unknown input like any other."""
+    import asyncio
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    out = asyncio.run(TOOL_REGISTRY["telemac_dye_release"].fn(input_mode="auto"))
+    assert out["status"] == "error" and out["error_code"] == "INPUT_UNNAMED"
+    assert "'input_mode' is not an input of telemac_dye_release" in out["error_message"]
 
 
 def test_a_required_param_is_required_on_the_schema_and_says_so_on_its_line():

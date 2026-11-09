@@ -27,6 +27,11 @@ _METADATA = AtomicToolMetadata(
     tier="template")
 
 
+@pytest.fixture(autouse=True)
+def _auto_input_mode(user_settings):
+    user_settings(AUTO=True)
+
+
 class STEERING(T2D):
     """The deck: a body of water under a week of weather."""
 
@@ -355,7 +360,6 @@ def test_a_previous_computation_a_measured_settle_cannot_open_on_is_refused_at_t
                         lambda: [SimpleNamespace(kind="harbour")])
     monkeypatch.setattr(workflow, "named_rows", lambda held=(): ())
     state = _filled_by(workflow, {
-        "input_mode": "auto",
         "keywords": {"PREVIOUS COMPUTATION FILE": "s3://r/prev.slf"}})
     refused = state.inputs["PREVIOUS_COMPUTATION_FILE"]
     assert refused.state == "rejected"
@@ -373,12 +377,12 @@ def test_a_deck_stating_no_cadence_is_refused_at_the_fill_and_stating_it_clears_
     monkeypatch.setattr(body, "ASSERTED", MappingProxyType(
         {k: v for k, v in body.ASSERTED.items() if k != body.CADENCE}))
     monkeypatch.setattr(workflow, "named_rows", lambda held=(): ())
-    state = _filled_by(workflow, {"input_mode": "auto"})
+    state = _filled_by(workflow, {})
     refused = state.inputs[body.MODULE]
     assert refused.state == "missing" and refused.code == "TELEMAC_SHEET_INCOMPLETE"
     assert "GRAPHIC PRINTOUT PERIOD" in refused.reason and not state.ready
     state = _filled_by(workflow, {
-        "input_mode": "auto", "keywords": {"GRAPHIC PRINTOUT PERIOD": 100}})
+        "keywords": {"GRAPHIC PRINTOUT PERIOD": 100}})
     assert body.MODULE not in state.inputs
 
 

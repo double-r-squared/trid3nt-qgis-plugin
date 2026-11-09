@@ -26,6 +26,11 @@ TELEMAC_TEMPLATES: tuple[tuple[str, str], ...] = (
 )
 
 
+@pytest.fixture(autouse=True)
+def _auto_input_mode(user_settings):
+    user_settings(AUTO=True)
+
+
 def _resolve_bare(tool_name: str, location: str):
     """The door-1 sheet a BARE ``{"location": ...}`` invocation resolves to."""
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -52,7 +57,7 @@ def test_an_unsupplied_moment_is_no_verdict_and_never_invented(
     workflow = TOOL_REGISTRY[tool_name].fn.workflow
     assert not workflow.input("event_time").required
     with patch.object(fill_mod, "_produce", _held):
-        state = asyncio.run(fill(Fill(workflow=workflow), {"input_mode": "auto"}))
+        state = asyncio.run(fill(Fill(workflow=workflow), {}))
     assert "event_time" not in state.inputs
     assert "event_time" not in state.refusal()[1]
 
@@ -93,7 +98,7 @@ async def _normalized(workflow, args):
         return decl.name
 
     with patch.object(fill_mod, "_produce", _held):
-        state = await fill(Fill(workflow=workflow), {"input_mode": "auto", **args})
+        state = await fill(Fill(workflow=workflow), dict(args))
     declared = {prm.name for prm in value_inputs(workflow)}
     refused = [v.reason for v in state.inputs.values() if v.state == REJECTED]
     return ({n: v.value for n, v in state.inputs.items()

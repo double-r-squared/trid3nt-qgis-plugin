@@ -899,9 +899,9 @@ package SteeringSurface {
     requirement def RunIsHeld {
         doc /*
         Nothing executes until the user runs. A READY sheet is not a launched
-        one: the review's proceed is the launch, and only a call that itself
-        states input_mode='auto' launches a ready sheet on its own; a run that
-        states no mode and has no session to review on refuses by name, saying
+        one: the review's proceed is the launch, and only the person's own
+        AUTO setting turned on launches a ready sheet on its own; a run
+        with AUTO off and no session to review on refuses by name, saying
         how to launch it. Fill produces a sheet and no work
         beyond the producers the canvas shows; run is the separate, explicit act.
         A deck whose REQUIRED slots or cadence neither the template nor the
