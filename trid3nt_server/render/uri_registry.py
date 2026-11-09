@@ -7,6 +7,7 @@ reconnect; a NON-store string is never blocked, whatever it names.
 
 from __future__ import annotations
 
+import json
 import logging
 import posixpath
 import re
@@ -22,13 +23,16 @@ __all__ = [
     "RESOLVABLE_URI_PARAMS",
     "SESSIONS_HELD",
     "SHORT_HANDLE_RE",
+    "SOURCE_HANDLE_RE",
     "SessionUriRegistry",
     "UriResolutionError",
     "activate_registry",
     "deactivate_registry",
     "get_uri_registry",
+    "held_source_request",
     "lookup_layer_for_handle",
     "lookup_uri_for_handle",
+    "mint_source_handle",
     "observe_published_layer",
     "reset_uri_registries_for_tests",
 ]
@@ -41,6 +45,9 @@ RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset({"layer_uri", "model_setup_uri
 
 #: The short per-case layer-handle shape minted at the emit seam; case-insensitive on resolve, leading zeros normalize (``L07`` == ``L7``).
 SHORT_HANDLE_RE = re.compile(r"^[Ll](\d+)$")
+
+#: The per-case source-row handle shape find_sources mints; case-insensitive on resolve, leading zeros normalize.
+SOURCE_HANDLE_RE = re.compile(r"^[Ss](\d+)$")
 
 #: Guard against pathological mint growth; records themselves cap at 1024.
 _SHORT_HANDLES_CAP = 4096
@@ -160,6 +167,10 @@ class SessionUriRegistry:
     _uri_to_short: dict[str, str] = field(default_factory=dict)
     _short_seq: int = 0
     _shorts_dirty: bool = False
+    # Source-row handles (``S<n>``), each holding the request find_sources filled and showed. Minted and persisted
+    # beside the layer shorts, in the same map, so a number the model has seen is never reused within the Case.
+    _requests: OrderedDict[str, dict] = field(default_factory=OrderedDict)
+    _request_seq: int = 0
 
 
     def record(
@@ -231,6 +242,22 @@ class SessionUriRegistry:
         self._shorts_dirty = True
         return short
 
+    def mint_request(self, held: dict[str, Any]) -> str | None:
+        """Hold one filled source request under the next ``S<n>``."""
+        if len(self._requests) >= _SHORT_HANDLES_CAP:
+            return None
+        self._request_seq += 1
+        handle = f"S{self._request_seq}"
+        self._requests[handle] = dict(held)
+        self._shorts_dirty = True
+        return handle
+
+    def held_request(self, handle: str | None) -> dict[str, Any] | None:
+        """The request an ``S<n>`` holds, as a copy, or None."""
+        m = SOURCE_HANDLE_RE.match(str(handle or "").strip())
+        held = self._requests.get(f"S{int(m.group(1))}") if m else None
+        return json.loads(json.dumps(held)) if held is not None else None
+
     def short_for_uri(self, uri: str | None) -> str | None:
         """``uri`` -> its ``L<n>`` handle, or None."""
         if not uri:
@@ -238,8 +265,9 @@ class SessionUriRegistry:
         return self._uri_to_short.get(uri.strip())
 
     def export_short_handles(self) -> dict[str, str]:
-        """The persistable ``{L<n>: uri}`` map (mint order preserved)."""
-        return dict(self._short_to_uri)
+        """The persistable ``{L<n>: uri, S<n>: request as JSON}`` map (mint order preserved)."""
+        return {**self._short_to_uri,
+                **{handle: json.dumps(held, default=str) for handle, held in self._requests.items()}}
 
     def import_short_handles(self, mapping: dict[str, str] | None) -> None:
         """Restore a persisted ``{L<n>: uri}`` map; malformed entries are skipped.
@@ -251,6 +279,10 @@ class SessionUriRegistry:
         for raw_short, raw_uri in mapping.items():
             if not isinstance(raw_short, str) or not isinstance(raw_uri, str):
                 continue
+            held = SOURCE_HANDLE_RE.match(raw_short.strip())
+            if held is not None:
+                self._import_request(int(held.group(1)), raw_uri)
+                continue
             m = SHORT_HANDLE_RE.match(raw_short.strip())
             uri = raw_uri.strip()
             if m is None or not uri:
@@ -260,6 +292,15 @@ class SessionUriRegistry:
             self._short_to_uri[short] = uri
             self._uri_to_short.setdefault(uri, short)
             self._short_seq = max(self._short_seq, n)
+
+    def _import_request(self, n: int, raw: str) -> None:
+        try:
+            held = json.loads(raw)
+        except ValueError:
+            return
+        if isinstance(held, dict):
+            self._requests[f"S{n}"] = held
+            self._request_seq = max(self._request_seq, n)
 
     @property
     def shorts_dirty(self) -> bool:
@@ -396,6 +437,8 @@ class SessionUriRegistry:
         self._uri_to_short.clear()
         self._short_seq = 0
         self._shorts_dirty = False
+        self._requests.clear()
+        self._request_seq = 0
 
     def replace_from_layers(
         self, layers: Any, short_handles: dict[str, str] | None = None
@@ -675,6 +718,18 @@ def lookup_uri_for_handle(handle: str) -> str | None:
         return short
     record = reg._records.get(key)
     return record.uri if record is not None else None
+
+
+def mint_source_handle(held: dict[str, Any]) -> str | None:
+    """Hold a filled source request under the next ``S<n>`` of this dispatch's Case; ``None`` outside a dispatch."""
+    reg = _ACTIVE_REGISTRY.get()
+    return reg.mint_request(held) if reg is not None else None
+
+
+def held_source_request(handle: str, reg: SessionUriRegistry | None = None) -> dict[str, Any] | None:
+    """The request an ``S<n>`` holds in ``reg``, else in this dispatch's registry; ``None`` where neither holds it."""
+    reg = reg if reg is not None else _ACTIVE_REGISTRY.get()
+    return reg.held_request(handle) if reg is not None else None
 
 
 def case_layers() -> list[dict[str, str]]:

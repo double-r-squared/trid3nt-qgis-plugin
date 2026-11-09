@@ -1,7 +1,7 @@
 """``find_sources(query=...)``: every data source reached by name and words, ranked on none of the match's facts.
 
 Model-free over the source index the registry builds: the retrieval floor each source's own phrasings must clear, the
-name that always finds it, the two refusals of an unclear ask, and the params line a row carries."""
+name that always finds it, the two refusals of an unclear ask, the request a row holds, and the params line a refusal names."""
 
 from __future__ import annotations
 
@@ -46,15 +46,25 @@ def test_the_source_index_holds_every_spec_served_fetcher_and_nothing_else(regis
 async def test_flood_zones_ranks_the_fema_zones_source_in_the_top_three(registry):
     found = await find_sources(query="flood zones")
     assert "fetch_fema_nfhl_zones" in [row["source"] for row in found["results"]][:3]
-    assert {row["kind"] for row in found["results"]} == {"unranked"}
+    assert all(row["what"] and row["status"] for row in found["results"])
 
 
 @pytest.mark.asyncio
-async def test_a_row_carries_what_the_source_is_what_it_takes_and_the_call_it_is_ready_for(registry):
-    found = await find_sources(query="flood zones", place=[-90.2, 29.9, -90.0, 30.0])
+async def test_a_row_carries_what_the_source_is_what_it_takes_and_the_request_it_holds(registry):
+    from trid3nt_server.render.uri_registry import (
+        SessionUriRegistry, activate_registry, deactivate_registry)
+
+    reg = SessionUriRegistry(session_id="query-case")
+    token = activate_registry(reg)
+    try:
+        found = await find_sources(query="flood zones", place=[-90.2, 29.9, -90.0, 30.0])
+    finally:
+        deactivate_registry(token)
     row = next(r for r in found["results"] if r["source"] == "fetch_fema_nfhl_zones")
-    assert row["about"] and row["params"].startswith("bbox*")
-    assert row["ask"] == {"bbox": [-90.2, 29.9, -90.0, 30.0]}
+    assert row["what"] and row["status"] == "READY"
+    assert row["box"] == [-90.2, 29.9, -90.0, 30.0]
+    assert row["also accepts"].startswith("zone")
+    assert reg.held_request(row["handle"])["args"] == {"bbox": [-90.2, 29.9, -90.0, 30.0]}
 
 
 def test_every_source_with_phrasings_is_in_the_top_three_of_at_least_one_of_them(registry, source_index):

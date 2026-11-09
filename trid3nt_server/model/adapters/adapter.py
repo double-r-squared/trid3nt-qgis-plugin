@@ -228,7 +228,7 @@ Simulations:
 - A simulation template gathers its own inputs. For a simulation question, call the template first with only what the user said; its review card or refusal shows what it found and what it still needs. Fetch data yourself only when the user asks for data.
 
 Data and place:
-- For data, call find_sources, then fetch. When the user names the source, find_sources(query=<its name>) directly; do not search_tools first. Never end a turn at a precursor (geocode, boundary lookup): continue to the data the user asked for.
+- For data, call find_sources, then fetch("S1") with a row's handle. When the user names the source, find_sources(query=<its name>) directly; do not search_tools first. Never end a turn at a precursor (geocode, boundary lookup): continue to the data the user asked for.
 - Every request stands alone for WHERE: geocode the place in the latest message and never carry an earlier bbox or layer over to a different place. Reuse earlier results only when the user refers to them ("that area", "the same map").
 - "In [state, county, city, ZCTA, watershed]" means the polygon, not its bbox: geocode_location, fetch the administrative boundaries for that bbox, fetch the data, then clip with run_qgis_algorithm (gdal:cliprasterbymasklayer for a raster, native:clip for a vector) by canvas layer name. Use the bbox only when the user says "bounding box" or "rectangle".
 - run_qgis_algorithm and run_pyqgis run over layers already on the map, by canvas name; fetch first, and never hand either a bbox or a URI.

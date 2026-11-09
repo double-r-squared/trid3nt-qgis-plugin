@@ -509,10 +509,13 @@ package DataSeam {
 
     part def SourceDoor {
         doc /*
-        The one way the model reaches a data source: find_sources names it
-        (a ranked class at a place, or free text), fetch calls it by that name
-        with the arguments the row handed back. A source is no tool of the
-        prompt, the retrieval index or a declared set.
+        The one way the model reaches a data source: find_sources fills each
+        row (a ranked class at a place, or free text) through the same filler a
+        template's need row uses and holds the request under a handle S<n> the
+        case never reuses; fetch sends a row by its handle, with edits checked
+        against the names its source declares and re-checked for what it
+        reaches, or calls a source by name with its own arguments. A source is
+        no tool of the prompt, the retrieval index or a declared set.
         */
     }
 

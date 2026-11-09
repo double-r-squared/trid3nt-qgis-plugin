@@ -274,7 +274,7 @@ async def _invoke_tool_via_emitter(
     # A ``fetch`` call IS a call of the source it names: everything below - the gates, the cards, the reuse guard, the
     # emission seam's dispatched name - keys on the source, so a fetch and a direct call cannot diverge.
     if tool_name == FETCH:
-        tool_name, params = resolve_fetch(params)
+        tool_name, params = resolve_fetch(params, get_uri_registry(state.session_id))
     _ensure_emitter(websocket, state)
     if tool_name not in TOOL_REGISTRY:
         raise ToolNotFoundError(tool_name, list(TOOL_REGISTRY))
@@ -676,7 +676,7 @@ async def _dispatch_tool_and_persist(
     try:
         try:
             if tool_name == FETCH:
-                tool_name, params = resolve_fetch(params)
+                tool_name, params = resolve_fetch(params, get_uri_registry(state.session_id))
             if tool_name in TOOL_REGISTRY:
                 # A plain tool opens the one gate's card for the inputs its call
                 # left out or that refused; a workflow opens none, its fill refuses.

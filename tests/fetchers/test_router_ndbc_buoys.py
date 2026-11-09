@@ -285,6 +285,6 @@ async def test_a_1973_window_at_46001_lists_no_buoy(monkeypatch):
     monkeypatch.setitem(match._LISTED, "ndbc_buoys.stations", nb.stations())
     found = await find_sources("wave series", [-148.027, 56.296],
                                ["1973-06-01", "1973-06-08"])
-    assert found["picked"] == ""
+    assert all(row["source"] != "fetch_ndbc_buoys" for row in found["results"])
     assert "fetch_ndbc_buoys" in found["sentence"]
     assert "reports from 1974-12-03" in found["sentence"]

@@ -25,7 +25,7 @@ from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
 from trid3nt_server.render.pipeline_emitter import current_emitter, substep
 from trid3nt_server.render.uri_registry import lookup_uri_for_handle
 from trid3nt_server.tools.search.match import (
-    AROUND_PLACE_DEG, HELD_NOTHING, Need, ask_for, base_ask, dropped_from, instant, match, sources_with_coverage)
+    AROUND_PLACE_DEG, HELD_NOTHING, Need, dropped_from, filled, instant, match, sources_with_coverage)
 
 from .data import Producer, refuse_wrong_shape
 from .sheet import Keyword
@@ -529,12 +529,13 @@ async def _ask_for(env: _Env, choice: SourceChoice,
     seed = await _seed(env, decl)
     lon, lat = _place(seed)
     opens = _opens(env, decl)
-    return ask_for(choice, base_ask(
+    return filled(
         choice, decl.name.replace("_", " "),
         _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox
         else None if lon is None or lat is None else _about(lon, lat, decl.span_km),
-        lon, lat, str(opens) if opens else None,
-        _closes(opens, _window(env, decl))), lon, lat,
+        Need(slot=decl.name, data_class=choice.need, lon=lon, lat=lat,
+             opens=str(opens) if opens else None,
+             until=_closes(opens, _window(env, decl))),
         {"span_km": decl.span_km, "of": _asked_of(decl, seed) or None,
          "measured": _measured(env, decl) or None,
          "seed_point": None if lon is None or lat is None else [lon, lat]})

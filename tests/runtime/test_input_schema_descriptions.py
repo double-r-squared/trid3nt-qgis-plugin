@@ -96,5 +96,5 @@ def test_the_fetch_arguments_are_described():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     props = _tool_schema(TOOL_REGISTRY["fetch"].fn)["properties"]
-    assert set(props) == {"source", "args"}
+    assert set(props) == {"source", "args", "edits"}
     assert all(0 < len(node["description"]) <= 120 for node in props.values())

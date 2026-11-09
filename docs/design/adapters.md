@@ -86,13 +86,30 @@ within `SOURCE_MARGIN` of its top row on the same similarity. A cold index or a 
 No data source is a tool the model is told of or ranks. The declarable registry, the fail-open dump and the
 retrieval index all skip every spec-served fetcher (`registered_spec_names()`);
 what the model sees is two tools on the always-visible floor: `find_sources`
-(`need` a class, or `query` free text, at a `place` and `window`) and
-`fetch(source, args)`. Every source's phrasings index as documents named
-`find_sources`, so a message about its data ranks the door and spends one slot.
+(`need` a class, or `query` free text, at a `place` and `window`) and `fetch`.
+Every source's phrasings index as documents named `find_sources`, so a message
+about its data ranks the door and spends one slot.
 
-`find_sources` rows key `source`; a query row is `unranked` (a source with no
-coverage row has no facts to weigh) and carries `about`, `params` and the `ask`
-to hand to `fetch`. A call to `fetch` is translated at the dispatch entry
+Each `find_sources` row is FILLED: the request is built by the match's filler
+(`tools/search/match.py` `filled`, the same function a template's need row is
+filled through) and held server-side under a handle `S<n>`, minted per Case in the
+session's layer registry beside the `L<n>` handles and persisted with them, so a
+number the model has seen is never reused within the Case. The row shows, in our
+words: `handle`, `source`, `what` (kind, class, cadence or cell, distance; a query
+row's first description line), `status` (READY, or `needs: X` for a required
+param nothing deduces), `box`, `window` (unstated, the moment now) and
+`also accepts` (declared params not shown). Params the row fixes for its class,
+the series switch and the place and window params are not shown. A row that does
+not reach is one line under `not reaching`: the reason and the edit that would
+make it reach. The series switch follows the window: a span asks a series row for
+its record through its declared `window.series_param`, a moment its latest reading.
+
+`fetch` takes three forms: `fetch("S1")` sends the held request as shown;
+`fetch("S1", edits={...})` merges edits - `box` and `window` filled again through
+the filler, a native param set as given, any other name refused in one line naming
+the row's editable names, and the edited request re-checked for coverage
+("S1 does not reach that box: ...; find_sources again"); `fetch(source, args)`
+calls a source by name for scripting. A call to `fetch` is translated at the dispatch entry
 (`_invoke_tool_via_emitter`) and in the turn loop into a call of the source it
 names, so gates, cards, the cache, the reuse guard, the circuit breaker and the
 emit-on-fetch silence are the source's own. An argument the source does not take,

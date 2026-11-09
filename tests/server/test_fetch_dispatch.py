@@ -94,9 +94,9 @@ def _first_param(name: str) -> dict:
     return {next(iter(get_spec(name).params)): "x"}
 
 
-async def _dispatch(call_name, params):
+async def _dispatch(call_name, params, session_id=None):
     ws = FakeWS()
-    state = server.SessionState(session_id=new_ulid())
+    state = server.SessionState(session_id=session_id or new_ulid())
     result = await server._invoke_tool_via_emitter(ws, state, call_name, params)
     steps = sorted({step.get("tool_name") for frame in map(json.loads, ws.sent)
                     for step in (frame.get("payload", {}).get("steps") or [])})
@@ -134,7 +134,7 @@ async def test_a_wrapper_that_does_not_translate_emits_the_layer_twice(world, mo
     name = "fetch_nhd_hr_waterbodies"
     stub(name)
     source_fn = agent_tools.TOOL_REGISTRY[name].fn
-    monkeypatch.setattr(emitter, "resolve_fetch", lambda params: ("fetch", dict(params)))
+    monkeypatch.setattr(emitter, "resolve_fetch", lambda params, held=None: ("fetch", dict(params)))
     monkeypatch.setitem(
         agent_tools.TOOL_REGISTRY, "fetch",
         agent_tools.RegisteredTool(metadata=agent_tools.TOOL_REGISTRY["fetch"].metadata,
@@ -168,3 +168,24 @@ def test_the_source_name_is_taken_without_its_prefix_and_args_may_arrive_as_text
 
     name, kwargs = resolve_fetch({"source": "fema_nfhl_zones", "args": '{"bbox": [0, 0, 1, 1]}'})
     assert (name, kwargs) == ("fetch_fema_nfhl_zones", {"bbox": [0, 0, 1, 1]})
+
+
+@pytest.mark.asyncio
+async def test_a_handle_find_sources_held_is_sent_as_the_row_showed(world, monkeypatch):
+    """Two dispatches of one session: find_sources holds the row, fetch("S<n>") calls the source with that request.
+    The world is the one source's own rows, so no other network's station listing is read."""
+    from importlib import import_module
+
+    asked, stub = world
+    name = "fetch_nws_river_forecast"
+    stub(name)
+    monkeypatch.setattr(import_module("trid3nt_server.tools.search.find_sources.find_sources"),
+                        "sources_with_coverage", lambda: [(name, row) for row in get_spec(name).coverage])
+    session = new_ulid()
+    found, _steps, _layers = await _dispatch(
+        "find_sources", {"need": "water level series", "place": [-122.80, 45.45, -122.60, 45.65],
+                         "window": ["2026-11-09T19:00:00Z", "2026-11-10T01:00:00Z"]}, session)
+    row = next(r for r in found["results"] if r["source"] == name)
+    await _dispatch("fetch", {"source": row["handle"]}, session)
+    (called, kwargs), = asked["fn"]
+    assert called == name and kwargs["bbox"] == row["box"] and kwargs["include_series"] is True

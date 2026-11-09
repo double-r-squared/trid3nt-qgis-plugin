@@ -616,7 +616,7 @@ async def _stream_model_reply(
                 _name, _args = call.name, call.args
                 try:
                     if _name == FETCH:
-                        _name, _args = resolve_fetch(_args or {})
+                        _name, _args = resolve_fetch(_args or {}, get_uri_registry(state.session_id))
                     # Per-session circuit breaker: short-circuit before dispatch if the tool has
                     # failed repeatedly this session.
                     if state.circuit_breaker.is_tripped(_name):

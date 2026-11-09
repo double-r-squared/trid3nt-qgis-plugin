@@ -25,8 +25,9 @@ from trid3nt_server.workflows.runtime.errors import DeclarationError
 logger = logging.getLogger(__name__)
 
 __all__ = ["HELD_NOTHING", "LOOSEN_DATUM", "LOOSEN_WINDOW", "NO_MOMENT", "Need", "RANKED_ROWS",
-           "ask_for", "base_ask", "covered_sources", "dropped_from", "instant",
-           "match", "sources_with_coverage"]
+           "ask_for", "base_ask", "covered_sources", "dropped_from", "excluded", "filled", "instant",
+           "match", "needed", "picked_row", "remedy", "shown_params", "sources_with_coverage",
+           "unreached", "window_params"]
 
 #: How many rows the ranked list carries. Five: enough for the facts to be
 #: comparable in one read, few enough that a model answering with a row number
@@ -219,8 +220,8 @@ def _wrong_shape(name: str, need: Need) -> str:
 _SHAPE_WORD: Mapping[str, str] = {"polyline": "line"}
 
 
-def _unaskable(name: str, coverage: Coverage, need: Need) -> str:
-    """Why the probe could not call this source at all, or "" where it can; a param is askable only where the NEED holds its value."""
+def needed(name: str, coverage: Coverage, need: Need) -> list[str]:
+    """The params this source requires that nothing in the need or the row can fill."""
     asked = set(_ASKABLE) | set(coverage.ask)
     if coverage.window.series:
         asked |= {param for param, _ in _INSTANT_PARAMS}
@@ -228,7 +229,12 @@ def _unaskable(name: str, coverage: Coverage, need: Need) -> str:
         asked.discard("seed_point")
     if coverage.extent.points or coverage.extent.read_from:
         asked.add(_STATION)
-    needs = [param for param in _required(name) if param not in asked]
+    return [param for param in _required(name) if param not in asked]
+
+
+def _unaskable(name: str, coverage: Coverage, need: Need) -> str:
+    """Why the probe could not call this source at all, or "" where it can; a param is askable only where the NEED holds its value."""
+    needs = needed(name, coverage, need)
     if not needs:
         return ""
     return (f"asks to be called by {', '.join(needs)} and its row "
@@ -296,7 +302,7 @@ def base_ask(choice: SourceChoice, purpose: str, bbox: Sequence[float] | None,
     spec = _SPEC_REGISTRY.get(choice.picked)
     params = dict(getattr(spec, "params", {}) or {})
     ask: dict[str, Any] = {"purpose": purpose}
-    switch = getattr(getattr(_picked_row(choice), "window", None), "series_param", "")
+    switch = getattr(getattr(picked_row(choice), "window", None), "series_param", "")
     if switch in params and opens and until and instant(until) != instant(opens):
         ask[switch] = True
     if "bbox" in params and bbox is not None:
@@ -307,11 +313,11 @@ def base_ask(choice: SourceChoice, purpose: str, bbox: Sequence[float] | None,
                    if pair[0] in params and pair[1] in params), None)
     if opens and window is not None:
         (first, last), cut = window
-        step = _cadence(_picked_row(choice))
+        step = _cadence(picked_row(choice))
         ask[first] = _moved(opens, -step, cut)
         ask[last] = _moved(until or opens, step, cut)
     elif opens:
-        row = _picked_row(choice)
+        row = picked_row(choice)
         series = row is not None and row.window.series
         spelled = next(((param, cut) for param, cut in _INSTANT_PARAMS
                         if param in params and (series or param == "valid_time")), None)
@@ -361,7 +367,7 @@ def ask_for(choice: SourceChoice, base: Mapping[str, Any], lon: float | None,
     The row, not the source's default, is what the match weighed. A source called by station name gets the nearest listed
     station; a param mapped to a need attribute is given that."""
     ask = dict(base)
-    row = _picked_row(choice)
+    row = picked_row(choice)
     if row is None:
         return ask
     stated = dict(needs or {})
@@ -386,6 +392,65 @@ def ask_for(choice: SourceChoice, base: Mapping[str, Any], lon: float | None,
     return ask
 
 
+def filled(choice: SourceChoice, purpose: str, bbox: Sequence[float] | None,
+           need: Need, needs: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """THE FILLER: the full request the picked source is called with for this need - the place and window in its own
+    params, then what its matched row says it takes. A template's slot and a find_sources row are filled here alike."""
+    ask = ask_for(choice, base_ask(choice, purpose, bbox, need.lon, need.lat, need.opens,
+                                   need.until), need.lon, need.lat, needs)
+    if not purpose:
+        ask.pop("purpose", None)
+    return ask
+
+
+def unreached(choice: SourceChoice, need: Need) -> str:
+    """Why the picked source's row does not reach this place and window, or "" where it does or states no row to check."""
+    row = picked_row(choice)
+    return excluded(need, row, choice.picked) if row is not None else ""
+
+
+def excluded(need: Need, coverage: Coverage, name: str = "") -> str:
+    """Why the place, window or quantity filter drops this row, or "" where it reaches."""
+    return _excluded(need, coverage, name)
+
+
+def window_params() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The params a source states the opening and the close of a window in, every spelling the filler writes."""
+    return ((*(pair[0] for pair, _cut in _WINDOW_PARAMS), *(p for p, _cut in _INSTANT_PARAMS)),
+            tuple(pair[1] for pair, _cut in _WINDOW_PARAMS))
+
+
+def shown_params(name: str, choice: SourceChoice, request: Mapping[str, Any]
+                 ) -> tuple[str, list[float] | None, str]:
+    """A filled request in our words: READY or what it still needs, the box it asks over, and the params it also takes.
+
+    Hidden are the place and window params (shown as box and window), what the row fixes for its class, and the series switch."""
+    from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
+
+    params = dict(getattr(_SPEC_REGISTRY.get(name), "params", {}) or {})
+    row = picked_row(choice)
+    starts, ends = window_params()
+    hidden = {"bbox", "seed_point", "purpose", _STATION, *starts, *ends,
+              *(row.ask if row is not None else ()),
+              row.window.series_param if row is not None else ""}
+    needs = [param for param in _required(name) if param not in request]
+    accepts = [param for param in params if param not in request and param not in hidden
+               and param not in needs]
+    box = request.get("bbox")
+    return (f"needs: {', '.join(needs)}" if needs else "READY",
+            [float(v) for v in box] if box is not None else None, ", ".join(accepts))
+
+
+def remedy(coverage: Coverage, need: Need) -> str:
+    """The edit that would make an excluded row reach: a window inside its record, else a box inside its extent."""
+    if coverage.window.series and _outside_window(need, coverage):
+        return (f"a window inside {coverage.window.earliest or 'its first record'} to "
+                f"{coverage.window.latest or 'now'}")
+    if coverage.extent.kind == "stations":
+        return f"a box within {coverage.reach_km or 0.0:g} km of one of its stations"
+    return f"a box inside {coverage.extent.note or 'its stated extent'}"
+
+
 def _reaching(bbox: Any, station: CoveragePoint) -> list[float]:
     """The run's own box, widened to REACH the station the row was ranked on."""
     west, south, east, north = (float(v) for v in bbox)
@@ -400,7 +465,7 @@ def _reaching(bbox: Any, station: CoveragePoint) -> list[float]:
 AROUND_PLACE_DEG = 0.001
 
 
-def _picked_row(choice: SourceChoice) -> Coverage | None:
+def picked_row(choice: SourceChoice) -> Coverage | None:
     """The row the pick was ranked on: this source's row of the class asked for AND of
     the kind the ranked list shows."""
     from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY

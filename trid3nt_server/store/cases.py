@@ -183,7 +183,7 @@ class Persistence:
     async def set_case_layer_handles(
         self, case_id: str, handles: dict[str, str]
     ) -> None:
-        """Persist a Case's storage-only ``{L<n>: uri}`` short-handle map.
+        """Persist a Case's storage-only handle map: ``{L<n>: uri}`` beside ``{S<n>: request JSON}``.
         ``upsert=False``: a deleted or never-created Case is not resurrected
         by this side channel, and the caller treats the write as best-effort."""
         await self._store.call_tool(
@@ -200,7 +200,7 @@ class Persistence:
     async def get_case_layer_handles(
         self, case_id: str
     ) -> dict[str, str] | None:
-        """Read back the persisted ``{L<n>: uri}`` map, or ``None`` when the
+        """Read back the persisted handle map, or ``None`` when the
         Case, the field or the shape is missing; only ``str -> str`` entries
         survive, and the caller falls back to minting fresh handles."""
         raw = await self._store.call_tool(
