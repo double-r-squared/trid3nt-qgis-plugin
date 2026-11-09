@@ -44,6 +44,10 @@ Three things are not operations and stay:
   run, run notes in an auto one. An engine that lays its own ladder of
   surfaces (`Workflow.lays_own_bed`, GeoClaw's topofiles, the finest at each
   point) takes one surface on its bed row and neither merges nor fills.
+  Otherwise the bed walks its ranked rows: the first answering surface is laid,
+  and while the water is left a wet hole the next ranked surface is produced and
+  the ordered list ingested, the first winning where it measured; only a wet
+  hole continues, and the refusal at the end names every surface tried.
   A layer of SOUNDINGS handed the bed is laid on that grid - each cell the mean
   of the points inside it, the cell the points' own median spacing - and the
   same fill paints the rest; the run notes name the count and the fill.

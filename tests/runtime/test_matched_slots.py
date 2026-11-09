@@ -37,6 +37,108 @@ from trid3nt_server.workflows.runtime.journal import (
 )
 from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, OBSERVE
 
+def _hole(code="BED_WET_HOLE"):
+    from trid3nt_server.inputs.user_input import UserInputError
+
+    return UserInputError("49.4% of the water in this domain is measured by nothing in the bed", code=code)
+
+
+def _walk(world, monkeypatch, holes, *, own_bed=False):
+    """Walk the bed with an ingestion that refuses ``holes[i]`` on its i-th call (None accepts); returns what it saw."""
+    seen = []
+
+    async def ingest(laid):
+        seen.append(laid)
+        refusal = holes[len(seen) - 1] if len(seen) <= len(holes) else None
+        if refusal is not None:
+            raise refusal
+        return laid
+
+    env = _env()
+    env.lays_own_bed = own_bed
+    bed = _row(Input(BED).need("bathymetry"), "bed")
+    return env, bed, ingest, seen
+
+
+def test_a_first_surface_that_covers_leaves_the_second_unasked(world, monkeypatch):
+    env, bed, ingest, seen = _walk(world, monkeypatch, [None])
+    out = asyncio.run(fill._bed_surface(env, bed, ingest))
+    assert out == "s3://b/fetch_soundings.geojson" and len(seen) == 1
+    assert [runner for runner, _kw in world] == ["fetch_soundings"]
+
+
+def test_a_wet_hole_walks_to_the_next_surface_and_hands_the_ordered_list(world, monkeypatch):
+    env, bed, ingest, seen = _walk(world, monkeypatch, [_hole(), None])
+    out = asyncio.run(fill._bed_surface(env, bed, ingest))
+    assert out == ["s3://b/fetch_soundings.geojson", "s3://b/fetch_bed_raster.tif"]
+    assert [runner for runner, _kw in world] == ["fetch_soundings", "fetch_bed_raster"]
+
+
+def test_every_surface_leaving_a_hole_refuses_the_last_hole_naming_each_surface(world, monkeypatch):
+    from trid3nt_server.inputs.user_input import UserInputError
+
+    env, bed, ingest, seen = _walk(world, monkeypatch, [_hole(), _hole()])
+    with pytest.raises(UserInputError) as refused:
+        asyncio.run(fill._bed_surface(env, bed, ingest))
+    assert refused.value.error_code == "BED_WET_HOLE"
+    assert "fetch_soundings, fetch_bed_raster" in str(refused.value)
+    assert len(seen) == 2
+
+
+def test_a_refusal_other_than_a_wet_hole_is_not_walked_past(world, monkeypatch):
+    from trid3nt_server.inputs.user_input import UserInputError
+
+    env, bed, ingest, seen = _walk(world, monkeypatch, [_hole("BED_CLIFF")])
+    with pytest.raises(UserInputError) as refused:
+        asyncio.run(fill._bed_surface(env, bed, ingest))
+    assert refused.value.error_code == "BED_CLIFF"
+    assert [runner for runner, _kw in world] == ["fetch_soundings"]
+
+
+def test_an_engine_laying_its_own_bed_takes_the_one_row_and_never_walks(world, monkeypatch):
+    from trid3nt_server.inputs.user_input import UserInputError
+
+    env, bed, ingest, seen = _walk(world, monkeypatch, [_hole()], own_bed=True)
+    with pytest.raises(UserInputError):
+        asyncio.run(fill._bed_surface(env, bed, ingest))
+    assert [runner for runner, _kw in world] == ["fetch_soundings"]
+
+
+def test_two_surfaces_each_measuring_half_the_water_make_a_bed_through_the_slot(world, monkeypatch, tmp_path):
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    west = tmp_path / "west.tif"
+    values = np.full((12, 20), -6.0, dtype="float32")
+    values[:, 10:] = -9999.0
+    with rasterio.open(west, "w", driver="GTiff", width=20, height=12, count=1, dtype="float32",
+                       crs="EPSG:4326", nodata=-9999.0,
+                       transform=from_origin(-122.72, 45.56, 0.005, 0.005)) as dst:
+        dst.write(values, 1)
+    monkeypatch.setitem(SPECS, "fetch_soundings",
+                        _Spec(coverage("bathymetry", res=1.0), "raster", {"bbox": None}))
+
+    async def _runner(runner, kwargs, label):
+        world.append((runner, dict(kwargs)))
+        uri = _half_measured(tmp_path) if runner == "fetch_soundings" else str(west)
+        return {"uri": uri, "vertical_datum": "NAVD88"}
+
+    monkeypatch.setattr(fill, "_call_runner", _runner)
+    water = {"type": "Polygon", "coordinates": [[
+        [-122.72, 45.50], [-122.62, 45.50], [-122.62, 45.56], [-122.72, 45.56], [-122.72, 45.50]]]}
+    from trid3nt_server.settings import bind_run, reset_run
+
+    token = bind_domain(Domain(bbox=WILLAMETTE, geometry=water, label="reach"))
+    reach = bind_run({"FILL_MAX_DISTANCE": 3})
+    try:
+        asyncio.run(fill._matched(_env(), _row(Input(BED).need("bathymetry"), "bed")))
+    finally:
+        reset_run(reach)
+        reset_domain(token)
+    assert [runner for runner, _kw in world] == ["fetch_soundings", "fetch_bed_raster"]
+
+
 WILLAMETTE = (-122.72, 45.50, -122.62, 45.56)
 CONUS = [[(-125.0, 24.0), (-66.0, 24.0), (-66.0, 50.0), (-125.0, 50.0)]]
 

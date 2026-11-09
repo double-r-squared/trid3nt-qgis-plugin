@@ -853,8 +853,8 @@ package DataSeam {
 
     requirement def WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach {
         doc /*
-        NOTHING PAINTS SILENTLY. The bed lays the ONE row the match ranked
-        first, or the ordered list of surfaces it was handed, and STATES WHAT IT COVERS - over the water the domain was cut with
+        NOTHING PAINTS SILENTLY. The bed lays the row the match ranked
+        first and each next ranked row while the water is left a wet hole, or the ordered list of surfaces it was handed, and STATES WHAT IT COVERS - over the water the domain was cut with
         and over the land separately, what each row painted there and what
         nothing measured, and the rows that also matched and could cover the
         gap. A wider surface over the water measures its TOP, so it is not a bed
@@ -1111,8 +1111,8 @@ package DataSeam {
         judgement, and a named source the filters excluded is a refusal rather
         than a way past them.
 
-        The bed takes the ONE row its class matched, like every other slot, or
-        the layer a person hands it by id. A row of soundings is laid on the bed
+        The bed takes the row its class ranked first, and each next ranked row
+        while the water is left a wet hole, or the layer a person hands it by id. A row of soundings is laid on the bed
         grid and filled at the slot. What that row does not
         cover is the surface's own coverage feedback to state.
         */

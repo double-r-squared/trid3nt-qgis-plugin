@@ -205,7 +205,7 @@ async def _matched(env: _Env, decl: Input) -> Any:
             error_code="DATA_NEED_UNPLACED", step=_data_step_label(decl.name))
     await _somewhere_to_ask(env)
     if decl.slot is BED:
-        return await _ingested(env, decl, await _bed_surface(env, decl))
+        return await _bed_surface(env, decl, lambda laid: _ingested(env, decl, laid))
     # The INGESTION rides INSIDE the probe: a source whose rows the slot finds nothing
     # usable in held nothing for this run, so the next survivor takes its turn.
     beside = await _beside(env, decl)
@@ -275,17 +275,39 @@ async def _named_surface(env: _Env, decl: Input, rank: int, named: str) -> Any:
     return top
 
 
-async def _bed_surface(env: _Env, decl: Input) -> Any:
-    """THE BED: the ONE row the match ranked first, as it came.
+async def _bed_surface(env: _Env, decl: Input, ingest: Any = None) -> Any:
+    """THE BED: the row the match ranked first, then each next ranked surface while the water is left a wet hole.
 
-    Nothing is gridded here: soundings are laid and filled at the slot's ingestion, and water nothing
-    measured refuses there naming the steps that compose a covering bed."""
+    ``ingest`` reads what is laid; only BED_WET_HOLE continues the walk, and an engine laying its own bed
+    takes the one row. Soundings are laid and filled at the slot, not here."""
     choice, top = await _probe(env, decl, decl.data_class,
                                f"{decl.name} {decl.data_class}")
     if top is None:
         raise StepFailedError(choice.sentence, error_code="DATA_NEED_UNMATCHED",
                               step=_data_step_label(decl.name))
-    return top
+    if ingest is None or env.lays_own_bed:
+        return await ingest(top) if ingest is not None else top
+    from trid3nt_server.inputs.user_input import UserInputError
+
+    laid, won = [top], [choice.picked]
+    while True:
+        try:
+            ingested = await ingest(laid[0] if len(laid) == 1 else list(laid))
+        except Exception as hole:  # noqa: BLE001 - only a wet hole walks on
+            if getattr(hole, "error_code", None) != "BED_WET_HOLE":
+                raise
+            nxt, more = await _probe(env, decl, decl.data_class,
+                                     f"{decl.name} {decl.data_class}", skip=tuple(won))
+            if more is None:
+                raise UserInputError(f"{hole} Surfaces tried, in rank order: {', '.join(won)}.",
+                                     code="BED_WET_HOLE") from hole
+            laid.append(more)
+            won.append(nxt.picked)
+            continue
+        if len(won) > 1:
+            journal_note(f"{decl.name}: the surfaces won in this order, each measuring where the one before did "
+                         f"not: {', '.join(won)}.")
+        return ingested
 
 
 async def _ranked(env: _Env, decl: Input, data_class: str,
@@ -298,13 +320,18 @@ async def _ranked(env: _Env, decl: Input, data_class: str,
 
 
 async def _probe(env: _Env, decl: Input, data_class: str, label: str, *,
-                 read: Any = None) -> tuple[SourceChoice, Any]:
+                 read: Any = None, skip: Sequence[str] = ()) -> tuple[SourceChoice, Any]:
     """Match a class, then CALL the survivors in rank order -> the first answer.
 
     A source holding nothing over this domain is dropped and the next takes its turn;
-    ``read`` is the slot's own reading, so an unreadable record drops out like an empty one."""
+    ``read`` is the slot's own reading, so an unreadable record drops out like an empty one;
+    ``skip`` names the sources already laid, which are not asked again."""
     choice = match(await _need(env, decl, data_class, label),
                    sources_with_coverage())
+    for laid in skip:
+        choice = dropped_from(choice, laid, "already laid")
+    if skip and not choice.picked:
+        return choice, None
     while choice.picked:
         row = _runtime_row(env, f"{label.replace(' ', '_')}_{choice.picked}",
                            choice.picked,
