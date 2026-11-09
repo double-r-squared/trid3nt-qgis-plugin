@@ -1,7 +1,7 @@
 """THE BED: what every node of the domain carries for elevation.
 
-A layer of soundings is REFUSED by name (gridding it is a step the person runs first). A surface is read on
-the RUN's vertical frame, and a surface of depths becomes elevations counted up from the zero it states. An
+A layer of soundings is laid on the bed grid (each cell the mean of the points inside it) and the fill paints
+the rest. A surface is read on the RUN's vertical frame, and a surface of depths becomes elevations counted up from the zero it states. An
 ordered list of surfaces is laid into one, the first handed winning, and what none measured inside the cut
 is filled by the bed settings or REFUSED by name.
 """
@@ -61,7 +61,7 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None,
         code: str = _CODE) -> Bed | None:
     """THE ingestion: a raster, a case layer id, a depth in metres, or an ORDERED LIST of surfaces -> Bed.
 
-    A number is a DEPTH below the free surface; a vector artifact refuses. ``frame`` and ``offset`` (one per
+    A number is a DEPTH below the free surface; a layer of points is laid on the grid and filled. ``frame`` and ``offset`` (one per
     surface of a list) are the run's vertical frame and shift; ``water`` is the cut polygon, inside which
     coverage is stated and holes filled; ``merge`` False is an engine laying its own ladder of surfaces."""
     if isinstance(value, Bed):
@@ -83,10 +83,11 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None,
     if isinstance(value, Mapping) and "depth_m" in value:
         return bed(value["depth_m"], label=label, code=code)
     held, surface = _surface(value, frame=frame, offset=offset, label=label, code=code)
-    if water is None:
+    points = _is_points(held)
+    if water is None and not points:
         return Bed(kind=RASTER, source=surface)
     return Bed(kind=RASTER, source=_composed(
-        [held], [surface], frame=frame, water=water, fill=merge, label=label))
+        [held], [surface], frame=frame, water=water, fill=merge or points, label=label))
 
 
 def _listed(values: list[Any], *, frame: Any, offset: Any, water: Any,
@@ -106,7 +107,7 @@ def _listed(values: list[Any], *, frame: Any, offset: Any, water: Any,
             f"the {label} was handed {len(values)} surfaces, and this engine lays its own ladder of surfaces "
             "and takes the finest at each point: hand the bed one surface and state the others in the "
             "engine's own topography list.", code="BED_LADDER")
-    held, surfaces = [], []
+    held, surfaces, points = [], [], False
     for rank, value in enumerate(values):
         named = f"{label} surface {rank + 1}"
         if _depth(value) is not None or (isinstance(value, Mapping) and "depth_m" in value):
@@ -116,6 +117,7 @@ def _listed(values: list[Any], *, frame: Any, offset: Any, water: Any,
         original, surface = _surface(value, frame=frame, offset=offsets[rank], label=named, code=code)
         held.append(original)
         surfaces.append(surface)
+        points = points or _is_points(original)
     if not str(frame or "").strip():
         from .vertical_datum import DatumError, datum_of, one_datum
 
@@ -126,26 +128,26 @@ def _listed(values: list[Any], *, frame: Any, offset: Any, water: Any,
         except DatumError as exc:
             raise UserInputError(str(exc), code=code) from exc
     return Bed(kind=RASTER, source=_composed(
-        held, surfaces, frame=frame, water=water, fill=water is not None, label=label))
+        held, surfaces, frame=frame, water=water, fill=water is not None or points, label=label))
 
 
 def _surface(value: Any, *, frame: Any, offset: Any, label: str, code: str) -> tuple[Any, Any]:
-    """One surface by id or whole, refused as soundings -> ``(as handed, read on the run's frame)``."""
-    from .geometry import artifact_class
-
+    """One surface by id or whole, soundings laid on a grid -> ``(as handed, read on the run's frame)``."""
     if isinstance(value, Mapping) and "layer" in value:
         value = value["layer"]
     value = _by_id(value)
-    # A source that arrives as GeoJSON is already READ, and a geometry document
-    # is a survey, never a surface.
-    if (isinstance(value, Mapping) and "type" in value) \
-            or artifact_class(value) == "vector":
-        raise UserInputError(
-            f"the {label} was handed a layer of points, and a bed is a raster: "
-            f"grid the soundings first with run_qgis_algorithm {setting('SOUNDING_GRID_ALGORITHM')} "
-            "(QGIS's IDW) and hand this slot the raster it produces.",
-            code="BED_POINTS")
+    if _is_points(value):
+        gridded = _sounded(value, label=label, code=code)
+        return value, elevations(gridded, frame=frame, offset=offset, label=label, code=code)
     return value, elevations(value, frame=frame, offset=offset, label=label, code=code)
+
+
+def _is_points(value: Any) -> bool:
+    """A layer already READ as GeoJSON, or one whose file is a vector: a survey, never a surface."""
+    from .geometry import artifact_class, source_uri
+
+    return (isinstance(value, Mapping) and "type" in value) \
+        or artifact_class(source_uri(value)) == "vector"
 
 
 def _by_id(value: Any) -> Any:
@@ -155,6 +157,87 @@ def _by_id(value: Any) -> Any:
     from trid3nt_server.render.uri_registry import lookup_layer_for_handle
 
     return lookup_layer_for_handle(value) or value
+
+
+def _sounded(layer: Any, *, label: str, code: str) -> Any:
+    """A layer of soundings as a sparse raster in metres, each cell the mean of the points inside it.
+
+    The cell is the points' own median nearest-neighbour spacing, on the UTM zone of their extent; a point's
+    value is the property named by the layer's quantity (or that plus ``_m``). The raster carries the layer's
+    datum, quantity and published shift so ``elevations`` reads it as it reads any surface."""
+    import numpy as np
+    from pyproj import Transformer
+    from scipy.spatial import cKDTree
+
+    from trid3nt_server.tools.derive._hydrology_common import write_cog
+
+    from .geometry import GeometryReadError, flatten_features, read_geometry_doc, utm_epsg_for
+    from .run_notes import journal_note
+    from .vertical_datum import datum_of, record_datum
+
+    try:
+        doc = read_geometry_doc(layer)
+    except (GeometryReadError, OSError, ValueError) as exc:
+        raise UserInputError(f"the {label} is a layer of points that could not be read ({exc}).",
+                             code=code) from exc
+    quantity = str(_said(layer, "quantity") or "").strip()
+    rows = [(g["coordinates"], p) for g, p in flatten_features(doc) if g.get("type") == "Point"]
+    field = next((name for name in (quantity, f"{quantity}_m") if quantity
+                  and any(p.get(name) is not None for _c, p in rows)), None)
+    if field is None:
+        raise UserInputError(
+            f"the {label} is a layer of points naming no value to lay: its quantity is {quantity or 'unstated'} "
+            "and no point carries a property of that name (or that name with _m). Hand a layer whose points "
+            "state their elevation or depth under its quantity.", code="BED_SOUNDINGS_VALUE")
+    held = [(c[0], c[1], float(p[field])) for c, p in rows if p.get(field) is not None]
+    lon, lat, value = (np.array(col, dtype="float64") for col in zip(*held))
+    keep = np.isfinite(value)
+    lon, lat, value = lon[keep], lat[keep], value[keep]
+    epsg = utm_epsg_for(float(lon.mean()), float(lat.mean()))
+    x, y = Transformer.from_crs(4326, epsg, always_xy=True).transform(lon, lat)
+    distinct = np.unique(np.column_stack([x, y]), axis=0)
+    if len(distinct) < 2:
+        raise UserInputError(
+            f"the {label} holds {len(distinct)} distinct sounding(s), and a grid cell is the spacing between "
+            "them: hand a survey of at least two points.", code="BED_SOUNDINGS_FEW")
+    cell = float(np.median(cKDTree(distinct).query(distinct, k=2)[0][:, 1]))
+    if not cell > 0.0:
+        raise UserInputError(f"the {label}'s soundings have no spacing to lay a grid by.", code="BED_SOUNDINGS_FEW")
+    west, north = np.floor(x.min() / cell) * cell, np.ceil(y.max() / cell) * cell
+    width = int(np.floor((x.max() - west) / cell)) + 1
+    height = int(np.floor((north - y.min()) / cell)) + 1
+    ceiling = setting("MERGE_MAX_CELLS")
+    if width * height > ceiling:
+        raise UserInputError(
+            f"laying the {label}'s {len(distinct)} soundings at their {cell:.3g} m spacing is {width} x {height} "
+            f"= {width * height} cells, past the {ceiling}-cell ceiling (setting MERGE_MAX_CELLS).",
+            code="BED_MERGE_CELLS")
+    cols = np.floor((x - west) / cell).astype(int)
+    row_of = np.floor((north - y) / cell).astype(int)
+    index = row_of * width + cols
+    total = np.bincount(index, weights=value, minlength=width * height)
+    count = np.bincount(index, minlength=width * height)
+    grid = np.where(count > 0, total / np.maximum(count, 1), np.nan).astype("float32").reshape(height, width)
+    from rasterio.transform import from_origin
+
+    seed = layer_seed()
+    uri = write_cog(grid, crs=f"EPSG:{epsg}", transform=from_origin(west, north, cell, cell),
+                    prefix="bed_soundings", seed=seed, output_dir=None,
+                    code="BED_ELEVATION_WRITE_FAILED", nodata=float("nan"))
+    shift = _said(layer, "datum_offset_m")
+    frame_of_shift = _said(layer, "datum_offset_frame")
+    stated = [p for _c, p in rows if p.get("datum_offset_m") is not None and p.get("datum_offset_frame")]
+    if shift is None and stated:
+        shift, frame_of_shift = stated[0]["datum_offset_m"], stated[0]["datum_offset_frame"]
+    journal_note(
+        f"the {label} is {int(keep.sum())} soundings ({_said(layer, 'name') or 'a layer of points'}), laid "
+        f"on a {cell:.3g} m grid as the mean of the points in each cell and filled by "
+        f"{setting('FILL_ALGORITHM')} interpolation up to {setting('FILL_MAX_DISTANCE')} px from a sounding.")
+    return LayerURI.published(
+        "bed-soundings", seed=seed, name=str(_said(layer, "name") or "soundings"), layer_type="raster",
+        uri=uri, role="primary", units="m", quantity=quantity, crs_authid=f"EPSG:{epsg}",
+        vertical_datum=datum_of(layer) or record_datum(layer) or None,
+        datum_offset_m=shift, datum_offset_frame=frame_of_shift)
 
 
 def _composed(held: list[Any], surfaces: list[Any], *, frame: Any, water: Any,

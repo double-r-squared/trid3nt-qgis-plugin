@@ -16,9 +16,8 @@ The system performs no resample, reproject, clip, aggregate or unit conversion
 because an input or a row DECLARED it. QGIS, GRASS and Python are in the
 person's hands, so data that does not fit a slot is REFUSED by name with the
 step that makes it fit named as the remedy, and the person or the model runs
-that step first and hands the slot the layer it produced. A layer of
-soundings refuses naming the derive that grids it; a place name handed to a
-Point or an Extent refuses naming `geocode_location`.
+that step first and hands the slot the layer it produced. A place name handed
+to a Point or an Extent refuses naming `geocode_location`.
 
 Three things are not operations and stay:
 
@@ -45,6 +44,9 @@ Three things are not operations and stay:
   run, run notes in an auto one. An engine that lays its own ladder of
   surfaces (`Workflow.lays_own_bed`, GeoClaw's topofiles, the finest at each
   point) takes one surface on its bed row and neither merges nor fills.
+  A layer of SOUNDINGS handed the bed is laid on that grid - each cell the mean
+  of the points inside it, the cell the points' own median spacing - and the
+  same fill paints the rest; the run notes name the count and the fill.
 - A FETCH reading its source onto the asked window and spacing. The kernel a
   row states is how that source's pixels are read; a grid past the pixel
   budget refuses naming the spacing to re-ask at.

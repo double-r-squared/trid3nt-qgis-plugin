@@ -429,8 +429,8 @@ package DataSeam {
     part def BedSlot {
         doc /*
         The one row every node's elevation comes from: a surface or a stated
-        depth. A layer of soundings is refused by name, naming QGIS's IDW run
-        through run_qgis_algorithm as the step that grids it first.
+        depth. A layer of soundings is laid on the bed grid and filled by the
+        bed's own fill.
         */
     }
 
@@ -1112,8 +1112,8 @@ package DataSeam {
         than a way past them.
 
         The bed takes the ONE row its class matched, like every other slot, or
-        the layer a person hands it by id. A row of soundings is refused at the
-        slot, naming the QGIS step that grids them. What that row does not
+        the layer a person hands it by id. A row of soundings is laid on the bed
+        grid and filled at the slot. What that row does not
         cover is the surface's own coverage feedback to state.
         */
     }
@@ -1306,8 +1306,7 @@ package DataSeam {
         doc /*
         The bed is one seam fed by whatever the user has: a fetched DEM, a
         bathymetry or survey raster, or a stated depth below the free surface.
-        It is one row; a layer of soundings is refused by name, naming the QGIS
-        step that grids it.
+        It is one row; a layer of soundings is laid on the grid and filled.
 
         A bed built from a survey over a wider surface is a SECOND SURFACE
         HANDED THE SAME SLOT, not a tool: the slot takes an ordered list, lays
@@ -1808,9 +1807,9 @@ package DataSeam {
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/mesh/test_bed_sources_and_runs.py::test_a_domain_no_source_covers_refuses_by_name";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/mesh/test_bed_sources_and_runs.py::test_a_layer_of_soundings_is_refused_and_nothing_grids_it";
+        "tests/inputs/test_bed_soundings.py::test_a_points_layer_becomes_a_filled_raster_bed";
     verify requirement OneBedOverEverySourceAUserCanHave by
-        "tests/inputs/test_slot_inputs.py::test_a_layer_of_points_is_refused_at_fill_naming_the_qgis_idw_step";
+        "tests/inputs/test_bed_soundings.py::test_soundings_past_the_reach_leave_a_wet_hole";
     verify requirement OneBedOverEverySourceAUserCanHave by
         "tests/search/test_covered_fetchers.py::test_nothing_of_ours_grids_soundings";
 

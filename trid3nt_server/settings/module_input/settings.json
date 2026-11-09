@@ -223,22 +223,6 @@
       "source": "TRID3NT engineering default."
     },
     {
-      "keyword": "SOUNDING_GRID_ALGORITHM",
-      "identifier": "SOUNDING_GRID_ALGORITHM",
-      "type": "STRING",
-      "shape": "",
-      "size": 1,
-      "unbounded": false,
-      "help": "The QGIS algorithm a refusal names for gridding soundings into a bed surface.",
-      "rubrique": [
-        "bed"
-      ],
-      "is_file": false,
-      "mandatory": false,
-      "default": "gdal:gridinversedistancenearestneighbor",
-      "source": "TRID3NT engineering default."
-    },
-    {
       "keyword": "RAIN_HOLE_INTERVALS",
       "identifier": "RAIN_HOLE_INTERVALS",
       "type": "REAL",

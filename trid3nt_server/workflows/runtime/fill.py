@@ -278,7 +278,7 @@ async def _named_surface(env: _Env, decl: Input, rank: int, named: str) -> Any:
 async def _bed_surface(env: _Env, decl: Input) -> Any:
     """THE BED: the ONE row the match ranked first, as it came.
 
-    Nothing is gridded here: soundings refuse at the slot's ingestion, and water nothing
+    Nothing is gridded here: soundings are laid and filled at the slot's ingestion, and water nothing
     measured refuses there naming the steps that compose a covering bed."""
     choice, top = await _probe(env, decl, decl.data_class,
                                f"{decl.name} {decl.data_class}")

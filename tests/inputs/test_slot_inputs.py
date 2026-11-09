@@ -101,19 +101,6 @@ def test_the_bed_slot_says_which_shape_it_was_handed():
     assert bed(None) is None
 
 
-@pytest.mark.parametrize("value", [
-    "s3://b/k/survey.geojson", {"type": "FeatureCollection", "features": []}])
-def test_a_layer_of_points_is_refused_at_fill_naming_the_qgis_idw_step(value):
-    """A bed is a raster: soundings are gridded by QGIS's IDW before the slot,
-    and the slot's ingestion - the one the fill runs - says so by name."""
-    with pytest.raises(UserInputError) as refused:
-        ingest_slot(BED, value, label="bed")
-    assert refused.value.error_code == "BED_POINTS"
-    said = str(refused.value)
-    assert "run_qgis_algorithm" in said
-    assert "gdal:gridinversedistancenearestneighbor" in said
-
-
 def test_the_bed_row_states_one_class_and_carries_no_surface_under_it():
     """A further surface is handed the slot in an ordered list, so neither the
     slot nor the row that declares it carries the surface underneath: the row

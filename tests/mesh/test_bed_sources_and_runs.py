@@ -163,18 +163,6 @@ def test_a_node_no_row_reached_refuses_with_the_feedback_and_never_a_zero(
     assert "0.0" not in said.split("nodes have no elevation")[0]
 
 
-def test_a_layer_of_soundings_is_refused_and_nothing_grids_it():
-    """The mesh paints a raster: soundings refuse by name before any node is
-    painted, naming the QGIS step that grids them."""
-    from trid3nt_server.inputs.user_input import UserInputError
-
-    soundings = {"type": "FeatureCollection", "features": []}
-    with pytest.raises(UserInputError) as refused:
-        P.set_bed(_lattice_mesh(), soundings)
-    assert refused.value.error_code == "BED_POINTS"
-    assert "run_qgis_algorithm" in str(refused.value)
-
-
 def test_boundary_runs_prescribe_the_roles_their_types_name():
     inflow = BoundaryRun(Point(-75.78, 36.12), Point(-75.78, 36.14),
                          type="inflow")
