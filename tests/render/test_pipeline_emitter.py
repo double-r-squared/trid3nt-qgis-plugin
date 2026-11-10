@@ -1437,3 +1437,14 @@ async def test_legacy_layer_without_legend_emits_null_legend(
 
     summary = _session_frames(sink)[-1]["payload"]["loaded_layers"][-1]
     assert summary["legend"] is None
+
+
+def test_a_long_error_message_keeps_its_first_line_and_its_end():
+    from trid3nt_server.render.pipeline_emitter import PipelineEmitter
+
+    message = "solve failed\n" + "banner line\n" * 200 + "GEOELT: ELEMENT 8712 : NEGATIVE DETERMINANT"
+    out = PipelineEmitter._truncate_message(message)
+    assert len(out) <= PipelineEmitter.ERROR_MESSAGE_MAX_LEN
+    assert out.startswith("solve failed\n") and out.endswith("NEGATIVE DETERMINANT")
+    assert "[...]" in out
+    assert PipelineEmitter._truncate_message("short") == "short"

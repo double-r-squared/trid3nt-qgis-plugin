@@ -1122,7 +1122,10 @@ class PipelineEmitter:
     def _truncate_message(cls, message: str) -> str:
         if len(message) <= cls.ERROR_MESSAGE_MAX_LEN:
             return message
-        return message[: cls.ERROR_MESSAGE_MAX_LEN]
+        # A solver failure ends in the engine's own error, so the end survives with the first line.
+        head = message.split("\n", 1)[0][: cls.ERROR_MESSAGE_MAX_LEN // 4]
+        gap = "\n[...]\n"
+        return head + gap + message[-(cls.ERROR_MESSAGE_MAX_LEN - len(head) - len(gap)):]
 
     def _step_fields(self, step_id: str) -> dict[str, Any]:
         """The fields a wire step and a persisted summary both carry; ``parent_step_id`` rides a child, the breadcrumb trio the parent."""
