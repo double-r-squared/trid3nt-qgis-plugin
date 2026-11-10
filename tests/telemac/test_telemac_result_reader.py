@@ -207,3 +207,25 @@ def test_a_frame_that_will_not_read_refuses_by_the_same_name(tmp_path,
     with pytest.raises(R.SelafinReadError) as ei:
         R.read_selafin(broken)
     assert "half.slf" in str(ei.value)
+
+
+def test_geometry_pair_is_written_double_precision(tmp_path):
+    import numpy as np
+
+    from trid3nt_server.workflows.telemac.authoring.selafin_io import (
+        GEOMETRY_FILE_FORMAT, read_selafin, write_telemac_pair)
+
+    x = np.array([0.0, 1.0, 1.0, 0.0]) + 500000.1
+    y = np.array([0.0, 0.0, 1.0, 1.0]) + 5030000.3
+    written = write_telemac_pair(tmp_path, x=x, y=y, cells=np.array([[0, 1, 2], [0, 2, 3]]),
+                                 bed=np.zeros(4))
+    assert GEOMETRY_FILE_FORMAT.encode() in written["geo_slf"].read_bytes()[:100]
+    read = read_selafin(written["geo_slf"])
+    assert np.array_equal(np.asarray(read["x"]), x) and np.array_equal(np.asarray(read["y"]), y)
+
+
+def test_the_deck_states_the_geometry_format():
+    from trid3nt_server.workflows.telemac.modules import wrapper_for
+    from trid3nt_server.workflows.telemac.workflow import stated
+
+    assert stated(steering=wrapper_for("telemac2d"), keywords={})["GEOMETRY_FILE_FORMAT"] == "SERAFIND"

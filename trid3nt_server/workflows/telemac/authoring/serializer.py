@@ -67,7 +67,7 @@ def _spread(sheet: Any, rundir: Path, steering: str,
 
 
 # The launcher partitions the mesh and boundary files each steering names, per deck; a coupled steering naming neither dies in partel on more than one core.
-_PARTITIONED = ("GEOMETRY_FILE", "BOUNDARY_CONDITIONS_FILE")
+_PARTITIONED = ("GEOMETRY_FILE", "GEOMETRY_FILE_FORMAT", "BOUNDARY_CONDITIONS_FILE")
 
 
 def _partitioned(sheet: Any, host: Any) -> dict[str, Any]:

@@ -60,7 +60,7 @@ def test_guard_runs_on_a_cached_mesh_and_on_a_fresh_one(tmp_path, monkeypatch):
     monkeypatch.setattr(mesh_files, "_stage", lambda _id, local: str(local))
     monkeypatch.setattr(mesh_files, "_record", lambda *_: None)
     pts = np.array([[500000.0, 5000000.0], [500003.0, 5000000.0],
-                    [500001.5, 5000000.2], [500001.5, 5000010.0]])
+                    [500001.5, 5000000.0], [500001.5, 5000010.0]])
     display = tmp_path / "mesh.2dm"
     _write_2dm(display, pts, [[0, 1, 2], [0, 2, 3]])
     for files in ({}, {"mesh.slf": "s3://b/mesh.slf", "mesh.cli": "s3://b/mesh.cli"}):

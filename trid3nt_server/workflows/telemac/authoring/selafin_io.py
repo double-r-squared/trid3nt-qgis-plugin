@@ -18,11 +18,14 @@ from trid3nt_server.tools.mesh.shared.formats.tin_topology import (
 )
 from .topology import FREE_EXIT_ROLE, RATING_CURVE_ROLE
 
-__all__ = ["BOUNDARY_CONDITIONS_FILE", "GEOMETRY_FILE", "telemac_boundary",
+__all__ = ["BOUNDARY_CONDITIONS_FILE", "GEOMETRY_FILE", "GEOMETRY_FILE_FORMAT", "telemac_boundary",
            "write_telemac_pair", "read_selafin", "keep_whole_frames", "SelafinReadError"]
 
 # The steering keywords TELEMAC reads the pair under; a mesh's file map is keyed by them.
 GEOMETRY_FILE: str = "GEOMETRY FILE"
+
+# The pair's geometry is written double precision, and the deck states that format by the module's own keyword.
+GEOMETRY_FILE_FORMAT: str = "SERAFIND"
 
 
 BOUNDARY_CONDITIONS_FILE: str = "BOUNDARY CONDITIONS FILE"
@@ -268,6 +271,7 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
     # ``from_triangulation`` takes 1-based connectivity and the walk's IPOBO; left alone it would rebuild IPOBO and the ``.cli`` rows would follow a numbering no other file shares.
     header.from_triangulation(np.column_stack([x, y]), cells + 1, ipobo)
     header.add_variable_str("BOTTOM", "BOTTOM", "M")
+    header.to_double_precision()
     bottom = (np.asarray(bed, dtype=float) if bed is not None
               else np.zeros(npoin, dtype=float))
     # The pair is one artifact; either half failing refuses by name.

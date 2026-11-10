@@ -31,6 +31,7 @@ from trid3nt_server.workflows.runtime import (
 from trid3nt_server.workflows.runtime.workflow import EVENT_TIME, _names_untaken
 from trid3nt_server.workflows.solver.staging import discard_run
 from trid3nt_server.workflows.telemac.errors import TelemacError
+from trid3nt_server.workflows.telemac.authoring.selafin_io import GEOMETRY_FILE_FORMAT
 from trid3nt_server.workflows.telemac.modules import wrapper_for
 from trid3nt_server.workflows.runtime.module import (SlotRefused,
                                                      identify_on,
@@ -325,6 +326,9 @@ def stated(*, steering: type, keywords: Mapping[str, Any]) -> dict[str, Any]:
     The template's assertions under the floor that overrides them; a composite has no number of its own and is absent."""
     out = {name: value for name, value in steering.ASSERTED.items()
            if value is not None and name in steering.MODULE_INPUT}
+    # The mesh pair is written by this engine's own writer, so the deck states the format the geometry is in.
+    if "GEOMETRY_FILE_FORMAT" in steering.MODULE_INPUT:
+        out.setdefault("GEOMETRY_FILE_FORMAT", GEOMETRY_FILE_FORMAT)
     return {**out, **_floor(steering, keywords)[0]}
 
 

@@ -53,8 +53,8 @@ def _mesh_files(mesh: Mapping[str, Any]) -> dict[str, Any]:
         raise mesh_missing(
             f"the accepted mesh {getattr(art, 'name', '?')!r} carries no readable "
             "nodes and cells, so no geometry can be written from it.")
-    # SELAFIN keeps coordinates in single precision, and TELEMAC refuses an element whose determinant is not positive there.
-    cells, reoriented = checked_triangles(points, cells, stored_as="float32")
+    # The geometry file holds coordinates double precision (GEOMETRY_FILE_FORMAT), and TELEMAC refuses an element whose determinant is not positive there.
+    cells, reoriented = checked_triangles(points, cells, stored_as="float64")
     if reoriented:
         journal_note(f"{reoriented} clockwise element(s) of the mesh were reoriented "
                      "counter-clockwise in the geometry file; the mesh itself is unchanged")
