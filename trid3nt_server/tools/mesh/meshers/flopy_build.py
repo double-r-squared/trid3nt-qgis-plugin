@@ -19,11 +19,7 @@ from shapely.geometry import Polygon, shape as _shape
 from shapely.ops import unary_union
 
 from trid3nt_server.tools.mesh.meshers import MeshToolError
-
-#: Cells with this or smaller unsigned area are construction artifacts, not
-#: elements: the build is in metres, so a square nanometre is below anything
-#: a mesh cell can be.
-_DEGENERATE_AREA_M2 = 1e-9
+from trid3nt_server.tools.mesh.shared.nodes import DEGENERATE_AREA_M2
 
 _REPO_BIN = Path(__file__).resolve().parents[4] / "bin"
 
@@ -375,7 +371,7 @@ def _neutenize(points, rows) -> tuple[np.ndarray, list, dict]:
         xy = pts[row]
         area = 0.5 * float(np.sum(
             xy[:, 0] * np.roll(xy[:, 1], -1) - np.roll(xy[:, 0], -1) * xy[:, 1]))
-        if abs(area) <= _DEGENERATE_AREA_M2:
+        if abs(area) <= DEGENERATE_AREA_M2:
             norm["dropped_degenerate_cells"] += 1
             continue
         kept.append(row[::-1] if area < 0.0 else row)

@@ -38,7 +38,9 @@ async def telemac_mesh_files(*, mesh: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _mesh_files(mesh: Mapping[str, Any]) -> dict[str, Any]:
-    from trid3nt_server.tools.mesh.shared.nodes import read_accepted_mesh_nodes
+    from trid3nt_server.inputs.run_notes import journal_note
+    from trid3nt_server.tools.mesh.shared.nodes import (
+        checked_triangles, read_accepted_mesh_nodes)
 
     art = mesh_artifact(mesh)
     display = (mesh or {}).get("display_uri")
@@ -51,8 +53,13 @@ def _mesh_files(mesh: Mapping[str, Any]) -> dict[str, Any]:
         raise mesh_missing(
             f"the accepted mesh {getattr(art, 'name', '?')!r} carries no readable "
             "nodes and cells, so no geometry can be written from it.")
+    # SELAFIN keeps coordinates in single precision, and TELEMAC refuses an element whose determinant is not positive there.
+    cells, reoriented = checked_triangles(points, cells, stored_as="float32")
+    if reoriented:
+        journal_note(f"{reoriented} clockwise element(s) of the mesh were reoriented "
+                     "counter-clockwise in the geometry file; the mesh itself is unchanged")
     roles = dict(getattr(art, "boundary_roles", None) or {})
-    files = dict(getattr(art, "engine_files", None) or {})
+    files = {} if reoriented else dict(getattr(art, "engine_files", None) or {})
     if files.get(GEOMETRY_FILE) and files.get(BOUNDARY_CONDITIONS_FILE):
         walk = telemac_boundary(x=points[:, 0], y=points[:, 1], cells=cells,
                                 roles=roles)

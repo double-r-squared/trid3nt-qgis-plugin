@@ -13,6 +13,8 @@ from trid3nt_server.inputs.geometry import utm_epsg_for
 from trid3nt_server.settings import setting
 
 __all__ = [
+    "DEGENERATE_AREA_M2",
+    "checked_triangles",
     "interior_nodes",
     "MeshNodeError",
     "accepted_mesh_nodes",
@@ -31,6 +33,11 @@ __all__ = [
 #: there is no cell at all, and the rim cell itself is resampled from partial
 #: source coverage. One and a half puts every sample on a whole cell.
 _RIM_PIXELS = 1.5
+
+#: Cells with this or smaller unsigned area are construction artifacts, not
+#: elements: the build is in metres, so a square nanometre is below anything
+#: a mesh cell can be.
+DEGENERATE_AREA_M2 = 1e-9
 
 
 def tin_topology() -> Any:
@@ -66,6 +73,49 @@ class MeshNodeError(RuntimeError):
     def __init__(self, error_code: str, message: str) -> None:
         super().__init__(message)
         self.error_code = error_code
+
+
+def checked_triangles(points: Any, cells: Any, *, stored_as: str = "float64",
+                      ) -> tuple[Any, int]:
+    """Triangles as an engine will read them -> ``(cells counter-clockwise, how many were reoriented)``.
+
+    Areas are taken from the coordinates rounded to ``stored_as``, the precision the engine's file keeps: a sliver
+    positive in float64 can be nonpositive there. A clockwise element is reoriented; one at or under
+    ``DEGENERATE_AREA_M2``, or covering ground a neighbour covers (two elements traversing one edge the same way,
+    which signed area cannot see), refuses naming the count and where the first stand.
+    """
+    import numpy as np
+
+    tri = np.asarray(cells, dtype=np.int64)
+    if tri.ndim != 2 or tri.shape[1] != 3:
+        return tri, 0
+    xy = np.asarray(points, dtype=float).astype(stored_as).astype(float)
+    a, b, c = xy[tri[:, 0]], xy[tri[:, 1]], xy[tri[:, 2]]
+    area = 0.5 * ((b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1])
+                  - (c[:, 0] - a[:, 0]) * (b[:, 1] - a[:, 1]))
+    clockwise = area < 0.0
+    tri = np.where(clockwise[:, None], tri[:, ::-1], tri)
+    heads = tri.ravel()
+    tails = np.roll(tri, -1, axis=1).ravel()
+    edge = heads.astype(np.int64) * int(xy.shape[0]) + tails
+    _, first, count = np.unique(edge, return_index=True, return_counts=True)
+    bad = np.zeros(tri.shape[0], dtype=bool)
+    bad[np.abs(area) <= DEGENERATE_AREA_M2] = True
+    bad[np.flatnonzero(np.isin(edge, edge[first[count > 1]])) // 3] = True
+    if bad.any():
+        where = np.flatnonzero(bad)[:5]
+        stands = "; ".join(
+            f"element {int(i) + 1} at x={xy[tri[i]][:, 0].mean():.1f} "
+            f"y={xy[tri[i]][:, 1].mean():.1f}" for i in where)
+        raise MeshNodeError(
+            "MESH_ELEMENTS_INVERTED",
+            f"{int(bad.sum())} element(s) of this mesh have no area or fold over a "
+            f"neighbour once its coordinates are held as {stored_as} (the engine's "
+            f"file precision), which the solver refuses as a negative determinant: "
+            f"{stands} (1-based, the engine's own numbering; x,y in the mesh's metres). "
+            "Build the mesh again at another resolution or draw the domain edge "
+            "away from those elements.")
+    return tri, int(clockwise.sum())
 
 
 def reproject_nodes_to_utm(points_lonlat: Any) -> tuple[Any, int]:
