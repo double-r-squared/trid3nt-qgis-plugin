@@ -12,6 +12,8 @@ import hashlib
 import json
 import logging
 import os
+from functools import lru_cache
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
@@ -74,9 +76,25 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
 
 def mesh_key(recipe: Mapping[str, Any]) -> str:
     """The CONTENT key of a bound recipe: the domain's geometry, the bytes of every file
-    the mesher reads, the resolution, the mesher and its own ops. A file enters by what it holds, never by its name or uri."""
-    blob = json.dumps(_content(recipe), sort_keys=True, default=str)
+    the mesher reads, the resolution, the mesher and its own ops, and the code that builds and writes the mesh.
+    A file enters by what it holds, never by its name or uri."""
+    blob = json.dumps({"code": _mesh_code(), "recipe": _content(recipe)},
+                      sort_keys=True, default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:24]
+
+
+@lru_cache(maxsize=1)
+def _mesh_code() -> str:
+    """A digest of the source that builds a mesh and writes the engine's pair: a mesh kept by other code is never a hit."""
+    root = Path(__file__).resolve().parents[2]
+    files = sorted((root / "tools" / "mesh").rglob("*.py")) + [
+        root / "workflows" / "telemac" / "authoring" / "selafin_io.py",
+        root / "workflows" / "telemac" / "authoring" / "mesh_files.py"]
+    digest = hashlib.sha256()
+    for path in files:
+        digest.update(path.relative_to(root).as_posix().encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:16]
 
 
 def _content(value: Any) -> Any:

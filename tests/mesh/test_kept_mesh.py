@@ -147,3 +147,11 @@ def test_a_friction_change_leaves_the_key_and_restart_clean_rebuilds(
     assert built == [1, 1]
     assert any(first["key"] in note and "restart_clean" in note
                for note in run_notes.drain_notes(token))
+
+
+def test_a_mesh_built_by_other_code_is_a_new_key(tmp_path, monkeypatch):
+    bed = _file(tmp_path, "bed.tif", b"elevations")
+    key = mesh_step.mesh_key(_recipe(bed))
+    assert mesh_step.mesh_key(_recipe(bed)) == key
+    monkeypatch.setattr(mesh_step, "_mesh_code", lambda: "another digest")
+    assert mesh_step.mesh_key(_recipe(bed)) != key
