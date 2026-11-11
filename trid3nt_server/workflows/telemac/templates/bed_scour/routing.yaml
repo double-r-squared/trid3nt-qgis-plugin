@@ -1,8 +1,8 @@
 summary: 'Bed SCOUR and DEPOSITION: a mobile bed under moving water.'
 routing: 'THE tool for "where does the bed scour and where does it re-deposit" - erodible-bed
   morphodynamics below a dam, weir or bridge, bedload under a flood, and how a GRADED mixture
-  sorts and armors. TELEMAC-2D + GAIA over a reach walked from the release point, an estuary
-  you draw, or a polygon you supply, its bed painted from a published channel survey where
+  sorts and armors. TELEMAC-2D + GAIA over the river reach it walks from the release point itself
+  (`domain` only if the user supplies one), its bed painted from a published channel survey where
   one covers it. Deck opinions, by keyword: DURATION 3600 s, MORPHOLOGICAL FACTOR 10, CLASSES
   SEDIMENT DIAMETERS 2e-4 m, LAYERS INITIAL THICKNESS 5 m, BED-LOAD TRANSPORT FORMULA FOR
   ALL SANDS 1. Give `release`, or supply `domain`.'

@@ -2,8 +2,7 @@ summary: A DYE / TRACER / CONTAMINANT plume released into a body of surface wate
   by its flow.
 routing: 'THE tool for "a spill in the water - how far does it travel, how concentrated":
   a dye / contaminant / pollutant / chemical plume carried by the current, sewage or E.coli
-  effluent DECAYING as it goes (name it in `decaying_substance`). TELEMAC-2D over a reach
-  walked from the release, a lake drawn on the canvas, or a supplied polygon: a finite pulse
+  effluent DECAYING as it goes (name it in `decaying_substance`). TELEMAC-2D over the reach it walks from `release` itself (`domain` only if the user supplies one): a finite pulse
   is carried by the flow and dilutes. Give `release` as a pick or a pair, or supply `domain`.
   Source: ABSCISSAE/ORDINATES/DISCHARGE/TRACER keywords. Deck: DURATION 3600 s, no WIND, no
   RAIN.'
