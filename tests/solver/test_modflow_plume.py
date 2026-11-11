@@ -36,7 +36,7 @@ def _state(monkeypatch, stated):
         return decl.name
 
     monkeypatch.setattr(fill_mod, "_produce", _produce)
-    return asyncio.run(fill_mod.fill(Fill(workflow=_workflow()), stated))
+    return asyncio.run(fill_mod.fill(Fill(workflow=_workflow()), {"event_time": "1990-01-01", **stated}))
 
 
 def test_a_fully_stated_run_is_ready(monkeypatch):

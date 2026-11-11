@@ -207,7 +207,7 @@ them, the inputs whoever reads them declares (`Workflow.seated`):
 (`RESOLUTION`, `GRADE`, `MAX_EDGE` in `tools/mesh/recipe.py`), each seated only
 where the ask names it, and the two sizing inputs carry no default - a template
 that names one restates it with its own number or the run asks for it; `event_time` is the engine's - the workflow names it as its `moment` and the fill reads the moment under that name - read through the
-engine's own coercion, and each module writes it into its deck in its own date
+engine's own coercion (required on the wire wherever a row reads a record, stated-only elsewhere), and each module writes it into its deck in its own date
 keywords, in UTC, with the meridian and latitude a solar clock reads taken off
 the domain (`MOMENT` in a module's `FILLED_BY`; a stated keyword wins, no moment
 writes none). The ice module tests its solar hour unfolded, so a dated ice run

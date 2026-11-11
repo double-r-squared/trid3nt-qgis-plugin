@@ -196,7 +196,7 @@ def test_every_row_the_sheet_reads_is_in_the_mapping_after_the_fill(monkeypatch)
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     workflow = TOOL_REGISTRY["modflow_water_table"].fn.workflow
     state = asyncio.run(fill_mod.fill(Fill(workflow=workflow), {
-        "drain_conductance": 100.0}))
+        "drain_conductance": 100.0, "event_time": "now"}))
     assert state.ready, state.refusal()
     read = set(workflow.steering.named()) | set(input_names(workflow.template.MESH))
     rows = {row.name for row in workflow.inputs if row.is_row and row.name != "mesh"}

@@ -10,7 +10,7 @@ import asyncio
 import inspect
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Collection, Mapping, NoReturn, Sequence
 
@@ -42,8 +42,8 @@ __all__ = ["EVENT_TIME", "RunResult", "Workflow", "register_workflow"]
 logger = logging.getLogger("trid3nt_server.workflows.runtime.workflow")
 
 #: The moment a run of this engine opens at: what every dated source is asked for and every record is read at.
-#: Stated or not: a source that needs a window and was not given one REFUSES naming the
-#: need at its own parameter, so an undated run proceeds and a dated one is asked.
+#: A workflow whose rows read a record (a record-slot need) lists it as required, so a call omitting it is
+#: refused naming it; one reading no record leaves it stated-only.
 EVENT_TIME = Input(
     name="event_time",
     desc="The moment the scenario is read at: 'now' for the present (never a date for it), or an "
@@ -121,6 +121,11 @@ class Workflow:
             self.inputs + tuple(row for row in self.seated()
                                 if row.name not in stated),
             key=lambda row: row.is_row))
+        reads_moment = any(row.data_class and getattr(row.slot, "record", False) for row in self.inputs)
+        # A need read off a record is asked for a window, and only a stated moment opens one.
+        self.inputs = tuple(
+            replace(row, stated_only=False) if reads_moment and row.name == self.moment and row.stated_only else row
+            for row in self.inputs)
         #: What the template calls every published variable and every row it reads into; one dict.
         self.captions = dict(getattr(template, "CAPTIONS", {}) or {})
         #: Published reads in a resolution-sensitive class; see ``resolution.py``.

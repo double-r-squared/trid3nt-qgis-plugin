@@ -10,6 +10,8 @@ import inspect
 
 import pytest
 
+from trid3nt_server.model.adapters.adapter import _tool_schema
+
 from trid3nt_server.workflows.telemac.templates.do_sag import do_sag as do_sag_mod
 from trid3nt_server.workflows.telemac.templates.dye_release import dye_release as dye_mod
 from seated import value_inputs
@@ -24,10 +26,9 @@ def test_template_surfaces_event_time_knob(mod, fn_name):
     # the template's own class body.
     rows = {p.name: p for p in value_inputs(fn.workflow)}
     assert "event_time" in rows
-    # The moment is stated or not: an undated run proceeds, and a dated source
-    # refuses at its own parameter naming the need.
-    assert rows["event_time"].required is False
-    assert rows["event_time"].stated_only is True
+    # Both read a record at a window, so the moment is on the wire's required list.
+    assert rows["event_time"].required is True
+    assert "event_time" in _tool_schema(fn)["required"]
 
 
 @pytest.mark.asyncio
@@ -41,3 +42,21 @@ async def test_malformed_event_time_refuses_it_never_falls_back_to_latest(
     assert isinstance(out, dict) and out["status"] == "error"
     assert out["error_code"] == "EVENT_TIME_INVALID"
     assert "event_time" in out["error_message"]
+
+
+def test_event_time_is_required_exactly_where_a_record_is_read():
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    for name, entry in TOOL_REGISTRY.items():
+        workflow = getattr(entry.fn, "workflow", None)
+        if workflow is None or not workflow.moment:
+            continue
+        reads = any(row.data_class and getattr(row.slot, "record", False)
+                    for row in workflow.inputs)
+        assert ("event_time" in _tool_schema(entry.fn).get("required", [])) is reads, name
+
+
+def test_a_template_reading_no_record_keeps_event_time_stated_only():
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    assert not TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow.input("event_time").required

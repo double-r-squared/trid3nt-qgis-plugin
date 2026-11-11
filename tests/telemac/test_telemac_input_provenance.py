@@ -45,8 +45,8 @@ def _resolve_bare(tool_name: str, location: str):
 @pytest.mark.parametrize(("tool_name", "location"), TELEMAC_TEMPLATES)
 def test_an_unsupplied_moment_is_no_verdict_and_never_invented(
         tool_name: str, location: str) -> None:
-    """Nobody sent a moment: the fill holds no event_time and refuses nothing
-    over it - a dated source asks for it at its own parameter."""
+    """Nobody sent a moment: a template reading a record refuses naming event_time and holds none;
+    one reading no record proceeds with none."""
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.runtime import fill as fill_mod
     from trid3nt_server.workflows.runtime.fill import Fill, fill
@@ -55,11 +55,15 @@ def test_an_unsupplied_moment_is_no_verdict_and_never_invented(
         return decl.name
 
     workflow = TOOL_REGISTRY[tool_name].fn.workflow
-    assert not workflow.input("event_time").required
+    required = workflow.input("event_time").required
     with patch.object(fill_mod, "_produce", _held):
         state = asyncio.run(fill(Fill(workflow=workflow), {}))
-    assert "event_time" not in state.inputs
-    assert "event_time" not in state.refusal()[1]
+    if required:
+        assert "event_time" in state.refusal()[1]
+        assert state.inputs["event_time"].value is None
+    else:
+        assert "event_time" not in state.inputs
+        assert "event_time" not in state.refusal()[1]
 
 
 @pytest.mark.parametrize(("tool_name", "location"), TELEMAC_TEMPLATES)
