@@ -43,6 +43,7 @@ from trid3nt_server.tools.mesh.meshers import (
     get_mesher,
     input_digest,
 )
+from trid3nt_server.tools.mesh.inputs import over_limit_accepted
 from trid3nt_server.tools.mesh.recipe import MeshRecipe
 
 logger = logging.getLogger("trid3nt_server.tools.mesh.session")
@@ -66,6 +67,8 @@ class MeshSession:
             Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"mesh-{self.mesh_id}")
         self.workdir.mkdir(parents=True, exist_ok=True)
         self._mesh: Mesh | None = None
+        #: The stated edge a person accepted at the gate though it passes MESH_MAX_NODES.
+        self.accepted_edge_m: float | None = None
         self._display: tuple[Path, str] | None = None
         self._events: list[dict[str, Any]] = []
         #: Why this mesh cannot be regenerated from its recipe, once a hand-edit
@@ -84,7 +87,8 @@ class MeshSession:
 
     def _ensure_built(self) -> None:
         if self._mesh is None:
-            self._mesh = _build(self.mesher, self.recipe)
+            with over_limit_accepted(self.accepted_edge_m):
+                self._mesh = _build(self.mesher, self.recipe)
             self._journal()
 
     def _regenerate(self, event: dict[str, Any]) -> dict[str, Any]:

@@ -16,8 +16,40 @@ from typing import Any, Iterable, Iterator, Mapping
 from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
 from trid3nt_server.tools.mesh.meshers import MeshToolError
 
-__all__ = ["finest_edge", "op_geometry", "op_input", "op_raster",
-           "raster_cell_m", "raster_scope"]
+__all__ = ["MeshTooLarge", "finest_edge", "op_geometry", "op_input",
+           "op_raster", "over_limit_accepted", "raster_cell_m", "raster_scope"]
+
+#: The stated edge a person accepted over MESH_MAX_NODES, which is then built as stated.
+_ACCEPTED_EDGE: ContextVar[float | None] = ContextVar("mesh_accepted_edge", default=None)
+
+
+@contextmanager
+def over_limit_accepted(edge_m: float | None) -> Iterator[None]:
+    token = _ACCEPTED_EDGE.set(edge_m)
+    try:
+        yield
+    finally:
+        _ACCEPTED_EDGE.reset(token)
+
+
+class MeshTooLarge(MeshToolError):
+    """MESH_TOO_LARGE with the numbers a gate card quotes: the stated edge, the estimate, the limit and the finest edge that fits."""
+
+    def __init__(self, message: str, *, edge_m: float, estimate: int, limit: int,
+                 fit_edge_m: float) -> None:
+        super().__init__("MESH_TOO_LARGE", message)
+        self.edge_m, self.estimate = edge_m, estimate
+        self.limit, self.fit_edge_m = limit, fit_edge_m
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (_rebuild_too_large, (str(self), self.edge_m, self.estimate,
+                                     self.limit, self.fit_edge_m))
+
+
+def _rebuild_too_large(message: str, edge_m: float, estimate: int, limit: int,
+                       fit_edge_m: float) -> MeshTooLarge:
+    return MeshTooLarge(message, edge_m=edge_m, estimate=estimate, limit=limit,
+                        fit_edge_m=fit_edge_m)
 
 #: Metres per degree of latitude, for a geographic raster's cell.
 
@@ -30,7 +62,7 @@ def finest_edge(stated: Any, ops: Iterable[Any],
     A stated edge stands whatever the data under it, and the bed says so where it is coarser; unstated, it is the finest cell
     of the rasters the recipe names, because the mesh library requires one and nothing finer is measured.
     Unstated, the edge is the coarser of that cell and the finest edge MESH_MAX_NODES lets the domain hold, and the run notes say so; a stated edge
-    whose mesh would pass MESH_MAX_NODES refuses here, before anything is built."""
+    whose mesh would pass MESH_MAX_NODES refuses here, before anything is built, unless that edge was accepted at the gate."""
     from trid3nt_server.settings import setting
 
     edge, note = _finest_edge(stated, ops, bbox)
@@ -48,13 +80,14 @@ def finest_edge(stated: Any, ops: Iterable[Any],
             return fit, derived
         return edge, note
     estimate = _estimated_nodes(edge, area)
-    if estimate > limit:
-        raise MeshToolError(
-            "MESH_TOO_LARGE",
+    if estimate > limit and _ACCEPTED_EDGE.get() != edge:
+        raise MeshTooLarge(
             f"a {edge:g} m edge over this domain ({area / 1e6:.4g} km2) is "
             f"an estimated {estimate:,} nodes, past the limit of {limit:,} "
             "(setting MESH_MAX_NODES). State a coarser mesh_resolution_m, or "
-            "raise MESH_MAX_NODES in Settings.")
+            "raise MESH_MAX_NODES in Settings.",
+            edge_m=edge, estimate=estimate, limit=limit,
+            fit_edge_m=_edge_for_nodes(limit, area))
     return edge, note
 
 

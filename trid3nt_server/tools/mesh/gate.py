@@ -7,10 +7,12 @@ presents every other user-gated thing asks about them. AUTO builds inline."""
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any, Mapping, Sequence
 
 from trid3nt_server.inputs.gate.input_review import GateCard, gate_input_review
 from trid3nt_server.tools.mesh.artifact import MeshArtifact
+from trid3nt_server.tools.mesh.inputs import MeshTooLarge
 from trid3nt_server.tools.mesh.meshers import MeshToolError
 from trid3nt_server.tools.mesh.session import MeshSession, to_build_thread
 
@@ -111,11 +113,19 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
                           max_rounds: int | None = None) -> MeshArtifact:
     """Build the demanded mesh under the gate -> the accepted :class:`MeshArtifact`.
 
-    AUTO builds inline; user_gated with no session to present on refuses."""
+    AUTO builds inline; user_gated with no session to present on refuses. A stated edge whose estimate passes
+    MESH_MAX_NODES is asked about first, with nothing built: proceed builds it as stated, a resolution_m
+    reply takes another edge, cancel refuses."""
     global _AT_GATE
+    asking: list[MeshTooLarge] = []
 
     async def card() -> GateCard:
-        presentation = await present_mesh(session)
+        asking.clear()
+        try:
+            presentation = await present_mesh(session)
+        except MeshTooLarge as big:
+            asking.append(big)
+            return _size_ask_card(big, tool_name=tool_name)
         lines = [*render_probe_lines(presentation.get("probes") or {}),
                  *(session.mesh.meta.get("edge_notes") or [])]
         lines.append(
@@ -131,14 +141,31 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
                        "mesh_display_uri": presentation.get("display_uri")})
 
     async def revise(revised: Mapping[str, Any]) -> None:
-        await _apply_gate_revision(session, revised)
+        asked = asking[0] if asking else None
+        try:
+            await _apply_gate_revision(session, revised)
+        except MeshTooLarge:
+            return
+        if asked is not None and revised.get("resolution_m") not in (None, ""):
+            from trid3nt_server.inputs.run_notes import journal_note
+
+            journal_note(
+                f"the stated mesh_resolution_m {asked.edge_m:g} m passed "
+                f"MESH_MAX_NODES = {asked.limit:,}, so {session.recipe.resolution_m:g} "
+                "m was taken at the gate")
+
+    def size_answered() -> str | None:
+        if not asking:
+            return None
+        session.accepted_edge_m = asking[0].edge_m
+        return "the mesh size answer"
 
     _AT_GATE = session
     try:
         outcome = await gate_input_review(
             tool_name=tool_name, entries=[], params={},
             max_rounds=max_rounds,
-            present=card, apply_revision=revise)
+            present=card, apply_revision=revise, blocked=size_answered)
     finally:
         _AT_GATE = None
     if not outcome.proceed:
@@ -147,6 +174,25 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
             f"the mesh for {tool_name} was not accepted at the gate, so the run "
             f"did not proceed: {outcome.cancel_reason}")
     return await to_build_thread(session.accept)
+
+
+def _size_ask_card(big: MeshTooLarge, *, tool_name: str) -> GateCard:
+    """The ask for a stated edge over MESH_MAX_NODES: the estimate, the limit and the edge that fits."""
+    from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
+
+    fit = math.ceil(big.fit_edge_m * 100) / 100
+    lines = [f"a {big.edge_m:g} m edge is an estimated {big.estimate:,} nodes, past "
+             f"MESH_MAX_NODES = {big.limit:,}; nothing is built yet",
+             f"proceed builds {big.edge_m:g} m as stated; provide values with "
+             f"resolution_m = {fit:g} (the finest that fits) builds that; cancel stops"]
+    sheet = ParamSheet(
+        workflow=tool_name, title="The mesh is over the size limit"[:200],
+        rows=[ParamSheetRow(
+            name="resolution_m", value=f"{fit:g}",
+            desc=f"{fit:g} m is the finest edge MESH_MAX_NODES fits; submit it "
+                 f"to build that, or proceed to build {big.edge_m:g} m as stated"[:512],
+            source_badge="size limit")])
+    return GateCard(lines=lines, param_sheet=sheet)
 
 
 #: The row every open gate offers beside the params: the revert to the recipe as

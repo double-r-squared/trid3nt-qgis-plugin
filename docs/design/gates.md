@@ -80,7 +80,10 @@ passes the `MESH_MAX_NODES` setting refuses before building, naming the
 estimate, the limit and `mesh_resolution_m`; with no edge stated, the mesh takes
 the finest edge that estimate fits under the setting (the estimate inverted),
 never finer than the finest data, and the run notes say so. The setting is
-overridden like any other.
+overridden like any other. User-gated, a stated edge over the limit is an ask on the
+mesh's own gate instead, with nothing built: proceed builds it as stated, a
+`resolution_m` reply (prefilled with the finest edge that fits) builds that and the
+run notes say so, cancel refuses; AUTO has no one to ask and refuses.
 
 ## Invariants
 

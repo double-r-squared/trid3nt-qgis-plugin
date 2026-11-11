@@ -499,3 +499,102 @@ async def test_a_cancel_the_refusal_map_has_not_learned_fails_by_its_key(
     with pytest.raises(KeyError, match="expired"):
         await mesh_gate.gate_mesh_build(
             _session(tmp_path), tool_name="telemac_dye_release")
+
+
+def _over(tmp_path, resolution_m=40.0) -> MeshSession:
+    return _session(tmp_path, resolution_m=resolution_m)
+
+
+@pytest.mark.asyncio
+async def test_over_the_limit_gated_asks_before_any_build(tmp_path, monkeypatch, user_settings):
+    user_settings(MESH_MAX_NODES=1000)
+    fake = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
+    session = _over(tmp_path)
+    driver = asyncio.create_task(_drive([("cancel", None)]))
+
+    with pytest.raises(MeshToolError) as excinfo:
+        await mesh_gate.gate_mesh_build(session, tool_name="telemac_dye_release")
+
+    await driver
+    _mtype, envelope = fake.sent[0]
+    assert envelope.options == ["proceed", "narrow_scope", "cancel"]
+    assert "past MESH_MAX_NODES = 1,000" in envelope.recommendation
+    assert envelope.param_sheet.rows[0].name == "resolution_m"
+    assert float(envelope.param_sheet.rows[0].value) > 40.0
+    assert session._mesh is None and not fake.layers
+    assert excinfo.value.error_code == "MESH_GATE_DECLINED"
+
+
+@pytest.mark.asyncio
+async def test_over_the_limit_proceed_builds_as_stated(tmp_path, monkeypatch, user_settings):
+    user_settings(MESH_MAX_NODES=1000)
+    fake = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
+    session = _over(tmp_path)
+    driver = asyncio.create_task(_drive([("proceed", None), ("proceed", None)]))
+
+    art = await mesh_gate.gate_mesh_build(session, tool_name="telemac_dye_release")
+
+    await driver
+    assert session.mesh.meta["resolution_m"] == 40.0
+    assert art.element_count > 0 and len(fake.sent) == 2
+
+
+@pytest.mark.asyncio
+async def test_over_the_limit_fit_builds_the_derived_edge_and_notes_it(
+        tmp_path, monkeypatch, user_settings):
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+
+    user_settings(MESH_MAX_NODES=1000)
+    fake = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
+    session = _over(tmp_path)
+    notes = bind_notes()
+    driver_state: dict = {}
+
+    async def fit_reply():
+        for _ in range(1000):
+            if fake.sent:
+                break
+            await asyncio.sleep(0.005)
+        row = fake.sent[0][1].param_sheet.rows[0]
+        driver_state["fit"] = float(row.value)
+        for wid, (_s, fut) in list(pending._PENDING_CONFIRMATIONS.items()):
+            fut.set_result(PayloadConfirmationEnvelopePayload(
+                warning_id=wid, decision="narrow_scope",
+                revised_args={"resolution_m": row.value}))
+        await _drive([("proceed", None)], seen=set())
+
+    driver = asyncio.create_task(fit_reply())
+    art = await mesh_gate.gate_mesh_build(session, tool_name="telemac_dye_release")
+
+    await driver
+    assert session.recipe.resolution_m == driver_state["fit"] > 40.0
+    assert art.node_count <= 1000 * 1.5
+    assert any("was taken at the gate" in n for n in drain_notes(notes))
+
+
+@pytest.mark.asyncio
+async def test_over_the_limit_auto_still_refuses(tmp_path, monkeypatch, user_settings):
+    user_settings(AUTO=True, MESH_MAX_NODES=1000)
+    fake = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
+
+    with pytest.raises(MeshToolError) as excinfo:
+        await mesh_gate.gate_mesh_build(_over(tmp_path), tool_name="telemac_dye_release")
+
+    assert excinfo.value.error_code == "MESH_TOO_LARGE" and fake.sent == []
+
+
+@pytest.mark.asyncio
+async def test_under_the_limit_gated_does_not_ask(tmp_path, monkeypatch, user_settings):
+    user_settings(MESH_MAX_NODES=1_000_000)
+    fake = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
+    driver = asyncio.create_task(_drive([("proceed", None)]))
+
+    await mesh_gate.gate_mesh_build(_over(tmp_path), tool_name="telemac_dye_release")
+
+    await driver
+    assert len(fake.sent) == 1 and "past MESH_MAX_NODES" not in fake.sent[0][1].recommendation
