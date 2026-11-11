@@ -53,6 +53,8 @@ async def request_spatial_input(
 ) -> dict[str, Any]:
     """Ask the user to DRAW geometry on the map, then PAUSE until they finish.
 
+    NOT for a template's inputs: a template (telemac_*, modflow_*, geoclaw_*) finds its own
+    domain, river reach and data, and asks for a drawing itself if it needs one - call it first.
     ROUTING: the user must physically draw rather than describe - an AOI outline for
     any bbox-taking tool (`mode="vector_draw"`, `purpose="aoi"`, the default; the
     returned `aoi_bbox` passes straight through), an elevation/section LINE
