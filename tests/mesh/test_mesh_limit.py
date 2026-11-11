@@ -116,3 +116,59 @@ def test_raising_the_setting_makes_the_derived_edge_finer(tmp_path):
     coarse = _built(_bed_session(tmp_path / "a", 1 / 3600), 400).meta["resolution_m"]
     finer = _built(_bed_session(tmp_path / "b", 1 / 3600), 1000).meta["resolution_m"]
     assert finer < coarse
+
+
+def _solve_built(session, *, budget, limit=10_000_000):
+    session.solve_estimate = lambda nodes, edge: float(nodes)
+    token = settings.bind_run({"MESH_MAX_NODES": limit, "SOLVE_BUDGET_S": budget})
+    try:
+        return session.mesh
+    finally:
+        settings.reset_run(token)
+
+
+def test_unstated_edge_fits_the_solve_budget_and_the_run_notes_say_so(tmp_path):
+    mesh = _solve_built(_bed_session(tmp_path, 1 / 3600), budget=400)
+    assert mesh.meta["resolution_m"] > 28.0 and mesh.node_count <= 400 * 1.5
+    assert any("derived from SOLVE_BUDGET_S = 400" in n for n in mesh.meta["edge_notes"])
+
+
+def test_the_tighter_limit_sets_the_derived_edge(tmp_path):
+    mesh = _solve_built(_bed_session(tmp_path, 1 / 3600), budget=10_000_000, limit=400)
+    assert any("derived from MESH_MAX_NODES = 400" in n for n in mesh.meta["edge_notes"])
+
+
+def test_raising_the_budget_makes_the_derived_edge_finer(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    coarse = _solve_built(_bed_session(tmp_path / "a", 1 / 3600), budget=400).meta["resolution_m"]
+    finer = _solve_built(_bed_session(tmp_path / "b", 1 / 3600), budget=1000).meta["resolution_m"]
+    assert finer < coarse
+
+
+@pytest.mark.parametrize("auto", [True, False])
+def test_a_stated_edge_over_the_solve_budget_refuses_by_name(tmp_path, auto):
+    session = _bed_session(tmp_path, 1 / 3600, resolution_m=5.0)
+    token = settings.bind_run({"AUTO": auto})
+    try:
+        with pytest.raises(MeshToolError) as caught:
+            _solve_built(session, budget=400)
+    finally:
+        settings.reset_run(token)
+    text = str(caught.value)
+    assert caught.value.error_code == "SOLVE_OVER_BUDGET"
+    assert "SOLVE_BUDGET_S" in text and "mesh_resolution_m" in text and "400" in text
+
+
+def test_a_stated_edge_under_the_solve_budget_stands(tmp_path):
+    mesh = _solve_built(_bed_session(tmp_path, 1 / 3600, resolution_m=100.0), budget=400)
+    assert mesh.meta["resolution_m"] == 100.0
+
+
+def test_an_engine_with_no_estimate_is_not_held_to_the_budget(tmp_path):
+    token = settings.bind_run({"SOLVE_BUDGET_S": 1})
+    try:
+        mesh = _bed_session(tmp_path, 1 / 3600, resolution_m=5.0).mesh
+    finally:
+        settings.reset_run(token)
+    assert mesh.meta["resolution_m"] == 5.0

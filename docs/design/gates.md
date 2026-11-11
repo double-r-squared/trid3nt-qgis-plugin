@@ -85,6 +85,12 @@ mesh's own gate instead, with nothing built: proceed builds it as stated, a
 `resolution_m` reply (prefilled with the finest edge that fits) builds that and the
 run notes say so, cancel refuses; AUTO has no one to ask and refuses.
 
+Where the engine hands the mesh a solve estimate (TELEMAC 2D: the estimated nodes, the run length
+over the step the settle derives for that edge, and the cores the solve has), the
+`SOLVE_BUDGET_S` setting bounds the edge the same way: unstated, the edge is the finest that fits
+both limits and the run note names the one that set it; stated over the budget, user-gated asks
+and AUTO refuses `SOLVE_OVER_BUDGET` naming the estimate, the budget, `mesh_resolution_m` and the setting.
+
 ## Invariants
 
 - ONE gate machine. A card contract, a gate loop or a tool surface of a

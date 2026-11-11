@@ -11,16 +11,31 @@ import tempfile
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Mapping
+from typing import Any, Callable, Iterable, Iterator, Mapping
 
 from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
 from trid3nt_server.tools.mesh.meshers import MeshToolError
 
-__all__ = ["MeshTooLarge", "finest_edge", "op_geometry", "op_input",
-           "op_raster", "over_limit_accepted", "raster_cell_m", "raster_scope"]
+__all__ = ["MeshTooLarge", "SolveEstimate", "finest_edge", "op_geometry", "op_input",
+           "op_raster", "over_limit_accepted", "raster_cell_m", "raster_scope",
+           "solve_estimated_by"]
 
-#: The stated edge a person accepted over MESH_MAX_NODES, which is then built as stated.
+#: The stated edge a person accepted over MESH_MAX_NODES or SOLVE_BUDGET_S, which is then built as stated.
 _ACCEPTED_EDGE: ContextVar[float | None] = ContextVar("mesh_accepted_edge", default=None)
+
+
+#: The engine's estimate of the wall seconds its solve takes on a mesh of ``nodes`` at ``edge_m``; the mesh knows no engine, so the caller hands it in.
+SolveEstimate = Callable[[int, float], float]
+_SOLVE: ContextVar[SolveEstimate | None] = ContextVar("mesh_solve_estimate", default=None)
+
+
+@contextmanager
+def solve_estimated_by(estimate: SolveEstimate | None) -> Iterator[None]:
+    token = _SOLVE.set(estimate)
+    try:
+        yield
+    finally:
+        _SOLVE.reset(token)
 
 
 @contextmanager
@@ -33,25 +48,29 @@ def over_limit_accepted(edge_m: float | None) -> Iterator[None]:
 
 
 class MeshTooLarge(MeshToolError):
-    """MESH_TOO_LARGE with the numbers a gate card quotes: the stated edge, the estimate, the limit and the finest edge that fits."""
+    """The refusal a gate card quotes: the stated edge, its estimates, the limits and the finest edge that fits both.
+
+    MESH_TOO_LARGE where the node estimate passes MESH_MAX_NODES; SOLVE_OVER_BUDGET where the engine's solve estimate passes SOLVE_BUDGET_S."""
 
     def __init__(self, message: str, *, edge_m: float, estimate: int, limit: int,
-                 fit_edge_m: float) -> None:
-        super().__init__("MESH_TOO_LARGE", message)
+                 fit_edge_m: float, solve_s: float | None = None,
+                 budget_s: float | None = None) -> None:
+        super().__init__("MESH_TOO_LARGE" if solve_s is None else "SOLVE_OVER_BUDGET", message)
         self.edge_m, self.estimate = edge_m, estimate
         self.limit, self.fit_edge_m = limit, fit_edge_m
+        self.solve_s, self.budget_s = solve_s, budget_s
 
     def __reduce__(self) -> tuple[Any, ...]:
         return (_rebuild_too_large, (str(self), self.edge_m, self.estimate,
-                                     self.limit, self.fit_edge_m))
+                                     self.limit, self.fit_edge_m, self.solve_s,
+                                     self.budget_s))
 
 
 def _rebuild_too_large(message: str, edge_m: float, estimate: int, limit: int,
-                       fit_edge_m: float) -> MeshTooLarge:
+                       fit_edge_m: float, solve_s: float | None,
+                       budget_s: float | None) -> MeshTooLarge:
     return MeshTooLarge(message, edge_m=edge_m, estimate=estimate, limit=limit,
-                        fit_edge_m=fit_edge_m)
-
-#: Metres per degree of latitude, for a geographic raster's cell.
+                        fit_edge_m=fit_edge_m, solve_s=solve_s, budget_s=budget_s)
 
 
 def finest_edge(stated: Any, ops: Iterable[Any],
@@ -61,33 +80,50 @@ def finest_edge(stated: Any, ops: Iterable[Any],
 
     A stated edge stands whatever the data under it, and the bed says so where it is coarser; unstated, it is the finest cell
     of the rasters the recipe names, because the mesh library requires one and nothing finer is measured.
-    Unstated, the edge is the coarser of that cell and the finest edge MESH_MAX_NODES lets the domain hold, and the run notes say so; a stated edge
-    whose mesh would pass MESH_MAX_NODES refuses here, before anything is built, unless that edge was accepted at the gate."""
+    Unstated, the edge is the coarser of that cell and the finest edge both MESH_MAX_NODES and, where the engine hands in a solve
+    estimate, SOLVE_BUDGET_S let the domain hold, and the run notes say which limit set it; a stated edge whose mesh would pass
+    either refuses here, before anything is built, unless that edge was accepted at the gate."""
     from trid3nt_server.settings import setting
 
     edge, note = _finest_edge(stated, ops, bbox)
     area = _domain_area_m2(bbox, area_m2)
     limit = int(setting("MESH_MAX_NODES"))
+    solve = _SOLVE.get()
+    budget = float(setting("SOLVE_BUDGET_S")) if solve is not None else None
+    fit_nodes = _edge_for_nodes(limit, area)
+    fit_solve = _edge_for_solve(solve, budget, area) if solve is not None else 0.0
+    fit = max(fit_nodes, fit_solve)
     if stated in (None, ""):
-        fit = _edge_for_nodes(limit, area)
         if fit > edge:
             from trid3nt_server.inputs.run_notes import journal_note
 
+            by = (f"SOLVE_BUDGET_S = {budget:,.0f} s (an estimated solve of "
+                  f"{solve(_estimated_nodes(fit, area), fit):,.0f} s)"
+                  if fit_solve > fit_nodes else f"MESH_MAX_NODES = {limit:,}")
             derived = (f"no edge was stated, so the resolution is {fit:.4g} m, "
-                       f"derived from MESH_MAX_NODES = {limit:,} (the cell of "
-                       f"the finest data is {edge:g} m)")
+                       f"derived from {by} (the cell of the finest data is {edge:g} m)")
             journal_note(derived)
             return fit, derived
         return edge, note
+    if _ACCEPTED_EDGE.get() == edge:
+        return edge, note
     estimate = _estimated_nodes(edge, area)
-    if estimate > limit and _ACCEPTED_EDGE.get() != edge:
+    if estimate > limit:
         raise MeshTooLarge(
             f"a {edge:g} m edge over this domain ({area / 1e6:.4g} km2) is "
             f"an estimated {estimate:,} nodes, past the limit of {limit:,} "
             "(setting MESH_MAX_NODES). State a coarser mesh_resolution_m, or "
             "raise MESH_MAX_NODES in Settings.",
-            edge_m=edge, estimate=estimate, limit=limit,
-            fit_edge_m=_edge_for_nodes(limit, area))
+            edge_m=edge, estimate=estimate, limit=limit, fit_edge_m=fit)
+    seconds = solve(estimate, edge) if solve is not None else 0.0
+    if budget is not None and seconds > budget:
+        raise MeshTooLarge(
+            f"a {edge:g} m edge over this domain ({area / 1e6:.4g} km2) is an "
+            f"estimated {estimate:,} nodes and a solve of about {seconds:,.0f} s, "
+            f"past the budget of {budget:,.0f} s (setting SOLVE_BUDGET_S). State "
+            "a coarser mesh_resolution_m, or raise SOLVE_BUDGET_S in Settings.",
+            edge_m=edge, estimate=estimate, limit=limit, fit_edge_m=fit,
+            solve_s=seconds, budget_s=budget)
     return edge, note
 
 
@@ -113,6 +149,22 @@ def _estimated_nodes(edge_m: float, area_m2: float) -> int:
 def _edge_for_nodes(nodes: int, area_m2: float) -> float:
     """The finest edge whose estimate fits ``nodes``: the estimate inverted."""
     return math.sqrt(area_m2 / (_NODE_AREA * nodes))
+
+
+def _edge_for_solve(solve: SolveEstimate, budget_s: float, area_m2: float) -> float:
+    """The finest edge whose solve estimate fits ``budget_s``, by bisection: the estimate falls as the edge grows.
+
+    A domain no edge fits - one element across it is still over - takes that coarsest edge."""
+    fine, coarse = 1e-3, math.sqrt(area_m2)
+    if solve(_estimated_nodes(coarse, area_m2), coarse) > budget_s:
+        return coarse
+    for _ in range(80):
+        mid = math.sqrt(fine * coarse)
+        if solve(_estimated_nodes(mid, area_m2), mid) > budget_s:
+            fine = mid
+        else:
+            coarse = mid
+    return coarse
 
 
 def _finest_edge(stated: Any, ops: Iterable[Any],

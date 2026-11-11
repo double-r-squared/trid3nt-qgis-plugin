@@ -598,3 +598,51 @@ async def test_under_the_limit_gated_does_not_ask(tmp_path, monkeypatch, user_se
 
     await driver
     assert len(fake.sent) == 1 and "past MESH_MAX_NODES" not in fake.sent[0][1].recommendation
+
+
+@pytest.mark.asyncio
+async def test_over_the_solve_budget_gated_asks_before_any_build(tmp_path, monkeypatch, user_settings):
+    user_settings(SOLVE_BUDGET_S=1000)
+    fake = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
+    session = _over(tmp_path)
+    session.solve_estimate = lambda nodes, edge: float(nodes)
+    driver = asyncio.create_task(_drive([("cancel", None)]))
+
+    with pytest.raises(MeshToolError) as excinfo:
+        await mesh_gate.gate_mesh_build(session, tool_name="telemac_dye_release")
+
+    await driver
+    _mtype, envelope = fake.sent[0]
+    assert "past SOLVE_BUDGET_S = 1,000" in envelope.recommendation
+    assert float(envelope.param_sheet.rows[0].value) > 40.0
+    assert session._mesh is None and excinfo.value.error_code == "MESH_GATE_DECLINED"
+
+
+@pytest.mark.asyncio
+async def test_over_the_solve_budget_proceed_builds_as_stated(tmp_path, monkeypatch, user_settings):
+    user_settings(SOLVE_BUDGET_S=1000)
+    fake = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
+    session = _over(tmp_path)
+    session.solve_estimate = lambda nodes, edge: float(nodes)
+    driver = asyncio.create_task(_drive([("proceed", None), ("proceed", None)]))
+
+    await mesh_gate.gate_mesh_build(session, tool_name="telemac_dye_release")
+
+    await driver
+    assert session.mesh.meta["resolution_m"] == 40.0 and len(fake.sent) == 2
+
+
+@pytest.mark.asyncio
+async def test_over_the_solve_budget_auto_refuses(tmp_path, monkeypatch, user_settings):
+    user_settings(AUTO=True, SOLVE_BUDGET_S=1000)
+    fake = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
+    session = _over(tmp_path)
+    session.solve_estimate = lambda nodes, edge: float(nodes)
+
+    with pytest.raises(MeshToolError) as excinfo:
+        await mesh_gate.gate_mesh_build(session, tool_name="telemac_dye_release")
+
+    assert excinfo.value.error_code == "SOLVE_OVER_BUDGET" and fake.sent == []

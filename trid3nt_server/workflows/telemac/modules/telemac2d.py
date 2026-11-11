@@ -15,6 +15,7 @@ from trid3nt_server.inputs.temporal import RATE, STATE, Series
 
 from ..authoring.atmosphere import (ATMOSPHERE_READS, Atmosphere,
                                      expand_atmosphere)
+from ..helpers.solve_cost import solve_wall_seconds
 from .coupling import couples
 from ...runtime.module import Output, SlotRefused
 from trid3nt_server.workflows.runtime.module import MOMENT
@@ -655,6 +656,7 @@ T2D = TelemacModule("telemac2d")
 T2D.MODULE_OUTPUT = MODULE_OUTPUT
 # The hydrodynamic clock is one keyword: the window itself.
 T2D.CLOCK = ("DURATION",)
+T2D.SOLVE_SECONDS = solve_wall_seconds
 T2D.LISTING = LISTING
 T2D.PRINTOUTS = "VARIABLES_FOR_GRAPHIC_PRINTOUTS"
 T2D.CADENCE = "GRAPHIC_PRINTOUT_PERIOD"

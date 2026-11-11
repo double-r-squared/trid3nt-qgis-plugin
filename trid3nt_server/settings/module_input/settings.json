@@ -86,6 +86,22 @@
       "source": "TRID3NT engineering default."
     },
     {
+      "keyword": "SOLVE_BUDGET_S",
+      "identifier": "SOLVE_BUDGET_S",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The most wall seconds an engine's solve may be estimated to take before a stated mesh edge asks (user-gated) or refuses (AUTO) by name; with no edge stated, the mesh takes the finest edge whose estimated solve fits it and MESH_MAX_NODES. The estimate is the engine's own: TELEMAC 2D, from the nodes, the clock and the time step, on the cores the solve has. The default is an operational wait, not physics: ten minutes.",
+      "rubrique": [
+        "mesh"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 600,
+      "source": "TRID3NT engineering default."
+    },
+    {
       "keyword": "MERGE_RESAMPLING",
       "identifier": "MERGE_RESAMPLING",
       "type": "STRING",

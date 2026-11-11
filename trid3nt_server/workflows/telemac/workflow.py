@@ -53,7 +53,9 @@ from trid3nt_server.workflows.runtime.sheet import (
 )
 from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
 from trid3nt_server.workflows.solver.stop import SolveStopped
+from trid3nt_server.workflows.telemac.modules.module import PROCESSORS
 from trid3nt_server.workflows.telemac.modules.sheet import (
+    _DIRECT_SOLVER,
     CONTINUATION,
     TelemacSheet,
     stage as stage_sheet_,
@@ -547,7 +549,8 @@ class TelemacWorkflow(Workflow):
             await stage("mesh", build_declared_mesh,
                         mesh=await self._recipe(env, mesh, untaken),
                         name=await read(env, self._states("MESH_ON", "") or domain),
-                        fresh=bool(state.carried.get("restart_clean")))
+                        fresh=bool(state.carried.get("restart_clean")),
+                        solve_estimate=self._solve_estimate(run))
         else:
             self._say_what_no_build_read(env, mesh)
         # The files this engine asks the accepted mesh for are written from it before anything reads one: its boundary numbering says which face carries what.
@@ -757,6 +760,20 @@ class TelemacWorkflow(Workflow):
                 "a mesh was supplied, so this run built none and "
                 f"{', '.join(unused)} went unused: only the mesh build reads "
                 f"{'it' if len(unused) == 1 else 'them'}.")
+
+    def _solve_estimate(self, run: Mapping[str, Any]) -> Callable[[int, float], float] | None:
+        """The module's estimate of this run's solve in wall seconds, on the clock, step and cores the run states; none where the module has none measured."""
+        from trid3nt_server.settings import setting
+
+        estimate, duration = self.steering.SOLVE_SECONDS, run.get("DURATION")
+        if estimate is None or not isinstance(duration, (int, float)):
+            return None
+        slot = self.steering.MODULE_INPUT.get("SOLVER")
+        solver = run.get("SOLVER", None if slot is None or slot.is_open else slot.engine_default)
+        cores = 1 if solver == _DIRECT_SOLVER else int(
+            run.get(PROCESSORS) or setting("CONTAINER_CORES"))
+        return partial(estimate, duration_s=float(duration), cores=cores,
+                       time_step_s=run.get("TIME_STEP"))
 
     def _named(self, mesh: bool = True) -> list[Any]:
         from trid3nt_server.tools.mesh.recipe import input_names

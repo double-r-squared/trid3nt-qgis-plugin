@@ -37,11 +37,13 @@ _NAMING = frozenset({"name", "label", "layer_id", "title"})
 
 
 async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
-                              fresh: bool = False) -> dict[str, Any]:
+                              fresh: bool = False,
+                              solve_estimate: Any = None) -> dict[str, Any]:
     """The mesh a solve runs on -> the accepted mesh's record, with its ``key``.
 
     One KEPT under this recipe's content key is reused unless ``fresh``;
-    otherwise one is built, gated unless AUTO is on."""
+    otherwise one is built, gated unless AUTO is on. ``solve_estimate`` is the engine's wall-second estimate of its
+    solve, which SOLVE_BUDGET_S holds the edge to."""
     from trid3nt_server.render.pipeline_emitter import current_turn_case
     from trid3nt_server.tools.mesh.gate import gate_mesh_build
     from trid3nt_server.tools.mesh.session import MeshSession
@@ -65,7 +67,7 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
     recipe = recipe_from_plan_value(mesh)
     session = await asyncio.to_thread(
         MeshSession, recipe, case_id=current_turn_case(),
-        name=_session_name(name, recipe.mesher))
+        name=_session_name(name, recipe.mesher), solve_estimate=solve_estimate)
     art = await gate_mesh_build(session, tool_name=GATE_LABEL)
     logger.info("mesh accepted: %s -> %d nodes / %d elements, min edge %s m",
                 art.mesh_id, art.node_count, art.element_count,

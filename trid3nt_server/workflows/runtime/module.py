@@ -60,6 +60,7 @@ _RESERVED = frozenset((
     "CADENCE", "CLOCK", "TRACER", "APPENDS", "APPENDABLE", "ONLY_3D",
     "UNWRITTEN", "RESULT_FILE", "RESULT_FILES", "RESULT_KEYWORD", "FILLED_BY",
     "CODE_ON_HOST", "PLACED_AGAINST", "PARTITION_KEYWORD", "CARRIER_OWNED",
+    "SOLVE_SECONDS",
     "composites",
     "reads", "appends", "printouts", "seconds", "slot",
 ))

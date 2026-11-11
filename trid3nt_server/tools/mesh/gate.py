@@ -114,7 +114,7 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
     """Build the demanded mesh under the gate -> the accepted :class:`MeshArtifact`.
 
     AUTO builds inline; user_gated with no session to present on refuses. A stated edge whose estimate passes
-    MESH_MAX_NODES is asked about first, with nothing built: proceed builds it as stated, a resolution_m
+    MESH_MAX_NODES or SOLVE_BUDGET_S is asked about first, with nothing built: proceed builds it as stated, a resolution_m
     reply takes another edge, cancel refuses."""
     global _AT_GATE
     asking: list[MeshTooLarge] = []
@@ -149,9 +149,11 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
         if asked is not None and revised.get("resolution_m") not in (None, ""):
             from trid3nt_server.inputs.run_notes import journal_note
 
+            passed = (f"MESH_MAX_NODES = {asked.limit:,}" if asked.solve_s is None
+                      else f"SOLVE_BUDGET_S = {asked.budget_s:,.0f}")
             journal_note(
                 f"the stated mesh_resolution_m {asked.edge_m:g} m passed "
-                f"MESH_MAX_NODES = {asked.limit:,}, so {session.recipe.resolution_m:g} "
+                f"{passed}, so {session.recipe.resolution_m:g} "
                 "m was taken at the gate")
 
     def size_answered() -> str | None:
@@ -177,19 +179,21 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
 
 
 def _size_ask_card(big: MeshTooLarge, *, tool_name: str) -> GateCard:
-    """The ask for a stated edge over MESH_MAX_NODES: the estimate, the limit and the edge that fits."""
+    """The ask for a stated edge over MESH_MAX_NODES or SOLVE_BUDGET_S: the estimate, the limit and the edge that fits."""
     from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
     fit = math.ceil(big.fit_edge_m * 100) / 100
-    lines = [f"a {big.edge_m:g} m edge is an estimated {big.estimate:,} nodes, past "
-             f"MESH_MAX_NODES = {big.limit:,}; nothing is built yet",
+    past = (f"is an estimated {big.estimate:,} nodes, past MESH_MAX_NODES = {big.limit:,}"
+            if big.solve_s is None else
+            f"is a solve of about {big.solve_s:,.0f} s, past SOLVE_BUDGET_S = {big.budget_s:,.0f}")
+    lines = [f"a {big.edge_m:g} m edge {past}; nothing is built yet",
              f"proceed builds {big.edge_m:g} m as stated; provide values with "
              f"resolution_m = {fit:g} (the finest that fits) builds that; cancel stops"]
     sheet = ParamSheet(
         workflow=tool_name, title="The mesh is over the size limit"[:200],
         rows=[ParamSheetRow(
             name="resolution_m", value=f"{fit:g}",
-            desc=f"{fit:g} m is the finest edge MESH_MAX_NODES fits; submit it "
+            desc=f"{fit:g} m is the finest edge the mesh and solve limits fit; submit it "
                  f"to build that, or proceed to build {big.edge_m:g} m as stated"[:512],
             source_badge="size limit")])
     return GateCard(lines=lines, param_sheet=sheet)

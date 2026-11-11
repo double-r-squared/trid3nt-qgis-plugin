@@ -44,7 +44,7 @@ from trid3nt_server.tools.mesh.meshers import (
     get_mesher,
     input_digest,
 )
-from trid3nt_server.tools.mesh.inputs import over_limit_accepted
+from trid3nt_server.tools.mesh.inputs import SolveEstimate, over_limit_accepted, solve_estimated_by
 from trid3nt_server.tools.mesh.recipe import MeshRecipe
 
 logger = logging.getLogger("trid3nt_server.tools.mesh.session")
@@ -57,7 +57,8 @@ class MeshSession:
 
     def __init__(self, recipe: MeshRecipe, *,
                  workdir: str | os.PathLike[str] | None = None,
-                 case_id: str | None = None, name: str | None = None) -> None:
+                 case_id: str | None = None, name: str | None = None,
+                 solve_estimate: SolveEstimate | None = None) -> None:
         self.declared = recipe
         self.recipe = recipe
         self.mesher: Mesher = get_mesher(recipe.mesher)
@@ -68,8 +69,10 @@ class MeshSession:
             Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"mesh-{self.mesh_id}")
         self.workdir.mkdir(parents=True, exist_ok=True)
         self._mesh: Mesh | None = None
-        #: The stated edge a person accepted at the gate though it passes MESH_MAX_NODES.
+        #: The stated edge a person accepted at the gate though it passes MESH_MAX_NODES or SOLVE_BUDGET_S.
         self.accepted_edge_m: float | None = None
+        #: The engine's estimate of its solve on this mesh, which bounds the edge by SOLVE_BUDGET_S.
+        self.solve_estimate = solve_estimate
         self._display: tuple[Path, str] | None = None
         self._events: list[dict[str, Any]] = []
         #: Why this mesh cannot be regenerated from its recipe, once a hand-edit
@@ -88,7 +91,7 @@ class MeshSession:
 
     def _ensure_built(self) -> None:
         if self._mesh is None:
-            with over_limit_accepted(self.accepted_edge_m):
+            with over_limit_accepted(self.accepted_edge_m), solve_estimated_by(self.solve_estimate):
                 self._mesh = _build(self.mesher, self.recipe)
             self._journal()
 

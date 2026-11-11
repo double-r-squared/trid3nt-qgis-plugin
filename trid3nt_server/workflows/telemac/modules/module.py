@@ -65,6 +65,8 @@ class TelemacModule(Module):
     CODE_ON_HOST: Mapping[Any, Mapping[str, Callable[[], str]]] = MappingProxyType({})
     ARMS_ON_HOST: tuple[str, ...] = ()
     PARTITION_KEYWORD: str = PROCESSORS
+    # The module's wall-second estimate of a solve (nodes, edge, then duration_s, cores, time_step_s) when it has been measured; none holds SOLVE_BUDGET_S off its meshes.
+    SOLVE_SECONDS: Callable[..., float] | None = None
 
     @classmethod
     def dictionary_dir(cls) -> Path:
