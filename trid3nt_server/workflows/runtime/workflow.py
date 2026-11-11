@@ -46,9 +46,8 @@ logger = logging.getLogger("trid3nt_server.workflows.runtime.workflow")
 #: refused naming it; one reading no record leaves it stated-only.
 EVENT_TIME = Input(
     name="event_time",
-    desc="The moment the scenario is read at: 'now' for the present (never a date for it), or an "
-         "ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ) from phrasing like "
-         "'during last Tuesday's storm'. Each source keeps its own "
+    desc="'now', an ISO date or datetime, or 'none' when the ask names no time and every observation is "
+         "stated. Phrasing like 'during last Tuesday's storm' is a date, never 'now'. Each source keeps its own "
          "retention, and a request deeper than one refuses typed").stated()
 
 

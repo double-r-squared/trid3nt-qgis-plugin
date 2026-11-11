@@ -12,7 +12,10 @@ from typing import Any, Mapping
 
 from .user_input import WireArgsError
 
-__all__ = ["event_time", "instant"]
+__all__ = ["NO_MOMENT_WORD", "event_time", "instant"]
+
+#: What a wire event_time says when the ask has no moment; the coercion passes it through and the fill reads it as a stated absence.
+NO_MOMENT_WORD = "none"
 
 
 def instant(value: Any, *, label: str = "event_time",
@@ -43,9 +46,11 @@ def instant(value: Any, *, label: str = "event_time",
 
 def event_time(*, label: str = "event_time",
                code: str = "EVENT_TIME_INVALID") -> Any:
-    """A coercion reading the wire's ``event_time`` into a pinned UTC instant."""
+    """A coercion reading the wire's ``event_time`` into a pinned UTC instant, or 'none' where the ask has no moment."""
 
     def _coerce(args: Mapping[str, Any]) -> dict[str, Any]:
+        if str(args.get("event_time") or "").strip().lower() == NO_MOMENT_WORD:
+            return {"event_time": NO_MOMENT_WORD}
         return {"event_time": instant(args.get("event_time"), label=label, code=code)}
 
     _coerce.__name__ = "event_time"

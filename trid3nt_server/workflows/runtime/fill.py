@@ -22,6 +22,7 @@ from trid3nt_contracts.common import Origin
 from trid3nt_contracts.coverage import CoverageExtent, SourceChoice
 
 from trid3nt_server.inputs.geometry import METRES_PER_DEGREE
+from trid3nt_server.inputs.instant import NO_MOMENT_WORD
 from trid3nt_server.render.pipeline_emitter import current_emitter, substep
 from trid3nt_server.render.uri_registry import lookup_uri_for_handle
 from trid3nt_server.tools.search.match import (
@@ -1142,6 +1143,9 @@ async def _answer(state: Fill, name: str, held: Any, value: Any) -> None:
     fetched or read and ingested first, and the verdict carries where the value came from."""
     row = getattr(held, "is_row", False)
     stated = held.default if value is None else value
+    if name == getattr(state.workflow, "moment", "") and isinstance(stated, str) and stated.strip().lower() == NO_MOMENT_WORD:
+        state.inputs[name] = Verdict(ACCEPTED, None, origin=Origin.USER)
+        return
     try:
         if row:
             await _row(state, held, value)

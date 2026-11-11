@@ -704,8 +704,7 @@ def _sentence(need: Need, survivors: Sequence[SourceOption],
     if not survivors:
         if dropped and all(row.excluded.startswith(NO_MOMENT) for row in dropped):
             return (f"{need.slot}: {NO_MOMENT}, so no source was asked for "
-                    f"{need.data_class}. State the moment the scenario is read "
-                    "at, or state the value on the call.")
+                    f"{need.data_class}. State {need.slot} as a number or a layer.")
         named = _named_exclusions(dropped)
         return (f"{need.slot}: nothing measures {need.data_class} here - "
                 + (named or "no source states coverage of this class")
