@@ -896,8 +896,8 @@ def _validate_supplied(env: _Env, decl: Input, supplied: Any) -> None:
 ACCEPTED, REJECTED, MISSING, DEFAULTED = (
     "accepted", "rejected", "missing", "defaulted")
 
-#: What rides a fill beside its inputs and is carried as stated: whether a kept mesh is rebuilt.
-_CARRIED = ("restart_clean",)
+#: What rides a fill beside its inputs and is carried as stated: whether a kept mesh is rebuilt, and how many engine steps a check run takes.
+_CARRIED = ("restart_clean", "check_steps")
 
 #: The code of a row that was not produced because a param it stands on was refused.
 _WAITS = "FILL_NOT_READY"

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -403,6 +404,7 @@ class TelemacWorkflow(Workflow):
 
     engine = "telemac"
     solve_step = "solve"
+    checkable = True
     moment = EVENT_TIME.name
     def __init__(self, *, coerce: Sequence[Any] = (), **declared: Any) -> None:
         super().__init__(coerce=(*coerce, event_time()), **declared)
@@ -599,6 +601,11 @@ class TelemacWorkflow(Workflow):
         # One tag for the run: every card edit re-stages into the same directory and prefix.
         run_id = new_ulid()
         prefix = self._states("PREFIX", "telemac")
+        steps = state.carried.get("check_steps")
+        if steps is not None:
+            keywords = self._checked(run, keywords, int(steps))
+            run["check_steps"] = int(steps)
+        check = None if steps is None else f"check run, stops at step {int(steps)}"
 
         async def write(sheet: TelemacSheet) -> None:
             # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
@@ -648,7 +655,46 @@ class TelemacWorkflow(Workflow):
         except SolveStopped as stop:
             await self.stopped(stop, run, products)
         await keep_mesh(run["mesh"], solved.get("run_id"))
-        return RunResult(value=await products(solved, None), results=dict(run))
+        return RunResult(value=await products(solved, check), results=dict(run))
+
+    def _checked(self, run: dict[str, Any], keywords: Mapping[str, Any], steps: int) -> dict[str, Any]:
+        """The keywords this check run states: the DURATION that ends the solve after ``steps`` of the fixed step in force, and the printout period held to the steps taken so the last one is written.
+        Refuses a variable step, which has no step count to stop at."""
+        from trid3nt_server.inputs.run_notes import journal_note
+
+        held = stated(steering=self.steering, keywords=keywords)
+        settled = run[_SETTLED].get("keywords") or {}
+        if held.get("VARIABLE_TIME_STEP"):
+            raise TelemacError(
+                "check_steps counts engine steps, and VARIABLE TIME-STEP leaves no step to count: state it false or leave check_steps unset.",
+                error_code="TELEMAC_CHECK_STEPS_VARIABLE_STEP")
+        step = held.get("TIME_STEP") or settled.get("TIME_STEP")
+        window = held.get("DURATION") or settled.get("DURATION")
+        if not isinstance(step, (int, float)) or step <= 0:
+            raise TelemacError(
+                "check_steps needs the time step the run solves at and none is stated or settled: state TIME STEP.",
+                error_code="TELEMAC_CHECK_STEPS_NO_STEP")
+        duration = float(step) * steps
+        if isinstance(window, (int, float)) and window < duration:
+            duration = float(window)
+        bounds = self.steering.MODULE_INPUT["DURATION"].whole_bounds
+        if bounds and duration < bounds[0]:
+            raise TelemacError(
+                f"check_steps={steps} at a time step of {float(step):g} s is {duration:g} s, under the {bounds[0]:g} s the DURATION range starts at: "
+                f"state check_steps of {math.ceil(bounds[0] / float(step))} or more.",
+                error_code="TELEMAC_CHECK_STEPS_TOO_FEW")
+        # The staged check holds the deck's clock to the fill's window, which is the settle's server fact.
+        run[_SETTLED] = {**run[_SETTLED], "server_facts": {**run[_SETTLED]["server_facts"], "duration_s": duration}}
+        out = {**keywords, "DURATION": duration}
+        if held.get("NUMBER_OF_TIME_STEPS"):
+            out["NUMBER_OF_TIME_STEPS"] = min(int(held["NUMBER_OF_TIME_STEPS"]), steps)
+        cadence = self.steering.CADENCE
+        period = held.get(cadence)
+        if cadence and isinstance(period, (int, float)) and period > steps:
+            out[cadence] = steps
+        journal_note(f"check run: the solve stops after {steps} engine steps ({duration:g} s of "
+                     f"{f'the {window:g} s window' if isinstance(window, (int, float)) else 'the run'}), so these results are the opening of the run and not its full length.")
+        return out
 
     def _declared(self, kind: type) -> tuple[Any, ...]:
         """Every placement or measurement the template module declares, in declared order."""
@@ -690,6 +736,11 @@ class TelemacWorkflow(Workflow):
         from trid3nt_server.workflows.runtime.fill import MISSING, REJECTED, Verdict
 
         refused = super().judged(state)
+        if state.carried.get("check_steps") is not None and tuple(self.steering.CLOCK) != ("DURATION",):
+            refused.setdefault("check_steps", Verdict(
+                REJECTED, state.carried["check_steps"], code="CHECK_STEPS_UNSUPPORTED",
+                reason=f"{self.steering.MODULE} spells its run length in {', '.join(self.steering.CLOCK) or 'no clock'}, "
+                "not a DURATION check_steps can shorten: leave it unset to run the full length."))
         keywords = dict(state.keywords)
         settles = self._settled_by()
         if settles and _previous(self.steering, keywords):

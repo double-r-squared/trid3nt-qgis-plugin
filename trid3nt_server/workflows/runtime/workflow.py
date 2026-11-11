@@ -94,6 +94,9 @@ class Workflow:
     #: The name of the input holding the moment a run opens at; a runtime that dates nothing names none.
     moment: str = ""
 
+    #: The engine stops its solve after the engine steps check_steps states; one that does not refuses the control.
+    checkable: bool = False
+
     #: The engine lays its own ladder of bed surfaces and takes the finest at each point, so its bed slot
     #: takes one surface and neither merges nor fills.
     lays_own_bed: bool = False
@@ -172,7 +175,17 @@ class Workflow:
         from .fill import REJECTED, Verdict
 
         sentence = no_session(self.name) if self.engine else None
-        return {} if sentence is None else {"AUTO": Verdict(REJECTED, None, reason=sentence, code="NO_SESSION")}
+        refused = {} if sentence is None else {"AUTO": Verdict(REJECTED, None, reason=sentence, code="NO_SESSION")}
+        steps = state.carried.get("check_steps")
+        if steps is not None and (isinstance(steps, bool) or not isinstance(steps, int) or steps < 1):
+            refused["check_steps"] = Verdict(
+                REJECTED, steps, code="CHECK_STEPS_INVALID",
+                reason=f"check_steps takes a whole number of engine steps, 1 or more; got {steps!r}.")
+        elif steps is not None and not self.checkable:
+            refused["check_steps"] = Verdict(
+                REJECTED, steps, code="CHECK_STEPS_UNSUPPORTED",
+                reason=f"{self.name} does not honour check_steps: leave it unset to run the full length.")
+        return refused
 
     def unnamed(self) -> tuple[str, ...]:
         """Every input the template names as a plain string that nothing of
@@ -501,6 +514,7 @@ class Workflow:
             origin=journal.run_origin(live_session=current_emitter() is not None),
             notes=list(notes), outputs=run.outputs,
             mesh=run.results.get("mesh"), settings=run.settings, stopped=stopped,
+            check_steps=run.results.get("check_steps"),
         ))
         clear_session_run()
 
@@ -509,6 +523,7 @@ class Workflow:
 #: and the source a caller names for a matched slot. None is a physical value, so none is an Input.
 _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
     ("restart_clean", bool, False),
+    ("check_steps", int | None, None),
     ("keywords", dict | None, None),
     ("picks", dict | None, None),
 )
@@ -519,6 +534,11 @@ _CONTROL_DOCS: tuple[tuple[str, str], ...] = (
     ("restart_clean",
      "True builds the mesh again even where one built from the same domain, "
      "bed, resolution and mesher is kept; unset, such a kept mesh is reused. "
+     "Not a physical value."),
+    ("check_steps",
+     "A check run: the solve stops after this many engine steps, then the outputs "
+     "it wrote are read, rendered and delivered marked as a check run; unset, the "
+     "run is the full length. An engine that does not declare it refuses. "
      "Not a physical value."),
     ("keywords",
      "The engine's own keyword names this run states beyond the template, as "
@@ -533,6 +553,7 @@ _CONTROL_DOCS: tuple[tuple[str, str], ...] = (
 #: The wire's one-line description of each control, unit or shape first; the framework's, stated once for every template.
 _CONTROL_SCHEMA: dict[str, str] = {
     "restart_clean": "true/false; build the mesh again even where a kept one matches",
+    "check_steps": "integer, 1 or more engine steps; stop the solve after that many and deliver a marked check run",
     "keywords": "object, keyword name to value; the engine keywords this run states beyond the template",
     "picks": "object, input name to source; the source this run names for a matched input",
 }

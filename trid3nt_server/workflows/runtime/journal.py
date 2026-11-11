@@ -164,9 +164,11 @@ def build_record(*, run_id: str | None, engine: str | None,
                  outputs: Sequence[Mapping[str, Any]] = (),
                  mesh: Mapping[str, Any] | None = None,
                  settings: Mapping[str, Mapping[str, Any]] = {},
-                 stopped: str | None = None) -> dict[str, Any]:
+                 stopped: str | None = None,
+                 check_steps: int | None = None) -> dict[str, Any]:
     """One run record, from what the publish stage already holds.
-    ``stopped`` is the sentence of a run the user stopped, whose outputs are partial; none on a run that ended."""
+    ``stopped`` is the sentence of a run the user stopped, whose outputs are partial; none on a run that ended.
+    ``check_steps`` is the step count a check run stopped its solve at; none on a full-length run."""
     return {
         "run_id": run_id,
         "recorded_at": datetime.now(timezone.utc).isoformat(),
@@ -182,6 +184,7 @@ def build_record(*, run_id: str | None, engine: str | None,
                    for name, row in inputs.items()},
         "correct_end": correct_end,
         "stopped": stopped,
+        "check_steps": check_steps,
         # The mesh content key, and on a reuse the run that built it.
         "mesh": {"mesh_size_m": getattr(result, "mesh_size_m", None),
                  **{k: mesh.get(k) if isinstance(mesh, Mapping) else None

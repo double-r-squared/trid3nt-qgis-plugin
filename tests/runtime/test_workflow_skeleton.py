@@ -98,7 +98,7 @@ def test_the_generated_signature_is_the_declaration_plus_controls():
     )
     sig, annotations = _wire_signature(params)
     assert list(sig.parameters) == ["location", "depth_m", "armed",
-                                    "solver_dt_s", "restart_clean", "keywords",
+                                    "solver_dt_s", "restart_clean", "check_steps", "keywords",
                                     "picks", "_extra_ignored"]
     assert annotations["depth_m"] == (float | None)      # bounded -> float
     assert annotations["armed"] == bool                  # declared type wins, and it is required

@@ -201,6 +201,12 @@ judgment about this use, read in place of the slot's generic description. The
 template-grammar lint refuses a DOC name, a controls= argument and a desc= on a
 value input.
 
+The `check_steps` run control stops a solve after that many engine steps and still delivers: the engine
+declares `checkable` and honours it through its own clock (TELEMAC shortens DURATION to the steps of the
+fixed time step in force and holds the printout period to them), the outputs it wrote are read and
+published named a check run, the journal record carries `check_steps`, and an engine that does not declare it
+refuses `CHECK_STEPS_UNSUPPORTED` naming the control.
+
 The runtime declares no input of its own. A template carries, without restating
 them, the inputs whoever reads them declares (`Workflow.seated`):
 `mesh_resolution_m`, `mesh_grade` and `mesh_max_edge_m` are the mesh ask's
