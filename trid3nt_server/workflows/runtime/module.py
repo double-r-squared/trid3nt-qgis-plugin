@@ -470,6 +470,11 @@ class Module(metaclass=_Body):
         raise DeclarativeError(ENGINE_UNAVAILABLE)
 
     @classmethod
+    def run_length(cls) -> Slot | None:
+        """The one keyword this module spells its run length in, or ``None`` where it spells it in none or in two."""
+        return cls.MODULE_INPUT.get(cls.CLOCK[0]) if len(cls.CLOCK) == 1 else None
+
+    @classmethod
     def seconds(cls, stated: Mapping[str, Any]) -> float | None:
         """How long a run of this module covers, off the keywords it spells it in.
 

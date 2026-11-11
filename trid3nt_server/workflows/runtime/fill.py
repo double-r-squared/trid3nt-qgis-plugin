@@ -1044,6 +1044,19 @@ def _engine_keyword(wf: Any, name: str) -> Any:
         return None
 
 
+def _run_length_said(wf: Any) -> str:
+    """The sentence naming the keyword the template's module spells its run length in, with the value the template states; empty where the module has none."""
+    steering = getattr(wf, "steering", None)
+    slot = steering.run_length() if steering is not None else None
+    if slot is None:
+        return ""
+    unit = f" ({slot.unit})" if slot.unit else ""
+    stated = steering.ASSERTED.get(slot.identifier)
+    return (f" The run length is the engine keyword {slot.keyword}{unit}"
+            + (f", stated by this template as {stated:g}" if isinstance(stated, (int, float)) else "")
+            + f": keywords={{\"{slot.keyword}\": ...}}.")
+
+
 def _looked_up(state: Fill, values: Mapping[str, Any], keywords: set[str],
                moves: dict[str, str]) -> dict[str, Any]:
     """Every stated name through the workflow's ONE lookup -> the input each names. A declared
@@ -1084,6 +1097,7 @@ def _looked_up(state: Fill, values: Mapping[str, Any], keywords: set[str],
             REJECTED, values[name], code="INPUT_UNNAMED",
             reason=f"{name!r} is not an input of {wf.name} "
             f"({nearest(name, known, cutoff=0.6)})."
+            + (_run_length_said(wf) if name == unknown[-1] else "")
             + (" An engine keyword is stated by its own name inside keywords."
                if name == unknown[-1] else ""))
     return found

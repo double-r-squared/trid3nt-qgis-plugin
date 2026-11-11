@@ -880,10 +880,21 @@ class TelemacWorkflow(Workflow):
             f"keywords={{\"LAW OF BOTTOM FRICTION\": 4}} - after "
             f"describe_keywords(module=\"{body.MODULE}\", query=...) names it "
             f"with its help, its choices, its unit, its range and that default. The solve is "
-            f"partitioned across PARALLEL PROCESSORS, stated the same way; a "
-            f"count past this box's cores is refused.\n"
+            f"partitioned across PARALLEL PROCESSORS, stated the same way (unstated, "
+            f"the CONTAINER_CORES setting); a count past the docker host's cores is refused."
+            f"{self._run_length_sentence()}\n"
             f"Stated by this deck (override any of them by name): "
             f"{self._stated_keywords()}.")
+
+    def _run_length_sentence(self) -> str:
+        """Where the run length is stated: the module's one run-length keyword, with this template's value."""
+        slot = self.steering.run_length()
+        if slot is None:
+            return ""
+        stated = self.steering.ASSERTED.get(slot.identifier)
+        return (f" The run length is {slot.keyword}" + (f" ({slot.unit})" if slot.unit else "")
+                + (f", {_stated_value(stated)} here" if stated is not None else "")
+                + ": state it in keywords, never as until.")
 
     def _stated_keywords(self) -> str:
         """The deck's own opinions, keyword by keyword, in dictionary order.

@@ -99,6 +99,12 @@ def _sources(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
             f"{len(tracers)} tracer values do not divide across "
             f"{len(discharges)} sources; VALUES OF THE TRACERS AT THE SOURCES "
             "carries every tracer of the first source, then of the second.")
+    window, until = value["window_s"], value["settled"]["until_s"]
+    if window is not None and until is not None and float(window) > float(until):
+        run_length = T2D.run_length().keyword
+        raise SlotRefused(
+            f"the release lasts {float(window):g} s and the run {float(until):g} s: a release longer than the "
+            f"run is cut off by it. State a shorter release, or a longer run as {run_length} in keywords.")
     return ({"SOURCES_FILE": SOURCES_FILENAME},
             {SOURCES_FILENAME: _series(discharges, tracers, value["window_s"],
                                        value["settled"]["until_s"])})
