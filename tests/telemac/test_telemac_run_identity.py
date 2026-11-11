@@ -171,3 +171,23 @@ def test_the_source_a_slot_was_filled_from_is_on_the_card():
         drain_choices(token)
     assert [(row.name, row.value) for row in rows] == [("bed source", "fetch_gebco")]
     assert not rows[0].editable
+
+
+def test_a_composed_bed_names_each_surface_so_the_sheet_rows_stay_unique():
+    from trid3nt_contracts.coverage import SourceChoice
+    from trid3nt_server.workflows.runtime.journal import (
+        bind_choices, drain_choices, slot_choice)
+    from trid3nt_server.workflows.runtime.review import _source_rows
+
+    token = bind_choices()
+    try:
+        for picked in ("fetch_a", "fetch_b", "fetch_c"):
+            slot_choice(SourceChoice(slot="bed", need="elevation", picked=picked, sentence="x"))
+        slot_choice(SourceChoice(slot="wind", need="wind", picked="fetch_w", sentence="x"))
+        rows = _source_rows()
+    finally:
+        drain_choices(token)
+    assert [row.name for row in rows] == [
+        "bed source 1", "bed source 2", "bed source 3", "wind source"]
+    assert len({row.name for row in rows}) == 4
+    assert "composed" in rows[1].desc and "composed" not in rows[3].desc

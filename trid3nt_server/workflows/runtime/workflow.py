@@ -54,8 +54,9 @@ EVENT_TIME = Input(
 #: How far down the line the domain reaches from the seed; a workflow whose domain need states a span lists it, with that span as its description's default.
 REACH_LENGTH = Input(
     name="reach_length_km", type=float, units="km",
-    desc="How far downstream of the release or seed point the domain reaches, in km, greater than 0; "
-         "the line's own end cuts a longer one short. A longer reach is a bigger mesh and a longer solve").stated()
+    desc="Leave unset unless the user names a reach length; the template's own span is used. How far downstream "
+         "of the release or seed point the domain reaches, in km, greater than 0; the line's own end cuts a "
+         "longer one short. A longer reach is a bigger mesh and a longer solve").stated()
 
 
 def _names_untaken(value: Any, untaken: set[str]) -> bool:

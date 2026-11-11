@@ -36,5 +36,5 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `mesh_max_edge_m` | m | 300.0 | Coarsest triangle edge, reached far from the channels on the hillslopes |
 | `event_time` | - | required | 'now', an ISO date or datetime, or 'none' when the ask names no time and every observation is stated. Phrasing like 'during last Tuesday's storm' is a date, never 'now'. Each source keeps its own retention, and a request deeper than one refuses typed |
 | `vertical_frame` | - | NAVD88 | Vertical datum the bed's elevations are counted from, and with them the level over it. A source published on another frame reaches this one through a measured offset, and a pair nobody publishes an offset between refuses by name |
-| `reach_length_km` | km | optional | How far downstream of the release or seed point the domain reaches, in km, greater than 0; the line's own end cuts a longer one short. A longer reach is a bigger mesh and a longer solve. This template reaches 15 km |
+| `reach_length_km` | km | optional | Leave unset unless the user names a reach length; the template's own span is used. How far downstream of the release or seed point the domain reaches, in km, greater than 0; the line's own end cuts a longer one short. A longer reach is a bigger mesh and a longer solve. This template reaches 15 km |
 

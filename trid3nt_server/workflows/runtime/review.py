@@ -50,15 +50,26 @@ def _source_rows() -> list[ParamSheetRow]:
     The card renders the list the model was given. Not editable: a source is superseded by supplying the slot."""
     from trid3nt_server.workflows.runtime.journal import run_choices
 
-    return [ParamSheetRow(
-        name=f"{choice.slot} source", value=choice.picked or "nothing matched",
-        desc=f"Which source filled the {choice.slot} slot, matched on "
-             f"{choice.need}.",
-        origin=Origin.PRODUCER, editable=False,
-        source_badge=(f"{len(choice.rows)} sources weighed"
-                      if choice.tie else "matched on the rows"),
-        note=choice.sentence, choices=choice, group="Sources")
-        for choice in run_choices()]
+    choices = run_choices()
+    walked = {slot: sum(c.slot == slot for c in choices) for slot in {c.slot for c in choices}}
+    seen: dict[str, int] = {}
+    rows = []
+    for choice in choices:
+        seen[choice.slot] = seen.get(choice.slot, 0) + 1
+        composed = walked[choice.slot] > 1
+        name = (f"{choice.slot} source {seen[choice.slot]}" if composed
+                else f"{choice.slot} source")
+        desc = (f"Which source filled the {choice.slot} slot, matched on {choice.need}.")
+        if composed:
+            desc += (f" Surface {seen[choice.slot]} of {walked[choice.slot]}: the {choice.slot} "
+                     "was composed down its ranked rows, in the order they won.")
+        rows.append(ParamSheetRow(
+            name=name, value=choice.picked or "nothing matched", desc=desc,
+            origin=Origin.PRODUCER, editable=False,
+            source_badge=(f"{len(choice.rows)} sources weighed"
+                          if choice.tie else "matched on the rows"),
+            note=choice.sentence, choices=choice, group="Sources"))
+    return rows
 
 
 def _coverage_rows() -> list[ParamSheetRow]:
