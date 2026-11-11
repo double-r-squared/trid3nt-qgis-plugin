@@ -81,7 +81,7 @@ def finest_edge(stated: Any, ops: Iterable[Any],
     A stated edge stands whatever the data under it, and the bed says so where it is coarser; unstated, it is the finest cell
     of the rasters the recipe names, because the mesh library requires one and nothing finer is measured.
     Unstated, the edge is the coarser of that cell and the finest edge both MESH_MAX_NODES and, where the engine hands in a solve
-    estimate, SOLVE_BUDGET_S let the domain hold, and the run notes say which limit set it; a stated edge whose mesh would pass
+    estimate, SOLVE_BUDGET_S (0, the default, is off) let the domain hold, and the run notes say which limit set it; a stated edge whose mesh would pass
     either refuses here, before anything is built, unless that edge was accepted at the gate."""
     from trid3nt_server.settings import setting
 
@@ -89,7 +89,9 @@ def finest_edge(stated: Any, ops: Iterable[Any],
     area = _domain_area_m2(bbox, area_m2)
     limit = int(setting("MESH_MAX_NODES"))
     solve = _SOLVE.get()
-    budget = float(setting("SOLVE_BUDGET_S")) if solve is not None else None
+    budget = float(setting("SOLVE_BUDGET_S")) if solve is not None else 0.0
+    if budget <= 0.0:
+        solve = budget = None
     fit_nodes = _edge_for_nodes(limit, area)
     fit_solve = _edge_for_solve(solve, budget, area) if solve is not None else 0.0
     fit = max(fit_nodes, fit_solve)

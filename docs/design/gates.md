@@ -86,8 +86,8 @@ mesh's own gate instead, with nothing built: proceed builds it as stated, a
 run notes say so, cancel refuses; AUTO has no one to ask and refuses.
 
 Where the engine hands the mesh a solve estimate (TELEMAC 2D: the estimated nodes, the run length
-over the step the settle derives for that edge, and the cores the solve has), the
-`SOLVE_BUDGET_S` setting bounds the edge the same way: unstated, the edge is the finest that fits
+over the step the settle derives for that edge, and the cores the solve has) and `SOLVE_BUDGET_S`
+is set (off, 0, by default; meant for quick test runs), the setting bounds the edge the same way: unstated, the edge is the finest that fits
 both limits and the run note names the one that set it; stated over the budget, user-gated asks
 and AUTO refuses `SOLVE_OVER_BUDGET` naming the estimate, the budget, `mesh_resolution_m` and the setting.
 

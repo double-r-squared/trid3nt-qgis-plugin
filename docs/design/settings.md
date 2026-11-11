@@ -23,7 +23,7 @@ percentile); its range holds every item, and the dock takes it comma-separated.
 `LOCAL_CORES` and `CONTAINER_CORES` take their default and range from the hosts' core counts, read when the dictionary is read, so the
 dictionary file carries no number for them.
 
-`MESH_MAX_NODES` and `SOLVE_BUDGET_S` are the mesh's two size limits: the nodes a build may hold and the wall seconds an engine's solve may take. The seconds default is an operational wait (ten minutes), judged against the engine's own estimate.
+`MESH_MAX_NODES` and `SOLVE_BUDGET_S` are the mesh's two size limits: the nodes a build may hold and the wall seconds an engine's solve may take. The seconds setting is off by default (0) and meant for quick test runs; set, it is judged against the engine's own estimate.
 
 A name is spelled once. A judgment two modules used to hold separately (the
 gate card's time-to-live and rounds, the bed interpolation, the observation

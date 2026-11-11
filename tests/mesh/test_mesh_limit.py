@@ -165,6 +165,21 @@ def test_a_stated_edge_under_the_solve_budget_stands(tmp_path):
     assert mesh.meta["resolution_m"] == 100.0
 
 
+def test_with_the_budget_unset_nothing_is_fitted_or_refused(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    off = _solve_built(_bed_session(tmp_path / "a", 1 / 3600), budget=0)
+    assert off.meta["resolution_m"] == pytest.approx(27.8, abs=0.1)
+    assert not any("SOLVE_BUDGET_S" in n for n in off.meta["edge_notes"])
+    assert _solve_built(_bed_session(tmp_path / "b", 1 / 3600, resolution_m=5.0), budget=0).meta["resolution_m"] == 5.0
+
+
+def test_the_budget_is_off_by_default(tmp_path):
+    from trid3nt_server.settings import setting
+
+    assert setting("SOLVE_BUDGET_S") == 0
+
+
 def test_an_engine_with_no_estimate_is_not_held_to_the_budget(tmp_path):
     token = settings.bind_run({"SOLVE_BUDGET_S": 1})
     try:

@@ -47,8 +47,9 @@ RESOLUTION = Input(
     name="mesh_resolution_m", type=float, units="m",
     desc="Target element edge or cell length the mesh is built at. The "
          "granularity is the USER's; a stated edge whose mesh would pass the "
-         "MESH_MAX_NODES setting, or whose solve would pass SOLVE_BUDGET_S, "
-         "refuses. Absent, the mesh takes the finest edge both allow, never "
+         "MESH_MAX_NODES setting, or whose solve would pass SOLVE_BUDGET_S "
+         "where that is set, refuses. Absent, the mesh takes the finest edge "
+         "both allow, never "
          "finer than the finest data it stands on, and the notes state the "
          "edge and why").stated()
 
