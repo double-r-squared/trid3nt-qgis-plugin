@@ -41,14 +41,15 @@ __all__ = [
 
 #: The edge a mesh ask is built at, as the run input an ask names it by; a
 #: template restates it only to say what the edge has to resolve for its question.
-#: Stated-only: the user's granularity, and absent the mesh resolves the finest
-#: data it stands on - the bed raster's own cell - which is why nothing refuses one.
+#: Stated-only: the user's granularity, and absent the mesh takes the finest
+#: edge MESH_MAX_NODES allows, never finer than the data it stands on - the bed raster's own cell.
 RESOLUTION = Input(
     name="mesh_resolution_m", type=float, units="m",
     desc="Target element edge or cell length the mesh is built at. The "
-         "granularity is the USER's and nothing refuses one: absent, the "
-         "mesh resolves the finest data it stands on, and the card states "
-         "the node count it comes to").stated()
+         "granularity is the USER's; a stated edge whose mesh would pass the "
+         "MESH_MAX_NODES setting refuses. Absent, the mesh takes the finest "
+         "edge MESH_MAX_NODES allows, never finer than the finest data it "
+         "stands on, and the notes state the edge and why").stated()
 
 #: How fast the edge may grow and how coarse it may get, as the run inputs a
 #: sizing op names them by. Neither has a default: the number is the asking

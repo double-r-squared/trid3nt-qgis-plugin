@@ -112,7 +112,7 @@ def _build(recipe: Any, rundir: Path) -> Mesh:
     notes: list[str] = []
     domain = _domain(recipe.extent, rundir)
     resolution_m, edge_note = finest_edge(recipe.resolution_m, recipe.ops,
-                                          domain.bbox)
+                                          domain.bbox, domain.area_m2)
     notes.extend([edge_note] if edge_note else [])
 
     pre = [op for op in ops if op.phase == PRE]
@@ -388,6 +388,7 @@ class _Domain:
     source: str
     polygon_name: str
     open_runs_name: str | None = None
+    area_m2: float | None = None
 
 
 def _domain(extent: Any, rundir: Path) -> _Domain:
@@ -414,7 +415,8 @@ def _domain(extent: Any, rundir: Path) -> _Domain:
     source = f"domain polygon ({len(polygons)} part(s))"
     bbox = _lonlat_bounds(_geometry_bounds(polygons), source)
     return _Domain(bbox=bbox, source=source, polygon_name=name,
-                   open_runs_name=_open_runs(extent, polygons, bbox, rundir))
+                   open_runs_name=_open_runs(extent, polygons, bbox, rundir),
+                   area_m2=_geometry_area_m2(polygons, bbox))
 
 
 def _open_runs(extent: Any, polygons: list[dict[str, Any]],
@@ -531,6 +533,17 @@ def _geometry_bounds(geometries: list[dict[str, Any]]
 
     minx, miny, maxx, maxy = unary_union([_shape(g) for g in geometries]).bounds
     return (float(minx), float(miny), float(maxx), float(maxy))
+
+
+def _geometry_area_m2(geometries: list[dict[str, Any]],
+                      bbox: tuple[float, float, float, float]) -> float:
+    """The area of the supplied domain in square metres, at the box's mid-latitude."""
+    from shapely.geometry import shape as _shape
+    from shapely.ops import unary_union
+
+    degrees = unary_union([_shape(g) for g in geometries]).area
+    return float(degrees * METRES_PER_DEGREE ** 2
+                 * math.cos(math.radians(0.5 * (bbox[1] + bbox[3]))))
 
 
 def _driver() -> Any:

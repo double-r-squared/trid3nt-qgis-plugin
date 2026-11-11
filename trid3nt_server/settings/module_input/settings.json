@@ -70,6 +70,22 @@
       "source": "TRID3NT engineering default."
     },
     {
+      "keyword": "MESH_MAX_NODES",
+      "identifier": "MESH_MAX_NODES",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The most nodes a mesh build may be estimated to hold before it refuses by name, in AUTO and user-gated alike. The default is an operational time budget, not physics: om2d on this box built 26k nodes in 15 s, 104k in 99 s and 289k in 436 s, so a five-minute build is about 200k nodes, and the estimate runs about a third above what is built.",
+      "rubrique": [
+        "mesh"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "default": 250000,
+      "source": "TRID3NT engineering default."
+    },
+    {
       "keyword": "MERGE_RESAMPLING",
       "identifier": "MERGE_RESAMPLING",
       "type": "STRING",

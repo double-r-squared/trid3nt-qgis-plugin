@@ -21,6 +21,13 @@
         1000000000000.0
       ]
     },
+    "MESH_MAX_NODES": {
+      "unit": "nodes",
+      "bounds": [
+        1,
+        1000000000000.0
+      ]
+    },
     "MERGE_CLIFF_FACTOR": {
       "unit": "relief",
       "bounds": [

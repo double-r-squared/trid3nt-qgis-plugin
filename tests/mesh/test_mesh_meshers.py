@@ -82,7 +82,13 @@ def test_a_mesh_with_no_stated_edge_takes_the_bed_s_cell(tmp_path):
 
 
 def test_an_edge_far_finer_than_the_data_runs_and_says_so(tmp_path):
-    mesh = _lattice(_bed(tmp_path, 1 / 3600), resolution_m=2.0)
+    from trid3nt_server import settings
+
+    token = settings.bind_run({"MESH_MAX_NODES": 10_000_000})
+    try:
+        mesh = _lattice(_bed(tmp_path, 1 / 3600), resolution_m=2.0)
+    finally:
+        settings.reset_run(token)
     assert mesh.meta["resolution_m"] == 2.0 and mesh.node_count > 250_000
     assert mesh.has_bed
     assert any("2 m edge is finer than the bed's" in note

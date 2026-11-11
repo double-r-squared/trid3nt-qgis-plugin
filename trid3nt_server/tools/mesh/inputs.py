@@ -23,11 +23,67 @@ __all__ = ["finest_edge", "op_geometry", "op_input", "op_raster",
 
 
 def finest_edge(stated: Any, ops: Iterable[Any],
-                bbox: tuple[float, float, float, float]) -> tuple[float, str | None]:
+                bbox: tuple[float, float, float, float],
+                area_m2: float | None = None) -> tuple[float, str | None]:
     """The mesh's finest edge -> ``(edge_m, the sentence the mesh states about it)``.
 
     A stated edge stands whatever the data under it, and the bed says so where it is coarser; unstated, it is the finest cell
-    of the rasters the recipe names, because the mesh library requires one and nothing finer is measured."""
+    of the rasters the recipe names, because the mesh library requires one and nothing finer is measured.
+    Unstated, the edge is the coarser of that cell and the finest edge MESH_MAX_NODES lets the domain hold, and the run notes say so; a stated edge
+    whose mesh would pass MESH_MAX_NODES refuses here, before anything is built."""
+    from trid3nt_server.settings import setting
+
+    edge, note = _finest_edge(stated, ops, bbox)
+    area = _domain_area_m2(bbox, area_m2)
+    limit = int(setting("MESH_MAX_NODES"))
+    if stated in (None, ""):
+        fit = _edge_for_nodes(limit, area)
+        if fit > edge:
+            from trid3nt_server.inputs.run_notes import journal_note
+
+            derived = (f"no edge was stated, so the resolution is {fit:.4g} m, "
+                       f"derived from MESH_MAX_NODES = {limit:,} (the cell of "
+                       f"the finest data is {edge:g} m)")
+            journal_note(derived)
+            return fit, derived
+        return edge, note
+    estimate = _estimated_nodes(edge, area)
+    if estimate > limit:
+        raise MeshToolError(
+            "MESH_TOO_LARGE",
+            f"a {edge:g} m edge over this domain ({area / 1e6:.4g} km2) is "
+            f"an estimated {estimate:,} nodes, past the limit of {limit:,} "
+            "(setting MESH_MAX_NODES). State a coarser mesh_resolution_m, or "
+            "raise MESH_MAX_NODES in Settings.")
+    return edge, note
+
+
+def _domain_area_m2(bbox: tuple[float, float, float, float],
+                    area_m2: float | None) -> float:
+    """The domain's area; the box's own where no polygon area is given."""
+    if area_m2 is not None:
+        return area_m2
+    lon0, lat0, lon1, lat1 = bbox
+    return ((lon1 - lon0) * METRES_PER_DEGREE
+            * math.cos(math.radians(0.5 * (lat0 + lat1)))
+            * (lat1 - lat0) * METRES_PER_DEGREE)
+
+
+#: One equilateral-triangle node's share of area is this factor times edge**2; every element is taken at the finest edge, so grading can only lower the count.
+_NODE_AREA = math.sqrt(3.0) / 2.0
+
+
+def _estimated_nodes(edge_m: float, area_m2: float) -> int:
+    return int(area_m2 / (_NODE_AREA * edge_m ** 2))
+
+
+def _edge_for_nodes(nodes: int, area_m2: float) -> float:
+    """The finest edge whose estimate fits ``nodes``: the estimate inverted."""
+    return math.sqrt(area_m2 / (_NODE_AREA * nodes))
+
+
+def _finest_edge(stated: Any, ops: Iterable[Any],
+                 bbox: tuple[float, float, float, float]) -> tuple[float, str | None]:
     if stated not in (None, ""):
         return float(stated), None
     finest = min((cell for op in ops for cell in _cells(op, bbox)), default=None)

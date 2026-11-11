@@ -72,6 +72,16 @@ size word, the recipe ops (read-only - `mesh_op` writes one), the revert and a
 hand-edited layer to adopt. Proceed accepts the mesh, a revision rebuilds and
 re-presents, cancel refuses the run.
 
+A mesh builds in a forked child process (`session.py`), so a cancelled turn
+kills the child's process group and keeps nothing. In AUTO and user-gated
+alike, a build whose estimated node count (the domain's area over one
+equilateral-triangle node's share of it, every element at the finest edge)
+passes the `MESH_MAX_NODES` setting refuses before building, naming the
+estimate, the limit and `mesh_resolution_m`; with no edge stated, the mesh takes
+the finest edge that estimate fits under the setting (the estimate inverted),
+never finer than the finest data, and the run notes say so. The setting is
+overridden like any other.
+
 ## Invariants
 
 - ONE gate machine. A card contract, a gate loop or a tool surface of a
