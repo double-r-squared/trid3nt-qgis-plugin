@@ -93,7 +93,8 @@ def _run(telemac_result, monkeypatch, dye=None, unrowed=None) -> dict[str, Any]:
             "reference_time": "2026-01-01T00:00:00+00:00",
             "module_output": [{"token": token, "module": module,
                                "style": row.style, "varies": row.varies,
-                               "has_edge": bool(row.has_edge)}
+                               "has_edge": bool(row.has_edge),
+                               "injected": bool(row.injected)}
                               for token, module, row in sheet.published()]}
 
 
@@ -517,3 +518,24 @@ def test_every_module_that_appends_rows_is_on_the_modules_page():
     for condition, rows in WAQTEL.APPENDABLE:
         process = int(condition.split()[-1])
         assert list(WAQTEL.APPENDS({"process": process})) == list(rows)
+
+
+def test_an_injected_tracer_that_is_zero_everywhere_is_withheld_and_the_note_says_so(
+        monkeypatch, fake_s3, telemac_result):
+    """An all-zero injected quantity publishes no layer and leaves a note naming
+    the variable as the file spells it; a non-zero one publishes as ever."""
+    seen = _surfacing(monkeypatch)
+    run = _run(telemac_result, monkeypatch, dye=[[0.0] * 5, [0.0] * 5])
+    notes = _notes(run)
+    assert "dye" not in [item.caption for item in seen]
+    said = [n for n in notes if "wrote 'DYE'" in n]
+    assert said and "no layer carries it" in said[0], notes
+    assert "withheld as empty" in said[0], said
+
+
+def test_a_non_zero_injected_tracer_is_published_and_not_withheld(
+        monkeypatch, fake_s3, telemac_result):
+    seen = _surfacing(monkeypatch)
+    notes = _notes(_run(telemac_result, monkeypatch))
+    assert "dye" in [item.caption for item in seen]
+    assert not [n for n in notes if "withheld as empty" in n]

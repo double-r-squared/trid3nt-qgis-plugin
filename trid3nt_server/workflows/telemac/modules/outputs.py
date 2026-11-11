@@ -494,8 +494,8 @@ def _envelope(token: str, times: Any, values: Any, row: Any = None,
     # The honesty floor is about shape and what the deck put in: an injected quantity the run lost has no region to draw (a broken run), while a grown one (ice cover, bed evolution) is zero because nothing happened.
     if injected and not peak > 0.0:
         raise OutputEmpty(
-            f"{token} is zero at every node this run held water on, so the run "
-            "injected nothing there is a shape of.")
+            f"{token} is zero at every node this run held water on, so it is "
+            "withheld as empty: the run injected nothing there is a shape of.")
     if edge is not None:
         measures["active_frames"] = int((highs[live] > edge).sum())
     return measures
