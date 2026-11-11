@@ -23,6 +23,7 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import ExecutionHandle, RunResult
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.settings import setting
 from trid3nt_server.store import objects as storage
 from trid3nt_server.store.objects import StorageError
 from trid3nt_server.tools import register_tool
@@ -198,6 +199,15 @@ def _with_declared_network(spec: LocalSolverSpec, cmd: list[str]) -> list[str]:
             f"solver {spec.solver!r} declares network={spec.network!r} but its "
             f"launch line does not start with 'docker run': {cmd[:2]}")
     return [*cmd[:2], "--network", spec.network, *cmd[2:]]
+
+
+def _with_cpu_limit(cmd: list[str], cores: int) -> list[str]:
+    """Apply docker's CPU limit to a launch line that starts ``docker run``; a line that runs no container is left as it is."""
+    if cmd[:2] != ["docker", "run"]:
+        return cmd
+    if "--cpus" in cmd:
+        raise SolverDispatchError("a solver launch line leaves --cpus to the launcher; write it in one place.")
+    return [*cmd[:2], "--cpus", str(int(cores)), *cmd[2:]]
 
 
 @dataclass
@@ -502,6 +512,8 @@ def launch_local_solver(
     stderr_path = rundir / spec.stderr_name
     cmd = spec.build_argv(run_id, rundir, solver_args)
     cmd = _with_declared_network(spec, cmd)
+    # A partition the run states outranks the setting: the container holds the cores the deck declares.
+    cmd = _with_cpu_limit(cmd, max(int(setting("CONTAINER_CORES")), int(cores)))
     logger.info("local-docker exec: %s", " ".join(cmd))
     try:
         with stdout_path.open("wb") as out, stderr_path.open("wb") as err:

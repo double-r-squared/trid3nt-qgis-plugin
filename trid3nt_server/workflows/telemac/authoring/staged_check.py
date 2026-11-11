@@ -14,16 +14,14 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from ...solver.cores import docker_cores
 from ..errors import TelemacError
 
 _SCRATCH: ContextVar[Path] = ContextVar("staged_check_scratch")
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.staged_check")
 
-__all__ = ["BOX_CORES", "check_staged_run", "read_steering"]
-
-#: Cores this box can partition a solve across; a count past it is refused by name.
-BOX_CORES: int = os.cpu_count() or 1
+__all__ = ["check_staged_run", "read_steering"]
 
 # The keyword a partitioned run states its core count under.
 _PROCESSORS = "PARALLEL PROCESSORS"
@@ -251,11 +249,12 @@ def _clock_is_consistent(values: Mapping[str, list[str]],
 
 def _processors_fit_the_box(values: Mapping[str, list[str]], cores: int) -> None:
     asked = _number(values, _PROCESSORS)
+    seats = docker_cores()
     for count, where in ((asked, f"the deck's {_PROCESSORS}"),
                          (float(cores), "the manifest's core count")):
-        if count is not None and int(count) > BOX_CORES:
+        if count is not None and int(count) > seats:
             _refuse("CORES_OVER_BOX",
-                    f"{where} states {int(count)} and this box has {BOX_CORES} "
+                    f"{where} states {int(count)} and the docker host has {seats} "
                     "core(s); the launcher would partition the mesh across a "
                     "partition that cannot be seated.")
 

@@ -25,6 +25,7 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.inputs.geometry import COS_LAT_FLOOR, METRES_PER_DEGREE
+from trid3nt_server.settings import setting
 from trid3nt_server.render.mesh_display import (
     MESH_ELEMENT_TAG,
     mesh_display_path,
@@ -397,6 +398,7 @@ def _child(send: Any, fn: Any, recipe: MeshRecipe) -> None:
     os.setpgrp()
     notes_token, reads_token = bind_notes(), journal.bind_settings()
     try:
+        _limit_to_cores(int(setting("LOCAL_CORES")))
         mesh = fn(recipe)
         state = {f.name: getattr(mesh, f.name) for f in dataclasses.fields(mesh)}
         state["meta"] = dict(state["meta"])
@@ -407,6 +409,18 @@ def _child(send: Any, fn: Any, recipe: MeshRecipe) -> None:
             "MESH_BUILD_FAILED", f"{type(exc).__name__}: {exc}"))
     send.send(outcome)
     send.close()
+
+
+#: The thread-count variables the numeric libraries and GDAL read when they start.
+_THREAD_VARIABLES = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS", "GDAL_NUM_THREADS")
+
+
+def _limit_to_cores(count: int) -> None:
+    """Bound this process, its threads and every program it starts to ``count`` cores: the affinity holds a library that ignores the variables."""
+    for name in _THREAD_VARIABLES:
+        os.environ[name] = str(count)
+    if hasattr(os, "sched_setaffinity"):
+        os.sched_setaffinity(0, sorted(os.sched_getaffinity(0))[:count])
 
 
 def _picklable(value: Any) -> bool:

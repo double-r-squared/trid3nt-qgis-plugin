@@ -15,6 +15,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.inputs.user_input import nearest
 from trid3nt_server.tools import register_tool
+from trid3nt_server.settings import dictionary as settings_dictionary
 from trid3nt_server.settings import input_dir as settings_input_dir
 from trid3nt_server.workflows.geoclaw.modules.module import (
     module_input_dir as geoclaw_input_dir)
@@ -157,7 +158,8 @@ def describe_keywords(module: str = "", keyword: str | list[str] = "",
             "UNKNOWN_MODULE",
             f"there is no keyword dictionary for {module!r} ({nearest(name, sorted(carried))}); "
             f"the carried modules are {', '.join(sorted(carried))}.")
-    dictionary = load_module_input(name, directory=carried[name])
+    dictionary = (settings_dictionary() if name == "settings"
+                  else load_module_input(name, directory=carried[name]))
     if isinstance(keyword, (list, tuple)):
         entries, unknown = [], []
         for asked in keyword:

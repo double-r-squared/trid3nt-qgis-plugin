@@ -102,10 +102,10 @@ def test_a_malformed_release_point_refuses_it_never_falls_back():
 
 def test_a_core_count_past_the_box_refuses_by_name():
     """Refused, never cut down to fit: the caller is told the box's own count."""
-    from trid3nt_server.workflows.telemac.authoring.staged_check import BOX_CORES
+    from trid3nt_server.workflows.solver.cores import docker_cores
 
-    _supplied, err = _norm(keywords={"PARALLEL PROCESSORS": BOX_CORES + 1})
-    assert "PARALLEL PROCESSORS" in err and str(BOX_CORES) in err
+    _supplied, err = _norm(keywords={"PARALLEL PROCESSORS": docker_cores() + 1})
+    assert "PARALLEL PROCESSORS" in err and str(docker_cores()) in err
 
 
 def test_a_declared_bound_refuses_rather_than_clamps():

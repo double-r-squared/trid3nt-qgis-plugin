@@ -526,6 +526,16 @@ same quantity agree within a stated tolerance, and the resolved range CONTAINS t
 headline - otherwise the caption states the gap. A number in prose that the
 picture cannot show is the dishonest case this pins.
 
+## Cores - two settings
+
+`LOCAL_CORES` bounds the daemon's own work (the mesh build child's affinity and thread variables); its range is 1 to this box's
+cores and its default all of them. `CONTAINER_CORES` is each solver container's docker CPU limit (`--cpus`, never below the
+partition the run states) and the default of the engine's parallel keyword when a run states none: TELEMAC `PARALLEL PROCESSORS`
+(left serial under a direct solver), GeoClaw `geoclaw_bouss` `cores` (shared across its `threads`); MODFLOW and shallow-water
+GeoClaw have no parallel form and take the limit only. Its range is 1 to the docker host's cores (`docker info`, read once) and
+its default all but one when the docker host is this box, all when it is not. A stated keyword wins and is held to the docker
+host's cores; the run notes say `CONTAINER_CORES` when the default was taken. One module, `workflows/solver/cores.py`, reads both hosts.
+
 ## The solve wait - no clock, the engine's own step, a stop keeps what was written
 
 The wait on a solve has no time limit: it ends when the container exits or the user stops it, and the stop

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, replace
+from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts.common import Origin
@@ -268,6 +269,22 @@ def _partitioned(body: type, filled: dict[str, Filled]) -> None:
         del filled[PROCESSORS]
 
 
+def _with_container_cores(sheet: TelemacSheet) -> TelemacSheet:
+    """The sheet with PARALLEL PROCESSORS at CONTAINER_CORES where the run states none; a direct solve stays serial."""
+    from trid3nt_server.inputs.run_notes import journal_note
+    from trid3nt_server.settings import setting
+
+    slot = sheet.body.MODULE_INPUT.get(PROCESSORS)
+    if PROCESSORS in sheet.filled or slot is None or _solver(sheet.body, sheet.filled) == _DIRECT_SOLVER:
+        return sheet
+    count = int(setting("CONTAINER_CORES"))
+    if count < 2:
+        return sheet
+    journal_note(f"PARALLEL PROCESSORS {count} from CONTAINER_CORES: the run states none, so the solve is partitioned across them.")
+    held = {**sheet.filled, PROCESSORS: Filled(slot=slot, value=slot.check(count), provenance=Provenance(Origin.DERIVED, "CONTAINER_CORES"))}
+    return replace(sheet, filled=MappingProxyType(held))
+
+
 def _arm(body: type, filled: dict[str, Filled],
          files: Mapping[str, Any]) -> None:
     """Turn on the term a stated value implies, where nothing has stated it.
@@ -305,6 +322,7 @@ async def stage(sheet: TelemacSheet, *, run_id: str,
     from ..authoring.staged_check import check_staged_run
     from ...solver.staging import new_rundir, stage_run
     complete(sheet.body, sheet.filled)
+    sheet = _with_container_cores(sheet)
     # Files the decks name past the one read from are declared so the worker's success convention checks each landed.
     kept = [name for name in sheet.kept() if name not in results]
     rundir = new_rundir(run_id, stem="telemac")

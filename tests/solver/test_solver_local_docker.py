@@ -21,6 +21,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 import trid3nt_server.workflows.solver.solver as solver_mod
+from trid3nt_server.workflows.solver.cores import container_default
 from trid3nt_server.store import objects as storage
 from trid3nt_server.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
@@ -115,13 +116,13 @@ if [ "$mode" = "kill" ]; then
   fi
   exit 0
 fi
-# mode == run: parse --name <name> and -v <src>:/data; ignore --rm/-w/--network.
+# mode == run: parse --name <name> and -v <src>:/data; ignore --rm/-w/--network/--cpus.
 name=""; vol=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --name) name="$2"; shift 2;;
     -v) vol="${2%%:*}"; shift 2;;
-    --network) shift 2;;
+    --network|--cpus) shift 2;;
     --rm) shift;;
     -w) shift 2;;
     *) break;;
@@ -301,7 +302,7 @@ def test_local_run_solver_stages_manifest_and_launches_docker(
     run_calls = [c for c in calls if c.startswith("run ")]
     assert len(run_calls) == 1, calls
     assert run_calls[0] == (
-        f"run --network none --rm --name {handle.run_id} -v {rundir}:/data "
+        f"run --cpus {max(container_default(), 2)} --network none --rm --name {handle.run_id} -v {rundir}:/data "
         "-w /data fake/telemac:test"
     ), run_calls[0]
 

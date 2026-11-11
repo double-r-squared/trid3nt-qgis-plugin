@@ -20,6 +20,9 @@ discovers entries; nothing else reads the dictionary for discovery.
 A value may be a list of fixed length (`CLIP_PERCENTILES` is a low and a high
 percentile); its range holds every item, and the dock takes it comma-separated.
 
+`LOCAL_CORES` and `CONTAINER_CORES` take their default and range from the hosts' core counts, read when the dictionary is read, so the
+dictionary file carries no number for them.
+
 A name is spelled once. A judgment two modules used to hold separately (the
 gate card's time-to-live and rounds, the bed interpolation, the observation
 window) is one entry both read.

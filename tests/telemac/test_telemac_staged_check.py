@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.telemac.authoring import selafin_io as IO
-from trid3nt_server.workflows.telemac.authoring.staged_check import BOX_CORES
+from trid3nt_server.workflows.solver.cores import docker_cores
 from trid3nt_server.workflows.telemac.authoring import staged_check as C
 from trid3nt_server.workflows.telemac.errors import TelemacError
 
@@ -204,12 +204,12 @@ def test_a_clock_whose_steps_do_not_make_the_window_refuses(tmp_path):
 
 def test_a_partition_past_the_box_refuses_rather_than_being_cut_to_fit(tmp_path):
     rundir = _staged(tmp_path,
-                     **{"PARALLEL PROCESSORS": str(BOX_CORES + 1)})
+                     **{"PARALLEL PROCESSORS": str(docker_cores() + 1)})
 
     refusal = _refusal(rundir)
 
     assert refusal.error_code == "TELEMAC_STAGED_CORES_OVER_BOX"
-    assert str(BOX_CORES + 1) in str(refusal) and str(BOX_CORES) in str(refusal)
+    assert str(docker_cores() + 1) in str(refusal) and str(docker_cores()) in str(refusal)
 
 
 def test_a_mesh_still_in_the_store_is_read_through_its_staged_name(tmp_path, monkeypatch):

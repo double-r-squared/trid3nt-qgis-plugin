@@ -44,10 +44,17 @@ def input_dir() -> Path:
 
 
 def dictionary() -> "Mapping[str, Slot]":
-    """Every setting by identifier, in the dictionary's order."""
-    from trid3nt_server.workflows.runtime.module import load_module_input
+    """Every setting by identifier, in the dictionary's order; the two core settings take their default and range from the hosts."""
+    from dataclasses import replace
+    from types import MappingProxyType
 
-    return load_module_input("settings", directory=input_dir())
+    from trid3nt_server.workflows.runtime.module import load_module_input
+    from trid3nt_server.workflows.solver.cores import host_rows
+
+    table = load_module_input("settings", directory=input_dir())
+    held = {name: replace(table[name], engine_default=default, unit="cores", bounds=((1.0, float(most)),))
+            for name, (default, most) in host_rows().items()}
+    return MappingProxyType({**table, **held})
 
 
 def user_file() -> Path:

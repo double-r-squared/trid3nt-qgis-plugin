@@ -35,6 +35,16 @@ def user_settings(monkeypatch, tmp_path):
     return write
 
 
+@pytest.fixture(autouse=True)
+def docker_on_this_box(monkeypatch):
+    """The docker host of every test is this box, so no test asks docker."""
+    import os
+
+    from trid3nt_server.workflows.solver import cores
+
+    monkeypatch.setattr(cores, "_HOST", (os.cpu_count() or 1, True))
+
+
 # Shared in-memory S3 double (GCP decommissioned — cache shim is S3-only).
 #
 # The cache read-through (``trid3nt_server.tools.cache``) and every tool

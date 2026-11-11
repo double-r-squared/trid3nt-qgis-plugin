@@ -661,6 +661,36 @@
       "mandatory": false,
       "default": 4,
       "source": "TRID3NT engineering default."
+    },
+    {
+      "keyword": "LOCAL_CORES",
+      "identifier": "LOCAL_CORES",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How many of this box's cores the daemon's own work may use: the mesh build's processes and threads. The range is 1 to this box's cores and the default is all of them.",
+      "rubrique": [
+        "server"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "TRID3NT engineering default: the daemon's own work may use the whole box."
+    },
+    {
+      "keyword": "CONTAINER_CORES",
+      "identifier": "CONTAINER_CORES",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How many cores each solver container runs on: docker's CPU limit for the container, and the value of the engine's own parallel keyword (TELEMAC PARALLEL PROCESSORS, GeoClaw geoclaw_bouss cores) when a run does not state it, which the run notes say. The range is 1 to the docker host's cores. The default is all but one of them when the docker host is this box, so the daemon keeps a core, and all of them when it is not.",
+      "rubrique": [
+        "server"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "TRID3NT engineering default. A solve left serial runs about one simulated second per wall second on one core."
     }
   ]
 }

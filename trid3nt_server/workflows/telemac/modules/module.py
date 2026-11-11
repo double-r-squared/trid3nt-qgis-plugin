@@ -12,7 +12,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, Sequence
 
-from ..authoring.staged_check import BOX_CORES
+from ...solver.cores import docker_cores
 from trid3nt_server.workflows.runtime.module import Module, Slot, SlotRefused, _spelled
 
 __all__ = [
@@ -185,11 +185,12 @@ def _matched(prefix: str, choices: Sequence[str]) -> set[str]:
 
 
 def fits_the_box(count: Any) -> None:
-    """Refuse a processor count past this box's cores; a count cut down to fit is a partition the caller was never told about."""
-    if int(count) > BOX_CORES:
+    """Refuse a processor count past the docker host's cores; a count cut down to fit is a partition the caller was never told about."""
+    seats = docker_cores()
+    if int(count) > seats:
         raise SlotRefused(
-            f"PARALLEL PROCESSORS {int(count)} is past the {BOX_CORES} cores this "
-            f"box has. State {BOX_CORES} or fewer - a count this box cannot seat "
+            f"PARALLEL PROCESSORS {int(count)} is past the {seats} cores the "
+            f"docker host has. State {seats} or fewer - a count the host cannot seat "
             "is refused rather than cut down to fit.")
 
 

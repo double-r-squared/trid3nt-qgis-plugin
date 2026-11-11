@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from functools import partial
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
@@ -28,6 +27,7 @@ from trid3nt_server.workflows.runtime.primitives import Primitive, field, max_ov
 from trid3nt_server.workflows.runtime.review import _seat_on, fill_sheet
 from trid3nt_server.workflows.runtime.sheet import Keyword, Sheet, reference_time
 from trid3nt_server.workflows.runtime.sheet import run as run_sheet_
+from trid3nt_server.workflows.solver.cores import docker_cores
 from trid3nt_server.workflows.solver.stop import SolveStopped
 from trid3nt_server.workflows.runtime.workflow import EVENT_TIME
 from trid3nt_server.workflows.solver.staging import discard_run
@@ -67,10 +67,10 @@ _MODULE = Input(name="module", type=str, desc=(
     "equations, the same keywords plus Clawpack's BOUSS_ ones); unstated, the template's own.")).stated()
 _CORES = Input(name="cores", type=int, desc=(
     "The MPI process count the Boussinesq executable runs under (PETSc's linear solves use them); a whole number from 1 "
-    "to this box's cores, unstated 1. Shallow-water runs take none.")).stated()
+    "to the docker host's cores, unstated the CONTAINER_CORES setting divided by the threads. Shallow-water runs take none.")).stated()
 _THREADS = Input(name="threads", type=int, desc=(
     "The OpenMP thread count of each process of the Boussinesq executable (OMP_NUM_THREADS); a whole number of at least 1 "
-    "whose product with cores is at most this box's cores, unstated 1, so the run holds the cores it declares. "
+    "whose product with cores is at most the docker host's cores, unstated 1, so the run holds the cores it declares. "
     "Shallow-water runs take none.")).stated()
 
 
@@ -107,6 +107,21 @@ def _threads(run: Mapping[str, Any], module: str) -> int | None:
     if module != "geoclaw_bouss":
         return None
     return int(run[_THREADS.name]) if run.get(_THREADS.name) is not None else 1
+
+def _processes(run: Mapping[str, Any], module: str) -> int:
+    """The MPI process count the run is staged with: the run's own, else CONTAINER_CORES shared across the threads of each process; one for shallow water."""
+    from trid3nt_server.inputs.run_notes import journal_note
+    from trid3nt_server.settings import setting
+
+    if run.get(_CORES.name) is not None:
+        return int(run[_CORES.name])
+    if module != "geoclaw_bouss":
+        return 1
+    count = max(1, int(setting("CONTAINER_CORES")) // int(_threads(run, module)))
+    if count > 1:
+        journal_note(f"{_CORES.name} {count} from CONTAINER_CORES: the run states none, so the Boussinesq executable runs on them.")
+    return count
+
 
 #: Whether the real event's catalogue epicentre is drawn beside the rupture: 'fetch' reads it, unstated or 'none' draws none.
 _CATALOGUE = Input(name="catalogue_epicentre", type=str, desc=(
@@ -413,8 +428,8 @@ class GeoclawWorkflow(Workflow):
             if module != "geoclaw_bouss":
                 raise GeoclawError(f"{_CORES.name} is stated for the module {module}, whose executable runs one process: only "
                                    "geoclaw_bouss runs under mpiexec.", error_code="GEOCLAW_CORES_UNUSED")
-            if not 1 <= int(stated) <= (os.cpu_count() or 1):
-                raise GeoclawError(f"{_CORES.name} {stated!r} is outside 1 to this box's {os.cpu_count()} cores.",
+            if not 1 <= int(stated) <= docker_cores():
+                raise GeoclawError(f"{_CORES.name} {stated!r} is outside 1 to the docker host's {docker_cores()} cores.",
                                    error_code="GEOCLAW_CORES_OUT_OF_RANGE")
         threads = run.get(_THREADS.name)
         if threads is not None:
@@ -422,9 +437,9 @@ class GeoclawWorkflow(Workflow):
                 raise GeoclawError(f"{_THREADS.name} is stated for the module {module}, whose executable is not compiled for "
                                    "OpenMP: only geoclaw_bouss takes threads.", error_code="GEOCLAW_THREADS_UNUSED")
             processes = int(stated or 1)
-            if int(threads) < 1 or int(threads) * processes > (os.cpu_count() or 1):
-                raise GeoclawError(f"{_THREADS.name} {threads!r} on {processes} process(es) is outside 1 thread to this box's "
-                                   f"{os.cpu_count()} cores in all.", error_code="GEOCLAW_THREADS_OUT_OF_RANGE")
+            if int(threads) < 1 or int(threads) * processes > docker_cores():
+                raise GeoclawError(f"{_THREADS.name} {threads!r} on {processes} process(es) is outside 1 thread to the docker host's "
+                                   f"{docker_cores()} cores in all.", error_code="GEOCLAW_THREADS_OUT_OF_RANGE")
         return steering
 
     def _restarted(self, keywords: dict[str, Any], steering: type) -> Previous | None:
@@ -502,7 +517,7 @@ class GeoclawWorkflow(Workflow):
             # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
             staged.clear()
             staged.update(await stage_sheet(sheet=sheet, run_id=run_id, prefix=prefix, name=name, previous=previous,
-                                            cores=int(run.get(_CORES.name) or 1),
+                                            cores=_processes(run, steering.MODULE),
                                             threads=_threads(run, steering.MODULE)))
 
         try:

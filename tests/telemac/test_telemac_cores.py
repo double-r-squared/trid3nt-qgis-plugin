@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring.staged_check import BOX_CORES
+from trid3nt_server.workflows.solver.cores import docker_cores, local_cores
 from trid3nt_server.workflows.solver.staging import case_section
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.modules.artemis import ART
@@ -26,7 +26,7 @@ from seated import value_inputs
 
 #: A partition every box this runs on can seat, so the assertions are about the
 #: keyword and not about the machine the suite happens to run on.
-PARTITIONED = min(2, BOX_CORES)
+PARTITIONED = min(2, local_cores())
 
 
 def test_a_run_that_states_no_count_leaves_the_modules_own_keyword_standing():
@@ -44,12 +44,12 @@ def test_a_count_past_this_box_refuses_by_name():
     import trid3nt_server.workflows.telemac.templates  # noqa: F401
 
     with pytest.raises(SlotRefused) as raised:
-        fill(T2D, **{PROCESSORS: BOX_CORES + 1})
+        fill(T2D, **{PROCESSORS: docker_cores() + 1})
     assert "PARALLEL PROCESSORS" in str(raised.value)
-    assert str(BOX_CORES) in str(raised.value)
+    assert str(docker_cores()) in str(raised.value)
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     with pytest.raises(SlotRefused):
-        workflow.input("PARALLEL PROCESSORS").accept(BOX_CORES + 1)
+        workflow.input("PARALLEL PROCESSORS").accept(docker_cores() + 1)
 
 
 def test_no_template_takes_a_cores_argument():
@@ -99,7 +99,7 @@ def test_the_direct_solver_runs_serial_whatever_was_asked_for():
     """ARTEMIS's dictionary defaults SOLVER to the direct one, which factorises
     the whole system rather than partitioning it. The deck states no solver, so
     the default IS what the engine will do, and the run is serial."""
-    sheet = fill(ART, **{PROCESSORS: max(2, BOX_CORES)})
+    sheet = fill(ART, **{PROCESSORS: max(2, docker_cores())})
     assert ART.MODULE_INPUT[SOLVER].engine_default == 8
     assert PROCESSORS not in sheet.filled
     assert solve_cores(ART, sheet.filled) == 1
@@ -112,7 +112,7 @@ def test_the_run_says_why_the_cores_it_asked_for_are_not_used():
 
     token = bind_notes()
     try:
-        fill(ART, **{PROCESSORS: max(2, BOX_CORES)})
+        fill(ART, **{PROCESSORS: max(2, docker_cores())})
         notes = drain_notes(token)
     except BaseException:
         drain_notes(token)
@@ -138,7 +138,7 @@ def test_an_iterative_deck_is_partitioned_on_the_count_it_asked_for():
 def test_the_launcher_is_handed_the_number_the_deck_resolved_to():
     """The engine and the launcher read ONE count: a deck the engine solves
     serially must not be launched under mpirun on every core the box has."""
-    serial = fill(ART, **{PROCESSORS: max(2, BOX_CORES)})
+    serial = fill(ART, **{PROCESSORS: max(2, docker_cores())})
     case = case_section(module="artemis", steering="art.cas",
                         results=["r.slf"], server_facts={},
                         cores=solve_cores(ART, serial.filled))
