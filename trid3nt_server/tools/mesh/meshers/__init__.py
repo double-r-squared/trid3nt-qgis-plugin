@@ -54,6 +54,9 @@ class MeshToolError(RuntimeError):
         self.error_code = error_code
         self.escalation = dict(escalation) if escalation else None
 
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (type(self), (self.error_code, str(self), self.escalation))
+
 
 def nearest_names(name: str, known: Iterable[str]) -> str:
     """The closest declared spellings to ``name``, as a ready-to-quote phrase."""

@@ -6,10 +6,16 @@ state; a hand-edit is ADOPTED and flagged rather than pretended into the recipe.
 
 from __future__ import annotations
 
+import asyncio
+import contextvars
+import dataclasses
 import json
 import logging
 import math
+import multiprocessing
 import os
+import signal
+import threading
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -41,7 +47,7 @@ from trid3nt_server.tools.mesh.recipe import MeshRecipe
 
 logger = logging.getLogger("trid3nt_server.tools.mesh.session")
 
-__all__ = ["MeshSession", "mesh_digest", "replay_recipe"]
+__all__ = ["MeshSession", "mesh_digest", "replay_recipe", "to_build_thread"]
 
 
 class MeshSession:
@@ -298,12 +304,115 @@ def _s3_client() -> Any:
     return storage.client()
 
 
+#: Set by ``to_build_thread`` for the work it runs; a build in that thread polls it and ends its child when it is set.
+_STOP: contextvars.ContextVar[threading.Event | None] = contextvars.ContextVar(
+    "trid3nt_mesh_stop", default=None)
+
+#: How often a waiting build checks that its turn has not been cancelled.
+_POLL_S = 0.1
+
+
+async def to_build_thread(fn: Any, *args: Any, **kwargs: Any) -> Any:
+    """``asyncio.to_thread`` for work that may build a mesh: a cancel of the awaiting task stops the build's child process.
+
+    A thread cannot be cancelled, so the cancel is a flag the build thread polls."""
+    stop = threading.Event()
+    token = _STOP.set(stop)
+    try:
+        return await asyncio.to_thread(fn, *args, **kwargs)
+    except asyncio.CancelledError:
+        stop.set()
+        raise
+    finally:
+        _STOP.reset(token)
+
+
 def _build(mesher: Mesher, recipe: MeshRecipe) -> Mesh:
-    """The whole mesh, from the whole recipe. There is no incremental path."""
+    """The whole mesh, from the whole recipe, built in a child process. There is no incremental path."""
     from trid3nt_server.tools.mesh.inputs import raster_scope
 
     with raster_scope():
-        return mesher.build(recipe)
+        return _in_child(mesher.build, recipe)
+
+
+def _in_child(fn: Any, recipe: MeshRecipe) -> Mesh:
+    """Run ``fn(recipe)`` in a forked child and return its mesh, or raise what it raised.
+
+    The child leads its own process group, so ending it ends every solver or mesher program it started."""
+    context = multiprocessing.get_context("fork")
+    receive, send = context.Pipe(duplex=False)
+    child = context.Process(target=_child, args=(send, fn, recipe), daemon=True)
+    child.start()
+    send.close()
+    stop = _STOP.get()
+    try:
+        while not receive.poll(_POLL_S):
+            if stop is not None and stop.is_set():
+                raise MeshToolError(
+                    "MESH_BUILD_CANCELLED",
+                    "the turn was cancelled, so the mesh build was stopped and "
+                    "nothing was kept.")
+        try:
+            outcome = receive.recv()
+        except EOFError:
+            child.join()
+            raise MeshToolError(
+                "MESH_BUILD_CHILD_DIED",
+                f"the mesh build process ended with exit code {child.exitcode} "
+                "before it returned a mesh.") from None
+    finally:
+        _end(child)
+        receive.close()
+    if outcome[0] == "error":
+        raise outcome[1]
+    from trid3nt_server.inputs.run_notes import journal_note
+    from trid3nt_server.workflows.runtime import journal
+
+    _, state, notes, reads = outcome
+    for note in notes:
+        journal_note(note)
+    for name, read in reads.items():
+        journal.setting_read(name, read["value"], read["level"])
+    return Mesh(**state)
+
+
+def _end(child: Any) -> None:
+    if child.is_alive() and child.pid is not None:
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    child.join()
+
+
+def _child(send: Any, fn: Any, recipe: MeshRecipe) -> None:
+    """The child's whole life: build, then send the mesh, the run notes and the settings read, or the error."""
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt_server.workflows.runtime import journal
+
+    os.setpgrp()
+    notes_token, reads_token = bind_notes(), journal.bind_settings()
+    try:
+        mesh = fn(recipe)
+        state = {f.name: getattr(mesh, f.name) for f in dataclasses.fields(mesh)}
+        state["meta"] = dict(state["meta"])
+        outcome: tuple = ("ok", state, drain_notes(notes_token),
+                          journal.drain_settings(reads_token))
+    except BaseException as exc:  # noqa: BLE001 - whatever ended the build goes to the parent
+        outcome = ("error", exc if _picklable(exc) else MeshToolError(
+            "MESH_BUILD_FAILED", f"{type(exc).__name__}: {exc}"))
+    send.send(outcome)
+    send.close()
+
+
+def _picklable(value: Any) -> bool:
+    import pickle
+
+    try:
+        pickle.loads(pickle.dumps(value))
+    except Exception:  # noqa: BLE001 - any pickling fault means it cannot cross
+        return False
+    return True
 
 
 def replay_recipe(source: str | os.PathLike[str] | Sequence[Mapping[str, Any]]

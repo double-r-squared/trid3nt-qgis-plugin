@@ -6,14 +6,13 @@ presents every other user-gated thing asks about them. AUTO builds inline."""
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any, Mapping, Sequence
 
 from trid3nt_server.inputs.gate.input_review import GateCard, gate_input_review
 from trid3nt_server.tools.mesh.artifact import MeshArtifact
 from trid3nt_server.tools.mesh.meshers import MeshToolError
-from trid3nt_server.tools.mesh.session import MeshSession
+from trid3nt_server.tools.mesh.session import MeshSession, to_build_thread
 
 logger = logging.getLogger("trid3nt_server.tools.mesh.gate")
 
@@ -55,7 +54,7 @@ async def present_mesh(session: MeshSession) -> dict[str, Any]:
     from trid3nt_server.render.layer_uri_emit import publish_input_layer
     from trid3nt_server.render.pipeline_emitter import current_emitter
 
-    layer = await asyncio.to_thread(session.snapshot)
+    layer = await to_build_thread(session.snapshot)
     emitter = current_emitter()
     await publish_input_layer(emitter, layer)
     if emitter is not None and layer.bbox:
@@ -147,7 +146,7 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
             _REFUSALS[str(outcome.cancel_code)],
             f"the mesh for {tool_name} was not accepted at the gate, so the run "
             f"did not proceed: {outcome.cancel_reason}")
-    return await asyncio.to_thread(session.accept)
+    return await to_build_thread(session.accept)
 
 
 #: The row every open gate offers beside the params: the revert to the recipe as
@@ -168,11 +167,11 @@ async def _apply_gate_revision(session: MeshSession,
 
     Only those three rows move; every other change is an op."""
     if _truthy(revised.get(_RESET_ROW)):
-        await asyncio.to_thread(session.reset)
+        await to_build_thread(session.reset)
         return
     layer = str(revised.get(_ADOPT_ROW) or "").strip()
     if layer:
-        await asyncio.to_thread(session.adopt_layer, layer)
+        await to_build_thread(session.adopt_layer, layer)
         return
     params = {name: _as_number(name, revised[name])
               for name in ("resolution_m",) if revised.get(name) not in (None, "")}
@@ -183,7 +182,7 @@ async def _apply_gate_revision(session: MeshSession,
             f"{{'{_ADOPT_ROW}': <path>}} or one of the recipe's agnostic params "
             f"('resolution_m'); got {sorted(revised)}. Every other change is an "
             "op - append, alter or remove one with mesh_op.")
-    await asyncio.to_thread(session.set_params, **params)
+    await to_build_thread(session.set_params, **params)
 
 
 def _truthy(value: Any) -> bool:

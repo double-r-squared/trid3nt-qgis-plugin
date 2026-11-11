@@ -6,7 +6,6 @@ entry by the INDEX the gate numbers them with."""
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
@@ -64,6 +63,7 @@ async def mesh_op(fn: str | None = None, at: int | None = None,
     from trid3nt_server.tools.mesh.gate import (
         active_mesh_session, present_mesh,
     )
+    from trid3nt_server.tools.mesh.session import to_build_thread
 
     session = active_mesh_session(mesh)
     if remove:
@@ -72,13 +72,13 @@ async def mesh_op(fn: str | None = None, at: int | None = None,
                 "MESH_OP_INDEX",
                 "removing an entry needs the index to remove; the gate numbers "
                 f"this recipe's ops: {session.recipe.numbered()}.")
-        await asyncio.to_thread(session.remove_op, int(at))
+        await to_build_thread(session.remove_op, int(at))
     else:
         entry = _entry(session, fn, kwargs)
         if at is None:
-            await asyncio.to_thread(session.append_op, entry)
+            await to_build_thread(session.append_op, entry)
         else:
-            await asyncio.to_thread(session.alter_op, int(at), entry)
+            await to_build_thread(session.alter_op, int(at), entry)
     return await present_mesh(session)
 
 
