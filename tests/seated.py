@@ -14,6 +14,9 @@ from trid3nt_server.workflows.runtime.fill import REJECTED, Fill, Verdict, _answ
 #: sheet reads them: the mesh ask's edge, the engine's moment, the bed's frame.
 SEATED = ("mesh_resolution_m", "event_time", "vertical_frame")
 
+#: What a workflow whose domain need states a span seats after them: the reach the domain is cut to.
+REACH = "reach_length_km"
+
 
 async def resolve_params(declared: Any, supplied: Mapping[str, Any]) -> dict[str, Verdict]:
     """The verdict of every value input, by name; a refused one raises its own refusal."""

@@ -182,7 +182,7 @@ def test_a_driven_arg_the_tool_reads_nowhere_refuses_rather_than_being_swallowed
     """The generated signature absorbs a MODEL's over-supply; a driver is not a
     model, and a value it states that lands nowhere is a row that fetches instead."""
     with pytest.raises(LiveRunError, match="reads none of"):
-        _drive(LiveRun(tool=_TOOL, args={"reach_length_km": 6.0}, case_title="c"))
+        _drive(LiveRun(tool=_TOOL, args={"river_geometry_uri": "x"}, case_title="c"))
 
 
 def test_an_arg_a_call_before_states_and_its_tool_reads_nowhere_refuses():

@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import do_profile
-from seated import SEATED, row_inputs, value_inputs, values_of
+from seated import REACH, SEATED, row_inputs, value_inputs, values_of
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.runtime.primitives import Line, Profile
 from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import (
@@ -79,7 +79,7 @@ def _resolve(**supplied):
 
 def test_declared_params_resolve():
     wf = _workflow()
-    assert [p.name for p in value_inputs(wf) if p.name not in SEATED] == [
+    assert [p.name for p in value_inputs(wf) if p.name not in (*SEATED, REACH)] == [
         "outfall_coords", "do_standard_mgl"]
     assert _resolve()["do_standard_mgl"].value == 5.0
 
@@ -130,7 +130,7 @@ def test_the_outfall_seeds_the_domain_match():
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_do_sag"].fn).parameters)
     assert "outfall_coords" in wire
     assert {"domain", "bed"} <= wire
-    assert not {"location", "bbox", "river_geometry_uri", "reach_length_km",
+    assert not {"location", "bbox", "river_geometry_uri",
                 "outfall_lat", "outfall_lon"} & wire
 
 

@@ -196,7 +196,7 @@ def test_the_template_declares_none_of_the_runtime_s_own_rows():
     """The domain, the bed, the granularity, the moment and the frame are
     declared by whoever reads them; the deck's clock, roughness and cadence are keywords the
     dictionary describes. What is left is the question's own."""
-    from seated import SEATED
+    from seated import REACH, SEATED
 
 
     workflow = _template().telemac_micropollutant_release.workflow
@@ -206,9 +206,9 @@ def test_the_template_declares_none_of_the_runtime_s_own_rows():
     # one it differs on keeps its own place and its own opinion of the value.
     own = {prm.name for prm in value_inputs(_template().INPUTS)}
     assert set(SEATED) <= set(declared)
-    seated = [name for name in SEATED if name not in own]
+    seated = [name for name in SEATED if name not in own] + [REACH]
     assert declared[-len(seated):] == seated
-    for gone in ("location", "bbox", "river_geometry_uri", "reach_length_km",
+    for gone in ("location", "bbox", "river_geometry_uri",
                  "friction_law", "friction_coefficient", "output_interval_min",
                  "sim_duration_s"):
         assert gone not in declared

@@ -148,7 +148,7 @@ def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
     the roughness, the cadence, the wind, the rain and the processors, the slots
     describe the water, the mesh ask declares the granularity, the engine the
     moment and the bed its frame."""
-    from seated import SEATED
+    from seated import REACH, SEATED
     from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
         INPUTS,
     )
@@ -164,14 +164,14 @@ def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
                            "rainfall_mm_per_day", "decay_half_life_hours",
                            "decay_rate_per_day"}
     assert not declared & {"location", "bbox", "river_geometry_uri",
-                           "reach_length_km", "mesh_resolution_m"}
+                           "mesh_resolution_m"}
     # The window this question is asked over is the module's own keyword, in the
     # seconds it reads, and the settle is built off the same statement.
     assert STEERING.ASSERTED["DURATION"] == 3600.0
     # None is restated here, so all three are seated at the end, in the order
     # the engine seats them.
     seated = [p.name for p in value_inputs(_workflow())]
-    assert seated[-len(SEATED):] == list(SEATED)
+    assert seated[-len(SEATED) - 1:] == [*SEATED, REACH]
 
 
 def test_the_data_body_is_the_slots_and_the_classes_they_need():
@@ -220,7 +220,7 @@ def test_the_release_point_seeds_the_domain_producer():
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_dye_release"].fn).parameters)
     assert "release" in wire
     assert not {"release_coords", "release_lat", "release_lon", "location",
-                "bbox", "reach_length_km", "river_geometry_uri"} & wire
+                "bbox", "river_geometry_uri"} & wire
 
 
 def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():

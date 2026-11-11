@@ -401,6 +401,22 @@ def _mesh_m(env: _Env) -> float | None:
     return env.run.get(RESOLUTION.name)
 
 
+def _span_km(env: _Env, decl: Input) -> float | None:
+    """The reach a span-stating row covers: the run's reach_length_km where it states one, else the need's own."""
+    from trid3nt_server.inputs.user_input import UserInputError
+    from .workflow import REACH_LENGTH
+
+    stated = env.run.get(REACH_LENGTH.name)
+    if stated is None or decl.span_km is None:
+        return decl.span_km
+    if not float(stated) > 0.0:
+        raise UserInputError(
+            f"{REACH_LENGTH.name}={stated} km is not a reach: it is the length of the line the domain is cut to, "
+            f"so it is greater than 0 and a value past the line's own end takes the whole line. "
+            f"Omit it for this template's {decl.span_km:g} km.", code="REACH_LENGTH_INVALID")
+    return float(stated)
+
+
 def _frame(env: _Env) -> str:
     """The vertical frame this run counts elevations from: the one the bed states, for every reader of it."""
     frame, = BED.states
@@ -533,11 +549,11 @@ async def _ask_for(env: _Env, choice: SourceChoice,
     return filled(
         choice, decl.name.replace("_", " "),
         _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox
-        else None if lon is None or lat is None else _about(lon, lat, decl.span_km),
+        else None if lon is None or lat is None else _about(lon, lat, _span_km(env, decl)),
         Need(slot=decl.name, data_class=choice.need, lon=lon, lat=lat,
              opens=str(opens) if opens else None,
              until=_closes(opens, _window(env, decl))),
-        {"span_km": decl.span_km, "of": _asked_of(decl, seed) or None,
+        {"span_km": _span_km(env, decl), "of": _asked_of(decl, seed) or None,
          "measured": _measured(env, decl) or None,
          "seed_point": None if lon is None or lat is None else [lon, lat]})
 
@@ -548,7 +564,7 @@ async def _searched_in(env: _Env, decl: Input) -> list[float] | None:
     if dom is not None and dom.bbox:
         return _around(dom.bbox, _mesh_m(env))
     lon, lat = _place(await _seed(env, decl))
-    return None if lon is None or lat is None else _about(lon, lat, decl.span_km)
+    return None if lon is None or lat is None else _about(lon, lat, _span_km(env, decl))
 
 
 def _around(bbox: Sequence[float], mesh_m: float | None) -> list[float]:
@@ -603,7 +619,7 @@ async def _ingested(env: _Env, decl: Input, value: Any,
     # reaches: the ingestion that states a need is the ingestion that reads it.
     coercion.update(dict(beside or {}))
     if beside:
-        coercion["span_km"] = decl.span_km
+        coercion["span_km"] = _span_km(env, decl)
     if decl.slot is BED:
         # THE CUT IS WHERE THE WATER IS: the bed states its coverage over it, fills
         # inside it and refuses a wet hole, and an empty one says the run was cut with none.

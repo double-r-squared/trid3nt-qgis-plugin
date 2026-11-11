@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 
 from trid3nt_server.workflows.telemac.workflow import stated
-from seated import SEATED, row_inputs, value_inputs
+from seated import REACH, SEATED, row_inputs, value_inputs
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.templates.bed_scour import (
     bed_scour,
@@ -34,7 +34,7 @@ _PACKAGE = Path(_MODULE.__file__).parent
 #: What the domain and twins waves took off this template: the keyword twins the
 #: module's dictionary already describes, the domain twins the slots replaced,
 #: and the levers the runtime declares once.
-_DISSOLVED = {"location", "bbox", "river_geometry_uri", "reach_length_km",
+_DISSOLVED = {"location", "bbox", "river_geometry_uri",
               "friction_coefficient", "friction_law", "output_interval_min",
               "evaporation_mm_per_day", "rainfall_gridmet_window",
               "sim_duration_s", "wind_speed_mps", "wind_direction_deg",
@@ -98,7 +98,7 @@ def test_the_seated_inputs_are_carried_and_no_baseline_param_is_restated():
 
     own = [prm.name for prm in value_inputs(_MODULE.INPUTS)]
     assert set(SEATED) <= set(declared)
-    seated = [name for name in SEATED if name not in own]
+    seated = [name for name in SEATED if name not in own] + [REACH]
     assert declared[-len(seated):] == seated
     assert _DISSOLVED.isdisjoint(declared)
 

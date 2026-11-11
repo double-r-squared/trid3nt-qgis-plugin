@@ -437,7 +437,7 @@ def test_the_seated_inputs_are_carried_and_no_keyword_twin_is_declared():
     declared = {prm.name for prm in value_inputs(_plan())}
     assert {"event_time", "vertical_frame", "mesh_resolution_m"} <= declared
     assert not declared & {"location", "bbox", "river_geometry_uri",
-                           "reach_length_km", "friction_coefficient",
+                           "friction_coefficient",
                            "friction_law", "output_interval_min",
                            "sim_duration_s", "water_temp_c", "sunshine_w_m2",
                            "secchi_depth_m", "do_saturation_mgl",
@@ -467,14 +467,12 @@ def test_the_longitudinal_reads_are_taken_along_the_line_slot():
 
 
 def test_the_stretch_the_producer_walks_is_the_templates_own_number():
-    """Reach length is a domain twin: the runtime and the domain slot describe
-    how far the water runs, so the template states its opinion of the value
-    instead of declaring a param for it. A user who wants another stretch
-    supplies the domain polygon."""
+    """The template states its opinion of how far the water runs as the domain row's span; the
+    reach_length_km a call may state is the runtime's own input, seated, never declared here."""
     from trid3nt_server.workflows.telemac.templates.eutrophication import (
         eutrophication,
     )
 
-    assert "reach_length_km" not in {prm.name for prm in value_inputs(_plan())}
+    assert "reach_length_km" in {prm.name for prm in value_inputs(_plan())}
     domain = {r.name: r for r in row_inputs(_plan())}["domain"]
     assert domain.span_km == eutrophication._REACH_LENGTH_KM

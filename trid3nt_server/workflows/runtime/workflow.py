@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from .fill import Fill
     from .primitives import Primitive
 
-__all__ = ["EVENT_TIME", "RunResult", "Workflow", "register_workflow"]
+__all__ = ["EVENT_TIME", "REACH_LENGTH", "RunResult", "Workflow", "register_workflow"]
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.workflow")
 
@@ -49,6 +49,13 @@ EVENT_TIME = Input(
     desc="'now', an ISO date or datetime, or 'none' when the ask names no time and every observation is "
          "stated. Phrasing like 'during last Tuesday's storm' is a date, never 'now'. Each source keeps its own "
          "retention, and a request deeper than one refuses typed").stated()
+
+
+#: How far down the line the domain reaches from the seed; a workflow whose domain need states a span lists it, with that span as its description's default.
+REACH_LENGTH = Input(
+    name="reach_length_km", type=float, units="km",
+    desc="How far downstream of the release or seed point the domain reaches, in km, greater than 0; "
+         "the line's own end cuts a longer one short. A longer reach is a bigger mesh and a longer solve").stated()
 
 
 def _names_untaken(value: Any, untaken: set[str]) -> bool:
@@ -100,9 +107,13 @@ class Workflow:
         """The inputs a declaration of this workflow carries without restating
         them: what the type of each of its rows states beside itself. An engine
         adds its own; the skeleton declares none."""
-        return tuple(stated for slot in dict.fromkeys(
+        reach = next((row.span_km for row in self.inputs
+                      if row.slot is DOMAIN and row.span_km is not None), None)
+        return (tuple(stated for slot in dict.fromkeys(
             row.slot for row in self.inputs if row.slot is not None)
             for stated in slot.states)
+            + (() if reach is None else (replace(
+                REACH_LENGTH, desc=f"{REACH_LENGTH.desc}. This template reaches {reach:g} km"),)))
 
     def __init__(self, *, metadata: Any, inputs: Any, template: Any,
                  sensitivity: Sequence[tuple[str, str]] | SensitivityDecl = (),

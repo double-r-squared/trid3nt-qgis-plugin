@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from seated import SEATED
+from seated import REACH, SEATED
 from trid3nt_server.workflows.telemac.workflow import stated
 from trid3nt_server.workflows.telemac.templates.sediment_plume import (
     sediment_plume as template,
@@ -75,7 +75,7 @@ def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
     """A template declares no domain twin, no keyword twin and no seated input of its
     own; the mesh ask's, the engine's and the bed's are seated on it."""
     declared = [prm.name for prm in value_inputs(_workflow())]
-    for gone in ("location", "bbox", "river_geometry_uri", "reach_length_km",
+    for gone in ("location", "bbox", "river_geometry_uri",
                  "friction_law", "friction_coefficient", "output_interval_min",
                  "evaporation_mm_per_day", "rainfall_gridmet_window"):
         assert gone not in declared, gone
@@ -85,7 +85,7 @@ def test_the_baseline_params_are_the_runtimes_and_are_not_restated():
     # one it differs on keeps its own place and its own opinion of the value.
     own = [prm.name for prm in value_inputs(template.INPUTS)]
     assert declared[:len(own)] == own
-    seated = [name for name in SEATED if name not in own]
+    seated = [name for name in SEATED if name not in own] + [REACH]
     assert declared[len(own):] == seated
 
 

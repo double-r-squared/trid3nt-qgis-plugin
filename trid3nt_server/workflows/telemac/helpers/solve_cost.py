@@ -10,7 +10,7 @@ from .time_step import suggest_time_step_s
 __all__ = ["solve_wall_seconds"]
 
 # Seconds per estimated node per step on one core, and the share of a step that does not divide across cores (Amdahl form).
-# Fitted to Telemac2D dye-release solves of 77k to 250k estimated nodes on 7 cores (0.016 s per step at 77k nodes, 0.069 at 250k)
+# Fitted to Telemac2D solves of 77k to 250k estimated nodes on 7 cores (0.016 s per step at 77k nodes, 0.069 at 250k)
 # and to 1, 3 and 7 cores at 77k (0.050, 0.020, 0.016 s per step).
 SECONDS_PER_NODE_STEP = 7.7e-7
 SERIAL_FRACTION = 0.21
