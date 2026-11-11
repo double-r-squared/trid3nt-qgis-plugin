@@ -65,10 +65,10 @@ _MESH_GRADE = 0.20
 class INPUTS:
     pour_point = Input()
 
-    rain_series_mm = Input()
-    design_storm_mm_per_day = Input()
+    rain_series_mm = Input().stated()
+    design_storm_mm_per_day = Input().stated()
 
-    curve_number = Input()
+    curve_number = Input().stated()
     steep_slope_correction = Input()
 
     mesh_resolution_m = RESOLUTION
@@ -79,7 +79,7 @@ class INPUTS:
     bed = Input(BED).need("terrain")
     rivers = Input().need("hydrography", geometry="polyline")
     landcover = Input().need("land cover")
-    rain = Input(RAIN).need("precipitation series")
+    rain = Input(RAIN).need("precipitation series").optional_need()
 
 
 MESH = tool.build_mesh(

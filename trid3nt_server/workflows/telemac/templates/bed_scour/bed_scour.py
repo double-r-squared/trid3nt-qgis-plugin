@@ -48,7 +48,7 @@ class INPUTS:
 
     spill_duration_s = Input()
 
-    sediment_gradation = Input()
+    sediment_gradation = Input().stated()
 
     domain = Input(DOMAIN).need("hydrography", at="release",
                                 span_km=_REACH_LENGTH_KM)
