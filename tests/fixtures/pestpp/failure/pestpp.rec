@@ -1,0 +1,1152 @@
+             pestpp-ies - a GLM iterative Ensemble Smoother
+                      for PEST(++) datasets 
+
+                 by the PEST++ development team
+
+
+
+
+
+version: 5.2.27
+binary compiled on Jun 29 2026 at 14:20:02
+using control file: "pestpp.pst"
+in directory: "/data"
+on host: "c4576dc46dfe"
+on a(n) linux operating system
+with release configuration
+started at 11/11/26 23:42:01
+
+Note: 3 unused lines in pest control file:
+  -->  line number 6: '2.000000E+01  -3.000000E+00   3.000000E-01   1.000000E-02        -7' 
+  -->  line number 10: '0         0         0' 
+  -->  line number 12: '1' 
+
+    This software has been approved for release by the
+    U.S.Geological Survey(USGS).Although the software has 
+    been subjected to rigorous review, the USGS reserves the
+    right to update the software as needed pursuant to further
+    analysisand review.No warranty, expressed or implied, is 
+    made by the USGS or the U.S.Government as to the
+    functionality of the softwareand related material nor shall
+    the fact of release constitute any such warranty.
+    Furthermore, the software is released on condition that
+    neither the USGS nor the U.S.Government shall be held
+    liable for any damages resulting from its authorized 
+    or unauthorized use.
+
+
+Case dimensions:- 
+    Number of parameters = 5
+    Number of adjustable parameters = 5
+    Number of observations = 725
+    Number of non-zero weighted observations = 725
+    Number of prior estimates = 0
+
+PEST Control Information
+    relparmax = 10
+    facparmax = 10
+    facorig = 0.001
+    phiredswh = 0.1
+    noptmax = 3
+    phiredstp = 0.01
+    nphistp = 3
+    nphinored = 3
+    relparstp = 0.01
+    nrelpar = 3
+
+
+    PEST++ OPTIONS: 
+
+...general options (used in multiple tools): 
+svd_pack: redsvd
+lambda_scale_fac: 0.75,1,1.1,
+forgive_unknown_args: 0
+max_run_fail: 3
+panther_poll_interval: 1
+parameter_covariance: 
+observation_covariance: 
+hotstart_resfile: 
+overdue_resched_fac: 1.15
+overdue_giveup_fac: 100
+overdue_giveup_minutes: 1e+30
+condor_submit_file: 
+tie_by_group: 0
+par_sigma_range: 4
+enforce_tied_bounds: 0
+debug_parse_only: 0
+check_tplins: 1
+fill_tpl_zeros: 0
+tpl_force_decimal: 0
+additional_ins_delimiters: ,
+random_seed: 358183147
+num_tpl_ins_threads: 1
+save_binary: 0
+save_dense: 0
+ensemble_output_precision: 20
+panther_echo: 1
+panther_agent_restart_on_error: 0
+panther_agent_no_ping_timeout_secs: -1
+panther_debug_loop: 0
+debug_check_par_en_consistency: 0
+panther_agent_freeze_on_fail: 0
+panther_transfer_on_finish: 
+panther_transfer_on_fail: 
+panther_timeout_milliseconds: -999
+panther_echo_interval_milliseconds: 1000
+panther_persistent_workers: 1
+
+...pestpp-glm specific options:
+max_n_super: 1000000
+super_eigthresh: 1e-06
+n_iter_base: 1000000
+n_iter_super: 0
+super_relparmax: 0.1
+max_super_frz_iter: 20
+max_reg_iter: 20
+lambdas: 0.1,1,10,100,1000,
+iteration_summary: 0
+der_forgive: 1
+uncertainty: 1
+forecasts: 
+base_jacobian: 
+glm_num_reals: 0
+jac_scale: 1
+glm_normal_form: DIAG
+glm_debug_der_fail: 0
+glm_debug_lamb_fail: 0
+glm_debug_real_fail: 0
+glm_accept_mc_phi: 0
+glm_rebase_super: 0
+glm_iter_mc: 0
+glm_high_2nd_iter_phi: 0
+
+...pestpp-swp options:
+sweep_parameter_csv_file: 
+sweep_output_csv_file: sweep_out.csv
+sweep_chunk: 500
+sweep_forgive: 0
+sweep_base_run: 0
+sweep_include_regul_phi: 0
+
+...pestpp-opt options:
+opt_objective_function: 
+opt_coin_log: 1
+opt_skip_final: 0
+opt_std_weights: 0
+opt_stack_size: 0
+opt_par_stack: 
+opt_obs_stack: 
+opt_decision_variable_groups: 
+opt_external_variable_groups: 
+opt_constraint_groups: 
+opt_risk: 0.5
+opt_iter_derinc_fac: 1
+opt_direction: 1
+opt_iter_tol: 0.001
+opt_recalc_fosm_every: 1
+opt_chance_points: SINGLE
+opt_chance_schedule: 
+
+...pestpp-sqp options:
+sqp_dv_en: 
+sqp_obs_restart_en: 
+sqp_search_method: LINE
+sqp_solve_method: NULL
+sqp_num_reals: -1
+sqp_num_refined_search_pts: 1
+sqp_subset_size: -10
+sqp_update_hessian: 1
+sqp_hessian_update_method: BFGS
+sqp_alpha_mults:
+  0.001
+  0.005
+  0.01
+  0.1
+  0.5
+  1
+sqp_filter_tol: 0.001
+sqp_working_set_tol: 0.1
+sqp_cma_c1: -1
+sqp_cma_cmu: -1
+sqp_cma_cc: -1
+sqp_cma_parent_num: -1
+sqp_cma_stepsize_control: 0
+sqp_cma_reinflation_factor: -1
+sqp_max_consec_infeas_ies: 3
+sqp_max_reinflation_cond_num: 500
+sqp_scale_down_factor: 1
+sqp_hess_max_cond_num: 1e+08
+sqp_save_cov_every: -1
+sqp_enforce_bounds: 0
+sqp_viol_pad: 0.0001
+sqp_reset_hessian_every: -1
+sqp_rescale_search_dir: 1
+sqp_seek_feas_max_iter: 3
+sqp_risk: 0.5
+sqp_powell_damping_factor: 0.2
+sqp_debug_hessian: 0
+sqp_debug_cmaes: 0
+sqp_debug_stosag_grad: 0
+
+...pestpp-mou options:
+mou_generator: PSO
+mou_population_size: 100
+mou_dv_population_file: 
+mou_obs_population_restart_file: 
+mou_objectives: 
+mou_max_archive_size: 500
+mou_risk_objective: 0
+mou_verbose_level: 1
+mou_env_selector: NSGA
+mou_mating_selector: TOURNAMENT
+mou_crossover_prob: 0.75
+mou_mutation_prob: -999
+mou_de_f: 0.8
+mou_save_population_every: -1
+mou_pso_omega: 0.7
+mou_pso_inertia (IINER, FINERT, INITER): 
+ 0.7  0.4  0 
+mou_pso_social_const: 
+ 2
+mou_pso_cognitive: 
+ 2
+mou_pso_alpha: 1
+mou_pso_rramp: -500
+mou_pso_rfit: 2
+mou_pso_vmax_factor: 0.8
+mou_pso_dv_bound_handling: CLAMP
+mou_ppd_beta: 0.5
+mou_fit_gamma: 0.25
+mou_fit_epsilon: 0.05
+mou_population_schedule: 
+mou_simplex_reflections:10
+mou_simplex_factors: 
+ 0.5
+ 0.6
+ 0.7
+ 0.8
+mou_simplex_mutation: 0
+mou_use_multigen:0
+mou_shuffle_fixed_pars: 0
+mou_debug_dv_handling: 0
+
+...shared pestpp-ies/pestpp-da options:
+(note: 'da' args override 'ies' args when using pestpp-da)
+ies_parameter_ensemble: 
+ies_observation_ensemble: 
+ies_weights_ensemble: 
+ies_restart_parameter_ensemble: 
+ies_restart_observation_ensemble: 
+ies_use_approximate_solution: 1
+ies_lambda_mults: 0.1,1,10,
+ies_initial_lambda: 0
+ies_use_approx: 1
+ies_subset_size: -10
+ies_reg_factor: 0
+ies_verbose_level: 1
+ies_use_prior_scaling: 0
+ies_num_reals: 10
+ies_bad_phi: 1.79769e+308
+ies_bad_phi_sigma: 1.79769e+308
+ies_include_base: 1
+ies_use_empirical_prior: 0
+ies_group_draws: 1
+ies_enforce_bounds: 1
+ies_localizer: 
+ies_accept_phi_fac: 1.05
+ies_lambda_inc_fac: 10
+ies_lambda_dec_fac: 0.75
+ies_save_lambda_ensembles: 0
+ies_subset_how: RANDOM
+ies_localize_how: PARAMETERS
+ies_num_threads: -1
+ies_debug_fail_subset: 0
+ies_debug_fail_remainder: 0
+ies_debug_bad_phi: 0
+ies_debug_upgrade_only: 0
+ies_debug_high_subset_phi: 0
+ies_debug_high_upgrade_phi: 0
+ies_csv_by_reals: 1
+ies_autoadaloc: 0
+ies_autoadaloc_sigma_dist: 1
+ies_enforce_chglim: 0
+ies_center_on: 
+ies_no_noise: 0
+ies_drop_conflicts: 0
+ies_save_rescov:0
+ies_pdc_sigma_distance: -1
+ies_use_mda: 0
+ies_mda_init_fac: 10
+ies_mda_dec_fac: 0.5
+ies_localization_type: LOCAL
+ies_upgrades_in_memory: 1
+ies_ordered_binary: 1
+ies_multimodal_alpha: 0
+ies_multimodal_weight_exponent: 0
+ies_multimodal_phi_weight: 0.5
+ies_localizer_forgive_extra: 0
+ies_phi_factors_file: 
+ies_phi_factors_by_real: 0
+ies_n_iter_reinflate: 
+0,
+ies_reinflate_factor: 
+1,
+ies_updatebyreals: 0
+ies_autoadaloc_indicator_pars: 
+
+ies_run_realname: ies_reinflate_num_reals: 
+0,ies_use_phi_lambda_iters: 0
+
+pestpp-sen options: 
+gsa_method: MORRIS
+gsa_morris_pooled_obs: 0
+gsa_morris_obs_sen: 1
+gsa_morris_p: 4
+gsa_morris_r: 4
+gsa_morris_delta: 0.6666
+gsa_sobol_samples: 4
+gsa_sobol_par_dist: norm
+
+pestpp-da options (those not shared with pestpp-ies):
+da_parameter_cycle_table: 
+da_observation_cycle_table: 
+da_hotstart_cycle: 0
+da_stop_cycle: 1000000000
+da_use_simulated_states: 1
+da_noptmax_schedule: 
+
+
+
+Model command line(s):- 
+    python forward_run.py
+
+Model interface files:-
+    template files:
+      npf_k_cn_inst0_constant.csv.tpl
+      npf_k33_cn_inst0_constant.csv.tpl
+      sto_ss_cn_inst0_constant.csv.tpl
+      sto_sy_cn_inst0_constant.csv.tpl
+      rch_recharge_cn_inst0_constant.csv.tpl
+    model input files:
+      mult/npf_k_cn_inst0_constant.csv
+      mult/npf_k33_cn_inst0_constant.csv
+      mult/sto_ss_cn_inst0_constant.csv
+      mult/sto_sy_cn_inst0_constant.csv
+      mult/rch_recharge_cn_inst0_constant.csv
+
+    instruction files:
+      heads.csv.ins
+      sfr.csv.ins
+    model output files:
+      heads.csv
+      sfr.csv
+
+
+Parameter group information
+NAME          INCREMENT TYPE     DERIVATIVE INCREMENT    INCREMENT LOWER BOUND  FORCE CENTRAL     INCREMENT MULTIPLIER
+npf_k               RELATIVE                     0.01                        0         SWITCH                        2
+npf_k33             RELATIVE                     0.01                        0         SWITCH                        2
+sto_ss              RELATIVE                     0.01                        0         SWITCH                        2
+sto_sy              RELATIVE                     0.01                        0         SWITCH                        2
+rch_recharge        RELATIVE                     0.01                        0         SWITCH                        2
+
+
+
+Parameter information
+NAME                                           TRANSFORMATION        CHANGE LIMIT  INITIAL VALUE    LOWER BOUND    UPPER BOUND        GROUP          SCALE         OFFSET  DERIVATIVE COMMAND
+pname:npf_k_cn_inst:0_ptype:cn_pstyle:m        log                     FACTOR              1            0.1             10        npf_k              1              0                   1
+pname:npf_k33_cn_inst:0_ptype:cn_pstyle:m      log                     FACTOR              1            0.1             10      npf_k33              1              0                   1
+pname:sto_ss_cn_inst:0_ptype:cn_pstyle:m       log                     FACTOR              1            0.1             10       sto_ss              1              0                   1
+pname:sto_sy_cn_inst:0_ptype:cn_pstyle:m       log                     FACTOR              1            0.9            1.1       sto_sy              1              0                   1
+pname:rch_recharge_cn_inst:0_ptype:cn_pstyle:m log                     FACTOR              1            0.5            1.5 rch_recharge              1              0                   1
+
+
+
+Observation information
+NAME                                                            VALUE                                   GROUP              WEIGHT
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:1                34.2596 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:122              34.5264 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:153              34.4427 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:183               34.317 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:214               34.177 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:245              34.0626 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:275              34.0006 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:306              34.0084 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:32               34.3837 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:336              34.0856 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:367               34.214 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:398              34.3541 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:426              34.4571 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:457              34.5097 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:487              34.4872 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:518              34.3956 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:548              34.2661 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:579                34.13 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:61               34.4858 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:610              34.0311 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:640              33.9992 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:671              34.0423 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:701               34.146 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:732              34.2849 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-13-10_time:92               34.5415 oname:hds_otype:lst_usecol:trgw-0-13-10                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:1                34.1387 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:122              34.3592 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:153              34.2828 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:183              34.1729 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:214               34.054 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:245              33.9598 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:275              33.9121 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:306               33.925 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:32               34.2484 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:336              33.9964 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:367              34.1094 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:398              34.2291 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:426              34.3145 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:457              34.3544 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:487              34.3297 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:518               34.247 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:548              34.1342 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:579              34.0186 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:61               34.3346 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:610              33.9374 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:640              33.9152 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:671              33.9577 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:701              34.0506 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:732              34.1708 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-15-16_time:92               34.3777 oname:hds_otype:lst_usecol:trgw-0-15-16                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:1                 34.2881  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:122               34.4602  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:153               34.4147  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:183               34.3406  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:214               34.2542  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:245               34.1808  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:275               34.1395  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:306               34.1401  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:32                34.3606  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:336               34.1826  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:367               34.2566  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:398               34.3394  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:426               34.4017  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:457               34.4355  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:487                34.425  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:518               34.3731  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:548               34.2972  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:579               34.2158  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:61                34.4241  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:610               34.1551  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:640               34.1336  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:671               34.1564  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:701               34.2158  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:732               34.2974  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-15_time:92                34.4631  oname:hds_otype:lst_usecol:trgw-0-2-15                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:1                  34.5827   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:122                 34.865   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:153                34.8107   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:183                34.7062   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:214                34.5737   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:245                34.4519   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:275                34.3739   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:306                34.3565   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:32                  34.683   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:336                34.4052   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:367                34.5079   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:398                34.6326   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:426                34.7337   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:457                34.7988   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:487                34.7985   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:518                34.7332   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:548                34.6252   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:579                34.5005   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:61                 34.7818   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:610                34.3989   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:640                34.3516   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:671                  34.37   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:701                 34.448   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:732                34.5669   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-2-9_time:92                 34.8533   oname:hds_otype:lst_usecol:trgw-0-2-9                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:1                34.1462 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:122              34.4204 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:153              34.3321 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:183              34.2004 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:214              34.0546 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:245               33.936 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:275              33.8721 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:306              33.8811 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:32               34.2746 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:336              33.9624 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:367               34.097 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:398              34.2439 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:426              34.3518 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:457              34.4071 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:487              34.3838 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:518              34.2883 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:548              34.1532 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:579              34.0111 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:61               34.3803 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:610              33.9077 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:640              33.8742 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:671              33.9191 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:701              34.0274 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:732              34.1726 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-21-10_time:92               34.4374 oname:hds_otype:lst_usecol:trgw-0-21-10                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:1                33.9898 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:122              34.1724 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:153               34.106 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:183              34.0122 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:214               33.912 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:245              33.8334 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:275              33.7942 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:306              33.8076 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:32               34.0858 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:336              33.8706 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:367              33.9679 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:398              34.0695 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:426              34.1408 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:457              34.1728 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:487                34.15 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:518              34.0786 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:548              33.9822 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:579              33.8843 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:61               34.1568 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:610              33.8163 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:640              33.7992 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:671              33.8375 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:701              33.9181 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:732              34.0207 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-22-15_time:92               34.1906 oname:hds_otype:lst_usecol:trgw-0-22-15                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:1                 34.3114  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:122               34.6385  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:153               34.5604  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:183               34.4258  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:214               34.2634  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:245               34.1198  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:275               34.0309  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:306               34.0183  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:32                34.4385  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:336                34.087  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:367               34.2215  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:398               34.3805  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:426               34.5068  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:457               34.5852  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:487               34.5803  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:518               34.4939  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:548               34.3558  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:579               34.1992  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:61                34.5574  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:610               34.0745  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:640               34.0195  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:671               34.0477  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:701               34.1498  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:732               34.3015  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-24-4_time:92                34.6361  oname:hds_otype:lst_usecol:trgw-0-24-4                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:1                 34.1725  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:122               34.4815  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:153               34.3885  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:183               34.2461  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:214               34.0853  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:245               33.9513  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:275               33.8752  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:306               33.8785  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:32                34.3145  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:336               33.9625  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:367               34.1077  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:398               34.2696  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:426               34.3914  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:457               34.4577  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:487               34.4377  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:518               34.3373  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:548               34.1905  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:579               34.0331  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:61                34.4305  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:610               33.9156  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:640               33.8736  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:671               33.9172  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:701               34.0323  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:732               34.1907  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-26-6_time:92                34.4959  oname:hds_otype:lst_usecol:trgw-0-26-6                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:1                33.9072 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:122              34.0752 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:153              34.0158 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:183              33.9305 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:214              33.8384 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:245              33.7656 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:275              33.7296 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:306              33.7413 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:32               33.9909 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:336              33.7982 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:367              33.8862 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:398              33.9781 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:426              34.0428 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:457              34.0722 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:487              34.0521 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:518               33.988 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:548              33.9013 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:579              33.8126 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:61                34.057 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:610              33.7506 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:640              33.7345 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:671              33.7688 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:701              33.8415 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:732              33.9342 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-29-15_time:92               34.0899 oname:hds_otype:lst_usecol:trgw-0-29-15                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:1                  34.6121   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:122                34.9033   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:153                34.8495   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:183                34.7437   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:214                34.6082   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:245                34.4825   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:275                34.4008   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:306                34.3808   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:32                 34.7139   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:336                34.4286   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:367                34.5324   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:398                34.6598   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:426                34.7639   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:457                34.8321   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:487                34.8337   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:518                34.7685   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:548                 34.659   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:579                34.5313   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:61                 34.8152   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:610                34.4264   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:640                34.3763   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:671                34.3931   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:701                34.4713   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:732                34.5924   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-3-8_time:92                 34.8895   oname:hds_otype:lst_usecol:trgw-0-3-8                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:1                  33.982  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:122               34.2244  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:153               34.1426  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:183               34.0234  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:214               33.8933  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:245               33.7893  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:275               33.7352  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:306               33.7467  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:32                34.1001  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:336               33.8221  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:367               33.9438  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:398               34.0747  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:426               34.1694  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:457               34.2157  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:487               34.1916  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:518               34.1037  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:548               33.9819  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:579               33.8558  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:61                34.1942  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:610                33.766  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:640               33.7395  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:671               33.7827  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:701               33.8816  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:732               34.0119  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-33-7_time:92                34.2427  oname:hds_otype:lst_usecol:trgw-0-33-7                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:1                 33.887 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:122              34.0941 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:153               34.013 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:183              33.9027 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:214               33.788 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:245              33.7006 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:275              33.6595 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:306              33.6789 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:32               34.0035 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:336              33.7549 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:367              33.8691 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:398              33.9866 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:426              34.0674 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:457              34.1007 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:487                34.07 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:518              33.9836 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:548              33.8704 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:579              33.7583 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:61               34.0848 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:610              33.6832 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:640              33.6677 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:671              33.7156 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:701              33.8113 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:732              33.9308 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-34-10_time:92                 34.12 oname:hds_otype:lst_usecol:trgw-0-34-10                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:1                  34.8716   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:122                35.2177   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:153                35.1816   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:183                35.0805   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:214                 34.934   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:245                34.7842   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:275                34.6737   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:306                34.6251   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:32                 34.9735   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:336                34.6523   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:367                34.7476   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:398                34.8809   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:426                35.0005   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:457                35.0928   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:487                35.1173   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:518                 35.068   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:548                34.9623   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:579                34.8251   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:61                 35.0851   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:610                34.6999   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:640                34.6258   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:671                34.6205   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:701                34.6858   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:732                34.8067   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-0-9-1_time:92                 35.1807   oname:hds_otype:lst_usecol:trgw-0-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:1                34.2539 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:122              34.5186 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:153              34.4347 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:183              34.3094 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:214              34.1704 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:245               34.057 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:275              33.9959 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:306              34.0044 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:32               34.3788 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:336              34.0818 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:367              34.2099 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:398              34.3493 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:426              34.4515 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:457              34.5032 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:487                34.48 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:518              34.3884 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:548              34.2592 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:579              34.1238 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:61               34.4799 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:610              34.0258 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:640              33.9948 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:671              34.0383 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:701               34.142 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:732              34.2805 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-13-10_time:92               34.5345 oname:hds_otype:lst_usecol:trgw-2-13-10                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:1                34.1335 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:122               34.352 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:153              34.2756 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:183              34.1663 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:214              34.0484 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:245              33.9551 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:275              33.9079 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:306              33.9212 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:32               34.2436 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:336              33.9926 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:367              34.1052 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:398              34.2242 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:426              34.3089 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:457              34.3481 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:487              34.3231 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:518              34.2406 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:548              34.1282 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:579              34.0133 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:61               34.3289 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:610              33.9328 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:640              33.9112 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:671              33.9539 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:701              34.0466 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:732              34.1663 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-15-16_time:92                34.371 oname:hds_otype:lst_usecol:trgw-2-15-16                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:1                 34.3362  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:122               34.5371  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:153               34.4844  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:183               34.3983  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:214               34.2977  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:245               34.2119  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:275               34.1633  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:306               34.1633  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:32                34.4204  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:336               34.2123  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:367               34.2985  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:398               34.3952  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:426               34.4681  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:457               34.5081  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:487               34.4965  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:518               34.4363  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:548                34.348  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:579                34.253  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:61                34.4944  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:610               34.1818  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:640               34.1561  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:671                34.182  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:701               34.2509  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:732                34.346  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-15_time:92                34.5402  oname:hds_otype:lst_usecol:trgw-2-2-15                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:1                  34.5769   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:122                34.8578   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:153                34.8034   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:183                34.6991   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:214                34.5672   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:245                 34.446   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:275                34.3685   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:306                34.3516   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:32                 34.6772   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:336                34.4004   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:367                34.5029   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:398                34.6273   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:426                34.7279   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:457                34.7925   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:487                34.7919   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:518                34.7265   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:548                34.6188   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:579                34.4945   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:61                 34.7756   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:610                34.3934   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:640                34.3466   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:671                34.3652   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:701                34.4431   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:732                34.5618   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-2-9_time:92                 34.8465   oname:hds_otype:lst_usecol:trgw-2-2-9                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:1                34.1406 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:122              34.4126 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:153              34.3239 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:183              34.1926 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:214              34.0478 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:245              33.9303 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:275              33.8673 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:306              33.8771 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:32               34.2699 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:336              33.9587 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:367              34.0932 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:398              34.2393 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:426              34.3464 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:457              34.4006 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:487              34.3766 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:518              34.2809 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:548              34.1461 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:579              34.0047 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:61               34.3745 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:610              33.9023 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:640              33.8697 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:671              33.9152 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:701              34.0236 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:732              34.1684 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-21-10_time:92               34.4304 oname:hds_otype:lst_usecol:trgw-2-21-10                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:1                34.0246 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:122              34.2352 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:153              34.1582 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:183              34.0499 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:214              33.9346 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:245              33.8443 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:275              33.7993 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:306              33.8147 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:32               34.1361 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:336              33.8872 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:367              33.9994 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:398              34.1169 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:426              34.1994 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:457              34.2364 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:487              34.2099 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:518              34.1272 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:548              34.0158 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:579              33.9029 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:61               34.2178 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:610              33.8247 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:640              33.8051 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:671              33.8491 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:701               33.942 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:732              34.0605 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-22-15_time:92               34.2566 oname:hds_otype:lst_usecol:trgw-2-22-15                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:1                 34.3057  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:122               34.6311  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:153               34.5525  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:183               34.4178  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:214                34.256  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:245               34.1132  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:275               34.0253  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:306               34.0135  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:32                34.4336  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:336               34.0829  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:367               34.2175  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:398               34.3762  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:426               34.5019  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:457               34.5793  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:487               34.5736  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:518               34.4866  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:548               34.3484  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:579               34.1923  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:61                 34.552  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:610               34.0683  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:640               34.0142  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:671               34.0433  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:701               34.1458  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:732               34.2974  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-24-4_time:92                34.6297  oname:hds_otype:lst_usecol:trgw-2-24-4                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:1                 34.1669  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:122               34.4737  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:153               34.3802  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:183                34.238  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:214               34.0781  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:245               33.9452  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:275                 33.87  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:306               33.8743  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:32                34.3102  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:336               33.9589  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:367               34.1042  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:398               34.2655  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:426               34.3865  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:457               34.4516  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:487               34.4307  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:518               34.3297  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:548                34.183  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:579               34.0262  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:61                 34.425  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:610               33.9098  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:640               33.8688  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:671               33.9133  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:701               34.0287  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:732               34.1869  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-26-6_time:92                34.4891  oname:hds_otype:lst_usecol:trgw-2-26-6                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:1                 33.942 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:122              34.1347 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:153              34.0664 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:183              33.9685 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:214               33.863 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:245              33.7799 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:275              33.7388 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:306               33.752 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:32               34.0383 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:336              33.8169 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:367              33.9177 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:398              34.0233 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:426              34.0978 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:457              34.1317 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:487              34.1087 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:518               34.035 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:548              33.9354 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:579              33.8337 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:61               34.1141 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:610              33.7628 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:640              33.7444 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:671              33.7833 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:701              33.8665 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:732              33.9728 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-29-15_time:92               34.1518 oname:hds_otype:lst_usecol:trgw-2-29-15                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:1                  34.6064   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:122                34.8962   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:153                34.8422   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:183                34.7366   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:214                34.6015   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:245                34.4764   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:275                34.3953   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:306                34.3757   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:32                 34.7082   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:336                34.4237   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:367                34.5274   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:398                34.6545   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:426                34.7582   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:457                34.8259   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:487                34.8271   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:518                34.7619   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:548                34.6525   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:579                34.5252   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:61                 34.8091   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:610                34.4208   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:640                34.3711   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:671                34.3882   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:701                34.4665   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:732                34.5873   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-3-8_time:92                 34.8829   oname:hds_otype:lst_usecol:trgw-2-3-8                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:1                 33.9764  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:122               34.2166  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:153               34.1348  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:183               34.0161  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:214               33.8871  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:245               33.7842  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:275               33.7308  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:306               33.7428  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:32                34.0952  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:336               33.8183  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:367               33.9396  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:398               34.0697  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:426               34.1636  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:457               34.2091  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:487               34.1845  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:518               34.0967  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:548               33.9753  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:579                 33.85  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:61                34.1881  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:610               33.7611  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:640               33.7353  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:671               33.7789  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:701               33.8777  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:732               34.0073  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-33-7_time:92                34.2355  oname:hds_otype:lst_usecol:trgw-2-33-7                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:1                33.8815 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:122               34.086 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:153              34.0053 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:183              33.8958 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:214              33.7823 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:245               33.696 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:275              33.6555 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:306              33.6753 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:32               33.9985 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:336              33.7511 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:367              33.8647 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:398              33.9813 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:426              34.0612 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:457              34.0938 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:487              34.0627 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:518              33.9766 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:548              33.8641 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:579              33.7529 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:61               34.0784 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:610              33.6787 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:640              33.6638 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:671              33.7119 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:701              33.8072 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:732              33.9259 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-34-10_time:92               34.1125 oname:hds_otype:lst_usecol:trgw-2-34-10                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:1                  34.8657   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:122                35.2112   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:153                35.1747   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:183                35.0733   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:214                34.9268   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:245                34.7773   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:275                34.6671   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:306                 34.619   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:32                 34.9677   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:336                34.6466   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:367                34.7422   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:398                34.8756   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:426                34.9952   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:457                35.0872   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:487                35.1114   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:518                35.0617   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:548                34.9558   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:579                34.8185   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:61                 35.0792   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:610                34.6935   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:640                34.6197   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:671                34.6147   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:701                34.6804   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:732                34.8015   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:hds_otype:lst_usecol:trgw-2-9-1_time:92                 35.1745   oname:hds_otype:lst_usecol:trgw-2-9-1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:1                      1194.16       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:122                    1977.25       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:153                     1679.7       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:183                    1272.07       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:214                     850.09       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:245                     533.09       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:275                    389.755       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:306                    459.958       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:32                     1630.27       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:336                    731.385       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:367                    1142.87       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:398                    1568.41       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:426                     1859.7       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:457                    1976.02       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:487                    1857.03       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:518                    1537.06       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:548                    1124.42       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:579                    723.424       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:61                     1932.78       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:610                    461.516       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:640                    411.956       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:671                    584.733       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:701                    929.831       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:732                    1362.95       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:gage_1_time:92                     2068.85       oname:sfr_otype:lst_usecol:gage_1                   1
+oname:sfr_otype:lst_usecol:headwater_time:1                  -637.837    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:122                -1080.11    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:153                -930.741    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:183                  -715.7    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:214                -483.554    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:245                -299.143    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:275                -202.841    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:306                -223.401    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:32                 -861.402    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:336                -358.868    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:367                -578.504    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:398                -814.677    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:426                -984.551    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:457                -1064.95    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:487                -1016.86    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:518                -854.043    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:548                -632.036    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:579                -405.813    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:61                  -1030.5    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:610                -247.434    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:640                 -202.62    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:671                -282.133    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:701                -461.845    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:732                -698.153    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:headwater_time:92                 -1115.82    oname:sfr_otype:lst_usecol:headwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:1                  -472.705    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:122                -791.494    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:153                -673.644    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:183                -509.304    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:214                -337.214    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:245                -206.688    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:275                -145.077    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:306                -167.583    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:32                 -635.719    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:336                 -271.92    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:367                 -437.24    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:398                -612.819    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:426                -736.861    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:457                -791.535    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:487                -749.708    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:518                -623.518    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:548                -456.967    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:579                -292.248    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:61                 -762.641    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:610                -181.932    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:640                 -155.35    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:671                    -218    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:701                -353.043    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:732                -528.888    oname:sfr_otype:lst_usecol:tailwater                   1
+oname:sfr_otype:lst_usecol:tailwater_time:92                  -823.63    oname:sfr_otype:lst_usecol:tailwater                   1
+
+
+
+Prior information
+
+   no prior information provided
+
+
+
+PEST SVD Information
+    maxsing = 10000000
+    eigthresh = 1e-06
+
+
+
+
+
+...resetting max_run_fail to 1
+...resetting overdue_giveup_fac to 2.0
+...resetting overdue_resched_fac to 1.15
+
+  ---  initializing  ---  
+...using glm algorithm
+...using REDSVD for truncated svd solve
+...maxsing: 10000000
+...eigthresh:  1e-06
+...initializing localizer
+...not using localization
+...using lambda multipliers: 0.1 , 1 , 10 , 
+...using lambda scaling factors: 0.75 , 1 , 1.1 , 
+...acceptable phi factor:  1.05
+...lambda increase factor:  10
+...lambda decrease factor:  0.75
+...max run fail:  1
+...initializing prior parameter covariance matrix
+...parcov loaded  from parameter bounds, using par_sigma_range 4
+...initializing observation noise covariance matrix
+...obscov loaded  from observation weights
+...drawing parameter realizations:  10
+...not using prior parameter covariance matrix scaling
+
+  ---  NOTE: no obs-noise-specific options have been passed, resetting to `ies_no_noise` to true  ---  
+...initializing no-noise observation ensemble of :  10
+...setting weights ensemble from control file weights
+...saved weight ensemble to  pestpp.weights.csv
+checking for denormal values in weights ensemble
+...adding 'base' parameter values to ensemble
+...adding 'base' observation values to ensemble
+...adding 'base' weight values to weight ensemble
+checking for denormal values in pe
+...saved initial parameter ensemble to  pestpp.0.par.csv
+checking for denormal values in obs + noise ensemble
+...saved obs+noise observation ensemble (obsval + noise realizations) to  pestpp.obs+noise.csv
+...using subset in lambda testing, percentage of realizations used in subset testing:  10
+...subset how:  RANDOM
+...centering on ensemble mean vector
+...running initial ensemble of size 10
+
+   ************   
+    EnsembleMethod error: all realizations failed during initial evaluation
+

@@ -1,0 +1,6 @@
+parameter_name,n_samples,sen_mean,sen_mean_abs,sen_std_dev
+pname:npf_k_cn_inst:0_ptype:cn_pstyle:m,4,1.52411e+07,2.18166e+07,2.4647e+07
+pname:npf_k33_cn_inst:0_ptype:cn_pstyle:m,4,3.04256e+06,4.93301e+06,8.39e+06
+pname:sto_ss_cn_inst:0_ptype:cn_pstyle:m,4,-132807,146083,171622
+pname:sto_sy_cn_inst:0_ptype:cn_pstyle:m,4,508407,770978,862206
+pname:rch_recharge_cn_inst:0_ptype:cn_pstyle:m,4,290455,7.01886e+07,8.33922e+07

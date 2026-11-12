@@ -15,6 +15,7 @@ import trid3nt_server.workflows.solver.solver as solver_mod
 from trid3nt_server.store import objects as storage
 from trid3nt_server.workflows.geoclaw.engine import _spec as geoclaw_spec
 from trid3nt_server.workflows.modflow.engine import _spec as modflow_spec
+from trid3nt_server.workflows.pestpp.engine import _spec as pestpp_spec
 from trid3nt_server.workflows.telemac.engine import _spec as telemac_spec
 
 _TELEMAC = (" ITERATION      500    TIME:  6 MN\n"
@@ -28,11 +29,15 @@ _MODFLOW = ("  Solving:  Stress period:     1    Time step:     1\n"
 _GEOCLAW = (" Reading data file: claw.data\n"
             "forrtl: severe (174): SIGSEGV, segmentation fault occurred\n"
             "Image              PC                Routine            Line        Source\n")
+# RECORDED: the end of a pestpp-ies record whose every trial's model failed (tests/fixtures/pestpp/failure).
+_PESTPP = (Path(__file__).resolve().parents[1] / "fixtures" / "pestpp" / "failure" / "pestpp.rec"
+           ).read_text(encoding="utf-8")[-600:]
 
 _ENGINES = [
     ("telemac", telemac_spec, "full_listing.log", _TELEMAC, "PLANTE: PROGRAM STOPPED AFTER AN ERROR"),
     ("modflow", modflow_spec, "mfsim.lst", _MODFLOW, "Model did not converge in outer iteration 100"),
     ("geoclaw", geoclaw_spec, "geoclaw.stdout", _GEOCLAW, "forrtl: severe (174)"),
+    ("pestpp", pestpp_spec, "pestpp.rec", _PESTPP, "all realizations failed during initial evaluation"),
 ]
 
 

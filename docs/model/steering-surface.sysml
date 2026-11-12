@@ -449,6 +449,17 @@ package SteeringSurface {
         port stageOut : StageOut;
     }
 
+    part pestppStage : Sheet {
+        doc /*
+        PEST++'s study directory: the control file, its template and instruction
+        files and the model files, checked against the control file and staged
+        through the one stager.
+
+        code: trid3nt_server/workflows/pestpp/staging.py
+        */
+        port stageOut : StageOut;
+    }
+
     part fill : Fill {
         doc /*
         code: trid3nt_server/workflows/runtime/fill.py
@@ -559,6 +570,9 @@ package SteeringSurface {
 
     interface geoclawStaged : StageRequest
         connect geoclawStage.stageOut to stager.stageIn;
+
+    interface pestppStaged : StageRequest
+        connect pestppStage.stageOut to stager.stageIn;
 
     interface canvasAnswered : DrawnValue
         connect canvasGate.drawOut to fill.drawIn;

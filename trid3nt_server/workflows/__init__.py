@@ -9,5 +9,6 @@ from __future__ import annotations
 from .telemac import engine as _telemac_engine  # noqa: F401
 from .modflow import engine as _modflow_engine  # noqa: F401
 from .geoclaw import engine as _geoclaw_engine  # noqa: F401
+from .pestpp import engine as _pestpp_engine  # noqa: F401
 
 __all__: list[str] = []

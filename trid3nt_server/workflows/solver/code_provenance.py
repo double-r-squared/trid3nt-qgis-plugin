@@ -24,6 +24,7 @@ ENGINE_PATHS: dict[str, tuple[str, ...]] = {
     "telemac": ("workers/telemac/", "trid3nt_server/workflows/telemac/"),
     "modflow": ("workers/modflow/", "trid3nt_server/workflows/modflow/"),
     "geoclaw": ("workers/geoclaw/", "trid3nt_server/workflows/geoclaw/"),
+    "pestpp": ("workers/pestpp/", "trid3nt_server/workflows/pestpp/"),
 }
 
 #: A commit list is a warning, not a changelog: past this many, the warning says how many and shows the newest.

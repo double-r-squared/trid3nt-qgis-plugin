@@ -10,7 +10,7 @@ speak it and the one file that specializes the executor to it.
 
 | file | what it is |
 | --- | --- |
-| `__init__.py` | Exports nothing; importing it registers the TELEMAC engine's local solve specs. |
+| `__init__.py` | Exports nothing; importing it registers each engine's local solve spec. |
 
 ## Subfolders
 
@@ -21,6 +21,7 @@ speak it and the one file that specializes the executor to it.
 | `telemac/` | The TELEMAC engine: the module wrappers, the templates over them, the code that fills a template, holds it for review and runs it, and the one engine file the executor is specialized by. Has its own map. |
 | `modflow/` | The MODFLOW engine: the engine file the executor is specialized by (image, exit verdict, metrics, solve path), its diagnostics parser, its typed errors, `workflow.py` (the door a template hands its declarations to: mesh, the sheet written, validated and staged under one review, solve, publish), `modules/` - the gwf, gwt and gwe wrappers over the runtime surface, each its dictionary and what a solved run writes - `authoring/` and `templates/` (one package per question). Nothing is re-exported from the package door. |
 | `geoclaw/` | The GeoClaw engine: the engine file the executor is specialized by (image, exit verdict - the worker's own sentences, because GeoClaw's `stop` exits 0 - metrics, solve path), its diagnostics parser, its typed errors, `modules/` - the one `geoclaw` wrapper over the runtime surface, its dictionary extracted from Clawpack's own Data classes. Nothing is re-exported from the package door. |
+| `pestpp/` | The PEST++ engine, a study engine whose trials run a model the study directory carries: the engine file the executor is specialized by (image, exit verdict - the manager's exit code and PEST++'s own `analysis complete` in its record - metrics, solve path), `staging.py` (a study directory staged with its control file as `pestpp.pst` and checked against it), `outputs.py` (the output table: phi per iteration, the parameter ensemble, the residuals per observation, the Morris sensitivity) and its typed errors. No template speaks it yet. |
 
 ## `runtime/` - the template runtime
 
