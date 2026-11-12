@@ -29,6 +29,7 @@ class INPUTS:
 
 
 CAPTIONS = {"phi": "objective function per iteration",
+            "fit": "simulated against observed head",
             "residuals": "simulated minus observed head",
             "parameters": "calibrated multipliers"}
 

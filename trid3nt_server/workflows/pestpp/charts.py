@@ -1,4 +1,5 @@
-"""The study's charts: phi per iteration, the residual at each observation, each parameter's ensemble range.
+"""The study's charts: phi per iteration, simulated against observed, the residual at each observation, each
+parameter's ensemble range.
 
 Each is a chart payload the dock renders, built from what the output table read; nothing here reads a file.
 """
@@ -9,7 +10,7 @@ from typing import Any, Mapping, Sequence
 
 from trid3nt_server.render.charts import build_chart_payload
 
-__all__ = ["parameter_chart", "phi_chart", "residual_chart"]
+__all__ = ["fit_chart", "parameter_chart", "phi_chart", "residual_chart"]
 
 
 def _title(caption: str) -> str:
@@ -31,6 +32,27 @@ def phi_chart(phi: Sequence[Mapping[str, Any]], *, caption: str) -> dict[str, An
         title=_title(caption),
         caption=(f"The {caption}: the ensemble's mean phi falls from {first['mean']:.4g} at iteration "
                  f"{first['iteration']} to {last['mean']:.4g} at iteration {last['iteration']}."))
+
+
+def fit_chart(residuals: Sequence[Mapping[str, Any]], *, caption: str) -> dict[str, Any]:
+    """Simulated against observed at each observation of the base realization, with the one-to-one line."""
+    rows = [{"observation": row["name"], "observed": row["measured"], "simulated": row["modelled"]}
+            for row in residuals]
+    values = [v for row in rows for v in (row["observed"], row["simulated"])]
+    line = [{"observed": v, "simulated": v} for v in ((min(values), max(values)) if values else ())]
+    mean_abs = sum(abs(row["simulated"] - row["observed"]) for row in rows) / len(rows) if rows else None
+    axis = {"type": "quantitative", "scale": {"zero": False}}
+    return build_chart_payload(
+        vega_lite_spec={"layer": [
+            {"data": {"values": line}, "mark": {"type": "line", "strokeDash": [4, 4]},
+             "encoding": {"x": {"field": "observed", **axis, "title": "Observed"},
+                          "y": {"field": "simulated", **axis, "title": "Simulated"}}},
+            {"data": {"values": rows}, "mark": {"type": "point", "filled": True},
+             "encoding": {"x": {"field": "observed", **axis}, "y": {"field": "simulated", **axis},
+                          "tooltip": [{"field": "observation"}, {"field": "observed"}, {"field": "simulated"}]}}]},
+        title=_title(caption),
+        caption=(f"The {caption} at {len(rows)} observations"
+                 + (f"; mean absolute residual {mean_abs:.3g}." if rows else ".")))
 
 
 def residual_chart(residuals: Sequence[Mapping[str, Any]], *, caption: str) -> dict[str, Any]:

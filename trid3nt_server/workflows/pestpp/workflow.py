@@ -294,15 +294,17 @@ class PestppWorkflow(Workflow):
 
     async def _publish_calibrated(self, solved: Mapping[str, Any], *, phi: list, residuals: list,
                          ensemble: Mapping[str, Mapping[str, float]], parameters: list, finished: Any) -> Any:
-        """The calibrated run published as MODFLOW publishes a run, the study's three charts beside it."""
+        """The calibrated run published as MODFLOW publishes a run, the study's four charts beside it."""
         from trid3nt_server.render.formats import Chart, Deliverable, publish
         from trid3nt_server.workflows.modflow.workflow import publish_outputs
 
-        from .charts import parameter_chart, phi_chart, residual_chart
+        from .charts import fit_chart, parameter_chart, phi_chart, residual_chart
 
         record = await publish_outputs(run=solved, sheet=solved["deck_sheet"], outputs=[], captions={}, params={})
         captions = dict(self._states("CAPTIONS", {}))
         items = [Deliverable(product=Chart(payload=phi_chart(phi, caption=captions["phi"])), caption=captions["phi"]),
+                 Deliverable(product=Chart(payload=fit_chart(residuals, caption=captions["fit"])),
+                             caption=captions["fit"]),
                  Deliverable(product=Chart(payload=residual_chart(residuals, caption=captions["residuals"])),
                              caption=captions["residuals"]),
                  Deliverable(product=Chart(payload=parameter_chart(ensemble, parameters,

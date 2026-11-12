@@ -18,7 +18,7 @@ import pytest
 from trid3nt_server.inputs.observation import Observation
 from trid3nt_server.workflows.pestpp import outputs
 from trid3nt_server.workflows.pestpp.authoring import modflow as study_deck
-from trid3nt_server.workflows.pestpp.charts import parameter_chart, phi_chart, residual_chart
+from trid3nt_server.workflows.pestpp.charts import fit_chart, parameter_chart, phi_chart, residual_chart
 from trid3nt_server.workflows.pestpp.errors import PestppError
 from trid3nt_server.workflows.pestpp.workflow import _bounds, ranked
 
@@ -46,6 +46,17 @@ def test_the_residual_is_simulated_minus_observed_on_a_real_well():
     with (_CALIBRATE / "calibrated_study_heads.csv").open() as fh:
         calibrated = float(next(csv.DictReader(fh))["HEAD_1"])
     assert calibrated - read["measured"] == pytest.approx(row["simulated_minus_observed"], abs=1e-9)
+
+
+def test_simulated_against_observed_plots_the_real_well_beside_the_one_to_one_line():
+    residuals = outputs.read_residuals(_CALIBRATE / "study")
+    (read,) = residuals
+    chart = fit_chart(residuals, caption="simulated against observed head")
+    line, points = chart["vega_lite_spec"]["layer"] if "vega_lite_spec" in chart else chart["spec"]["layer"]
+    (point,) = points["data"]["values"]
+    assert (point["observed"], point["simulated"]) == (read["measured"], read["modelled"])
+    assert all(row["observed"] == row["simulated"] for row in line["data"]["values"])
+    assert f"mean absolute residual {abs(read['modelled'] - read['measured']):.3g}" in chart["caption"]
 
 
 def test_phi_falls_over_the_recorded_study_and_the_charts_read_it():
