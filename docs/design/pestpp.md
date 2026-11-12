@@ -3,7 +3,7 @@
 PEST++ (5.2.27, github.com/pestpp/pestpp) runs studies over a model: sensitivity (`pestpp-sen`), ensemble
 calibration (`pestpp-ies`) and the release's other tools. It is an engine like the others - one image, one
 `LocalSolverSpec`, one dictionary, one output table - whose trials run a model the study directory carries.
-One template speaks it, `pestpp_calibrate_modflow`.
+One template speaks it, `calibrate`, over a finished run of any engine with a piece.
 
 ## What it consumes
 
@@ -54,13 +54,21 @@ is the binary's 0 - the ensemble evaluated, nothing calibrated - so a calibratio
 what the study and the run state (every other variable is PEST++'s own default), and the parameter, observation,
 template and instruction tables as CSVs beside it.
 
-## `pestpp_calibrate_modflow`
+## `calibrate`
 
-A finished MODFLOW run (`run`), the arrays and list columns to tune (`parameters`, each a MODFLOW identifier with
-its lower and upper factor - or, as `lower_value` and `upper_value`, its bounds in the run's own unit - and the
-source they are read from; unstated bounds refuse), how many of them to tune (`tune`), the
-moment the wells are asked at (`event_time`) and the wells (`observe`, every groundwater level the source reports
-over the run's ground). `workflow.py` runs one order:
+One study over a finished run (`run`), whatever engine solved it: the run's record names its engine and the study
+takes that engine's PIECE, `authoring/<engine>.py` - the parameter writer, the observation reader, the command a
+trial runs, and the calibrated run's solve and publish. A run of an engine with no piece refuses
+(`PESTPP_ENGINE_UNCALIBRATED`) naming the engines a study calibrates (`workflow.ENGINES`: MODFLOW), and what is
+tunable is the piece's own. Unstated, `run` is this case's finished run of one of those engines: the one there is,
+taken; of several, the one confirmed on the review card, which lists them newest first and offers the newest (AUTO
+takes it, said on the run); none refuses `RUN_NONE_IN_CASE` naming the engines. A stated run wins.
+
+Beside the run: the parameters to tune (`parameters`, each an identifier of the run's engine with its lower and
+upper factor - or, as `lower_value` and `upper_value`, its bounds in the run's own unit - and the source they are
+read from; unstated bounds refuse), how many of them to tune (`tune`), the moment the observations are asked at
+(`event_time`) and the observations (`observe`). `workflow.py` runs one order; over a MODFLOW run
+(`authoring/modflow.py`):
 
 1. The run's staged deck is fetched from where it was staged (`authoring/modflow.py`). Each parameter is a
    multiplier written into its array's own control record through a PEST template - into the FACTOR of an

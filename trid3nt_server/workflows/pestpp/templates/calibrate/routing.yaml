@@ -1,0 +1,16 @@
+summary: CALIBRATE a finished run against what was measured where it was solved, with PEST++ (an
+  ensemble smoother), returning the run solved again with the best parameters.
+routing: 'THE tool for "calibrate this model", "tune the conductivity to the wells", "fit the model to
+  the measured heads". Takes a finished run of this case (`run`: its run id or layer handle; unstated,
+  the case''s own - a MODFLOW run), the parameters to tune as multipliers on the run''s own values
+  (`parameters`, e.g. {"NPF_K": {"lower": 0.1, "upper": 10, "source": "..."}}, or lower_value/upper_value
+  in the run''s unit; bounds stated, cited or refused), and the observations (`observe`, matched over
+  the run''s ground when unstated). State the iterations, keywords={"noptmax": N}; every PEST++ option
+  is settable by name (describe_keywords module "pestpp"). `tune` below the count ranks by sensitivity first.'
+not_for: building a model (modflow_water_table, modflow_plume); a GeoClaw run; predictions under
+  changed forcing
+returns: 'On success the calibrated run''s record (a `LayerURI`): an ordinary run of the same engine
+  solved with the base realization''s last parameters, every output it saves published, with phi per
+  iteration, simulated against observed, the residual at each observation and each multiplier''s
+  ensemble range charted, and the study and its ensemble kept on the run''s record. On failure a dict
+  with `status="error"` + `error_code`.'

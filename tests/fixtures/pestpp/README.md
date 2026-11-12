@@ -28,7 +28,7 @@ base model's own outputs: a synthetic benchmark, read here for file shapes only.
   two whose printed or manual value the binary refuses back (`opt_direction`,
   `mou_simplex_factors`), and `ies_save_binary`, which the binary reads as `save_binary`. The
   dictionary extractor reads them all.
-- `calibrate/` - from the `pestpp_calibrate_modflow_check` canary (a SYNTHETIC zero-fetch aquifer held to a
+- `calibrate/` - from the `calibrate_modflow_check` canary (a SYNTHETIC zero-fetch aquifer held to a
   REAL USGS well): `deck/` and `manifest.json`, the deck and case section the finished water-table run staged;
   `study/`, the pestpp-ies study over it (`pestpp.pst` as the template wrote it, `pestpp.phi.actual.csv`, the
   last ensemble `pestpp.3.par.csv` and the base realization's residuals `pestpp.3.base.rei`, one well); and

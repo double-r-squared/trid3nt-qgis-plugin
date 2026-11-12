@@ -10,7 +10,7 @@ from __future__ import annotations
 import csv
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable, Mapping
 
 from trid3nt_contracts import new_ulid
 
@@ -19,7 +19,7 @@ from trid3nt_server.workflows.solver.staging import new_rundir, stage_run
 
 from .errors import PestppError
 
-__all__ = ["CONTROL_FILENAME", "RECORD_FILENAME", "check_staged", "interface_files", "stage_study"]
+__all__ = ["CONTROL_FILENAME", "RECORD_FILENAME", "check_staged", "fetch_deck", "interface_files", "stage_study"]
 
 CONTROL_FILENAME = "pestpp.pst"
 RECORD_FILENAME = "pestpp.rec"
@@ -110,3 +110,17 @@ async def stage_study(source: Path, *, tool: str, control: str, name: str,
         results=[RECORD_FILENAME, *_RESULTS.get(tool, ())], outputs=list(_OUTPUTS),
         mesh_inputs=[], prefix="pestpp", sheet={}, server_facts={"name": name},
         result_basename=RECORD_FILENAME, check=check_staged, cores=count)
+
+
+def fetch_deck(staged: Iterable[Mapping[str, str]], dest: Path) -> Path:
+    """Every file the finished run staged, downloaded to the name it was staged under -> ``dest``."""
+    from trid3nt_server.store import objects as storage
+
+    dest.mkdir(parents=True, exist_ok=True)
+    s3 = storage.client()
+    for row in staged:
+        bucket, _, key = str(row["gs_uri"])[len("s3://"):].partition("/")
+        target = dest / str(row["dest"])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(s3.get_object(Bucket=bucket, Key=key)["Body"].read())
+    return dest

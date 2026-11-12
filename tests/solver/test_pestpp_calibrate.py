@@ -179,7 +179,7 @@ def test_an_unstated_noptmax_refuses_the_study():
     main._import_tools_registry()
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    workflow = TOOL_REGISTRY["pestpp_calibrate_modflow"].fn.workflow
+    workflow = TOOL_REGISTRY["calibrate"].fn.workflow
     refused = workflow.judged(SimpleNamespace(keywords={}, carried={}))
     assert refused["noptmax"].code == "PESTPP_ITERATIONS_UNSTATED"
     assert "noptmax" not in workflow.judged(SimpleNamespace(keywords={"noptmax": 3}, carried={}))
@@ -233,3 +233,13 @@ def test_a_list_column_stating_two_values_or_a_value_outside_its_bounds_refuses(
     assert refused.value.error_code == "PESTPP_BOUNDS_UNSTATED"
     with pytest.raises(PestppError, match="read INTERNAL"):
         study_deck.multiplier(tmp_path / "one", "NPF_K", lower=1.0, upper=30.0, the_deck=the_deck, absolute=True)
+
+
+def test_the_run_s_engine_picks_its_piece_and_an_engine_with_none_refuses_naming_them():
+    from trid3nt_server.workflows.pestpp.workflow import ENGINES, piece
+
+    assert piece("modflow") is study_deck
+    with pytest.raises(PestppError, match="a study calibrates a run of modflow") as refused:
+        piece("geoclaw")
+    assert refused.value.error_code == "PESTPP_ENGINE_UNCALIBRATED"
+    assert "modflow" in ENGINES

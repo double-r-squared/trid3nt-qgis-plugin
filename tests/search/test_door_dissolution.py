@@ -39,7 +39,7 @@ EXPECTED_TEMPLATES = {
     "modflow_plume",
     "geoclaw_tsunami_inundation",
     "geoclaw_storm_surge",
-    "pestpp_calibrate_modflow",
+    "calibrate",
 }
 
 # The 10 deleted engine-door concierge tools.

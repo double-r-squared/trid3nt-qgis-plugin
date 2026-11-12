@@ -193,6 +193,8 @@ _RECALL_FIXTURE = [
      "drop_minor_divergences"),
     ("make the stream network dendritic so every line flows into one line",
      "drop_minor_divergences"),
+    ("calibrate this groundwater model against the measured well levels", "calibrate"),
+    ("tune the run's parameters so it matches what was measured", "calibrate"),
 ]
 
 #: A question in a data source's own words: it routes to the door, and the door's query names the source.

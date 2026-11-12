@@ -1,4 +1,4 @@
-"""Engine template ``pestpp_calibrate_modflow`` - a finished MODFLOW run's arrays tuned against measured well levels."""
+"""Engine template ``calibrate`` - a finished run's parameters tuned against what was measured where it was solved."""
 
 from __future__ import annotations
 
@@ -8,17 +8,17 @@ from types import MappingProxyType
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.inputs.slots import OBSERVE, RUN
-from trid3nt_server.workflows.pestpp.workflow import PestppWorkflow
+from trid3nt_server.workflows.pestpp.workflow import ENGINES, PestppWorkflow
 from trid3nt_server.workflows.runtime import register_workflow
 
-__all__ = ["CAPTIONS", "INPUTS", "pestpp_calibrate_modflow"]
+__all__ = ["CAPTIONS", "INPUTS", "calibrate"]
 
 
 class INPUTS:
     run = Input(RUN, desc=(
-        "The finished MODFLOW run whose arrays are tuned: its run id, or the handle the case shows for one of "
-        "its layers. Its deck, mesh and frame are the study's model."), coercion=MappingProxyType(
-        {"engines": ("modflow",)}))
+        "The finished run whose parameters are tuned: its run id, or the handle the case shows for one of its "
+        "layers; unstated, this case's finished run, the newest offered where it holds several. Its deck, mesh "
+        "and frame are the study's model."), coercion=MappingProxyType({"engines": ENGINES}))
     parameters = Input()
     tune = Input().stated()
     observe = Input(OBSERVE, desc=(
@@ -29,16 +29,17 @@ class INPUTS:
 
 
 CAPTIONS = {"phi": "objective function per iteration",
-            "fit": "simulated against observed head",
-            "residuals": "simulated minus observed head",
+            "fit": "simulated against observed",
+            "residuals": "simulated minus observed",
             "parameters": "calibrated multipliers"}
 
 _METADATA = AtomicToolMetadata(
-    name="pestpp_calibrate_modflow",
+    name="calibrate",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
     engine="pestpp",
     tier="template",
 )
 
-pestpp_calibrate_modflow = register_workflow(PestppWorkflow, _METADATA, sys.modules[__name__])
+calibrate = register_workflow(PestppWorkflow, _METADATA, sys.modules[__name__])
+"""Engine template ``calibrate``."""

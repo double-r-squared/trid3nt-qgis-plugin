@@ -162,6 +162,13 @@ async def _produce(env: _Env, decl: Input) -> Any:
         measured = await _domain_companion(env, "centerline")
         if measured is not None:
             return measured
+    if producer is None and decl.slot is RUN:
+        # A FINISHED RUN NOBODY NAMED is this case's own, of an engine the row takes; several are offered on
+        # the review card, none refuses.
+        from trid3nt_server.inputs.run import case_run
+
+        named = await case_run(tuple(decl.coercion.get("engines") or ()), label=decl.name, tool=env.workflow)
+        return await _ingested(env, decl, named)
     if producer is None and decl.data_class:
         # A SLOT THAT STATES A NEED: the match reads every fetcher's row
         # and the runtime declares the row it picked, so the pick earns a

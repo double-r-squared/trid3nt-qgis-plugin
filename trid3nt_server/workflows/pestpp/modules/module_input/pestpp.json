@@ -2747,7 +2747,7 @@
     }
   ],
   "inputs": {
-    "pestpp_calibrate_modflow": {
+    "calibrate": {
       "parameters": {
         "type": "dict",
         "desc": "The run's own arrays to tune, each by its MODFLOW identifier (NPF_K, NPF_K33, STO_SS, ...) as a multiplier on the values the run solved with, bounded by a lower and an upper factor around 1: {\"NPF_K\": {\"lower\": 0.1, \"upper\": 10, \"source\": \"where the bounds are read\"}}. A parameter stating no bounds refuses; one array read from its own file, or stated per layer with different factors, refuses"

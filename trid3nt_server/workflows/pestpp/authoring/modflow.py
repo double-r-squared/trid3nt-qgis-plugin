@@ -1,4 +1,4 @@
-"""A study over a finished MODFLOW run's deck: its arrays multiplied through their own control records, its heads read at wells.
+"""The study's MODFLOW piece: a finished run's arrays multiplied through their own control records, its heads read at wells.
 
 mf6 multiplies every value an array's control record reads by that record's FACTOR, and a CONSTANT record is
 its one value, so a multiplier parameter is written into the record through a PEST template - the FACTOR
@@ -12,13 +12,24 @@ import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Iterable, Mapping, Sequence
 
 from ..authoring.control import Observed, Parameter
 from ..errors import PestppError
 
-__all__ = ["Deck", "OBS_FILE", "OBS_OUTPUT", "copy_deck", "deck", "deck_sheet", "fetch_deck", "head_targets",
-           "interface", "multiplier", "observe_heads", "substitute"]
+__all__ = ["COMMAND", "Deck", "OBSERVED", "OBS_FILE", "OBS_OUTPUT", "OWN", "PLACE", "SITE", "calibrated", "copy_deck",
+           "deck", "deck_sheet", "head_targets", "interface", "multiplier", "observe_heads", "published", "substitute",
+           "targets"]
+
+#: What a trial runs: the deck alone, every multiplier already written into its own files.
+COMMAND = "mf6"
+
+#: The option the study's instruction files are written for: the heads CSV's own separator.
+OWN = MappingProxyType({"additional_ins_delimiters": ","})
+
+#: What a target is, where it stands, and what it is read at: the words a study's notes and charts say it in.
+OBSERVED, SITE, PLACE = "head", "well", "cell"
 
 #: The OBS file the study adds to the model, and the CSV mf6 writes the heads it reads into.
 OBS_FILE = "study_heads.obs"
@@ -49,20 +60,6 @@ class Deck:
     top: tuple[float, ...]
     length_units: str
     steps: int
-
-
-def fetch_deck(staged: Iterable[Mapping[str, str]], dest: Path) -> Path:
-    """Every file the finished run staged, downloaded to the name it was staged under -> ``dest``."""
-    from trid3nt_server.store import objects as storage
-
-    dest.mkdir(parents=True, exist_ok=True)
-    s3 = storage.client()
-    for row in staged:
-        bucket, _, key = str(row["gs_uri"])[len("s3://"):].partition("/")
-        target = dest / str(row["dest"])
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(s3.get_object(Bucket=bucket, Key=key)["Body"].read())
-    return dest
 
 
 def _block(text: str, name: str) -> list[str]:
@@ -253,6 +250,13 @@ def head_targets(wells: Sequence[Any], *, the_deck: Deck, mesh: Mapping[str, Any
     return out, left
 
 
+def targets(wells: Sequence[Any], *, the_deck: Deck, finished: Any, frame: str
+            ) -> tuple[list[tuple[Observed, int]], list[str]]:
+    """Each well's reading as a head target at its cell of the finished run's mesh -> ``(targets, left out)``."""
+    return head_targets(wells, the_deck=the_deck, mesh=finished.mesh,
+                        utm_epsg=int(finished.case["server_facts"]["utm_epsg"]), frame=frame)
+
+
 def observe_heads(directory: Path, targets: Sequence[tuple[Observed, int]], *, the_deck: Deck) -> tuple[str, str]:
     """The OBS file reading each target's head, named in the model's name file, and the instruction file that
     reads its one saved row -> ``(instruction file, output)``. A deck already holding a model OBS file refuses."""
@@ -355,3 +359,42 @@ def copy_deck(source: Path, dest: Path, study_files: Iterable[str]) -> None:
     dest.mkdir(parents=True, exist_ok=True)
     for path in model_files(source, study_files):
         shutil.copy2(path, dest / path.name)
+
+
+async def calibrated(*, finished: Any, study_dir: Path, the_deck: Deck, parameters: list,
+                     templates: list, best: Mapping[str, float], frame: str) -> dict[str, Any]:
+    """The deck with the best parameters written in, staged and solved as an ordinary MODFLOW run -> its handle."""
+    import asyncio
+
+    from trid3nt_contracts import new_ulid
+
+    from trid3nt_server.workflows.modflow.authoring.staged_check import check_staged_run
+    from trid3nt_server.workflows.modflow.workflow import run_sheet
+    from trid3nt_server.workflows.solver.staging import new_rundir, stage_run
+
+    from .control import TABLES
+
+    run_id = new_ulid()
+    rundir = new_rundir(run_id, stem="modflow")
+    await asyncio.to_thread(substitute, study_dir, templates, parameters, best)
+    own = [template for template, _file in templates] + [f"{OBS_OUTPUT}.ins", *TABLES.values()]
+    await asyncio.to_thread(copy_deck, study_dir, rundir, own)
+    sheet = await asyncio.to_thread(deck_sheet, rundir, the_deck)
+    case = finished.case
+    results = list(case.get("results") or [])
+    staged = await stage_run(
+        rundir, run_id, module=str(case["module"]), steering=str(case["steering"]), results=results,
+        outputs=list(dict.fromkeys([*finished.outputs, OBS_OUTPUT])), mesh_inputs=[],
+        prefix="modflow", sheet={}, server_facts=dict(case.get("server_facts") or {}),
+        result_basename=(results or list(finished.outputs))[0], check=check_staged_run)
+    handle = await run_sheet(sheet=sheet, staged=staged, mesh=finished.mesh,
+                             name=str((case.get("server_facts") or {}).get("name") or "domain"),
+                             moment=None, frame=frame or None)
+    return {**handle, "deck_sheet": sheet}
+
+
+async def published(solved: Mapping[str, Any]) -> Any:
+    """The calibrated run published as MODFLOW publishes a run: every output its output control saved."""
+    from trid3nt_server.workflows.modflow.workflow import publish_outputs
+
+    return await publish_outputs(run=solved, sheet=solved["deck_sheet"], outputs=[], captions={}, params={})

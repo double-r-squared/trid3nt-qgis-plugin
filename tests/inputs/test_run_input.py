@@ -138,3 +138,84 @@ def test_a_run_whose_mesh_is_not_kept_refuses(case):
     with pytest.raises(FinishedRunError, match="not kept") as refused:
         _read(_RUN)
     assert refused.value.error_code == "RUN_MESH_GONE"
+
+
+_NEWER = "01M76H6GJN2RN18XTTVBSHFBZ5"
+
+
+def _hold(run_id, **over):
+    """A second run of the case: its layer published, its record on the journal after the first."""
+    uri_registry.observe_published_layer(f"head-{run_id}", f"s3://runs/{run_id}/head.nc")
+    journal.append_record(_record(run_id=run_id, **over))
+
+
+@pytest.fixture
+def said(monkeypatch):
+    from trid3nt_server.inputs import run_notes
+
+    lines: list[str] = []
+    monkeypatch.setattr(run_notes, "journal_note", lines.append)
+    return lines
+
+
+@pytest.fixture
+def card(monkeypatch):
+    """The review card: what it was handed, and the run a person picks on it (unpicked, the offered one)."""
+    from trid3nt_server.inputs.gate import input_review
+
+    seen: dict = {"pick": None}
+
+    async def review(*, tool_name, entries, params, **_):
+        seen.update(tool=tool_name, entries=[e.param for e in entries], offered=dict(params))
+        return input_review.ReviewOutcome(proceed=True, entries=list(entries),
+                                          params={**params, **({"run": seen["pick"]} if seen["pick"] else {})})
+
+    monkeypatch.setattr(input_review, "gate_input_review", review)
+    return seen
+
+
+def _unstated(engines=("modflow",)):
+    return asyncio.run(run_input.case_run(engines, label="run", tool="calibrate"))
+
+
+def test_an_unstated_run_is_the_case_s_one_finished_run(case, said, card):
+    assert _unstated() == _RUN
+    assert "entries" not in card
+    assert said == [f"run is unstated, so it is this case's finished run {_RUN}, the one finished run of modflow "
+                    "it holds"]
+
+
+def test_of_several_the_card_lists_them_newest_first_and_offers_the_newest(case, said, card):
+    _hold(_NEWER)
+    assert _unstated() == _NEWER
+    assert card["tool"] == "calibrate" and card["entries"] == [_NEWER, _RUN] and card["offered"] == {"run": _NEWER}
+    assert said[-1].endswith(f"{_NEWER}, the newest of the 2 it holds of modflow")
+
+
+def test_the_run_picked_on_the_card_is_taken(case, said, card):
+    _hold(_NEWER)
+    card["pick"] = _RUN
+    assert _unstated() == _RUN
+    assert said[-1].endswith(f"{_RUN}, one of the 2 it holds")
+
+
+def test_a_run_of_another_engine_or_unfinished_is_no_candidate(case, said, card):
+    _hold(_NEWER, engine="telemac")
+    _hold("01M76H6GJN2RN18XTTVBSHFBZ7", check_steps=10)
+    assert _unstated() == _RUN and "entries" not in card
+
+
+def test_a_case_holding_no_finished_run_of_the_engines_refuses_naming_them(case, said, card):
+    with pytest.raises(FinishedRunError, match="no finished run of telemac or geoclaw") as refused:
+        _unstated(("telemac", "geoclaw"))
+    assert refused.value.error_code == "RUN_NONE_IN_CASE"
+
+
+def test_the_fill_reads_an_unstated_run_from_the_case(case, said, card):
+    from trid3nt_server.inputs.input import Input
+    from trid3nt_server.workflows.runtime import fill
+
+    row = Input(RUN, name="run", coercion={"engines": ("modflow",)})
+    env = fill._Env(data={"run": row}, workflow="calibrate")
+    found = asyncio.run(fill._produce(env, row))
+    assert isinstance(found, FinishedRun) and found.run_id == _RUN

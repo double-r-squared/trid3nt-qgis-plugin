@@ -1,22 +1,22 @@
 """The PEST++ workflow: a study over a finished run, and the run its best parameter set makes.
 
-``launch`` runs one order - the finished run's deck fetched, a multiplier template written into each
-named array and the wells' heads observed, the study reviewed, a sensitivity pass where it ranks more
-parameters than are tuned, the ensemble study, then the deck solved once more with the base
-realization's last parameters through the MODFLOW engine and published as that engine publishes a run.
+``launch`` runs one order - the finished run's deck fetched, its engine's piece writing a template over each
+named parameter and observing each target, the study reviewed, a sensitivity pass where it ranks more
+parameters than are tuned, the ensemble study, then the deck solved once more with the base realization's
+last parameters through the run's own engine and published as that engine publishes a run.
 """
 
 from __future__ import annotations
 
 import asyncio
+import importlib
 import logging
 import shutil
 import tempfile
 from pathlib import Path
-from types import MappingProxyType
+from types import ModuleType
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
-from trid3nt_contracts import new_ulid
 from trid3nt_contracts.common import Origin, SyntheticInput
 
 from trid3nt_server.inputs.instant import event_time
@@ -33,10 +33,20 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("trid3nt_server.workflows.pestpp.workflow")
 
-__all__ = ["PestppWorkflow", "ranked"]
+__all__ = ["ENGINES", "PestppWorkflow", "piece", "ranked"]
 
-#: The option the study's instruction files are written for: the heads CSV's own separator.
-_OWN = MappingProxyType({"additional_ins_delimiters": ","})
+#: The engines a study calibrates, each by its piece ``authoring/<engine>.py``: the parameter writer, the
+#: observation reader, the trial's command, and the calibrated run's solve and publish.
+ENGINES = ("modflow",)
+
+
+def piece(engine: str) -> ModuleType:
+    """The study's piece for a run of ``engine``; an engine with none refuses naming the engines a study calibrates."""
+    if engine not in ENGINES:
+        raise PestppError(f"a study calibrates a run of {' or '.join(ENGINES)}, and this is a "
+                          f"{engine or 'engineless'} run, for which no calibration is written",
+                          error_code="PESTPP_ENGINE_UNCALIBRATED")
+    return importlib.import_module(f"{__package__}.authoring.{engine}")
 
 
 def ranked(sensitivity: Sequence[Mapping[str, Any]]) -> list[str]:
@@ -73,8 +83,8 @@ def _bounds(identifier: str, stated: Any) -> tuple[float, float, str, bool]:
 
 
 class PestppWorkflow(Workflow):
-    """PEST++ over a finished MODFLOW run: the template module, read by its own names.
-    A template DECLARES INPUTS (the run, its parameters and the wells) and CAPTIONS; this builds every stage off them."""
+    """PEST++ over a finished run of an engine with a piece: the template module, read by its own names.
+    A template DECLARES INPUTS (the run, its parameters and its observations) and CAPTIONS; this builds every stage off them."""
 
     engine = "pestpp"
     solve_step = "solve"
@@ -138,15 +148,15 @@ class PestppWorkflow(Workflow):
         from trid3nt_server.workflows.runtime.fill import call, production, read
 
         from . import engine, outputs, staging
-        from .authoring import modflow as study_deck
         from .authoring.control import write_control
 
         env = production(state)
         run = env.run
         emitter = current_emitter()
         finished = await read(env, "run")
-        wells = await read(env, "observe")
-        wells = wells if isinstance(wells, tuple) else (wells,)
+        study = piece(finished.engine)
+        observations = await read(env, "observe")
+        observations = observations if isinstance(observations, tuple) else (observations,)
         named = dict(await read(env, "parameters") or {})
         tune = await read(env, "tune")
         options, _ = keyword_floor([PESTPP], dict(state.keywords))
@@ -166,26 +176,26 @@ class PestppWorkflow(Workflow):
 
         try:
             deck_dir = work / "deck"
-            await asyncio.to_thread(study_deck.fetch_deck, finished.staged, deck_dir)
-            the_deck = await asyncio.to_thread(study_deck.deck, deck_dir)
-            targets, left = study_deck.head_targets(
-                wells, the_deck=the_deck, mesh=finished.mesh,
-                utm_epsg=int(finished.case["server_facts"]["utm_epsg"]), frame=frame)
+            await asyncio.to_thread(staging.fetch_deck, finished.staged, deck_dir)
+            the_deck = await asyncio.to_thread(study.deck, deck_dir)
+            targets, left = study.targets(observations, the_deck=the_deck, finished=finished, frame=frame)
             for line in left:
-                journal_note(f"a well is not held to the run: {line}")
+                journal_note(f"a {study.SITE} is not held to the run: {line}")
             if not targets:
-                raise PestppError("no well's reading is a head at a cell of the run, so the study has nothing to be "
-                                  "held to", error_code="PESTPP_OBSERVATIONS_NONE")
-            journal_note(f"every one of the {len(targets)} wells weighs 1 in phi, the sum of the squared residuals")
-            observed = [target for target, _cell in targets]
+                raise PestppError(f"no {study.SITE}'s reading is a {study.OBSERVED} at a {study.PLACE} of the run, so "
+                                  "the study has nothing to be held to", error_code="PESTPP_OBSERVATIONS_NONE")
+            journal_note(f"every one of the {len(targets)} {study.SITE}s weighs 1 in phi, the sum of the squared "
+                         "residuals")
+            observed = [target for target, _where in targets]
 
             async def studied(tool: str, chosen: Sequence[tuple[str, float, float, bool]], stated: Mapping[str, Any]
                               ) -> tuple[dict[str, Any], Path, list, list]:
                 where = work / tool
                 parameters, templates, instructions = await asyncio.to_thread(
-                    study_deck.interface, deck_dir, where, chosen, the_deck=the_deck, targets=targets)
+                    study.interface, deck_dir, where, chosen, the_deck=the_deck, targets=targets)
                 write_control(where, name=staging.CONTROL_FILENAME, parameters=parameters, observations=observed,
-                              templates=templates, instructions=instructions, command="mf6", stated=stated, own=_OWN)
+                              templates=templates, instructions=instructions, command=study.COMMAND,
+                              stated=stated, own=study.OWN)
                 staged = await staging.stage_study(where, tool=tool, control=staging.CONTROL_FILENAME,
                                                    name=f"{self.name} of {finished.run_id}")
                 handle = await stage("ranking" if tool == "sen" else "ensemble", engine.solve_case,
@@ -205,7 +215,7 @@ class PestppWorkflow(Workflow):
             if best is None:
                 raise PestppError("the study's last ensemble carries no base realization, whose parameters the "
                                   "calibrated run is solved with", error_code="PESTPP_OUTPUT_MISSING")
-            solved = await stage("solve", self._calibrated, finished=finished, study_dir=work / "ies",
+            solved = await stage("solve", study.calibrated, finished=finished, study_dir=work / "ies",
                                  the_deck=the_deck, parameters=parameters, templates=templates, best=best,
                                  frame=frame)
             run["study"] = {"run_id": handle["run_id"], "tool": "ies", "model_engine": finished.engine,
@@ -214,8 +224,8 @@ class PestppWorkflow(Workflow):
                                          "calibrated": best[p.name]} for p in parameters},
                             "phi": phi, "ensemble": ensemble,
                             "observations": [{"name": o.name, "target": o.value} for o in observed]}
-            value = await self._publish_calibrated(solved, phi=phi, residuals=residuals, ensemble=ensemble,
-                                          parameters=parameters, finished=finished)
+            value = await self._publish_calibrated(study, solved, phi=phi, residuals=residuals, ensemble=ensemble,
+                                                   parameters=parameters, finished=finished)
             return RunResult(value=value, results=dict(run))
         finally:
             shutil.rmtree(work, ignore_errors=True)
@@ -264,44 +274,18 @@ class PestppWorkflow(Workflow):
             raise PestppError(f"the study was not run: {outcome.cancel_reason or 'declined'}",
                               error_code="PESTPP_STUDY_DECLINED")
 
-    async def _calibrated(self, *, finished: Any, study_dir: Path, the_deck: Any, parameters: list,
-                          templates: list, best: Mapping[str, float], frame: str) -> dict[str, Any]:
-        """The deck with the best parameters written in, staged and solved as an ordinary MODFLOW run -> its handle."""
-        from trid3nt_server.workflows.modflow.authoring.staged_check import check_staged_run
-        from trid3nt_server.workflows.modflow.workflow import run_sheet
-        from trid3nt_server.workflows.solver.staging import new_rundir, stage_run
-
-        from .authoring import modflow as study_deck
-        from .authoring.control import TABLES
-
-        run_id = new_ulid()
-        rundir = new_rundir(run_id, stem="modflow")
-        await asyncio.to_thread(study_deck.substitute, study_dir, templates, parameters, best)
-        own = [template for template, _file in templates] + [f"{study_deck.OBS_OUTPUT}.ins", *TABLES.values()]
-        await asyncio.to_thread(study_deck.copy_deck, study_dir, rundir, own)
-        sheet = await asyncio.to_thread(study_deck.deck_sheet, rundir, the_deck)
-        case = finished.case
-        results = list(case.get("results") or [])
-        staged = await stage_run(
-            rundir, run_id, module=str(case["module"]), steering=str(case["steering"]), results=results,
-            outputs=list(dict.fromkeys([*finished.outputs, study_deck.OBS_OUTPUT])), mesh_inputs=[],
-            prefix="modflow", sheet={}, server_facts=dict(case.get("server_facts") or {}),
-            result_basename=(results or list(finished.outputs))[0], check=check_staged_run)
-        handle = await run_sheet(sheet=sheet, staged=staged, mesh=finished.mesh,
-                                 name=str((case.get("server_facts") or {}).get("name") or "domain"),
-                                 moment=None, frame=frame or None)
-        return {**handle, "deck_sheet": sheet}
-
-    async def _publish_calibrated(self, solved: Mapping[str, Any], *, phi: list, residuals: list,
-                         ensemble: Mapping[str, Mapping[str, float]], parameters: list, finished: Any) -> Any:
-        """The calibrated run published as MODFLOW publishes a run, the study's four charts beside it."""
+    async def _publish_calibrated(self, study: ModuleType, solved: Mapping[str, Any], *, phi: list,
+                                  residuals: list, ensemble: Mapping[str, Mapping[str, float]], parameters: list,
+                                  finished: Any) -> Any:
+        """The calibrated run published as its engine publishes a run, the study's four charts beside it."""
         from trid3nt_server.render.formats import Chart, Deliverable, publish
-        from trid3nt_server.workflows.modflow.workflow import publish_outputs
 
         from .charts import fit_chart, parameter_chart, phi_chart, residual_chart
 
-        record = await publish_outputs(run=solved, sheet=solved["deck_sheet"], outputs=[], captions={}, params={})
+        record = await study.published(solved)
         captions = dict(self._states("CAPTIONS", {}))
+        captions = {**captions, **{key: f"{captions[key]} {study.OBSERVED}" for key in ("fit", "residuals")
+                                   if key in captions}}
         items = [Deliverable(product=Chart(payload=phi_chart(phi, caption=captions["phi"])), caption=captions["phi"]),
                  Deliverable(product=Chart(payload=fit_chart(residuals, caption=captions["fit"])),
                              caption=captions["fit"]),
