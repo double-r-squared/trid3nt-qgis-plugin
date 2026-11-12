@@ -28,6 +28,10 @@ OBS_OUTPUT = "study_heads.csv"
 #: own exponent form at full precision.
 _FIELD = 24
 
+#: mf6's own PACKAGEDATA columns after the reach number and its cell, in the order its input definition states
+#: them: a list package whose every row states one value of a column is tuned by that value's multiplier.
+_LIST_COLUMNS = {"SFR": ("rlen", "rwid", "rgrd", "rtp", "rbth", "rhk", "man")}
+
 _CONTROL = re.compile(r"^(\s*)(CONSTANT|INTERNAL|OPEN/CLOSE)\b(.*)$", re.I)
 _FACTOR = re.compile(r"(\bFACTOR\s+)(\S+)", re.I)
 
@@ -94,13 +98,16 @@ def deck(directory: Path) -> Deck:
                 length_units=str(dis.length_units.array or "unknown").lower(), steps=steps)
 
 
-def multiplier(directory: Path, identifier: str, *, lower: float, upper: float, the_deck: Deck
-               ) -> tuple[Parameter, tuple[str, str]]:
-    """One multiplier parameter over the array ``identifier`` names -> the parameter and its (template, file).
+def multiplier(directory: Path, identifier: str, *, lower: float, upper: float, the_deck: Deck,
+               absolute: bool = False) -> tuple[Parameter, tuple[str, str]]:
+    """One multiplier parameter over the array or list column ``identifier`` names -> the parameter and its
+    (template, file).
 
-    The parameter starts at 1, the run's own array; every control record of the array takes the same
-    multiplier, and records stating different factors or constants refuse, one parameter writing one scale.
-    A second array of the same file is written into the template the first one left."""
+    The parameter starts at 1, the run's own values; every control record of an array, or every row of a list
+    column, takes the same multiplier, and records or rows stating different values refuse, one parameter writing
+    one scale. ``absolute`` bounds are stated in the run's own unit and divided by that scale; they refuse over an
+    array read INTERNAL, whose FACTOR is not its values, and where the run's own value lies outside them. A second
+    array of the same file is written into the template the first one left."""
     prefix, _, variable = identifier.upper().partition("_")
     file = the_deck.packages.get(prefix)
     if file is None or not variable:
@@ -110,14 +117,62 @@ def multiplier(directory: Path, identifier: str, *, lower: float, upper: float, 
     written = directory / template
     lines = (written.read_text().split("\n", 1)[1] if written.is_file()
              else (directory / file).read_text()).splitlines()
+    name = identifier.lower()
+    field = "~" + name.ljust(_FIELD - 2) + "~"
+    if prefix in _LIST_COLUMNS:
+        scale = _list_column(lines, identifier, _LIST_COLUMNS[prefix], variable.lower(), field)
+    else:
+        scale, internal = _array(lines, identifier, variable, field)
+        if absolute and internal:
+            raise PestppError(f"{identifier} is bounded in the run's own unit, and its array is read INTERNAL, "
+                              "whose FACTOR is not its values: state its bounds as multipliers of the run's own "
+                              "array", error_code="PESTPP_BOUNDS_UNSTATED")
+    if absolute:
+        lower, upper = lower / scale, upper / scale
+        if not 0.0 < lower < 1.0 < upper:
+            raise PestppError(f"{identifier} is {scale:g} in the run, outside its stated bounds "
+                              f"{lower * scale:g} to {upper * scale:g}", error_code="PESTPP_BOUNDS_UNSTATED")
+    written.write_text("ptf ~\n" + "\n".join(lines) + "\n")
+    return (Parameter(name=name, value=1.0, lower=float(lower), upper=float(upper), group=name,
+                      scale=scale), (template, file))
+
+
+def _list_column(lines: list[str], identifier: str, columns: Sequence[str], variable: str, field: str) -> float:
+    """The PACKAGEDATA column ``variable`` written as ``field`` in every row of ``lines`` -> the one value they
+    state; a column the package has not, or rows stating different values, refuse."""
+    if variable not in columns:
+        raise PestppError(f"{identifier} names no PACKAGEDATA column; it states {', '.join(columns)}",
+                          error_code="PESTPP_PARAMETER_UNPLACED")
+    rows = [i for i, line in enumerate(lines)
+            if re.match(r"^\s*BEGIN\s+packagedata\b", line, re.I)]
+    if len(rows) != 1:
+        raise PestppError(f"{identifier}: the package states {len(rows)} PACKAGEDATA blocks",
+                          error_code="PESTPP_PARAMETER_UNPLACED")
+    scales, at = set(), rows[0] + 1
+    while at < len(lines) and not re.match(r"^\s*END\s+packagedata\b", lines[at], re.I):
+        # a field a template already writes is one token, the spaces inside its delimiters included
+        tokens = re.findall(r"~[^~]*~|[^\s~]+", lines[at].split("#", 1)[0])
+        if tokens:
+            # a reach on no cell states NONE in place of its DISV layer and cell
+            column = 1 + (1 if tokens[1].upper() == "NONE" else 2) + columns.index(variable)
+            scales.add(float(tokens[column]))
+            tokens[column] = field
+            lines[at] = "  " + "  ".join(tokens)
+        at += 1
+    if len(scales) != 1:
+        raise PestppError(f"{identifier} states {len(scales)} different values across the package's rows; one "
+                          "multiplier writes one scale", error_code="PESTPP_PARAMETER_UNPLACED")
+    return scales.pop()
+
+
+def _array(lines: list[str], identifier: str, variable: str, field: str) -> tuple[float, bool]:
+    """The array ``variable``'s control records written with ``field`` -> its one scale, and whether it is read INTERNAL."""
     starts = [i for i, line in enumerate(lines)
               if re.match(rf"^\s*{re.escape(variable)}(\s+LAYERED)?\s*$", line, re.I)]
     if len(starts) != 1:
-        raise PestppError(f"{identifier} is stated {len(starts)} times as an array in {file}; a multiplier is "
+        raise PestppError(f"{identifier} is stated {len(starts)} times as an array in its package; a multiplier is "
                           "written into one array's control records", error_code="PESTPP_PARAMETER_UNPLACED")
-    name = identifier.lower()
-    field = "~" + name.ljust(_FIELD - 2) + "~"
-    scales, at = set(), starts[0] + 1
+    scales, kinds, at = set(), set(), starts[0] + 1
     while at < len(lines):
         record = _CONTROL.match(lines[at])
         if record is None:
@@ -126,6 +181,7 @@ def multiplier(directory: Path, identifier: str, *, lower: float, upper: float, 
                 continue
             break
         kind = record.group(2).upper()
+        kinds.add(kind)
         if kind == "CONSTANT":
             scales.add(float(record.group(3).split()[0]))
             lines[at] = f"{record.group(1)}CONSTANT  {field}"
@@ -140,9 +196,7 @@ def multiplier(directory: Path, identifier: str, *, lower: float, upper: float, 
     if len(scales) != 1:
         raise PestppError(f"{identifier} states {len(scales)} different factors or constants across its "
                           "records; one multiplier writes one scale", error_code="PESTPP_PARAMETER_UNPLACED")
-    written.write_text("ptf ~\n" + "\n".join(lines) + "\n")
-    return (Parameter(name=name, value=1.0, lower=float(lower), upper=float(upper), group=name,
-                      scale=scales.pop()), (template, file))
+    return scales.pop(), "INTERNAL" in kinds
 
 
 def head_targets(wells: Sequence[Any], *, the_deck: Deck, mesh: Mapping[str, Any], utm_epsg: int,
@@ -274,14 +328,15 @@ def deck_sheet(directory: Path, the_deck: Deck) -> Any:
     return fill(GWF, **stated)
 
 
-def interface(source: Path, dest: Path, chosen: Sequence[tuple[str, float, float]], *, the_deck: Deck,
+def interface(source: Path, dest: Path, chosen: Sequence[tuple[str, float, float, bool]], *, the_deck: Deck,
               targets: Sequence[tuple[Observed, int]]) -> tuple[list[Parameter], list[tuple[str, str]], list[tuple[str, str]]]:
     """A study directory: the deck at ``source`` copied to ``dest`` with a multiplier template over each chosen
-    ``(identifier, lower, upper)`` and the wells' heads observed -> ``(parameters, templates, instructions)``."""
+    ``(identifier, lower, upper, absolute)`` and the wells' heads observed -> ``(parameters, templates, instructions)``."""
     shutil.copytree(source, dest)
     parameters, templates = [], []
-    for identifier, lower, upper in chosen:
-        parameter, pair = multiplier(dest, identifier, lower=lower, upper=upper, the_deck=the_deck)
+    for identifier, lower, upper, absolute in chosen:
+        parameter, pair = multiplier(dest, identifier, lower=lower, upper=upper, the_deck=the_deck,
+                                     absolute=absolute)
         parameters.append(parameter)
         if pair not in templates:
             templates.append(pair)

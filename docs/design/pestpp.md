@@ -56,8 +56,9 @@ template and instruction tables as CSVs beside it.
 
 ## `pestpp_calibrate_modflow`
 
-A finished MODFLOW run (`run`), the arrays to tune (`parameters`, each a MODFLOW identifier with its lower and
-upper factor and the source they are read from; unstated bounds refuse), how many of them to tune (`tune`), the
+A finished MODFLOW run (`run`), the arrays and list columns to tune (`parameters`, each a MODFLOW identifier with
+its lower and upper factor - or, as `lower_value` and `upper_value`, its bounds in the run's own unit - and the
+source they are read from; unstated bounds refuse), how many of them to tune (`tune`), the
 moment the wells are asked at (`event_time`) and the wells (`observe`, every groundwater level the source reports
 over the run's ground). `workflow.py` runs one order:
 
@@ -66,7 +67,10 @@ over the run's ground). `workflow.py` runs one order:
    INTERNAL record (PEST's scale the factor the run stated), or the CONSTANT itself (its scale the run's
    constant) - so the array's values are never rewritten and the trial runs `mf6` alone. The multiplier starts
    at 1 and is log-transformed. An array read from its own file, or stated per layer with different factors,
-   refuses.
+   refuses. A column of a list package's PACKAGEDATA (SFR's rlen, rwid, rgrd, rtp, rbth, rhk, man) is tuned the
+   same way, the template writing the multiplier into that column of every row and PEST's scale the one value the
+   rows state (rows stating different values refuse). Bounds in the run's own unit are divided by that scale, and
+   refuse over an INTERNAL array (whose FACTOR is not its values) and where the run's own value lies outside them.
 2. Each well's reading is a head target at its cell (the point contract: a site no cell holds is left out and
    said): a depth below the land surface is the cell's top less the depth, an elevation counts only on the run's
    own frame, and a site is held once, at the first of its readings that is a head. Every well weighs 1. An OBS
@@ -84,5 +88,5 @@ parameter's bounds, source and calibrated value, phi and the last ensemble.
 
 ## What is not built yet
 
-Multipliers on list packages (recharge or drain rows); a run of several layers or time steps; progress on the
+Multipliers on stress-period lists (recharge or drain rows) and on per-row values of a list column; a run of several layers or time steps; progress on the
 Sim card (PEST++'s run-manager lines are not parsed); a diagnostics parser.

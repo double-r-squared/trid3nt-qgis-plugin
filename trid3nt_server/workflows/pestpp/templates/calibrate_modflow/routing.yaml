@@ -2,8 +2,9 @@ summary: CALIBRATE a finished MODFLOW run against measured well levels with PEST
   smoother), returning the run solved again with the best parameters.
 routing: 'THE tool for "calibrate this groundwater model", "tune the conductivity to the wells",
   "fit the model to the measured heads". Takes a finished MODFLOW run of this case (`run`, its run
-  id or a layer handle), the arrays to tune as multipliers on the run''s own values (`parameters`,
-  e.g. {"NPF_K": {"lower": 0.1, "upper": 10, "source": "..."}}; bounds stated, cited or refused),
+  id or layer handle), the arrays to tune as multipliers on the run''s own values (`parameters`,
+  e.g. {"NPF_K": {"lower": 0.1, "upper": 10, "source": "..."}}, or lower_value/upper_value in
+  the run''s unit; bounds stated, cited or refused),
   and the wells (`observe`, matched over the run''s ground when unstated). State the iterations,
   keywords={"noptmax": N}; every PEST++ option is settable by name (describe_keywords module
   "pestpp"). `tune` below the number of parameters ranks them by a sensitivity pass first.'

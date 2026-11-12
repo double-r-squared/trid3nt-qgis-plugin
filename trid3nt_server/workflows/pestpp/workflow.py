@@ -44,8 +44,15 @@ def ranked(sensitivity: Sequence[Mapping[str, Any]]) -> list[str]:
     return [row["parameter"] for row in sorted(sensitivity, key=lambda row: -float(row["sen_mean_abs"]))]
 
 
-def _bounds(identifier: str, stated: Any) -> tuple[float, float, str]:
-    """A parameter's multiplier bounds and their source, as stated; unstated or malformed refuses naming it."""
+def _bounds(identifier: str, stated: Any) -> tuple[float, float, str, bool]:
+    """A parameter's bounds, their source, and whether they are values in the run's own unit rather than
+    multipliers of the run's own values, as stated; unstated or malformed refuses naming it."""
+    if isinstance(stated, Mapping) and {"lower_value", "upper_value"} <= set(stated):
+        lower, upper = float(stated["lower_value"]), float(stated["upper_value"])
+        if not 0.0 < lower < upper:
+            raise PestppError(f"{identifier} is bounded {lower:g} to {upper:g} in the run's own unit; a bound "
+                              "below another, both above 0", error_code="PESTPP_BOUNDS_UNSTATED")
+        return lower, upper, str(stated.get("source") or ""), True
     if isinstance(stated, Mapping) and {"lower", "upper"} <= set(stated):
         lower, upper, source = stated["lower"], stated["upper"], str(stated.get("source") or "")
     elif isinstance(stated, (list, tuple)) and len(stated) == 2:
@@ -54,14 +61,15 @@ def _bounds(identifier: str, stated: Any) -> tuple[float, float, str]:
         raise PestppError(
             f"{identifier} states no bounds: a multiplier on the run's own array is tuned between a lower and an "
             "upper factor, stated by the user, read from a citation, or bounded in the engine's dictionary, and "
-            f"none states one for it. State {identifier}: {{\"lower\": L, \"upper\": U, \"source\": \"...\"}}.",
+            f"none states one for it. State {identifier}: {{\"lower\": L, \"upper\": U, \"source\": \"...\"}}, or "
+            "the bounds in the run's own unit as lower_value and upper_value.",
             error_code="PESTPP_BOUNDS_UNSTATED")
     lower, upper = float(lower), float(upper)
     if not 0.0 < lower < 1.0 < upper:
         raise PestppError(
             f"{identifier} is bounded {lower:g} to {upper:g}; a multiplier starts at 1, the run's own array, so "
             "it is bounded below 1 and above it, and above 0", error_code="PESTPP_BOUNDS_UNSTATED")
-    return lower, upper, source
+    return lower, upper, source, False
 
 
 class PestppWorkflow(Workflow):
@@ -145,8 +153,8 @@ class PestppWorkflow(Workflow):
         frame = str(((finished.record.get("inputs") or {}).get("vertical_frame") or {}).get("value") or "")
         chosen, sources = [], {}
         for identifier, stated in named.items():
-            lower, upper, sources[identifier.lower()] = _bounds(identifier, stated)
-            chosen.append((identifier, lower, upper))
+            lower, upper, sources[identifier.lower()], absolute = _bounds(identifier, stated)
+            chosen.append((identifier, lower, upper, absolute))
         ranking = tune is not None and int(tune) < len(chosen)
         begin_substeps(emitter, 3 + ranking)
         work = Path(tempfile.mkdtemp(prefix="pestpp-study-"))
@@ -171,7 +179,7 @@ class PestppWorkflow(Workflow):
             journal_note(f"every one of the {len(targets)} wells weighs 1 in phi, the sum of the squared residuals")
             observed = [target for target, _cell in targets]
 
-            async def studied(tool: str, chosen: Sequence[tuple[str, float, float]], stated: Mapping[str, Any]
+            async def studied(tool: str, chosen: Sequence[tuple[str, float, float, bool]], stated: Mapping[str, Any]
                               ) -> tuple[dict[str, Any], Path, list, list]:
                 where = work / tool
                 parameters, templates, instructions = await asyncio.to_thread(
@@ -212,7 +220,7 @@ class PestppWorkflow(Workflow):
         finally:
             shutil.rmtree(work, ignore_errors=True)
 
-    async def _ranked(self, studied: Any, chosen: Sequence[tuple[str, float, float]],
+    async def _ranked(self, studied: Any, chosen: Sequence[tuple[str, float, float, bool]],
                       options: Mapping[str, Any], tune: int) -> list[str]:
         """A Morris pass over every named parameter, ranked; the top ``tune`` confirmed on a card where a
         person reviews, taken as ranked otherwise and said."""
@@ -239,16 +247,17 @@ class PestppWorkflow(Workflow):
         journal_note(f"the sensitivity pass ranks {', '.join(order)}; the study tunes {', '.join(kept)}")
         return kept
 
-    async def _reviewed(self, chosen: Sequence[tuple[str, float, float]], sources: Mapping[str, str],
+    async def _reviewed(self, chosen: Sequence[tuple[str, float, float, bool]], sources: Mapping[str, str],
                         observed: list, options: Mapping[str, Any]) -> None:
         """The study before it runs, on the one review card where a person reviews; a decline ends the run."""
         from trid3nt_server.inputs.gate.input_review import gate_input_review
 
         outcome = await gate_input_review(
             tool_name=self.name,
-            entries=[SyntheticInput(param=name, value=f"{lower:g} to {upper:g} times the run's own",
+            entries=[SyntheticInput(param=name, value=f"{lower:g} to {upper:g} " + (
+                                        "in the run's own unit" if absolute else "times the run's own"),
                                     basis=Origin.USER, real_source_if_any=sources.get(name.lower()) or None)
-                     for name, lower, upper in chosen] + [SyntheticInput(param="observations", value=len(observed),
+                     for name, lower, upper, absolute in chosen] + [SyntheticInput(param="observations", value=len(observed),
                                                                          basis=Origin.PRODUCER)],
             params={PESTPP.MODULE_INPUT[k].keyword: v for k, v in options.items()})
         if not outcome.proceed:

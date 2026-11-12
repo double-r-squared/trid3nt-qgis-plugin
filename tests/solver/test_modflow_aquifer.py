@@ -865,3 +865,21 @@ def test_a_water_table_depth_still_lies_below_the_top():
     sheet = _fill({}, {"saturated_thickness": 28.0, "water_table_depth": 2.0, "transmissivity": 140.0})
     assert sheet.filled["IC_STRT"].value["cells"] == "below_top"
     assert _placed(sheet, "IC_STRT") == [pytest.approx([_TOP[0] - 2.0] * 8)]
+
+
+def test_a_raster_named_by_its_handle_reads_the_unit_its_producer_stated(tmp_path, monkeypatch):
+    import trid3nt_server.inputs.geometry as geometry
+    import trid3nt_server.render.uri_registry as registry
+
+    inputs = _inputs(tmp_path)
+    held = {"lyr-thick": inputs["thick"]}
+    inputs["thick"] = "lyr-thick"
+    monkeypatch.setattr(registry, "lookup_layer_for_handle", lambda handle: held.get(handle))
+    real = geometry.source_uri
+    monkeypatch.setattr(geometry, "source_uri",
+                        lambda layer: held[layer]["uri"] if layer in held else real(layer))
+    assert _layering(_fill(inputs, _FULL), tmp_path) is not None
+    held["lyr-thick"] = {k: v for k, v in held["lyr-thick"].items() if k != "units"}
+    with pytest.raises(ModflowError) as caught:
+        _layering(_fill(inputs, _FULL), tmp_path)
+    assert caught.value.error_code == "MODFLOW_UNITS_UNSTATED"

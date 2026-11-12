@@ -298,6 +298,7 @@ def _factor(artifact: Any, *, dimension: str, frame: Any, label: str, name: str)
     """What the artifact's published unit is multiplied by to read on the model's frame."""
     if dimension == "1":
         return 1.0
+    artifact = _described(artifact)
     unit = (artifact.get("units") if isinstance(artifact, Mapping)
             else getattr(artifact, "units", None))
     if not unit or not str(unit).strip():
@@ -526,7 +527,17 @@ def _thickness(slot: Slot, thickness: list[float]) -> None:
             error_code="MODFLOW_AQUIFER_THICKNESS")
 
 
+def _described(artifact: Any) -> Any:
+    """A layer named by its handle as what its producer said about it (its unit among it); any other value as is."""
+    if isinstance(artifact, str):
+        from trid3nt_server.render.uri_registry import lookup_layer_for_handle
+
+        return lookup_layer_for_handle(artifact) or artifact
+    return artifact
+
+
 def _name_of(artifact: Any) -> str:
+    artifact = _described(artifact)
     name = (artifact.get("name") if isinstance(artifact, Mapping)
             else getattr(artifact, "name", None))
     return str(name or "").strip() or "input"
