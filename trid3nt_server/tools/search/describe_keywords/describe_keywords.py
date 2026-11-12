@@ -21,6 +21,8 @@ from trid3nt_server.workflows.geoclaw.modules.module import (
     module_input_dir as geoclaw_input_dir)
 from trid3nt_server.workflows.modflow.modules.module import (
     module_input_dir as modflow_input_dir)
+from trid3nt_server.workflows.pestpp.modules.module import (
+    module_input_dir as pestpp_input_dir)
 from trid3nt_server.workflows.runtime.module import load_module_input
 from trid3nt_server.workflows.telemac.modules.module import (
     module_input_dir)
@@ -56,7 +58,7 @@ def _carried() -> dict[str, Path]:
     """Every dictionary the system carries, by module name: wherever its wrapper loads its slots from."""
     return {path.stem: directory
             for directory in (module_input_dir(), modflow_input_dir(),
-                              geoclaw_input_dir(), settings_input_dir())
+                              geoclaw_input_dir(), pestpp_input_dir(), settings_input_dir())
             for path in directory.glob("*.json")}
 
 
@@ -127,7 +129,7 @@ def describe_keywords(module: str = "", keyword: str | list[str] = "",
     For what a template's inputs do not name - a friction law, a turbulence
     model, an ice process, a wave spectrum - in ANY carried module (telemac2d,
     telemac3d, khione, tomawac, gaia, artemis, waqtel, gwf, gwt, gwe, prt, geoclaw,
-    settings, ...). State what you learn on the call: `keywords={"LAW OF BOTTOM FRICTION": 4}`;
+    pestpp, settings, ...). State what you learn on the call: `keywords={"LAW OF BOTTOM FRICTION": 4}`;
     on a run of several bodies the name carries its body first, as
     `keywords={"gwt: IMS_PRINT_OPTION": "ALL"}`. Never runs anything; never
     picks a template.
@@ -201,7 +203,7 @@ def _entry(name: str, dictionary: Mapping[str, Any], asked: str) -> dict[str, An
         raise DescribeKeywordsError(
             "UNKNOWN_KEYWORD",
             f"{name} has no keyword {asked!r} "
-            f"({nearest(asked.upper(), [s.keyword for s in dictionary.values()])}).")
+            f"({nearest(asked.upper(), [s.keyword.upper() for s in dictionary.values()])}).")
     return _row(slot)
 
 

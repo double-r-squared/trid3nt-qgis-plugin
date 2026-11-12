@@ -86,6 +86,7 @@ def test_every_exposed_module_answers_a_question_of_its_own():
         ("gwe", "specific heat of water", "HEAT_CAPACITY_WATER"),
         ("geoclaw", "manning friction coefficient", "GEO_MANNING_COEFFICIENT"),
         ("geoclaw", "maximum refinement levels", "AMR_AMR_LEVELS_MAX"),
+        ("pestpp", "number of realizations", "ies_num_reals"),
     ):
         found = _keywords(describe_keywords(module=module, query=query))
         assert wanted in found, f"{module}/{query!r}: {list(found)}"

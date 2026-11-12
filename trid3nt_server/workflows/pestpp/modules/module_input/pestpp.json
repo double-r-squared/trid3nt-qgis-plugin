@@ -1,0 +1,2761 @@
+{
+  "module": "pestpp",
+  "keywords": [
+    {
+      "keyword": "base_jacobian",
+      "identifier": "BASE_JACOBIAN",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Provide the name of a JCO file. The Jacobian matrix contained in this file will be used for the first iteration of the inversion process. Provide the name of a Jacobian matrix file (with extension .jco or .jcb). Sensitivities read from this file are used for the first iteration of the constrained optimization process.",
+      "rubrique": [
+        "pestpp-glm",
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables; 8.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "da_observation_cycle_table",
+      "identifier": "DA_OBSERVATION_CYCLE_TABLE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The name of a CSV file representing the cycle-specific observation values. The row index should be integer cycle numbers and the column labels (header) should be observation names from the control file \u2013 these observation names in the control must be assigned a non-zero weight to activate their use in this table. Missing values should be represented by an empty entry.",
+      "rubrique": [
+        "pestpp-da"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 12.4.3 PEST++ Control Variables"
+    },
+    {
+      "keyword": "da_stop_cycle",
+      "identifier": "DA_STOP_CYCLE",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The cycle number to stop PESTPP-DA on. If not supplied, PESTPP-DA will process all cycles found.",
+      "rubrique": [
+        "pestpp-da"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 12.4.3 PEST++ Control Variables",
+      "default": 1000000000
+    },
+    {
+      "keyword": "da_use_simulated_states",
+      "identifier": "DA_USE_SIMULATED_STATES",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Use the simulated states at the end of each cycle as the initial states for the next cycle. This option should only be set to False for cases that include both initial and final state parameters quantities. As mentioned above, users are caution against setting this option to False.",
+      "rubrique": [
+        "pestpp-da"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 12.4.3 PEST++ Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "da_weight_cycle_table",
+      "identifier": "DA_WEIGHT_CYCLE_TABLE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The name of a CSV file representing the cycle-specific weight values. The row index should be integer cycle numbers and the column labels (header) should be observation names from the control file \u2013 these observation names in the control must be assigned a non-zero weight to activate their use in this table. Missing values should be represented by an empty entry.",
+      "rubrique": [
+        "pestpp-da"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 12.4.3 PEST++ Control Variables"
+    },
+    {
+      "keyword": "der_forgive",
+      "identifier": "DER_FORGIVE",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "If set to true, then if model run failure occurs when calculating finite-difference derivatives with respect to a certain parameter, that parameter is frozen at its current value for the remainder of the iteration. If set to false, PESTPP-GLM terminates execution with an appropriate message if this occurs.",
+      "rubrique": [
+        "pestpp-glm"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "enforce_tied_bounds",
+      "identifier": "ENFORCE_TIED_BOUNDS",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to enforce parameter bounds on any tied parameters Flag to enforce parameter bounds on any tied parameters. Depending on the ration between the tied and free parameters, this option can greatly limit parameter changes.",
+      "rubrique": [
+        "pestpp-glm",
+        "pestpp-sen",
+        "pestpp-opt",
+        "pestpp-swp",
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables; 7.2.3 Control Variables; 8.4 Summary of Control Variables; 10.3 Summary of Control Variables; 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "ensemble_output_precision",
+      "identifier": "ENSEMBLE_OUTPUT_PRECISION",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of significant digits to use in ASCII format ensemble files. Default is 6",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 20,
+      "manual_default": 6
+    },
+    {
+      "keyword": "forecasts",
+      "identifier": "FORECASTS",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Provide the names of one or more observations featured in the \u201cobservation data\u201d section of the PEST control file; these are treated as predictions in FOSM predictive uncertainty analysis.",
+      "rubrique": [
+        "pestpp-glm"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables"
+    },
+    {
+      "keyword": "glm_accept_mc_phi",
+      "identifier": "GLM_ACCEPT_MC_PHI",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to accept FOSM-based realization phi each base iteration if the phi is lower than the lambda-testing phi. Default is false.",
+      "rubrique": [
+        "pestpp-glm"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "glm_iter_mc",
+      "identifier": "GLM_ITER_MC",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to undertake FOSM-based posterior Monte Carlo during each iteration of PESTPP-GLM. Default is False, which will result in Monte Carlo only after iterations are done (depending on the glm_num_reals and uncertainty flags)",
+      "rubrique": [
+        "pestpp-glm"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "glm_num_reals",
+      "identifier": "GLM_NUM_REALS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of parameter realizations to draw from the posterior parameter distribution (using final, estimated parameter values as the parameter mean vector, and the FOSM-based posterior covariance matrix). Following generation of the realizations, the model is run once for each realization. The resulting observation ensemble is saved in a CSV file named case.obs.csv; the parameter ensemble is saved in a CSV file named case.par.csv.",
+      "rubrique": [
+        "pestpp-glm"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables",
+      "default": 0,
+      "manual_default": 100
+    },
+    {
+      "keyword": "gsa_method",
+      "identifier": "GSA_METHOD",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Methods are \u201cmorris\u201d and \u201csobol\u201d. Select \u201csobol\u201d to implement Method of Sobol.",
+      "rubrique": [
+        "pestpp-sen"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 7.2.3 Control Variables; 7.3.2 Control Variables",
+      "default": "MORRIS"
+    },
+    {
+      "keyword": "gsa_morris_delta",
+      "identifier": "GSA_MORRIS_DELTA",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The default value for morris_delta() is p/2[(p-1)]. The value supplied for this variable must be a multiple of 1/2[(p-1)]. No check is made to assure this is the case so users must take if specifying this argument",
+      "rubrique": [
+        "pestpp-sen"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 7.2.3 Control Variables",
+      "default": 0.6666
+    },
+    {
+      "keyword": "gsa_morris_obs_sen",
+      "identifier": "GSA_MORRIS_OBS_SEN",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "If supplied as false, PESTPP-SEN computes parameter sensitivities for the objective function only. If supplied as true, PESTPP-SEN computes parameter sensitivities for the objective function, as well as for each model output corresponding to observations featured in the \u201cobservation data\u201d section of the PEST control file.",
+      "rubrique": [
+        "pestpp-sen"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 7.2.3 Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "gsa_morris_p",
+      "identifier": "GSA_MORRIS_P",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The number of levels employed to grid the interval [0,1] associated with each transformed parameter. The number of intervals into which [0, 1] is therefore subdivided is p-1.",
+      "rubrique": [
+        "pestpp-sen"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 7.2.3 Control Variables",
+      "default": 4
+    },
+    {
+      "keyword": "gsa_morris_r",
+      "identifier": "GSA_MORRIS_R",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Sample size. The number of times that an elementary effect is computed for each parameter. That is, the number of sequences of m model runs undertaken by PESTPP-SEN, where m is the number of adjustable parameters featured in the PEST control file.",
+      "rubrique": [
+        "pestpp-sen"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 7.2.3 Control Variables",
+      "default": 4
+    },
+    {
+      "keyword": "gsa_sobol_par_dist",
+      "identifier": "GSA_SOBOL_PAR_DIST",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Specifies whether parameter samples should be drawn from a uniform or normal distribution. Values are \u201cunif\u201d or \u201cnorm\u201d respectively. In the latter case, samples are centered on parameter values provided in the PEST control file, while the standard deviation is a quarter of the difference between a parameter\u2019s upper and lower bounds. Log-uniform and log-normal distributions are employed for parameters which are denoted as log-transformed in the PEST control file.",
+      "rubrique": [
+        "pestpp-sen"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 7.3.2 Control Variables",
+      "default": "norm"
+    },
+    {
+      "keyword": "gsa_sobol_samples",
+      "identifier": "GSA_SOBOL_SAMPLES",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The number of samples to use in computing variances. The number of model runs is actually twice this number because of the need to employ two series of parameter samples. See Saltelli et al (2008) for details.",
+      "rubrique": [
+        "pestpp-sen"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 7.3.2 Control Variables",
+      "default": 4
+    },
+    {
+      "keyword": "hotstart_resfile",
+      "identifier": "HOTSTART_RESFILE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Specify the name of a residuals file from a previous PESTPP-GLM run. PESTPP-GLM will assume that these are model outputs corresponding to initial parameter values. It will use these instead of undertaking the initial model run. The name of a residuals file produced by PESTPP-GLM or PESTPP-OPT. PESTPP-OPT assumes that model output values contained in this file correspond to the values of parameters (including decision variables) listed in the PEST control file. Hence it does not carry out the initial model run.",
+      "rubrique": [
+        "pestpp-glm",
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables; 8.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_accept_phi_fac",
+      "identifier": "IES_ACCEPT_PHI_FAC",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The factor applied to the previous best mean objective function to determine if the current mean objective function is acceptable.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 1.05
+    },
+    {
+      "keyword": "ies_add_base",
+      "identifier": "IES_ADD_BASE",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "If set to true, instructs PESTPP-IES to include a \u201crealization\u201d in the initial parameter ensemble comprised of parameter values read from the \u201cparameter data\u201d section of the PEST control file. The corresponding observation ensemble is comprised of measurements read from the \u201cobservation data\u201d section of the PEST control file.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "ies_autoadaloc",
+      "identifier": "IES_AUTOADALOC",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to activate automatic adaptive localization.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "ies_autoadaloc_indicator_pars",
+      "identifier": "IES_AUTOADALOC_INDICATOR_PARS",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The name of 1 or more parameters to treat as indicator parameters in the automatic adaptive localization process to help define the level of spurious correlation.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_autoadaloc_sigma_dist",
+      "identifier": "IES_AUTOADALOC_SIGMA_DIST",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Real number representing the factor by which a correlation coefficient must exceed the standard deviation of background correlation coefficients to be considered significant. Default is 1.0",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 1.0
+    },
+    {
+      "keyword": "ies_bad_phi",
+      "identifier": "IES_BAD_PHI",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "If the objective function calculated as an outcome of a model run is greater than this value, the model run is deemed to have failed.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 1.79769e+308,
+      "manual_default": 1e+300
+    },
+    {
+      "keyword": "ies_bad_phi_sigma",
+      "identifier": "IES_BAD_PHI_SIGMA",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "If the objective function calculated for a given realization is greater than the current mean objective function of the ensemble plus the objective function standard deviation of the ensemble times ies_bad_phi_sigma() , that realization is treated as failed. If negative, its absolute value is treated as the upper quantile for identifying \u201cbad\u201d realizations.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 1.79769e+308,
+      "manual_default": 1e+300
+    },
+    {
+      "keyword": "ies_center_on",
+      "identifier": "IES_CENTER_ON",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "A realization name that should be used for the ensemble center in calculating the approximate Jacobian matrix. The realization name must be in both the parameter and observation ensembles. If not passed, the mean vector is used as the center. The value \u201c_MEDIAN_\u201d can also be used, which instructs PESTPP-IES to use the median vector for calculating anomalies.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_csv_by_reals",
+      "identifier": "IES_CSV_BY_REALS",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "A flag to save parameter and observation ensemble CSV files by realization instead of by variable name. If true, each row of the CSV file is a realization. If false, each column of the CSV file is a realization.",
+      "rubrique": [
+        "pestpp-swp",
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 10.3 Summary of Control Variables; 9.4 Summary of Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "ies_drop_conflicts",
+      "identifier": "IES_DROP_CONFLICTS",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to remove non-zero weighted observations that are in a prior-data conflict state from the upgrade calculations. Default is False.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "ies_enforce_bounds",
+      "identifier": "IES_ENFORCE_BOUNDS",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "If set to true PESTPP-IES will not transgress bounds supplied in the PEST control file when generating or accepting parameter realizations, and when adjusting these realizations.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "ies_enforce_chglim",
+      "identifier": "IES_ENFORCE_CHGLIM",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to enforce parameter change limits (via FACPARMAX and RELPARMAX) in a way similar to PEST and PESTPP-GLM (by scaling the entire realization). Default is false.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "ies_group_draws",
+      "identifier": "IES_GROUP_DRAWS",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "A flag to draw from the (multivariate) Gaussian prior by parameter/observation groups. This is usually a good idea since groups of parameters/observations are likely to have prior correlation.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "ies_initial_lambda",
+      "identifier": "IES_INITIAL_LAMBDA",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The initial Marquardt lambda. The default value is (10^{floorleft( log_{10}frac{mu_{\u0553}}{2n} right)}. ) If supplied as a negative value, then the abs(ies_initial_lambda) is used as multiplier of the default initial-phi-based value.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 0.0
+    },
+    {
+      "keyword": "ies_lambda_dec_fac",
+      "identifier": "IES_LAMBDA_DEC_FAC",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The factor by which to decrease the value of the Marquardt lambda during the next IES iteration if the current iteration of the ensemble smoother process was successful in lowering the mean objective function.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 0.75
+    },
+    {
+      "keyword": "ies_lambda_inc_fac",
+      "identifier": "IES_LAMBDA_INC_FAC",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The factor by which to increase the current value of the Marquardt lambda for further lambda testing if the current lambda testing cycle was unsuccessful.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 10.0
+    },
+    {
+      "keyword": "ies_lambda_mults",
+      "identifier": "IES_LAMBDA_MULTS",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Factors by which to multiply the best lambda from the previous iteration to yield values for testing parameter upgrades during the current iteration.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": [
+        0.1,
+        1,
+        10
+      ]
+    },
+    {
+      "keyword": "ies_localizer",
+      "identifier": "IES_LOCALIZER",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The name of a matrix to use for localization. The extension of the file is used to determine the type: .mat is an ASCII matrix file, .jcb / .jco signifies use of (enhanced) Jacobian matrix format (a binary format), while .csv signifies a comma-delimited file. Note that adjustable parameters not listed in localization matrix columns are implicitly treated as \u201cfixed\u201d while non-zero weighted observations not listed in rows of this matrix are implicitly treated as zero-weighted.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_mda_init_fac",
+      "identifier": "IES_MDA_INIT_FAC",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The initial MDA covariance inflation factor. Only used if ies_use_mda is true. Default is 10.0",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 10.0
+    },
+    {
+      "keyword": "ies_multimodal_alpha",
+      "identifier": "IES_MULTIMODAL_ALPHA",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The fraction of the total ensemble size to use as the local neighborhood realizations in the multimodal solution process. Must be greater than zero and less than 1. Values of 0.1 to 0.25 seem to work well. Default is 1.0 (disable multi-modal solution process)",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 0.0,
+      "manual_default": 1.0
+    },
+    {
+      "keyword": "ies_multimodal_phi_weight",
+      "identifier": "IES_MULTIMODAL_PHI_WEIGHT",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The relative importance of objective function (phi) value versus parameter-space distance in the composite score used to rank realizations in the multimodal solution process. Must be between 0 and 1. A value of 0.5 (the default) weights the two equally, which recovers the original behavior; values nearer 1.0 favor phi distance and values nearer 0.0 favor parameter-space distance. Used by both ies_multimodal_alpha and ies_multimodal_weight_exponent .",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 0.5
+    },
+    {
+      "keyword": "ies_multimodal_weight_exponent",
+      "identifier": "IES_MULTIMODAL_WEIGHT_EXPONENT",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Exponent controlling soft, distance-based weighting of realization contributions when ies_multimodal_alpha is 1.0 (that is, when a local neighborhood subset is not being used). Larger values more strongly down-weight realizations that have a lower composite score \u2013 in combined parameter-space and objective-function distance \u2013 from the realization being upgraded, approaching the behavior of the local neighborhood subset; a value of 0.0 (the default) weights all realizations equally and recovers the standard solution. Ignored when ies_multimodal_alpha is less than 1.0.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 0.0
+    },
+    {
+      "keyword": "ies_n_iter_reinflate",
+      "identifier": "IES_N_ITER_REINFLATE",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The number of between covariance re-inflation. Default is 0, which is indicates not re-inflate parameter covariance. This argument can also be a sequence of integers, indicating the number of iterations between each reinflation cycle",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_no_noise",
+      "identifier": "IES_NO_NOISE",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to not generate and use realizations of measurement noise. Default is False (that is, to use measurement noise).",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "ies_num_reals",
+      "identifier": "IES_NUM_REALS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The number of realizations to draw in order to form parameter and observation ensembles.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 50
+    },
+    {
+      "keyword": "ies_num_threads",
+      "identifier": "IES_NUM_THREADS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The number of threads to use during the localized upgrade solution process, the automatic adaptive localization process. If the localizer contains many (>10K) rows, then multithreading can substantially speed up the upgrade calculation process. ies_num_threads() should not be greater than the number of physical cores on the host machine.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": -1
+    },
+    {
+      "keyword": "ies_observation_ensemble",
+      "identifier": "IES_OBSERVATION_ENSEMBLE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The name of a CSV or JCO/JCB file (recognized by its extension) containing user-supplied observation plus noise realizations comprising the observation plus noise ensemble. If this keyword is omitted, PESTPP-IES generates the observation plus noise ensemble itself.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_ordered_binary",
+      "identifier": "IES_ORDERED_BINARY",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to write control-file-ordered binary ensemble files. Only used if save_binary is true. If false, hash-ordered binary files are written \u2013 for very high dimensional problems, writing unordered binary can save lots of time. If not passed and number of parameters > 100K, then ies_ordered_binary is set to false.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "ies_parameter_ensemble",
+      "identifier": "IES_PARAMETER_ENSEMBLE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The name of a CSV or JCO/JCB file (recognized by its extension) containing user-supplied parameter realizations comprising the initial (prior) parameter ensemble. If this keyword is omitted, PESTPP-IES generates the initial parameter ensemble itself.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_pdc_sigma_distance",
+      "identifier": "IES_PDC_SIGMA_DISTANCE",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The number of standard deviations from the mean used in checking for prior-data conflict.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": -1.0
+    },
+    {
+      "keyword": "ies_phi_factor_file",
+      "identifier": "IES_PHI_FACTOR_FILE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "A two-column ASCII file that contains observation group \u201ctags\u201d and phi factors. Used to internally adjust weights to implement a balanced objective function using the mean residuals from the initial ensemble. If ies_center_on() identifies a different realization to center the ensemble on for upgrades, that residuals of the identified realization are used instead of the mean to adjust weights.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_phi_factors_by_real",
+      "identifier": "IES_PHI_FACTORS_BY_REAL",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "A flag to use internal weight balancing for each realization. This option should be used in conjunction with the multi-modal solution process.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "ies_reg_factor",
+      "identifier": "IES_REG_FACTOR",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Regularization objective function as a fraction of measurement objective function when constraining parameter realizations to respect initial values.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 0.0
+    },
+    {
+      "keyword": "ies_reinflate_factor",
+      "identifier": "IES_REINFLATE_FACTOR",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "A scaling factor between 0 and 1 to reduce the variance of the prior parameter ensemble anomalies before translating them to the current parameter ensemble mean vector.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_reinflate_num_reals",
+      "identifier": "IES_REINFLATE_NUM_REALS",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The number of realizations to use between reinflation cycles. If negative, new realizations are drawn from the current ensemble.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_restart_observation_ensemble",
+      "identifier": "IES_RESTART_OBSERVATION_ENSEMBLE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The name of a CSV or JCO/JCB file (recognized by its extension) containing model outputs calculated using a parameter ensemble. If it reads this file, PESTPP-IES does not calculate these itself, proceeding to upgrade calculations instead.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_restart_parameter_ensemble",
+      "identifier": "IES_RESTART_PARAMETER_ENSEMBLE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The name of a CSV or JCO/JCB file (recognized by its extension) containing a parameter ensemble that corresponds to the ies_restart_observation_ensemble() . This option requires that the ies_restart_observation_ensemble( ) control variable also be supplied. This ensemble is only used in the calculation of the regularization component of the objective function for a restarted PESTPP-IES analysis.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_run_realname",
+      "identifier": "IES_RUN_REALNAME",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The name of a parameter realization in an external parameter ensemble file to run. Only used if noptmax = -2.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": "ies_reinflate_num_reals:"
+    },
+    {
+      "keyword": "ies_save_binary",
+      "identifier": "IES_SAVE_BINARY",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "A flag to save parameter and observation ensembles in binary (i.e., JCB) format instead of CSV format.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "ies_save_lambda_ensembles",
+      "identifier": "IES_SAVE_LAMBDA_ENSEMBLES",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Save a set of CSV or JCB files that record parameter realizations used when testing different Marquardt lambdas.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "ies_save_rescov",
+      "identifier": "IES_SAVE_RESCOV",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to save the iteration-level residual covariance matrix. If ies_save_binary is True, then a binary format file is written, otherwise an ASCII format (.cov) file is written. The file name is case.N.res.cov/.jcb. Note that this functionality does not scale beyond about 20,000 non-zero-weighted observations",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "ies_subset_how",
+      "identifier": "IES_SUBSET_HOW",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How to select the subset of realizations for objective function evaluation during upgrade testing. Default is \u201crandom\u201d.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": "RANDOM",
+      "choices": [
+        "first",
+        "last",
+        "random",
+        "phi_based"
+      ]
+    },
+    {
+      "keyword": "ies_subset_size",
+      "identifier": "IES_SUBSET_SIZE",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of realizations used in testing and evaluation of different Marquardt lambdas. If supplied as a negative value, then abs( ies_subset_size ) is treated as a percentage of the current ensemble size \u2013 this allows the subset size to fluctuate with the size of the ensemble",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": -10,
+      "manual_default": 4
+    },
+    {
+      "keyword": "ies_update_by_reals",
+      "identifier": "IES_UPDATE_BY_REALS",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to indicate whether or not to update each realization according to its phi reduction. Default is False.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_upgrades_in_memory",
+      "identifier": "IES_UPGRADES_IN_MEMORY",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to hold parameter upgrade ensembles in memory during testing. If False, parameter ensembles are saved to disk during testing and the best-phi ensemble is loaded from disk after testing \u2013 this can reduce memory pressure for very high dimensional problems. Default is True but is only activated if number of parameters > 100K.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "ies_use_approx",
+      "identifier": "IES_USE_APPROX",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Use complex or simple formula provided by Chen and Oliver (2013) for calculation of parameter upgrades. The more complex formula includes a function which constrains parameter realizations to respect prior means and probabilities.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "ies_use_empirical_prior",
+      "identifier": "IES_USE_EMPIRICAL_PRIOR",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Use an empirical, diagonal parameter covariance matrix for certain calculations. This matrix is contained in a file whose name is provided with the ies_parameter_ensemble() keyword.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "ies_use_mda",
+      "identifier": "IES_USE_MDA",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to use the (optionally iterative) Kalman update equation \u2013 the number of data assimilation iterations is controlled by NOPTMAX; NOPTMAX = 1 and ies_use_mda(true) results in the standard ensemble smoother Kalman update. If False, the GLM iterative ensemble smoother equation is used. Default is False",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "ies_use_phi_lambda_iters",
+      "identifier": "IES_USE_PHI_LAMBDA_ITERS",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to use phi-based lambda each iteration (instead just for the initial phi).",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "ies_use_prior_scaling",
+      "identifier": "IES_USE_PRIOR_SCALING",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Use a scaling factor based on the prior parameter distribution when evaluating parameter-to-model-output covariance used in calculation of the randomized Jacobian matrix.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "ies_verbose_level",
+      "identifier": "IES_VERBOSE_LEVEL",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The level of diagnostic output provided by PESTPP-IES. If set to 2, all intermediate matrices are saved to ASCII files. This can require a considerable amount of storage.",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": 1
+    },
+    {
+      "keyword": "ies_weight_ensemble",
+      "identifier": "IES_WEIGHT_ENSEMBLE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The name of a CSV or JCO/JCB file (recognized by its extension) containing user-supplied weight vectors for each realization. If this keyword is omitted, PESTPP-IES uses the weight vector in the control file for all realizations. Only used with ies_multimodal_alpha",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "iteration_summary",
+      "identifier": "ITERATION_SUMMARY",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "This flag activates or deactivates the writing of CSV files summarizing parameters (case.ipar), objective functions (case.iobj), sensitivities (case.isen), trial parameter upgrades (case.upg.csv) and parameter-to-run-id mapping (case.rid).",
+      "rubrique": [
+        "pestpp-glm"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables",
+      "default": false,
+      "manual_default": true
+    },
+    {
+      "keyword": "jac_scale",
+      "identifier": "JAC_SCALE",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Scale parameters by their sensitivities when calculating parameter upgrades. This can increase numerical precision; however, it may incur a numerical cost.",
+      "rubrique": [
+        "pestpp-glm"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "lambda_scale_fac",
+      "identifier": "LAMBDA_SCALE_FAC",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "These values are used to scale each parameter upgrade vector calculated using different values of lambda. This results in a line search along each upgrade vector direction. The number of tested parameter upgrades (and hence model runs) is equal to the number of lambdas times the number of scaling factors. Set lambda_scale_fac() to 1.0 to disable an upgrade direction line search. Line search factors along parameter upgrade directions computed using different Marquardt lambdas.",
+      "rubrique": [
+        "pestpp-glm",
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables; 9.4 Summary of Control Variables",
+      "default": [
+        0.75,
+        1,
+        1.1
+      ]
+    },
+    {
+      "keyword": "lambdas",
+      "identifier": "LAMBDAS",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Values for the Marquardt lambda used in calculation of parameter upgrades. Note that this base list is augmented with values bracketing the previous iteration\u2019s best lambda. However, if a single value is specified, only that lambda (and no other lambda) is used in all iterations.",
+      "rubrique": [
+        "pestpp-glm"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables",
+      "default": [
+        0.1,
+        1,
+        10,
+        100,
+        1000
+      ]
+    },
+    {
+      "keyword": "max_run_fail",
+      "identifier": "MAX_RUN_FAIL",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "A model run is declared to have failed if PESTPP-WRK cannot read one or more of the model\u2019s output files. Excessive execution time can also be deemed as model run failure, as discussed above. Run failure is normally an outcome of model hostility to the set of parameters with which it was provided. However, sometimes it can be caused by external problems that are not the model\u2019s fault, for example operating system quirks or network failure. Hence, the parallel run manager can be instructed to attempt a failed model run again using another agent. However, only a certain number of model run failures can be tolerated. This \u201ccertain number\u201d (an integer) must be supplied as the value of the max_run_fail() control variable. A value of 1 is used to request no repetition of model runs. The default value of 3 is used for all programs except PESTPP-IES, which uses a default value of 1. As discussed above, max_run_fail() is also used to control the number of concurrent runs that are allowed when the overdue_resched_fac() criterion is exceeded.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables",
+      "default": 3
+    },
+    {
+      "keyword": "mou_de_f",
+      "identifier": "MOU_DE_F",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The differential evolution \u201cf\u201d factor. Default is 0.8",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": 0.8
+    },
+    {
+      "keyword": "mou_dv_population_file",
+      "identifier": "MOU_DV_POPULATION_FILE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "A file ending in .csv or .jco/.jcb that contains the initial population to use. If not passed, the initial population is generated from a uniform distribution defined by decision variable upper and lower bounds.",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables"
+    },
+    {
+      "keyword": "mou_env_selector",
+      "identifier": "MOU_ENV_SELECTOR",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Which environmental selector to use. Values are \u201cnsga\u201d or \u201cspea\u201d. Default is \u201cnsga\u201d",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": "NSGA"
+    },
+    {
+      "keyword": "mou_generator",
+      "identifier": "MOU_GENERATOR",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The generator to use. Valid values are \u201cde\u201d (differential evolution), \u201cpso\u201d (particle swarm optimization), \u201csbx\u201d (simulated binary cross over), and \u201cpm\u201d (polynomial mutation), \u201csimplex\u201d (gradient simplex with increased parallelism). Default is \u201cde\u201d",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": "PSO",
+      "manual_default": "DE"
+    },
+    {
+      "keyword": "mou_mating_selector",
+      "identifier": "MOU_MATING_SELECTOR",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The mating selector to use. Values can be \u201ctournament\u201d or \u201crandom\u201d. Default is \u201ctournament\u201d",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": "TOURNAMENT"
+    },
+    {
+      "keyword": "mou_max_archive_size",
+      "identifier": "MOU_MAX_ARCHIVE_SIZE",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The maximum number of solutions to track in the archive. default is 500.",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": 500
+    },
+    {
+      "keyword": "mou_objectives",
+      "identifier": "MOU_OBJECTIVES",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Comma-separated list of observations and/or prior information equations to use as objectives. These quantities must have a group name that defines the desired extrema to seek (minimize or maximize) using the same rules used to name constraints.",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables"
+    },
+    {
+      "keyword": "mou_obs_population_restart_file",
+      "identifier": "MOU_OBS_POPULATION_RESTART_FILE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "File ending in .csv or .jcb/.jco that contains the simulation results to restart PESTPP-MOU with. Requires mou_population_file and it is up to the user to make sure these two files are coherent (e.g., from the same generation of a previous PESTPP-MOU analysis)",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables"
+    },
+    {
+      "keyword": "mou_population_schedule",
+      "identifier": "MOU_POPULATION_SCHEDULE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "A two column ascii file that defines the size of the population to use for each generation. Generations not listed use mou_population_size. This can be useful for finding a group of feasible initial population individuals.",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables"
+    },
+    {
+      "keyword": "mou_population_size",
+      "identifier": "MOU_POPULATION_SIZE",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The size of the population to use in PESTPP-MOU. Default is 100",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": 100
+    },
+    {
+      "keyword": "mou_pso_cognitive_const",
+      "identifier": "MOU_PSO_COGNITIVE_CONST",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The particle swarm cognitive constant. The default is 2.0",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": 2.0
+    },
+    {
+      "keyword": "mou_pso_dv_bound_handling",
+      "identifier": "MOU_PSO_DV_BOUND_HANDLING",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Method used to restore generated out of bound decision variable values. Values can be: \"clamp\" - set to the nearest bound, \"reperturb\" - keep drawing perturbations until it is within bounds; \"hybrid\" - combination of clamp and reperturb. Default is \"hybrid\".",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": "CLAMP",
+      "manual_default": "hybrid"
+    },
+    {
+      "keyword": "mou_pso_inertia",
+      "identifier": "MOU_PSO_INERTIA",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The particle swarm omega values: IINERT, FINERT, INITER, respectively. If INITER is 0.0, inertia is kept constant throughout iterations.",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": [
+        0.7,
+        0.4,
+        0
+      ]
+    },
+    {
+      "keyword": "mou_pso_rfit",
+      "identifier": "MOU_PSO_RFIT",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The maximum value that the particle swarm $alpha$ can take, if it is adjusted.",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": 2.0
+    },
+    {
+      "keyword": "mou_pso_rramp",
+      "identifier": "MOU_PSO_RRAMP",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The particle swarm RRAMP variable that affects how $alpha$ is adjusted each iteration (if $alpha = 0.0$ is passed). Default value is -500.",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": -500.0
+    },
+    {
+      "keyword": "mou_pso_social_const",
+      "identifier": "MOU_PSO_SOCIAL_CONST",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The particle swarm social constant. Default is 2.0",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": 2.0
+    },
+    {
+      "keyword": "mou_save_population_every",
+      "identifier": "MOU_SAVE_POPULATION_EVERY",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "How often, in generations, to save the population files to disk. Default is -1 \u2013 don\u2019t save any generation-specific populations.",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": -1
+    },
+    {
+      "keyword": "mou_simplex_factors",
+      "identifier": "MOU_SIMPLEX_FACTORS",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Backtracking points to test along each reflected simplex individual.",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables"
+    },
+    {
+      "keyword": "mou_simplex_mutation",
+      "identifier": "MOU_SIMPLEX_MUTATION",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to add guassian mutation to the reflected simplex individuals. Default is false",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "mou_simplex_reflections",
+      "identifier": "MOU_SIMPLEX_REFLECTIONS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of poor performing individuals to reflect. Must be less than the population size minus 1. Default is 10.",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": 10
+    },
+    {
+      "keyword": "mou_verbose_level",
+      "identifier": "MOU_VERBOSE_LEVEL",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Level of verbosity for PESTPP-MOU. 1 is minimal, 4 is everything.",
+      "rubrique": [
+        "pestpp-mou"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 13.4.3 PEST++ Control Variables",
+      "default": 1
+    },
+    {
+      "keyword": "noptmax",
+      "identifier": "NOPTMAX",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "NOPTMAX, an integer variable, sets the maximum number of iterations that an inversion or optimization process is allowed to run. However, values of 0, -1 and -2 trigger behaviour that is dependent on the PEST++ program that reads the PEST control file.",
+      "rubrique": [
+        "control data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.6 Control Data Section",
+      "default": 0
+    },
+    {
+      "keyword": "nphistp",
+      "identifier": "NPHISTP",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "PHIREDSTP is a real variable whereas NPHISTP is an integer variable. If, in the course of a PESTPP-GLM inversion process, there have been NPHISTP optimization iterations for which (\u03a6 i - \u03a6 min )/\u03a6 i \u2264 PHIREDSTP (\u03a6 i being the objective function value at the end of the i th optimization iteration and \u03a6 min being the lowest objective function achieved to date), PESTPP-GLM considers that the inversion process is at an end. Alternatively, if PESTPP-GLM has failed to lower the objective function over NPHINORED successive iterations, it ceases execution. PESTPP-IES supplies these same termination criteria to ensemble-mean objective functions.",
+      "rubrique": [
+        "control data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.6 Control Data Section",
+      "default": 3
+    },
+    {
+      "keyword": "num_tpl_ins_threads",
+      "identifier": "NUM_TPL_INS_THREADS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "When using the PEST++ tools for very high-dimensional problems, the time required to process template and/or instruction files can be considerable. To speed things up, the parallel agents can multithread these input and output processing operations. By default, only one thread is used and the number of threads to use is controlled by the num_tpl_ins_threads arg. Note that the number of threads used to process template and/or instruction files is set to the minimum of the number files and the value of num_tpl_ins_threads. Also note that using multithreading to process template and/or instruction files can consume significantly more memory and clock cycles. pest.stp Sometimes, users may want to stop a pest++ tool at a certain stage of the algorithm. Of course, you can use the ctrl+c, but this option will quit (nearly) immediately without recording any results regarding the current stage of the algorithm. For example, during an ensemble evaluation for pestpp-ies or pestpp-da, users may not want to wait for one or more (really) slow model runs to finish, but still want the results of the completed runs to be written to files. In this case, users can place a file named \u201cpest.stp\u201d (case sensitive \u2013 use lower case!) in the directory where PESTPP-XXX master is running and the first line of \u201cpest.stp\u201d should have a \u201c1\u201d or a \u201c2\u201d as the first whitespace-delimited token on the first line. If this file is found and meets the first-token requirement, then the PESTPP-XXX master instance will exit gracefully. If the file\u2019s presence is detected during run management, all remaining runs (queued or being run) are marked as fails (supported by both parallel and serial run manager). Then the algorithm records any relevant results are recorded and the pestpp-xxx exits gracefully. Alternatively, users may want to the run manager to stop waiting on one or more runs that are progressing slowly but don\u2019t want to quit running the pestpp-xxx tool. In this case, users can create the \u201cpest.stp\u201d file and put a \u201c4\u201d as the first whitespace-delimited token on the first line. In the case, the run manager will mark any remaining runs as fails and return control to the calling program. This program will then continue its execution and remove the pest.stp file. In this way, the next time the run manager is called, the pest.stp file is gone and execution will continue.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables",
+      "default": 1
+    },
+    {
+      "keyword": "obscov",
+      "identifier": "OBSCOV",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The name of a file containing the observation noise covariance matrix. This can be a parameter uncertainty file (extension .unc ), a covariance matrix file (extension .cov ) or a binary JCO or JCB file (extension .jco or .jcb ). Please see the section on this matrix above to understand the implications of using this matrix",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "opt_coin_log",
+      "identifier": "OPT_COIN_LOG",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Level of verbosity of solution information recorded by optimization library functions.",
+      "rubrique": [
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 8.4 Summary of Control Variables",
+      "default": 1
+    },
+    {
+      "keyword": "opt_constraint_groups",
+      "identifier": "OPT_CONSTRAINT_GROUPS",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Comma- delimited string identifying which observation and prior information groups are to be treated as constraints. Group names for \"less than\" constraints must start with \"l_\" or \u201cless_\u201d; group names for \"greater than\" constraints must start with \"g_\" or \u201cgreater_\u201d. If this control variable is omitted, all observation and prior information groups that meet these naming conventions are treated as constraints.",
+      "rubrique": [
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 8.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "opt_dec_var_groups",
+      "identifier": "OPT_DEC_VAR_GROUPS",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Comma-delimited string identifying which parameter groups are to be treated as decision variables. If not supplied, all adjustable parameters are treated as decision variables.",
+      "rubrique": [
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 8.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "opt_direction",
+      "identifier": "OPT_DIRECTION",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Either \"min\" or \"max\". \u201cmin\u201d specifies that the objective function be minimized, while \u201cmax\u201d specifies that it be maximized.",
+      "rubrique": [
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 8.4 Summary of Control Variables",
+      "default": "min"
+    },
+    {
+      "keyword": "opt_obj_func",
+      "identifier": "OPT_OBJ_FUNC",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "String identifying the prior information equation or two-column ASCII file that contains coefficients used in formulation of the objective function (see equation 8.4). If this control variable is not supplied, then each decision variable is given a coefficient of 1.0 in formulation of the objective function.",
+      "rubrique": [
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 8.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "opt_obs_stack",
+      "identifier": "OPT_OBS_STACK",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "File containing an observation stack. The file extension is used to determining CSV for binary (JCB) format. Supplying this file will forego evaluating the stack for the first iteration and possibly subsequent iterations depending on the value if opt_recalc_chance_every",
+      "rubrique": [
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 8.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "opt_par_stack",
+      "identifier": "OPT_PAR_STACK",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "File containing a parameter stack. The file extension is used to determining CSV for binary (JCB) format. The stack in this file must constrain all adjustable parameters.",
+      "rubrique": [
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 8.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "opt_recalc_chance_every",
+      "identifier": "OPT_RECALC_CHANCE_EVERY",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of iterations of the SLP process over which chance constraints are re-used. If set to 1, a calibration Jacobian matrix is calculated during every iteration of the SLP constrained optimization process if fosm-based chance constraints are used or the stack is re-evaluated if stack-based chance constraints are being used",
+      "rubrique": [
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 8.4 Summary of Control Variables",
+      "default": 1
+    },
+    {
+      "keyword": "opt_risk",
+      "identifier": "OPT_RISK",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "A number between 0.0 and 1.0. A value of 0.5 signifies risk neutrality. A value of 0.95 seeks a 95% risk averse application of optimization constraints, while a value of 0.05 seeks a 5% risk tolerant application of optimization constraints.",
+      "rubrique": [
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 8.4 Summary of Control Variables",
+      "default": 0.5
+    },
+    {
+      "keyword": "opt_skip_final",
+      "identifier": "OPT_SKIP_FINAL",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to skip the final model run.",
+      "rubrique": [
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 8.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "opt_stack_size",
+      "identifier": "OPT_STACK_SIZE",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of realizations to use in the stack. If positive, stack-based chance constraints are used. If opt_par_stack is not supplied, opt_stack_size realizations are drawn from the Prior. If opt_par_stack is supplied and the stack in that file is larger than opt_stack_size, the stack is truncated to opt_stack_size.",
+      "rubrique": [
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 8.4 Summary of Control Variables",
+      "default": 0
+    },
+    {
+      "keyword": "opt_std_weights",
+      "identifier": "OPT_STD_WEIGHTS",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag that identifies constraint weights as standard deviations. If set to true, PESTPP-OPT skips FOSM-based constraint uncertainty calculation and uses observation weights directly as standard deviations in the calculation of risk. These standard deviations can be calculated externally via PREDUNC or pyEMU, or can be derived empirically from an ensemble. Setting this flag to true will override all other chance constraint flags and options.",
+      "rubrique": [
+        "pestpp-opt"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 8.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "overdue_giveup_fac",
+      "identifier": "OVERDUE_GIVEUP_FAC",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The value of overdue_giveup_fac() is also a real number. Suppose that it is r. If an overdue simulation has already taken r times the average model run time but is still not complete, then the run manager declares the run to have failed. It instructs the agent that is supervising the run to kill it. The agent is then free to supervise another model run based on another set of parameters. Handling of run failure by programs of the PEST++ suite is discussed in more detail below. The default value for overdue_giveup_fac() is 100.0 for all programs in the suite except for PESTPP-IES, which uses a default value of 2.0.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables",
+      "default": 100.0
+    },
+    {
+      "keyword": "overdue_giveup_minutes",
+      "identifier": "OVERDUE_GIVEUP_MINUTES",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "This control variable can be used to place a \u201chard\u201d upper bound on the acceptable model run time. The value supplied for overdue_giveup_minutes()must be a real number. Suppose that it is r. Then a model run is deemed to have failed if it has been executing for more than r minutes. This model run time criterion works as an \u201cor\u201d condition with overdue_giveup_fac(); if the duration of a given model run exceeds overdue_giveup_minutes() or overdue_giveup_fac() times the average model run time, it is marked as a failure. The default value for overdue_giveup_fac() is 1.0E+30, this effectively disabling it.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables",
+      "default": 1e+30
+    },
+    {
+      "keyword": "overdue_resched_fac",
+      "identifier": "OVERDUE_RESCHED_FAC",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Suppose that the value of overdue_resched_fac() is supplied as r, where r is a real number. If the run manager is still awaiting completion of a simulation that has already been running for more than r times the average model run time (calculated on the basis of previous successful runs), then it will ask another agent to start the same run if one is available. The maximum number of concurrent runs that employ the same set of parameters is set by the max_run_fail() control variable (this variable is further discussed below). The re-running of a simulation using another agent is done as a precautionary measure. It guards against the possibility that the computer on which the delayed model run is executing has become busy with other tasks. A competition is started between agents. The first of the concurrent model runs to finish successfully is accepted; meanwhile, the remaining concurrent model run (or runs) is terminated by PESTPP-XXX. Note, however, that if max_run_fail() is set to 1, concurrent model run scheduling is not undertaken. The value supplied for the overdue_resched_fac() variable must be a real number that is 1.0 or greater. Its default value is 1.15; this is the value which the run manager uses if you do not supply a value for this control variable yourself. A value greater than 1.15 may be desirable in circumstances where the time required for completion of a simulation is sensitive to parameter values.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables",
+      "default": 1.15
+    },
+    {
+      "keyword": "panther_agent_freeze_on_fail",
+      "identifier": "PANTHER_AGENT_FREEZE_ON_FAIL",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "In some settings, when starting to use PEST++, it can be difficult to debug why runs may be failing in a parallel run environment. This is especially true when agents are on separate physical hosts, which can make monitoring agent progress difficult and when a run fails, the panther run manager will immediate try to schedule another run on that same agent, which will cause the template files to be rewritten (nearly immediately) and any temporary files to be erased, making it nearly impossible to investigate the cause of the run failure. If users want to \u201cslow down the process\u201d so they debug run failures, adding panther_agent_freeze_on_fail as true to a (agent) control file will cause a agent to \u201cfreeze\u201d on the occurrence of a run failure. This freeze can only be undone by forcing the agent to exit and restarting it, but, nevertheless, freezing a agent when a run failure occurs can be very useful to diagnosing issues related to parallelization of the PEST++ process because it allows direct inspection of all (temporary) files related to the failed run.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables",
+      "default": 0
+    },
+    {
+      "keyword": "panther_agent_no_ping_timeout_secs",
+      "identifier": "PANTHER_AGENT_NO_PING_TIMEOUT_SECS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Related to the above agent restart option, agent can be instructed to terminate (if panther_agent_restart_on_error() is set to false) or restart (if panther_agent_restart_on_error() is set to true), if no ping message has been received from the run manager in more than a specified time interval. This interval is configurable in seconds via the panther_agent_no_ping_timeout_secs() control variable, with a default value of 300 (i.e., 5 minutes).",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables",
+      "default": -1,
+      "manual_default": 300
+    },
+    {
+      "keyword": "panther_agent_restart_on_error",
+      "identifier": "PANTHER_AGENT_RESTART_ON_ERROR",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "In certain Wide Area Network (WAN) environments, manager-agent communications can become \u201cbroken\u201d, or \u201chalf-open\u201d, where one side does not know that the other has closed the connection. This can happen with TCP/IP connections when there are long periods of no communication, such as during extended periods when the PEST++ manager is busy calculating parameter upgrades or undertaking localization calculations in PESTPP-IES. To help alleviate this, a discrete run manager ping thread is invoked which pings agents at least once every two minutes when the run manager is idle (i.e., when the manager is not communicating with agents as they undertake model runs but is busy doing other intensive calculations). In addition, agents can optionally be restarted in the case that communication errors still occur, instead of terminating or remaining in a half-open state. By default, this option is activated (i.e., it is set to true) but can be inactivated using the ++panther_agent_restart_on_error(false) control variable.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "panther_echo",
+      "identifier": "PANTHER_ECHO",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "If users are piping the master instance stdout and stderr to a file (through a redirect), then the panther master run summary, which echoes to the file with a line return to overwrite the output (in place using a carriage return), can fill up these file because the carriage return character is ignored or converted to a line return. In this case, suppling panther_echo(false) will turn off this stdout updating during the run sequence. Users can still inspect the run management process through the run management record.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "panther_master_echo_interval_milliseconds",
+      "identifier": "PANTHER_MASTER_ECHO_INTERVAL_MILLISECONDS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "In situations where the forward model runtime is very short, allowing the master to echo as quickly as workers communicate can slow down responsiveness of physical host machine. The panther_master_echo_interval_milliseconds option controls how often the panther master reports to the terminal screen. Default is 500 milliseconds.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables",
+      "default": 500
+    },
+    {
+      "keyword": "panther_master_timeout_milliseconds",
+      "identifier": "PANTHER_MASTER_TIMEOUT_MILLISECONDS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "In situations where the forward model runtime is very short, it is advantageous to have the panther master be as responsive as possible. But in other situations, where network traffic is heavy and latency is high, it is important for the panther master to be patience when communicating with workers. The panther_master_timeout_milliseconds option controls how quickly the panther master responds to requests. The default is 500 milliseconds. If users are experiencing \u201cdeadlock\u201d on the master, you may need to increase the value.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables",
+      "default": 500
+    },
+    {
+      "keyword": "panther_persistent_workers",
+      "identifier": "PANTHER_PERSISTENT_WORKERS",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Part of the run management design for panther is that workers persist for the duration of any long-term PESTPP run. All PESTPP-XXX programs have iterative steps involved that can result in idle workers at some times. With long and potentially variable runtimes the worker idle time can be significant. As users start to pay for cloud resources, for example, that idle time can be wasteful. panther_persistent_workers is a Boolean parameter (default value is True) that, if False, will shut down workers when no more forward runs are requested. This decreases idle time of workers but also requires users to manually restart workers for the next batch of forward runs as, at completion of a batch, all workers will be shut down. It is recommended to set panther_master_timeout_milliseconds to a higher value (>=1000) if setting panther_persistent_workers to False to prevent overloading the master.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "panther_poll_interval",
+      "identifier": "PANTHER_POLL_INTERVAL",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Once a panther agent is initialized, it will start to try to connect to the master instance. On some operating systems, this act of trying connect actually results in a OS-level \u201cfile handle\u201d being opened, which, if substantial time passes, can accumulate to a large number of open file handles. To prevent this, the panther agents will \u201csleep\u201d for a given number of seconds before trying to connect to the master again. The length of time the agent sleeps is controlled by the panther_poll_interval, which an integer value of seconds to sleep. By default, this value is 1 second.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables",
+      "default": 1
+    },
+    {
+      "keyword": "panther_transfer_on_fail",
+      "identifier": "PANTHER_TRANSFER_ON_FAIL",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "In some cases, users may want to retrieve one or more model output files from the agent working directories and collect those files in the master directory. For example, users may want an entire model output binary file for further processing after a successful model run. Or, if a model run fails to complete, users may wish to see certain model input/output files to diagnose issues. In a parallel run setting, both of these tasks can be difficult to complete. To support these use cases, the PEST++ tools allow transferring files from the agent directories to the master directory through the panther_transfer_on_finish and panther_transfer_on_fail options. Both of these options can be supplied as comma-separated lists of files or single file names. After successful completion or run failure, respectively, the panther run manager will transfer the nominated files found in the agent control file to the master working directory. This is worth saying again \u2013 the values of panther_transfer_on_finish and panther_transfer_on_fail listed in the agent\u2019s control file are transferred to the master. This approach allows users to potentially transfer different files from each agent. To avoid naming conflicts in the master directory, the name of the file saved in the master directory is prepended with a unique tag staring with \u201cftx_\u201d and a counter. Additional metadata information including agent hostname, agent working directory, run manager run id value, run manager group id value and run manager information text (this information text usually includes information like realization name from pestpp-ies/pestpp-da and parameter name for Jacobian filling and global sensitivity analysis) are added to the run management record file along with the unique \u201cftx_\u201d tag, to that users can piece together which agent and in what context a file originated. Users are encouraged to study the .rmr file because it lists several valuable pieces of information regarding any file transfers.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables"
+    },
+    {
+      "keyword": "panther_transfer_on_finish",
+      "identifier": "PANTHER_TRANSFER_ON_FINISH",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "In some cases, users may want to retrieve one or more model output files from the agent working directories and collect those files in the master directory. For example, users may want an entire model output binary file for further processing after a successful model run. Or, if a model run fails to complete, users may wish to see certain model input/output files to diagnose issues. In a parallel run setting, both of these tasks can be difficult to complete. To support these use cases, the PEST++ tools allow transferring files from the agent directories to the master directory through the panther_transfer_on_finish and panther_transfer_on_fail options. Both of these options can be supplied as comma-separated lists of files or single file names. After successful completion or run failure, respectively, the panther run manager will transfer the nominated files found in the agent control file to the master working directory. This is worth saying again \u2013 the values of panther_transfer_on_finish and panther_transfer_on_fail listed in the agent\u2019s control file are transferred to the master. This approach allows users to potentially transfer different files from each agent. To avoid naming conflicts in the master directory, the name of the file saved in the master directory is prepended with a unique tag staring with \u201cftx_\u201d and a counter. Additional metadata information including agent hostname, agent working directory, run manager run id value, run manager group id value and run manager information text (this information text usually includes information like realization name from pestpp-ies/pestpp-da and parameter name for Jacobian filling and global sensitivity analysis) are added to the run management record file along with the unique \u201cftx_\u201d tag, to that users can piece together which agent and in what context a file originated. Users are encouraged to study the .rmr file because it lists several valuable pieces of information regarding any file transfers.",
+      "rubrique": [
+        "run management"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 5.3.5 Run Management Control Variables"
+    },
+    {
+      "keyword": "par_sigma_range",
+      "identifier": "PAR_SIGMA_RANGE",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The difference between a parameter\u2019s upper and lower bounds expressed as standard deviations.",
+      "rubrique": [
+        "pestpp-glm",
+        "pestpp-opt",
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables; 8.4 Summary of Control Variables; 9.4 Summary of Control Variables",
+      "default": 4.0
+    },
+    {
+      "keyword": "parcov",
+      "identifier": "PARCOV",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Provide the name of a JCO, JCB, UNC or COV file from which the prior parameter covariance matrix used in FOSM analysis is read. Provide the name of a JCO, JCB, UNC or COV file from which the prior covariance matrix used in FOSM analysis is read. The name of a file containing the prior parameter covariance matrix. This can be a parameter uncertainty file (extension .unc ), a covariance matrix file (extension .cov ) or a binary JCO or JCB file (extension .jco or .jcb ).",
+      "rubrique": [
+        "pestpp-glm",
+        "pestpp-opt",
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables; 8.4 Summary of Control Variables; 9.4 Summary of Control Variables"
+    },
+    {
+      "keyword": "phiredstp",
+      "identifier": "PHIREDSTP",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "PHIREDSTP is a real variable whereas NPHISTP is an integer variable. If, in the course of a PESTPP-GLM inversion process, there have been NPHISTP optimization iterations for which (\u03a6 i - \u03a6 min )/\u03a6 i \u2264 PHIREDSTP (\u03a6 i being the objective function value at the end of the i th optimization iteration and \u03a6 min being the lowest objective function achieved to date), PESTPP-GLM considers that the inversion process is at an end. Alternatively, if PESTPP-GLM has failed to lower the objective function over NPHINORED successive iterations, it ceases execution. PESTPP-IES supplies these same termination criteria to ensemble-mean objective functions.",
+      "rubrique": [
+        "control data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.6 Control Data Section",
+      "default": 0.01
+    },
+    {
+      "keyword": "rand_seed",
+      "identifier": "RAND_SEED",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Seed for the random number generator. Used for FOSM-basd Monte Carlo Seed for the random number generator.",
+      "rubrique": [
+        "pestpp-glm",
+        "pestpp-sen",
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables; 7.2.3 Control Variables; 7.3.2 Control Variables; 9.4 Summary of Control Variables",
+      "default": 358183147
+    },
+    {
+      "keyword": "save_binary",
+      "identifier": "SAVE_BINARY",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "A flag to save parameter and observation ensembles in binary format. If this is set to true, parameter and observation ensembles are saved in files named case.par.jcb and case.obs.jcb.",
+      "rubrique": [
+        "pestpp-glm"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "save_dense",
+      "identifier": "SAVE_DENSE",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to save ensembles in a \u201cdense\u201d binary format, which in constrast to the sparse binary format of jcb/jco. Ensemble files will be given a \u201c.bin\u201d extension. These files can be read by PESTPP-IES (for restarting) and by pyEMU. This option only applies of save_ binary is True. Default is False",
+      "rubrique": [
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "sqp_alpha_mults",
+      "identifier": "SQP_ALPHA_MULTS",
+      "type": "ARRAY",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Line-search scale multipliers applied to the KKT search direction.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": [
+        0.001,
+        0.005,
+        0.01,
+        0.1,
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "keyword": "sqp_cma_c1",
+      "identifier": "SQP_CMA_C1",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Rank-one learning rate for the covariance update. -1 uses the auto-computed CMA default.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": -1.0
+    },
+    {
+      "keyword": "sqp_cma_cc",
+      "identifier": "SQP_CMA_CC",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Cumulation time scale for the rank-one evolution path. -1 uses the auto-computed CMA default.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": -1.0
+    },
+    {
+      "keyword": "sqp_cma_cmu",
+      "identifier": "SQP_CMA_CMU",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Rank-mu learning rate for the covariance update. -1 uses the auto-computed CMA default.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": -1.0
+    },
+    {
+      "keyword": "sqp_cma_parent_num",
+      "identifier": "SQP_CMA_PARENT_NUM",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of parent members used in the adaptive covariance update. -1 defaults to lambda/4.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": -1
+    },
+    {
+      "keyword": "sqp_cma_reinflation_factor",
+      "identifier": "SQP_CMA_REINFLATION_FACTOR",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Multiplicative reinflation applied to the covariance matrix when the base realization is infeasible. -1 disables explicit reinflation.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": -1.0
+    },
+    {
+      "keyword": "sqp_cma_stepsize_control",
+      "identifier": "SQP_CMA_STEPSIZE_CONTROL",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Enable experimental step-size adaptation via a sigma evolution path. Disabled by default.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "sqp_dv_en",
+      "identifier": "SQP_DV_EN",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Initial decision-variable ensemble file (CSV/JCO/JCB). If omitted, draws from prior parameter covariance.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables"
+    },
+    {
+      "keyword": "sqp_enforce_bounds",
+      "identifier": "SQP_ENFORCE_BOUNDS",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Enforce parameter bounds on ensemble members during initialization.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "sqp_filter_tol",
+      "identifier": "SQP_FILTER_TOL",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Tolerance for objective/violation dominance in the filter acceptance criterion.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": 0.001
+    },
+    {
+      "keyword": "sqp_hess_max_cond_num",
+      "identifier": "SQP_HESS_MAX_COND_NUM",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Maximum condition number allowed for the Hessian before regularization is applied.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": 100000000.0
+    },
+    {
+      "keyword": "sqp_hessian_update_method",
+      "identifier": "SQP_HESSIAN_UPDATE_METHOD",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Hessian update formula: BFGS (default, with Powell damping), SR1, or STOSAG (ensemble-approximated curvature).",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": "BFGS"
+    },
+    {
+      "keyword": "sqp_max_consec_infeas_ies",
+      "identifier": "SQP_MAX_CONSEC_INFEAS_IES",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of consecutive infeasible iterations before switching to IES-based feasibility recovery.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": 3
+    },
+    {
+      "keyword": "sqp_max_reinflation_cond_num",
+      "identifier": "SQP_MAX_REINFLATION_COND_NUM",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Maximum covariance matrix condition number permitted before reinflation is triggered.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": 500.0
+    },
+    {
+      "keyword": "sqp_num_reals",
+      "identifier": "SQP_NUM_REALS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of ensemble realizations. Values >0 enable ensemble-gradient mode. -1 (default) enables ensemble mode only if sqp_dv_en is also provided.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": -1
+    },
+    {
+      "keyword": "sqp_num_refined_search_pts",
+      "identifier": "SQP_NUM_REFINED_SEARCH_PTS",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of intermediate (adaptively refined) candidate points added around the best line-search scale factor.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": 1
+    },
+    {
+      "keyword": "sqp_powell_damping_factor",
+      "identifier": "SQP_POWELL_DAMPING_FACTOR",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Damping factor used in Powell's modification to the BFGS update to maintain positive definiteness.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": 0.2
+    },
+    {
+      "keyword": "sqp_rescale_search_dir",
+      "identifier": "SQP_RESCALE_SEARCH_DIR",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Rescale the KKT search direction by parameter ranges prior to the line search.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "sqp_reset_hessian_every",
+      "identifier": "SQP_RESET_HESSIAN_EVERY",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Reset the Hessian to the identity every N iterations. -1 disables periodic resets.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": -1
+    },
+    {
+      "keyword": "sqp_restart_obs_en",
+      "identifier": "SQP_RESTART_OBS_EN",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Observation ensemble for warm-starting (CSV/JCO/JCB); must be matched to the DV ensemble.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables"
+    },
+    {
+      "keyword": "sqp_risk",
+      "identifier": "SQP_RISK",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Reliability level for chance constraint evaluation in PESTPP-SQP (0\u20131). 0.5 = risk neutral; >0.5 = risk averse. Overrides opt_risk for SQP runs.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": 0.5
+    },
+    {
+      "keyword": "sqp_save_cov_every",
+      "identifier": "SQP_SAVE_COV_EVERY",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Save the adaptive covariance matrix every N iterations. -1 disables saving.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": -1
+    },
+    {
+      "keyword": "sqp_scale_down_factor",
+      "identifier": "SQP_SCALE_DOWN_FACTOR",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Factor by which the base search-direction scale is reduced when the previous step was rejected.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": 1.0
+    },
+    {
+      "keyword": "sqp_seek_feas_max_iter",
+      "identifier": "SQP_SEEK_FEAS_MAX_ITER",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Maximum number of IES iterations allowed during feasibility recovery.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": 3
+    },
+    {
+      "keyword": "sqp_solve_method",
+      "identifier": "SQP_SOLVE_METHOD",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "KKT subproblem solver: NULL (null-space method, default) or DIRECT (direct KKT solve).",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": "NULL"
+    },
+    {
+      "keyword": "sqp_subset_size",
+      "identifier": "SQP_SUBSET_SIZE",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of ensemble members used in the line search. Negative values are interpreted as a percentage of the current ensemble size.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": -10
+    },
+    {
+      "keyword": "sqp_update_hessian",
+      "identifier": "SQP_UPDATE_HESSIAN",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Enable Hessian updates each iteration. If false, the identity matrix is used throughout.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "sqp_use_ensemble_approx_hessian",
+      "identifier": "SQP_USE_ENSEMBLE_APPROX_HESSIAN",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Use the ensemble-approximated (STOSAG-based) curvature to initialize the Hessian at the first iteration.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": true
+    },
+    {
+      "keyword": "sqp_viol_pad",
+      "identifier": "SQP_VIOL_PAD",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Small padding added to constraint violations when evaluating working-set membership.",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": 0.0001
+    },
+    {
+      "keyword": "sqp_working_set_tol",
+      "identifier": "SQP_WORKING_SET_TOL",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Relative tolerance used to classify an inequality constraint as active (in the working set).",
+      "rubrique": [
+        "pestpp-sqp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 17.4.3 PEST++ Control Variables",
+      "default": 0.1
+    },
+    {
+      "keyword": "svd_pack",
+      "identifier": "SVD_PACK",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "This informs PESTPP-GLM of the package that it must employ to undertake singular value decomposition of the J t QJ matrix (appropriately modified to include the Marquardt lambda and regularization). Options are \u201ceigen\u201d and \u201credsvd\u201d.",
+      "rubrique": [
+        "pestpp-glm"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables",
+      "default": "redsvd"
+    },
+    {
+      "keyword": "sweep_chunk",
+      "identifier": "SWEEP_CHUNK",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The number of runs to batch queue for the run manager. Each chunk is read, run and written as a single batch.",
+      "rubrique": [
+        "pestpp-swp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 10.3 Summary of Control Variables",
+      "default": "500"
+    },
+    {
+      "keyword": "sweep_forgive",
+      "identifier": "SWEEP_FORGIVE",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "If set to true, PESTPP-SWP provides values for missing variables in the user-supplied sweep_parameter_csv_file() file.",
+      "rubrique": [
+        "pestpp-swp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 10.3 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "sweep_output_csv_file",
+      "identifier": "SWEEP_OUTPUT_CSV_FILE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The CSV file written by PESTPP-SWP.",
+      "rubrique": [
+        "pestpp-swp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 10.3 Summary of Control Variables",
+      "default": "sweep_out.csv"
+    },
+    {
+      "keyword": "sweep_parameter_csv_file",
+      "identifier": "SWEEP_PARAMETER_CSV_FILE",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "A user-provided CSV file that lists the parameter values employed for model runs. If this filename ends with .jcb or .jco, then the ensemble is read from a binary JCB or JCO file instead.",
+      "rubrique": [
+        "pestpp-swp"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 10.3 Summary of Control Variables",
+      "default": "sweep_in.csv"
+    },
+    {
+      "keyword": "tie_by_group",
+      "identifier": "TIE_BY_GROUP",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to tie all adjustable parameters by group designation; however, all user-supplied parameter tied-parent relationships are preserved. The effective number of adjustable parameters thus becomes the number of parameter groups (which contain at least one adjustable parameter) plus the number of parameters that are listed as having others tied to it. Flag to tie all adjustable parameters together within each parameter group. Initial parameter ratios are maintained as parameters are adjusted. Parameters that are designated as already tied, or that have parameters tied to them, are not affected.",
+      "rubrique": [
+        "pestpp-glm",
+        "pestpp-sen",
+        "pestpp-opt",
+        "pestpp-swp",
+        "pestpp-ies"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables; 7.2.3 Control Variables; 7.3.2 Control Variables; 8.4 Summary of Control Variables; 10.3 Summary of Control Variables; 9.4 Summary of Control Variables",
+      "default": false
+    },
+    {
+      "keyword": "uncertainty",
+      "identifier": "UNCERTAINTY",
+      "type": "LOGICAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "Flag to active or deactivate FOSM-based parameter and (optionally) forecast uncertainty estimation.",
+      "rubrique": [
+        "pestpp-glm"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables",
+      "default": true
+    }
+  ],
+  "inputs": {
+    "pestpp_calibrate_modflow": {
+      "parameters": {
+        "type": "dict",
+        "desc": "The run's own arrays to tune, each by its MODFLOW identifier (NPF_K, NPF_K33, STO_SS, ...) as a multiplier on the values the run solved with, bounded by a lower and an upper factor around 1: {\"NPF_K\": {\"lower\": 0.1, \"upper\": 10, \"source\": \"where the bounds are read\"}}. A parameter stating no bounds refuses; one array read from its own file, or stated per layer with different factors, refuses"
+      },
+      "tune": {
+        "type": "int",
+        "desc": "How many of the named parameters are tuned; fewer than are named ranks them first by a PEST++ sensitivity pass (Method of Morris), the most sensitive kept and confirmed on the review card. Unstated, every named parameter is tuned"
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+pcf version=2
+* control data keyword
+pestmode estimation
+noptmax 1
+debug_parse_only true
+* parameter data external
+par.csv
+* observation data external
+obs.csv
+* model command line
+true
+* model input external
+tpl.csv
+* model output external
+ins.csv
