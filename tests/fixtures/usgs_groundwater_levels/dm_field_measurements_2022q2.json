@@ -1,0 +1,687 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "dd3c8193-a48d-4291-8eab-ebc7f6fe83da",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "279e90f2-2f12-4e43-8dfa-e1a1ff7d5c44",
+        "parameter_code": "62611",
+        "monitoring_location_id": "USGS-414035093391801",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "796.38",
+        "unit_of_measure": "ft",
+        "time": "2022-05-02T18:32:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "NAVD88",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T04:05:30.448599+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 5,
+        "day": 2,
+        "time_of_day": "18:32:00+00:00"
+      },
+      "id": "01dca4b7-54dd-47d7-9e44-656eaf1159a9",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65490000000001,
+          41.676319444444445
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "dd3c8193-a48d-4291-8eab-ebc7f6fe83da",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "b21713ec-ded2-4533-8ad5-cf2b9341249b",
+        "parameter_code": "62611",
+        "monitoring_location_id": "USGS-414035093391801",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "796.16",
+        "unit_of_measure": "ft",
+        "time": "2022-04-25T16:47:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "NAVD88",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T04:05:30.448599+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 4,
+        "day": 25,
+        "time_of_day": "16:47:00+00:00"
+      },
+      "id": "0b2b70ed-8511-471d-bd95-262efac4c58d",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65490000000001,
+          41.676319444444445
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "019f6f29-a596-4f7a-b873-5ddb4b86700d",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "da011341-aba6-431c-929e-c36fa9a6d9ae",
+        "parameter_code": "62611",
+        "monitoring_location_id": "USGS-414034093391802",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "795.67",
+        "unit_of_measure": "ft",
+        "time": "2022-05-02T18:35:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "NAVD88",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T03:53:42.077960+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 5,
+        "day": 2,
+        "time_of_day": "18:35:00+00:00"
+      },
+      "id": "0c573af7-5bdd-46f7-8ab0-643a52232f93",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65488055555556,
+          41.676249999999996
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "df709afe-338a-4b81-b189-b6848a7624ce",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "9d2c5adf-4c1d-4700-8c5e-dbc0cc1f69cb",
+        "parameter_code": "62611",
+        "monitoring_location_id": "USGS-414034093391801",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "795.69",
+        "unit_of_measure": "ft",
+        "time": "2022-05-02T18:24:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "NAVD88",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T03:57:04.768435+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 5,
+        "day": 2,
+        "time_of_day": "18:24:00+00:00"
+      },
+      "id": "3275d2e0-6ea4-4bee-b810-827873bbf8e1",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65488055555556,
+          41.676069444444444
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "e84b5287-4f07-4614-9ab0-87190b014e66",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "a4ecdbd2-609d-4d0a-824a-4b73bba9fd60",
+        "parameter_code": "72019",
+        "monitoring_location_id": "USGS-414034093391803",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "18.55",
+        "unit_of_measure": "ft",
+        "time": "2022-04-25T17:53:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "Local Assumed Datum",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T03:33:42.701059+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 4,
+        "day": 25,
+        "time_of_day": "17:53:00+00:00"
+      },
+      "id": "525b5dfd-f51d-4203-9427-fbcc9f004b7c",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65488055555556,
+          41.67611111111111
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "3987271a-5eb6-4166-af53-f658ac8b72c9",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "50574aad-876f-48e6-a6df-1e3a11828ef6",
+        "parameter_code": "62611",
+        "monitoring_location_id": "USGS-414003093391501",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "790.18",
+        "unit_of_measure": "ft",
+        "time": "2022-04-25T15:36:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "NAVD88",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T04:04:44.782587+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 4,
+        "day": 25,
+        "time_of_day": "15:36:00+00:00"
+      },
+      "id": "5e5f3e14-2955-4abe-be68-1ed2f0c57def",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65426666666667,
+          41.66756944444444
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "5fbba04b-97e3-4091-a598-1ea8de976630",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "80d1e699-9f53-405e-b7c3-6ceae073cb0a",
+        "parameter_code": "72019",
+        "monitoring_location_id": "USGS-414034093391802",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "18.53",
+        "unit_of_measure": "ft",
+        "time": "2022-04-25T16:48:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "Local Assumed Datum",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T03:53:42.077960+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 4,
+        "day": 25,
+        "time_of_day": "16:48:00+00:00"
+      },
+      "id": "70694d70-701e-4d8b-99ef-1afe319ecd08",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65488055555556,
+          41.676249999999996
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "5cbaa7e5-857c-43c0-9bb5-947ab652520c",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "279e90f2-2f12-4e43-8dfa-e1a1ff7d5c44",
+        "parameter_code": "72019",
+        "monitoring_location_id": "USGS-414035093391801",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "17.40",
+        "unit_of_measure": "ft",
+        "time": "2022-05-02T18:32:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "Local Assumed Datum",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T04:05:30.448599+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 5,
+        "day": 2,
+        "time_of_day": "18:32:00+00:00"
+      },
+      "id": "77ada9f4-71ea-44eb-9c9c-3f07720e32b3",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65490000000001,
+          41.676319444444445
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "5fbba04b-97e3-4091-a598-1ea8de976630",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "da011341-aba6-431c-929e-c36fa9a6d9ae",
+        "parameter_code": "72019",
+        "monitoring_location_id": "USGS-414034093391802",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "18.32",
+        "unit_of_measure": "ft",
+        "time": "2022-05-02T18:35:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "Local Assumed Datum",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T03:53:42.077960+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 5,
+        "day": 2,
+        "time_of_day": "18:35:00+00:00"
+      },
+      "id": "808dd845-6f6e-4084-9b7a-43e9fa65ad7c",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65488055555556,
+          41.676249999999996
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "2c8543a4-a15f-4455-9d70-de4529171ea4",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "dfe1aa75-bf23-49be-9a46-413a341420c2",
+        "parameter_code": "72019",
+        "monitoring_location_id": "USGS-414034093391801",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "18.80",
+        "unit_of_measure": "ft",
+        "time": "2022-04-25T20:26:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "Local Assumed Datum",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T03:57:04.768435+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 4,
+        "day": 25,
+        "time_of_day": "20:26:00+00:00"
+      },
+      "id": "8c39ad99-4f0c-4efd-94ed-927f12b655ea",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65488055555556,
+          41.676069444444444
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "f983e505-4589-4067-86cb-09a9a83cdecd",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "a4ecdbd2-609d-4d0a-824a-4b73bba9fd60",
+        "parameter_code": "62611",
+        "monitoring_location_id": "USGS-414034093391803",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "795.47",
+        "unit_of_measure": "ft",
+        "time": "2022-04-25T17:53:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "NAVD88",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T03:33:42.701059+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 4,
+        "day": 25,
+        "time_of_day": "17:53:00+00:00"
+      },
+      "id": "95760328-9b46-4017-8f93-d82575af2ad7",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65488055555556,
+          41.67611111111111
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "019f6f29-a596-4f7a-b873-5ddb4b86700d",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "80d1e699-9f53-405e-b7c3-6ceae073cb0a",
+        "parameter_code": "62611",
+        "monitoring_location_id": "USGS-414034093391802",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "795.46",
+        "unit_of_measure": "ft",
+        "time": "2022-04-25T16:48:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "NAVD88",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T03:53:42.077960+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 4,
+        "day": 25,
+        "time_of_day": "16:48:00+00:00"
+      },
+      "id": "cfd23ef1-df7e-4d04-9d9d-5174a6fde5fe",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65488055555556,
+          41.676249999999996
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "df709afe-338a-4b81-b189-b6848a7624ce",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "dfe1aa75-bf23-49be-9a46-413a341420c2",
+        "parameter_code": "62611",
+        "monitoring_location_id": "USGS-414034093391801",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "795.50",
+        "unit_of_measure": "ft",
+        "time": "2022-04-25T20:26:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "NAVD88",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T03:57:04.768435+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 4,
+        "day": 25,
+        "time_of_day": "20:26:00+00:00"
+      },
+      "id": "d5430537-913d-48db-b31f-39bb96e0f991",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65488055555556,
+          41.676069444444444
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "5cbaa7e5-857c-43c0-9bb5-947ab652520c",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "b21713ec-ded2-4533-8ad5-cf2b9341249b",
+        "parameter_code": "72019",
+        "monitoring_location_id": "USGS-414035093391801",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "17.62",
+        "unit_of_measure": "ft",
+        "time": "2022-04-25T16:47:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "Local Assumed Datum",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T04:05:30.448599+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 4,
+        "day": 25,
+        "time_of_day": "16:47:00+00:00"
+      },
+      "id": "deacb922-4176-4404-bc8b-8cfb287bf988",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65490000000001,
+          41.676319444444445
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "7b8f71b6-149b-4e0f-9c25-a4fa1f8e8091",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "50574aad-876f-48e6-a6df-1e3a11828ef6",
+        "parameter_code": "72019",
+        "monitoring_location_id": "USGS-414003093391501",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "15.17",
+        "unit_of_measure": "ft",
+        "time": "2022-04-25T15:36:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "Local Assumed Datum",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T04:04:44.782587+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 4,
+        "day": 25,
+        "time_of_day": "15:36:00+00:00"
+      },
+      "id": "dfd845e5-f0ed-4e7f-8092-2d308793d9e1",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65426666666667,
+          41.66756944444444
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "2c8543a4-a15f-4455-9d70-de4529171ea4",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "9d2c5adf-4c1d-4700-8c5e-dbc0cc1f69cb",
+        "parameter_code": "72019",
+        "monitoring_location_id": "USGS-414034093391801",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "18.61",
+        "unit_of_measure": "ft",
+        "time": "2022-05-02T18:24:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "Local Assumed Datum",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T03:57:04.768435+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 5,
+        "day": 2,
+        "time_of_day": "18:24:00+00:00"
+      },
+      "id": "e7c0cda6-c658-49b9-aaae-c61dd542abcc",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65488055555556,
+          41.676069444444444
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "f983e505-4589-4067-86cb-09a9a83cdecd",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "d26cbcaf-14c4-45c6-b9c8-672e2d492303",
+        "parameter_code": "62611",
+        "monitoring_location_id": "USGS-414034093391803",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "795.62",
+        "unit_of_measure": "ft",
+        "time": "2022-05-02T18:37:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "NAVD88",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T03:33:42.701059+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 5,
+        "day": 2,
+        "time_of_day": "18:37:00+00:00"
+      },
+      "id": "eb45d320-75e6-4c33-9a51-e79fcad368d2",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65488055555556,
+          41.67611111111111
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_measurements_series_id": "e84b5287-4f07-4614-9ab0-87190b014e66",
+        "reading_type": "ReferencePrimary",
+        "field_visit_id": "d26cbcaf-14c4-45c6-b9c8-672e2d492303",
+        "parameter_code": "72019",
+        "monitoring_location_id": "USGS-414034093391803",
+        "observing_procedure_code": "V",
+        "observing_procedure": "GW level, calib electric tape",
+        "value": "18.40",
+        "unit_of_measure": "ft",
+        "time": "2022-05-02T18:37:00+00:00",
+        "qualifier": [
+          "Static"
+        ],
+        "vertical_datum": "Local Assumed Datum",
+        "approval_status": "Approved",
+        "measuring_agency": "USGS",
+        "last_modified": "2026-10-25T03:33:42.701059+00:00",
+        "control_condition": null,
+        "measurement_rated": null,
+        "year": 2022,
+        "month": 5,
+        "day": 2,
+        "time_of_day": "18:37:00+00:00"
+      },
+      "id": "ffd71da5-6591-49d4-9499-ccb06cb179d5",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -93.65488055555556,
+          41.67611111111111
+        ]
+      }
+    }
+  ],
+  "numberReturned": 18,
+  "links": [
+    {
+      "type": "application/geo+json",
+      "rel": "self",
+      "title": "This document as GeoJSON",
+      "href": "https://api.waterdata.usgs.gov/ogcapi/v0/collections/field-measurements/items?f=json&parameter_code=72019,72150,62610,62611,61055&datetime=2022-04-01T00%3A00%3A00Z%2F2022-06-30T23%3A59%3A59Z&limit=10000&bbox=-93.6729,41.6625,-93.6369,41.6895"
+    },
+    {
+      "rel": "alternate",
+      "type": "application/ld+json",
+      "title": "This document as RDF (JSON-LD)",
+      "href": "https://api.waterdata.usgs.gov/ogcapi/v0/collections/field-measurements/items?f=jsonld&parameter_code=72019,72150,62610,62611,61055&datetime=2022-04-01T00%3A00%3A00Z%2F2022-06-30T23%3A59%3A59Z&limit=10000&bbox=-93.6729,41.6625,-93.6369,41.6895"
+    },
+    {
+      "type": "text/html",
+      "rel": "alternate",
+      "title": "This document as HTML",
+      "href": "https://api.waterdata.usgs.gov/ogcapi/v0/collections/field-measurements/items?f=html&parameter_code=72019,72150,62610,62611,61055&datetime=2022-04-01T00%3A00%3A00Z%2F2022-06-30T23%3A59%3A59Z&limit=10000&bbox=-93.6729,41.6625,-93.6369,41.6895"
+    },
+    {
+      "type": "text/csv; charset=utf-8",
+      "rel": "alternate",
+      "title": "This document as CSV",
+      "href": "https://api.waterdata.usgs.gov/ogcapi/v0/collections/field-measurements/items?f=csv&parameter_code=72019,72150,62610,62611,61055&datetime=2022-04-01T00%3A00%3A00Z%2F2022-06-30T23%3A59%3A59Z&limit=10000&bbox=-93.6729,41.6625,-93.6369,41.6895"
+    },
+    {
+      "type": "application/json",
+      "title": "Field measurements",
+      "rel": "collection",
+      "href": "https://api.waterdata.usgs.gov/ogcapi/v0/collections/field-measurements"
+    }
+  ],
+  "timeStamp": "2026-11-12T04:53:43.151121Z"
+}

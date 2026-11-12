@@ -1,11 +1,12 @@
-"""usgs_groundwater_levels hooks: monitoring wells and their latest water level.
+"""usgs_groundwater_levels hooks: monitoring wells and their water levels, the latest or the dated ones of a window.
 
-``build_request`` resolves the spatial selector -- state or bbox, exactly one, state
-winning -- and GETs the latest-measurements collection; a primary that misses raises a
-typed no-wells error. The enrich phase joins well metadata and NEVER drops a reading."""
+``build_request`` resolves the spatial selector -- state or bbox, exactly one, state winning -- and GETs
+the latest-measurements collection, or asked a window the field measurements dated inside it; a primary
+that misses raises a typed no-wells error. The enrich phase joins well metadata and NEVER drops a reading."""
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import math
 from typing import Any
@@ -19,6 +20,9 @@ __all__ = ["build_request", "parse_response", "enrich_plan", "enrich_merge"]
 
 _MEASUREMENTS_URL = (
     "https://api.waterdata.usgs.gov/ogcapi/v0/collections/latest-field-measurements/items"
+)
+_DATED_URL = (
+    "https://api.waterdata.usgs.gov/ogcapi/v0/collections/field-measurements/items"
 )
 _LOCATIONS_URL = (
     "https://api.waterdata.usgs.gov/ogcapi/v0/collections/monitoring-locations/items"
@@ -57,7 +61,7 @@ _USPS_TO_FIPS = {
 _OUT_COLUMNS = (
     "site_no", "site_name", "parameter_code", "parameter_label", "quantity",
     "water_level", "unit", "vertical_datum", "datetime", "approval_status",
-    "aquifer_code", "well_depth_ft",
+    "aquifer_code", "well_depth_ft", "reading_count", "period_end",
 )
 
 
@@ -91,13 +95,42 @@ def _query(state_fips: str | None, bbox: list[float] | None, extra: list[tuple[s
     return q
 
 
+def _window(spec: SourceSpec, params: dict[str, Any]) -> tuple[str, str] | None:
+    """The asked window as the API's datetime interval bounds, or None where none is asked; one end alone refuses.
+
+    A moment reaches back the observation window, so every reading the observation ingestion would let speak for
+    the run is fetched; a period average is asked over the span alone."""
+    start, end = (str(params.get(k) or "").strip()[:10] for k in ("start_date", "end_date"))
+    if not start and not end:
+        return None
+    try:
+        opens, closes = dt.date.fromisoformat(start), dt.date.fromisoformat(end)
+    except ValueError:
+        raise router_input_error(
+            spec.error_code_prefix, f"start_date={params.get('start_date')!r} and end_date={params.get('end_date')!r} "
+            "state no window: a window is both ends as ISO dates, start_date not after end_date")
+    if opens > closes:
+        raise router_input_error(spec.error_code_prefix, f"start_date {start} is after end_date {end}")
+    if not params.get("period_average"):
+        from trid3nt_server.settings import setting
+
+        opens -= dt.timedelta(days=float(setting("OBSERVATION_WINDOW_DAYS")))
+    return f"{opens.isoformat()}T00:00:00Z", f"{closes.isoformat()}T23:59:59Z"
+
+
 @_hooks.register_hook("usgs_groundwater_levels.build_request")
 def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.RequestPlan"]:
-    """GET the latest-field-measurements collection for the resolved scope."""
+    """GET the latest-field-measurements collection for the resolved scope, or asked a window the field
+    measurements dated inside it."""
     state_fips, bbox = _resolve_selector(spec, params)
-    q = _query(state_fips, bbox, [("parameter_code", ",".join(_GW_PARAMETER_CODES))])
+    window = _window(spec, params)
+    extra = [("parameter_code", ",".join(_GW_PARAMETER_CODES))]
+    if window is not None:
+        extra.append(("datetime", "/".join(window)))
+    q = _query(state_fips, bbox, extra)
     ua = {"User-Agent": spec.auth.user_agent}
-    return [_hooks.RequestPlan(url=_MEASUREMENTS_URL, params=dict(q), headers=ua)]
+    return [_hooks.RequestPlan(url=_MEASUREMENTS_URL if window is None else _DATED_URL, params=dict(q),
+                               headers=ua)]
 
 
 def _feature_coords(feat: dict[str, Any]) -> tuple[float, float] | None:
@@ -131,6 +164,10 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
             sc, "USGS OGC measurements response is not a GeoJSON FeatureCollection: "
                 f"type={obj.get('type') if isinstance(obj, dict) else type(obj).__name__!r}")
 
+    if any(isinstance(link, dict) and link.get("rel") == "next" for link in obj.get("links") or []):
+        raise router_upstream_error(
+            sc, f"the USGS OGC API holds more than {_PAGE_LIMIT} readings for this scope and window, so one page "
+                "is not all of them: ask a smaller box or a shorter window")
     feats: list[dict[str, Any]] = []
     for feat in obj.get("features") or []:
         if not isinstance(feat, dict):
@@ -179,7 +216,28 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
             f"or a state-level query (e.g. a High Plains aquifer state like state_code='KS').",
             spec.empty_error_suffix,
         )
-    return feats
+    return _averaged(feats, params) if params.get("period_average") and _window(spec, params) else feats
+
+
+def _averaged(feats: list[dict[str, Any]], params: dict[str, Any]) -> list[dict[str, Any]]:
+    """Each site's readings of one parameter over the asked span as ONE reading: their mean, stamped at the
+    span's opening, with how many readings it averages and when the span closes. An unparsed value averages nothing."""
+    groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for feat in feats:
+        props = feat["properties"]
+        if props["water_level"] is None:
+            continue
+        key = (props["monitoring_location_id"], props["parameter_code"], props["unit"], props["vertical_datum"])
+        groups.setdefault(key, []).append(feat)
+    out = []
+    for rows in groups.values():
+        props = dict(rows[0]["properties"])
+        props.update(water_level=sum(r["properties"]["water_level"] for r in rows) / len(rows),
+                     datetime=str(params["start_date"])[:10], reading_count=len(rows),
+                     period_end=str(params["end_date"])[:10], approval_status=None
+                     if len({r["properties"]["approval_status"] for r in rows}) > 1 else props["approval_status"])
+        out.append({"type": "Feature", "geometry": rows[0]["geometry"], "properties": props})
+    return out
 
 
 @_hooks.register_hook("usgs_groundwater_levels.enrich_plan")

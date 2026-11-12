@@ -1,0 +1,7 @@
+fetch_usgs_model_head_targets:
+- the calibration targets of the published Des Moines groundwater model
+- which wells was the Des Moines River alluvial aquifer model calibrated against
+- pre-1980 water levels the USGS Des Moines MODFLOW model was fitted to
+- published water level targets to hold my groundwater model to near Des Moines
+- the head observations and weights from the Des Moines MF6 model's PEST files
+- steady-state water level targets of the USGS model in this area

@@ -1,0 +1,101 @@
+# The water-level ELEVATION targets a published USGS MODFLOW model was calibrated against, read out of the
+# Des Moines MF6 data release's ancillary archive (Davis and Bristow 2024, https://doi.org/10.5066/P13ZDDVY,
+# CC0-1.0): the control file's own observation table (pest_dmww_tr6.obs_data.csv - each target's value,
+# weight and group) joined to the two tables its targets were written from (DMWW_gw_wl_obs.csv for the
+# GeoSam and wetland wells, DMWW_gw_nwis_wl_obs.csv for the USGS wells - each target's bore, UTM 15N
+# coordinates, model layer and date). The archive is one whole-object GET (ScienceBase answers no range).
+# Model-callable, not matched: a calibration target set is one study's selection of readings, so the row
+# carries no coverage row and is named by a run directly.
+schema_version: v1
+
+name: fetch_usgs_model_head_targets
+source_class: usgs_model_head_targets
+error_prefix: USGS_MODEL_TARGETS
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  des_moines_ancillary:
+    url: https://www.sciencebase.gov/catalog/file/get/6601d849d34e64ff1548e2ad?f=__disk__21%2Fe6%2F2e%2F21e62e25debc961272ce66b9ef69eea4a08e4580
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; agent@trid3nt.dev)"
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  period: {type: str, schema_optional: true}
+
+hooks:
+  build_request: usgs_model_head_targets.build_request
+  parse_response: usgs_model_head_targets.parse_response
+
+ingest:
+  properties:
+    - site_id
+    - target
+    - database
+    - value
+    - unit
+    - quantity
+    - vertical_datum
+    - datetime
+    - model_layer
+    - weight
+    - group
+    - period
+
+normalize:
+  crs: "EPSG:4326"
+  units: "m (water level elevation, NAVD88)"
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style:
+    kind: reference
+    geometry: point
+  bbox_from_features:
+    pad: 0.02
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 2000.0
+  kb_per_feature: 0.3
+  floor_mb: 0.001
+
+caveats:
+  - "model-callable, not matched: a calibration target set is one study's selection of readings, not a measurement source, so it carries no coverage row and a run names this tool directly"
+  - "One published target set: the 120 water-level elevation targets (observation group wl_alt_obs) of the Des Moines River alluvial aquifer MODFLOW 6 model, Davis and Bristow 2024, https://doi.org/10.5066/P13ZDDVY, CC0-1.0 (report SIR 2024-5059). A bbox outside that model's grid raises USGS_MODEL_TARGETS_INPUT_INVALID; one holding none of its targets raises USGS_MODEL_TARGETS_EMPTY."
+  - "Each value is the target exactly as the control file states it (metres above NAVD 88), with its published weight and group; where the table a target was written from states another value, the control file's stands."
+  - "period names the model stress period a target was matched to: 'steady' for a reading before 1980-01-01 (the model's first stress period is steady, representative of pre-1980 conditions, and its transient periods start January 1, 1980 - SIR 2024-5059 p. 26; the archive's mod2obs reference date is 12/31/1979), 'transient' otherwise. Asked with period, only that period's targets are returned."
+
+docstring: |-
+  Fetch the published water-level targets a USGS MODFLOW model was calibrated against, as points.
+
+  **What it does:** Reads the 120 water-level ELEVATION calibration targets of the Des Moines River
+  alluvial aquifer MODFLOW 6 model (Davis and Bristow 2024, doi 10.5066/P13ZDDVY; SIR 2024-5059) out
+  of its data release: per target the well (``site_id``), the target name, the database it came from
+  (GeoSam, wetland or USGS), the value in metres above NAVD 88, the reading date, the model layer it
+  was matched in, its published weight and group, and the stress period it belongs to
+  (``steady`` before 1980, ``transient`` after).
+
+  **When to use:**
+  - Holding a groundwater model of the Des Moines alluvium to the published model's own targets.
+  - "Which wells was the Des Moines model calibrated against, and in which layer?"
+  - Pre-development (pre-1980) levels for a steady water table: ``period="steady"``.
+
+  **When NOT to use:**
+  - Current or dated well readings anywhere else - ``fetch_usgs_groundwater_levels``.
+  - Outside the Des Moines model grid - the call refuses.
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326 inside the model grid. Required.
+  - ``period`` (str, optional): ``"steady"`` or ``"transient"``; unstated, every target.
+
+  **Returns:** a point ``LayerURI`` (FlatGeobuf), one feature per target, ``quantity`` ``groundwater_head``,
+  ``unit`` ``m``, ``vertical_datum`` ``NAVD88``.

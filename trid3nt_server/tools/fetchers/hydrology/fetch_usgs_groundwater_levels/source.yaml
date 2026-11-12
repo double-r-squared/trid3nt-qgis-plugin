@@ -1,4 +1,5 @@
-# USGS Water Data OGC API groundwater wells: a measurements primary, then a best-effort
+# USGS Water Data OGC API groundwater wells: a measurements primary - the latest reading per well, or asked a
+# window the field measurements dated inside it - then a best-effort
 # monitoring-locations enrich. A failed or absent locations body leaves the names blank
 # and never drops a reading. Keyless.
 # NOT a dataretrieval delegate: nwis.get_gwlevels is defunct in the installed version
@@ -16,6 +17,8 @@ supports_global_query: false
 endpoints:
   data:
     url: "https://api.waterdata.usgs.gov/ogcapi/v0/collections/latest-field-measurements/items"
+  dated:
+    url: "https://api.waterdata.usgs.gov/ogcapi/v0/collections/field-measurements/items"
 auth:
   mode: none
   user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
@@ -23,6 +26,9 @@ auth:
 params:
   state_code: {type: str, schema_optional: true}
   bbox: {type: bbox, schema_optional: true, quantize: round_6dp}
+  start_date: {type: str, schema_optional: true}
+  end_date: {type: str, schema_optional: true}
+  period_average: {type: bool, schema_optional: true}
 
 hooks:
   build_request: usgs_groundwater_levels.build_request
@@ -44,6 +50,8 @@ ingest:
     - approval_status
     - aquifer_code
     - well_depth_ft
+    - reading_count
+    - period_end
 
 normalize:
   crs: "EPSG:4326"
@@ -86,6 +94,7 @@ coverage:
   window:
     series: true
     cadence: irregular field measurements
+    series_param: period_average
   datum: record
   units:
     water_level: ft
@@ -94,6 +103,7 @@ coverage:
 
 caveats:
   - "USGS Water Data OGC API observed groundwater monitoring wells + their latest water-level reading (depth-to-water / groundwater elevation) as points. Pass EXACTLY ONE of state_code (USPS) or bbox (state wins). No wells with a reading in scope -> a typed USGS_GROUNDWATER_NO_WELLS error, never a fabricated layer."
+  - "Asked a window (start_date and end_date, ISO dates), every field measurement DATED inside it is one point, the window reaching back OBSERVATION_WINDOW_DAYS before start_date so every reading that may speak for a moment is read; with period_average, each well's readings of one parameter over the window alone are ONE point - their mean, stamped at start_date, with reading_count and period_end. More readings than one page holds refuse (USGS_GROUNDWATER_UPSTREAM_ERROR) rather than return part of them."
 
 docstring: |-
   Fetch REAL, OBSERVED USGS groundwater monitoring wells as a point FlatGeobuf.
@@ -128,6 +138,10 @@ docstring: |-
         companion). This tool is the GROUNDWATER (subsurface well) network.
       - Soil-moisture / shallow vadose-zone water content -- that is a different
         measurement; this is the saturated-zone water table.
+
+  Window (optional): ``start_date`` and ``end_date`` (ISO dates) read the DATED field measurements inside
+  it instead of the latest; ``period_average=True`` returns each well's mean over that window, one
+  point per well and parameter, with ``reading_count``.
 
   Spatial selector (pass EXACTLY ONE):
       state_code: Optional 2-letter USPS state/territory code (e.g. ``"KS"``,
