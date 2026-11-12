@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 from trid3nt_server.inputs import run_notes
+from trid3nt_server.store import journal as store_journal
 from trid3nt_server.workflows.runtime import journal
 
 
@@ -113,26 +114,26 @@ def test_a_short_list_value_is_kept_whole():
 def test_append_and_read_round_trip_through_the_persistence_dir():
     first = journal.append_record(_record(run_id="RUN1"))
     second = journal.append_record(_record(run_id="RUN2"))
-    assert first == second == journal.journal_path()
+    assert first == second == store_journal.journal_path()
     assert first.name == "run_journal.jsonl"
 
-    records = journal.read_records()
+    records = store_journal.read_records()
     assert [r["run_id"] for r in records] == ["RUN1", "RUN2"]   # oldest first
 
 
 def test_reading_a_journal_that_does_not_exist_yet_is_empty_not_an_error():
-    assert journal.read_records() == []
+    assert store_journal.read_records() == []
 
 
 def test_a_malformed_line_is_skipped_rather_than_fatal():
     """A half-written line must not cost the reader every record around it."""
     journal.append_record(_record(run_id="RUN1"))
-    path = journal.journal_path()
+    path = store_journal.journal_path()
     with path.open("a", encoding="utf-8") as handle:
         handle.write("{not json at all\n\n")
     journal.append_record(_record(run_id="RUN2"))
 
-    assert [r["run_id"] for r in journal.read_records()] == ["RUN1", "RUN2"]
+    assert [r["run_id"] for r in store_journal.read_records()] == ["RUN1", "RUN2"]
 
 
 def test_a_journal_write_that_cannot_land_never_fails_the_run(tmp_path, monkeypatch):
@@ -141,7 +142,7 @@ def test_a_journal_write_that_cannot_land_never_fails_the_run(tmp_path, monkeypa
     failure-retracts-something anti-pattern."""
     blocked = tmp_path / "not_a_dir"
     blocked.write_text("this is a file, so nothing can be created under it")
-    monkeypatch.setattr(journal, "journal_path",
+    monkeypatch.setattr(store_journal, "journal_path",
                         lambda: blocked / "run_journal.jsonl")
     assert journal.append_record(_record()) is None
 
@@ -149,7 +150,7 @@ def test_a_journal_write_that_cannot_land_never_fails_the_run(tmp_path, monkeypa
 def test_every_record_is_one_json_line():
     journal.append_record(_record(run_id="RUN1"))
     journal.append_record(_record(run_id="RUN2"))
-    lines = journal.journal_path().read_text(encoding="utf-8").splitlines()
+    lines = store_journal.journal_path().read_text(encoding="utf-8").splitlines()
     assert len(lines) == 2
     assert [json.loads(line)["run_id"] for line in lines] == ["RUN1", "RUN2"]
 

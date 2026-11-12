@@ -1,4 +1,4 @@
-"""The RUN JOURNAL: one append-only JSONL line per completed run.
+"""The RUN JOURNAL's write side: the channels a run fills, and its one line appended when it completes.
 
 Decoupled from artifacts on purpose - the record lives in the persistence
 directory nothing sweeps, and outlives every artifact it describes.
@@ -15,12 +15,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from trid3nt_server.store import journal as store_journal
+
 logger = logging.getLogger("trid3nt_server.workflows.runtime.journal")
 
 __all__ = ["append_record", "bind_choices", "bind_outputs", "bind_settings",
            "drain_choices", "drain_outputs", "drain_settings", "journal_outputs",
-           "journal_path", "read_records", "run_choices", "run_origin",
-           "run_outputs", "setting_read", "slot_choice"]
+           "run_choices", "run_origin", "setting_read", "slot_choice"]
 
 #: Layers the run has published, drained into the record: the one place outputs are read back from.
 _OUTPUTS: contextvars.ContextVar[list[dict[str, Any]] | None] = contextvars.ContextVar(
@@ -102,17 +103,6 @@ def drain_settings(token: contextvars.Token) -> dict[str, dict[str, Any]]:
 #: Env var a DRIVER sets to label its runs, so telemetry never learns a default from a canary's pinned window.
 ORIGIN_ENV = "TRID3NT_RUN_ORIGIN"
 
-_FILENAME = "run_journal.jsonl"
-
-
-def journal_path() -> Path:
-    """Where the journal lives - the persistence dir, which no sweep touches."""
-    from trid3nt_server.store.cases import _default_dev_persistence_dir
-
-    root = os.environ.get("TRID3NT_DEV_PERSISTENCE_DIR") or _default_dev_persistence_dir()
-    return Path(root) / _FILENAME
-
-
 def run_origin(*, live_session: bool) -> str:
     """Where this run came from: a labelled driver, a live session, or headless."""
     declared = (os.environ.get(ORIGIN_ENV) or "").strip()
@@ -124,7 +114,7 @@ def run_origin(*, live_session: bool) -> str:
 def append_record(record: Mapping[str, Any]) -> Path | None:
     """Append one run record. Best-effort: a journal write never fails a run,
     because the run already happened and its outputs already exist."""
-    path = journal_path()
+    path = store_journal.journal_path()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         line = json.dumps(record, default=str, separators=(",", ":"))
@@ -135,23 +125,6 @@ def append_record(record: Mapping[str, Any]) -> Path | None:
                        exc_info=True)
         return None
     return path
-
-
-def read_records(path: Path | None = None) -> list[dict[str, Any]]:
-    """Every record on file, oldest first. A malformed line is skipped, not fatal."""
-    target = path or journal_path()
-    if not target.exists():
-        return []
-    out: list[dict[str, Any]] = []
-    for line in target.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            out.append(json.loads(line))
-        except json.JSONDecodeError:
-            logger.warning("run journal: skipping a malformed line in %s", target)
-    return out
 
 
 def build_record(*, run_id: str | None, engine: str | None,
@@ -219,15 +192,3 @@ def _small(value: Any) -> Any:
         return {key: _small(field) for key, field
                 in dataclasses.asdict(value).items()}
     return str(value)
-
-
-def run_outputs(run_id: str) -> list[dict[str, Any]]:
-    """The layers the named run published, off its own record; ``[]`` when the
-    journal has no line for it. The record is APPEND-ONLY, so the last line for
-    a run id is the one that stands."""
-    for record in reversed(read_records()):
-        if str(record.get("run_id") or "") == str(run_id):
-            published = record.get("outputs")
-            return [dict(row) for row in published if isinstance(row, dict)] \
-                if isinstance(published, list) else []
-    return []

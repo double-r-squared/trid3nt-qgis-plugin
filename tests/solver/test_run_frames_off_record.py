@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.runtime.journal import run_outputs
+from trid3nt_server.store import journal as store_journal
+from trid3nt_server.store.journal import run_outputs
 from trid3nt_server.workflows.runtime import journal
 
 RID = "run-xyz"
@@ -18,7 +19,7 @@ RID = "run-xyz"
 @pytest.fixture
 def _journalled(tmp_path, monkeypatch):
     path = tmp_path / "run_journal.jsonl"
-    monkeypatch.setattr(journal, "journal_path", lambda: path)
+    monkeypatch.setattr(store_journal, "journal_path", lambda: path)
 
     def _install(outputs: list[dict]) -> None:
         journal.append_record(journal.build_record(

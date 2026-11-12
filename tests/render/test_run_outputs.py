@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.runtime.journal import run_outputs
+from trid3nt_server.store import journal as store_journal
+from trid3nt_server.store.journal import run_outputs
 from trid3nt_server.workflows.runtime import journal
 
 RID = "01JRUNRUNRUNRUNRUNRUNRUNRU"
@@ -17,7 +18,7 @@ RID = "01JRUNRUNRUNRUNRUNRUNRUNRU"
 @pytest.fixture
 def _journal(tmp_path, monkeypatch):
     path = tmp_path / "run_journal.jsonl"
-    monkeypatch.setattr(journal, "journal_path", lambda: path)
+    monkeypatch.setattr(store_journal, "journal_path", lambda: path)
     return path
 
 

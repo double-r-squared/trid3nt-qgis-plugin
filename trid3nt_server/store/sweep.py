@@ -15,7 +15,7 @@ from typing import Any, Iterator, Mapping, Sequence
 
 from trid3nt_server.store import objects as storage
 from trid3nt_server.tools.cache import CACHE_BUCKET, ttl_bucket_vintage
-from trid3nt_server.workflows.runtime import journal
+from trid3nt_server.store import journal
 
 __all__ = ["pinned_uris", "reap"]
 

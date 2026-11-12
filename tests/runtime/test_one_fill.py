@@ -301,7 +301,7 @@ def test_a_keyword_the_module_refuses_is_rejected_by_name():
 
 
 def _journal(monkeypatch, line):
-    from trid3nt_server.workflows.runtime import journal
+    from trid3nt_server.store import journal
 
     monkeypatch.setattr(journal, "read_records", lambda: [line])
 

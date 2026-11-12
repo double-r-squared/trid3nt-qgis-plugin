@@ -74,7 +74,7 @@ async def run(value: Any, *, label: str = "run", engines: Sequence[str] = ()) ->
     ``engines`` are the engines the reader takes a run of; a run of another engine refuses naming them."""
     from trid3nt_server.store import objects as storage
     from trid3nt_server.tools.mesh.step import kept_mesh, mesh_record
-    from trid3nt_server.workflows.runtime.journal import read_records
+    from trid3nt_server.store.journal import read_records
 
     if isinstance(value, FinishedRun):
         return value
