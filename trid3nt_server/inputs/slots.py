@@ -18,7 +18,7 @@ from typing import Any, Callable, Mapping
 from .input import Input
 
 __all__ = ["BED", "DISCHARGE", "DOMAIN", "DRAW", "EXTENT", "LEVEL", "LINE",
-           "MESH", "OBSERVE", "RAIN", "Slot", "WAVE", "WEATHER",
+           "MESH", "OBSERVE", "RAIN", "RUN", "Slot", "WAVE", "WEATHER",
            "ask_on_canvas", "draw_on_canvas", "ingest_slot", "needs_of"]
 
 logger = logging.getLogger("trid3nt_server.inputs.slots")
@@ -150,6 +150,12 @@ WAVE = Slot("wave", ingestion="wave", classes=frozenset({"wave series"}), record
 MESH = Slot("mesh", ingestion="mesh",
             desc="a mesh this case already built, as its uri or its layer "
                  "name, solved on in place of the one the run would build")
+
+
+#: A FINISHED RUN of this case, taken whole: its record, the deck it staged and the mesh it solved on.
+#: Where it stands is the place every later row of the run is matched at.
+RUN = Slot("run", ingestion="run",
+           desc="a finished run of this case, as its run id or the handle the case shows for one of its layers")
 
 
 def needs_of(slot: Slot | None, kind: str) -> tuple[tuple[str, str, str], ...]:

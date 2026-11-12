@@ -21,7 +21,7 @@ from trid3nt_server.tools.mesh.artifact import MeshArtifact, measured_min_edge_m
 
 logger = logging.getLogger("trid3nt_server.tools.mesh.step")
 
-__all__ = ["GATE_LABEL", "build_declared_mesh", "keep_mesh", "mesh_key",
+__all__ = ["GATE_LABEL", "build_declared_mesh", "keep_mesh", "kept_mesh", "mesh_key",
            "mesh_record"]
 
 #: The label the mesh gate's card carries. It names the ASK - the mesh this run
@@ -178,6 +178,12 @@ async def _kept(key: str) -> tuple[MeshArtifact, str | None] | None:
                     "built again", key)
         return None
     return art, doc.get("run")
+
+
+async def kept_mesh(key: str) -> MeshArtifact | None:
+    """The mesh kept under ``key``, or ``None`` where nothing is kept or a file it names is gone."""
+    found = await _kept(key)
+    return None if found is None else found[0]
 
 
 def _live(uri: str) -> bool:

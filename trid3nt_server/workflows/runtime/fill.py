@@ -32,7 +32,7 @@ from .data import Producer, refuse_wrong_shape
 from .sheet import Keyword
 
 from trid3nt_server.inputs.slots import (
-    BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, MESH, Slot)
+    BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, MESH, RUN, Slot)
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.inputs.bound_domain import Domain, bind_domain, current_domain
 from .errors import (DeclarativeError, StepFailedError,
@@ -642,6 +642,10 @@ async def _ingested(env: _Env, decl: Input, value: Any,
         bind_domain(Domain(bbox=tuple(ingested.bbox),
                            geometry=dict(ingested.geometry),
                            label=ingested.name))
+    elif decl.slot is RUN and ingested is not None and current_domain() is None and ingested.bbox:
+        # A RUN OVER A FINISHED RUN stands where that run was solved: its mesh's box is the place
+        # every later row is asked for.
+        bind_domain(Domain(bbox=tuple(ingested.bbox), geometry={}, label=f"run {ingested.run_id}"))
     elif decl.slot is EXTENT and ingested is not None and current_domain() is None:
         # A QUESTION WHOSE DOMAIN IS CUT OUT OF A BOX has no polygon until the cut runs,
         # and the cut's own sources have to be asked somewhere: the window the question
@@ -882,9 +886,9 @@ def _validate_supplied(env: _Env, decl: Input, supplied: Any) -> None:
     dom = current_domain()
     if dom is not None and dom.bbox is not None:
         return
-    if any(row.slot is DOMAIN for row in env.data.values()):
-        # A workflow that DECLARES a domain slot carries its own: the slot binds it the
-        # moment it is filled, so a row produced before it is adopted for its declared shape.
+    if any(row.slot in (DOMAIN, RUN) for row in env.data.values()):
+        # A workflow that DECLARES a domain or a finished run carries its own place: the slot binds
+        # it the moment it is filled, so a row produced before it is adopted for its declared shape.
         return
     raise SuppliedCoverageError(
         f"the artifact supplied for {decl.name!r} cannot be checked against the "
@@ -1035,7 +1039,7 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
         # produced is refused now, by name, and a READY fill is followed by no fetch but a placed mark's.
         # The place answers first: every other row stands on it.
         for name, value in sorted(sourced.items(), key=lambda item: (
-                declared[item[0]].slot not in (DOMAIN, EXTENT))):
+                declared[item[0]].slot not in (DOMAIN, EXTENT, RUN))):
             await _answer(state, name, declared[name], value)
         for name in wf.named_rows(production(state).run) if state.ready else ():
             if name not in production(state).run:
