@@ -537,7 +537,8 @@ picture cannot show is the dishonest case this pins.
 `LOCAL_CORES` bounds the daemon's own work (the mesh build child's affinity and thread variables); its range is 1 to this box's
 cores and its default all of them. `CONTAINER_CORES` is each solver container's docker CPU limit (`--cpus`, never below the
 partition the run states) and the default of the engine's parallel keyword when a run states none: TELEMAC `PARALLEL PROCESSORS`
-(left serial under a direct solver), GeoClaw `geoclaw_bouss` `cores` (shared across its `threads`); MODFLOW and shallow-water
+(left serial under a direct solver), GeoClaw `geoclaw_bouss` `cores` (shared across its `threads`), the PEST++ agents a study
+runs its trials on; MODFLOW and shallow-water
 GeoClaw have no parallel form and take the limit only. Its range is 1 to the docker host's cores (`docker info`, read once) and
 its default all but one when the docker host is this box, all when it is not. A stated keyword wins and is held to the docker
 host's cores; the run notes say `CONTAINER_CORES` when the default was taken. One module, `workflows/solver/cores.py`, reads both hosts.
@@ -626,6 +627,11 @@ the run's own module, a coupled body's tagged with its own word, each body
 reading its filerecord from its own slots over the carrier's sheet (the clock
 and units the simulation owns are one for both models). The engine page
 (`docs/design/modflow.md`) holds the coupling itself.
+
+## PEST++ - a study engine
+
+PEST++ is an engine whose trials run a model the study directory carries; no template speaks it yet.
+Its staging, worker and output table are `docs/design/pestpp.md`.
 
 ## Mesh
 
