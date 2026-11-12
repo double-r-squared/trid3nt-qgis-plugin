@@ -161,6 +161,7 @@ from .fetchers._router.registration import register_specs_from_tree as _register
 _register_router_specs()
 
 from .derive.charts.generate_chart import generate_chart  # noqa: E402,F401
+from .derive.drop_minor_divergences import drop_minor_divergences  # noqa: E402,F401
 from .derive.mark_lake_outlets import mark_lake_outlets  # noqa: E402,F401
 from .derive.probe_point import probe_point  # noqa: E402,F401
 from .derive.restyle_layer import restyle_layer  # noqa: E402,F401

@@ -264,6 +264,12 @@ path names its lake in `wbarea_permanent_identifier`, its `dnhydroseq` names the
 `permanent_identifier`. A line two lakes run into refuses. The mover's `from_key` is the waterbody layer's
 `permanent_identifier` and its `to_key` is `receives_from_waterbody`.
 
+`drop_minor_divergences(flowlines)` (a derive) publishes the flowline network the `Streams` composite can join without
+a choice: where a river splits, a line ends where a main and a minor line both start, and the composite refuses a line
+whose end two reaches are as near. NHDPlus marks the minor path (from the split down to where it rejoins) with a
+computed order `streamcalc` that differs from its `streamorde`; those lines are dropped and every other line is kept,
+tributaries included (a kept line that ran into a dropped one now ends there, counted on the journal).
+
 ### Period settings of the placement composites
 
 `Streams`, `Lakes`, `MultiAquiferWells` and `UnsaturatedZone` each take every period setting

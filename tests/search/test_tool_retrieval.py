@@ -189,6 +189,10 @@ _RECALL_FIXTURE = [
      "mark_lake_outlets"),
     ("tag the flowlines that start at a lake outlet with the lake they receive from",
      "mark_lake_outlets"),
+    ("route the river without its braided side channels",
+     "drop_minor_divergences"),
+    ("make the stream network dendritic so every line flows into one line",
+     "drop_minor_divergences"),
 ]
 
 #: A question in a data source's own words: it routes to the door, and the door's query names the source.

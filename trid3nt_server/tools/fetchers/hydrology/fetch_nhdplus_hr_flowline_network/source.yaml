@@ -31,7 +31,7 @@ ingest:
     page_size: 2000
     empty_is_typed_error: true
   query_template:
-    out_fields: "nhdplusid,gnis_name,ftype,fcode,hydroseq,dnhydroseq,levelpathi,fromnode,tonode,wbarea_permanent_identifier,streamorde,totdasqkm,slope,lengthkm,minelevsmo,maxelevsmo"
+    out_fields: "nhdplusid,gnis_name,ftype,fcode,hydroseq,dnhydroseq,levelpathi,fromnode,tonode,wbarea_permanent_identifier,streamorde,streamcalc,totdasqkm,slope,lengthkm,minelevsmo,maxelevsmo"
 
 normalize:
   crs: "EPSG:4326"
@@ -83,6 +83,7 @@ caveats:
   - "every flowline intersecting the box comes back WHOLE; ftype 558 ArtificialPath lines are the centrelines through wide rivers and name the polygon they run through in wbarea_permanent_identifier"
   - "minelevsmo and maxelevsmo are CENTIMETERS and slope is unitless (USGS SIR 2025-5031, NHDPlusFlowlineVAA table); totdasqkm is km2, lengthkm km"
   - "NHD publishes no stream width, depth, bed material or roughness: a line carries identity, topology and drainage area only"
+  - "streamcalc differs from streamorde on a minor divergence path (the side branch where a river splits, down to where it rejoins); drop_minor_divergences keeps the lines where they agree"
   - "more than 100000 lines in the box refuses by name rather than truncating"
   - "CONUS, Alaska, Hawaii and Puerto Rico (NHDPlus HR)"
 
@@ -94,7 +95,7 @@ docstring: |-
       past the service's 2000-record cap. Each line carries ``nhdplusid``,
       ``gnis_name``, ``ftype``, ``fcode``, ``hydroseq``, ``dnhydroseq``,
       ``levelpathi``, ``fromnode``, ``tonode``, ``wbarea_permanent_identifier``,
-      ``streamorde``, ``totdasqkm`` (km2), ``slope`` (unitless), ``lengthkm``
+      ``streamorde``, ``streamcalc``, ``totdasqkm`` (km2), ``slope`` (unitless), ``lengthkm``
       (km), ``minelevsmo`` and ``maxelevsmo`` (cm).
 
   When to use:

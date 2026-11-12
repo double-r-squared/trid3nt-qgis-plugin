@@ -28,7 +28,7 @@ _RIVER_AREA_COLUMNS = ["nhdplusid", "permanent_identifier", "ftype", "fcode",
                        "gnis_name", "areasqkm"]
 _FLOWLINE_COLUMNS = ["nhdplusid", "gnis_name", "ftype", "fcode", "hydroseq",
                      "dnhydroseq", "levelpathi", "fromnode", "tonode",
-                     "wbarea_permanent_identifier", "streamorde", "totdasqkm",
+                     "wbarea_permanent_identifier", "streamorde", "streamcalc", "totdasqkm",
                      "slope", "lengthkm", "minelevsmo", "maxelevsmo"]
 
 

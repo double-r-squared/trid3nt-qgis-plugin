@@ -1,0 +1,8 @@
+drop_minor_divergences:
+- route the river without its braided side channels
+- keep only the main path of the stream network where it splits
+- remove the minor divergences from these flowlines
+- make the flowline network dendritic so every line flows into one line
+- drop the side channels of a braided river from the stream lines
+- a stream network with no braids for routing streamflow
+- filter the NHDPlus flowlines to the main stem at each divergence
