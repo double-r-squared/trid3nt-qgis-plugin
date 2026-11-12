@@ -175,6 +175,15 @@ def _feature(lon: float, lat: float, props: dict[str, Any]) -> dict[str, Any]:
     return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props}
 
 
+def _column_of(sub: Any, code: str) -> str | None:
+    """The one column a site reports ``code`` under: the bare code, or the one ``<code>_<description>`` dataretrieval
+    names a site-described time series; a site reporting it under several holds no one reading, and none is read."""
+    held = [name for name in sub.columns
+            if (name == code or (str(name).startswith(f"{code}_") and not str(name).endswith("_cd")))
+            and sub[name].notna().any()]
+    return held[0] if len(held) == 1 else None
+
+
 def _readings_by_site(iv_df: Any, parameter_cd: str, mode: str) -> dict[str, dict[str, Any]]:
     """Group ``get_iv``'s long DataFrame (one row per timestep) by ``site_no`` into
     one record per site, latest-value columns for ``instantaneous`` and full inline
@@ -200,10 +209,11 @@ def _readings_by_site(iv_df: Any, parameter_cd: str, mode: str) -> dict[str, dic
             rec.setdefault("discharge_max_cfs", None)
             rec.setdefault("discharge_mean_cfs", None)
         for code in codes:
-            if code not in sub.columns:
+            named = _column_of(sub, code)
+            if named is None:
                 continue
             value_column, series_column = _COLUMNS[code]
-            col = sub[code].dropna()
+            col = sub[named].dropna()
             col = col[col > -999990.0]
             if col.empty:
                 continue

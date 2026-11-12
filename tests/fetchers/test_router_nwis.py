@@ -1,4 +1,4 @@
-"""The gauge network read through dataretrieval, offline over synthetic frames.
+"""The gauge network read through dataretrieval, offline over synthetic frames and one recorded real one.
 
 The readings and the expanded site record are joined by the delegate - the
 readings win and the site record decorates them with the zero a gage height is
@@ -9,6 +9,7 @@ Plus the spatial-selector and temporal-window edge matrix."""
 from __future__ import annotations
 
 import datetime as dt
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -399,3 +400,31 @@ async def test_a_lasting_upstream_failure_on_the_invoke_path_goes_out_as_upstrea
     assert err["error_code"] == "UPSTREAM_API_ERROR" and err["retryable"] is True
     assert err["message"] == ("[NWIS_GAUGES_UPSTREAM_ERROR] NetworkError: "
                               "Could not reach waterservices.usgs.gov")
+
+
+_RECORDED = Path(__file__).resolve().parents[1] / "fixtures" / "usgs_nwis_gauges"
+
+
+def _recorded():
+    """The frames dataretrieval returned for USGS 14211720 on 2026-11-10: its stage arrives as "00065_morrison bridge"."""
+    iv = pd.read_csv(_RECORDED / "willamette_14211720_iv_2026-11-10.csv", index_col="datetime", parse_dates=True,
+                     dtype={"site_no": str})
+    site = pd.read_csv(_RECORDED / "willamette_14211720_site.csv", dtype={"site_no": str})
+    return iv, site
+
+
+def test_a_site_described_stage_is_read_as_the_stage(spec, nwis_calls):
+    nwis_calls["iv_df"], nwis_calls["site_df"] = _recorded()
+    feats = _read(spec, nwis_calls, bbox=[-122.70, 45.49, -122.65, 45.55], _mode="hydrograph")
+    p = feats[0]["properties"]
+    assert p["site_no"] == "14211720" and p["vertical_datum"] == "NGVD29" and p["gauge_datum_ft"] == 1.55
+    assert p["stage_series_csv"].startswith("2026-11-10T08:00:00+0000,2.960000")
+    assert len(p["stage_series_csv"].splitlines()) == 288 and p["n_timesteps"] == 288
+
+
+def test_a_code_reported_under_two_descriptions_is_not_read(spec, nwis_calls):
+    iv, site = _recorded()
+    iv["00065_second gauge"] = iv["00065_morrison bridge"]
+    nwis_calls["iv_df"], nwis_calls["site_df"] = iv, site
+    p = _read(spec, nwis_calls, bbox=[-122.70, 45.49, -122.65, 45.55], _mode="hydrograph")[0]["properties"]
+    assert p["stage_series_csv"] == "" and p["gage_height_ft"] is None
