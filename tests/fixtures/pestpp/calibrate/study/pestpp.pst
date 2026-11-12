@@ -1,0 +1,16 @@
+pcf version=2
+* control data keyword
+pestmode estimation
+noptmax 3
+ies_num_reals 10
+additional_ins_delimiters ,
+* parameter data external
+study_parameters.csv
+* observation data external
+study_observations.csv
+* model command line
+mf6
+* model input external
+study_templates.csv
+* model output external
+study_instructions.csv

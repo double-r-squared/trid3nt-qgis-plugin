@@ -1,0 +1,304 @@
+"""The PEST++ workflow: a study over a finished run, and the run its best parameter set makes.
+
+``launch`` runs one order - the finished run's deck fetched, a multiplier template written into each
+named array and the wells' heads observed, the study reviewed, a sensitivity pass where it ranks more
+parameters than are tuned, the ensemble study, then the deck solved once more with the base
+realization's last parameters through the MODFLOW engine and published as that engine publishes a run.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import shutil
+import tempfile
+from pathlib import Path
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
+
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.common import Origin, SyntheticInput
+
+from trid3nt_server.inputs.instant import event_time
+from trid3nt_server.workflows.runtime import DeclarationError, RunResult, Workflow
+from trid3nt_server.workflows.runtime.workflow import EVENT_TIME
+from trid3nt_server.workflows.runtime.module import identify_on, keyword_floor
+from trid3nt_server.workflows.runtime.sheet import Keyword
+
+from .errors import PestppError
+from .modules import PESTPP
+
+if TYPE_CHECKING:
+    from trid3nt_server.workflows.runtime.fill import Fill
+
+logger = logging.getLogger("trid3nt_server.workflows.pestpp.workflow")
+
+__all__ = ["PestppWorkflow", "ranked"]
+
+#: The option the study's instruction files are written for: the heads CSV's own separator.
+_OWN = MappingProxyType({"additional_ins_delimiters": ","})
+
+
+def ranked(sensitivity: Sequence[Mapping[str, Any]]) -> list[str]:
+    """The parameters of a Morris summary, most sensitive first: by the mean absolute elementary effect."""
+    return [row["parameter"] for row in sorted(sensitivity, key=lambda row: -float(row["sen_mean_abs"]))]
+
+
+def _bounds(identifier: str, stated: Any) -> tuple[float, float, str]:
+    """A parameter's multiplier bounds and their source, as stated; unstated or malformed refuses naming it."""
+    if isinstance(stated, Mapping) and {"lower", "upper"} <= set(stated):
+        lower, upper, source = stated["lower"], stated["upper"], str(stated.get("source") or "")
+    elif isinstance(stated, (list, tuple)) and len(stated) == 2:
+        (lower, upper), source = stated, ""
+    else:
+        raise PestppError(
+            f"{identifier} states no bounds: a multiplier on the run's own array is tuned between a lower and an "
+            "upper factor, stated by the user, read from a citation, or bounded in the engine's dictionary, and "
+            f"none states one for it. State {identifier}: {{\"lower\": L, \"upper\": U, \"source\": \"...\"}}.",
+            error_code="PESTPP_BOUNDS_UNSTATED")
+    lower, upper = float(lower), float(upper)
+    if not 0.0 < lower < 1.0 < upper:
+        raise PestppError(
+            f"{identifier} is bounded {lower:g} to {upper:g}; a multiplier starts at 1, the run's own array, so "
+            "it is bounded below 1 and above it, and above 0", error_code="PESTPP_BOUNDS_UNSTATED")
+    return lower, upper, source
+
+
+class PestppWorkflow(Workflow):
+    """PEST++ over a finished MODFLOW run: the template module, read by its own names.
+    A template DECLARES INPUTS (the run, its parameters and the wells) and CAPTIONS; this builds every stage off them."""
+
+    engine = "pestpp"
+    solve_step = "solve"
+    moment = EVENT_TIME.name
+
+    def __init__(self, *, coerce: Sequence[Any] = (), **declared: Any) -> None:
+        super().__init__(coerce=(*coerce, event_time()), **declared)
+
+    def seated(self) -> tuple[Any, ...]:
+        """The moment the wells' readings are asked at, then what the types of its rows state."""
+        return (EVENT_TIME,) + super().seated()
+
+    def input_schema(self) -> tuple[Any, str] | None:
+        """The PEST++ dictionary: where this template's values read their schema off."""
+        from .modules.module import module_input_dir
+
+        return (module_input_dir(), PESTPP.MODULE)
+
+    def input(self, name: str) -> Any:
+        """The template's own inputs first, then the PEST++ option a name spells."""
+        declared = next((row for row in self.inputs if row.name == name), None)
+        if declared is not None:
+            return declared
+        body, identifier = identify_on([PESTPP], name)
+        return Keyword(body, identifier, True)
+
+    def check(self) -> None:
+        """Refuse at import a template that names no run, no parameters or no wells, or no caption for its charts."""
+        names = {row.name for row in self.inputs}
+        missing = {"run", "parameters", "observe"} - names
+        if missing:
+            raise DeclarationError(f"{self.name} declares no {sorted(missing)}: a study reads a finished run, "
+                                   "the parameters it tunes and the wells it is held to.")
+        captions = dict(self._states("CAPTIONS", {}))
+        unnamed = {"phi", "residuals", "parameters"} - set(captions)
+        if unnamed:
+            raise DeclarationError(f"{self.name} names no caption for {sorted(unnamed)}.")
+
+    def judged(self, state: Fill) -> dict[str, Any]:
+        """An unstated noptmax is PEST++'s 0, an ensemble evaluated and nothing calibrated, so it refuses."""
+        from trid3nt_server.workflows.runtime.fill import REJECTED, Verdict
+
+        refused = super().judged(state)
+        own, _ = keyword_floor([PESTPP], dict(state.keywords))
+        if own.get("NOPTMAX") in (None, 0):
+            refused["noptmax"] = Verdict(
+                REJECTED, own.get("NOPTMAX"), code="PESTPP_ITERATIONS_UNSTATED",
+                reason="noptmax states how many iterations PEST++ runs, and unstated it is PEST++'s own 0: the "
+                       "ensemble is evaluated and nothing is calibrated. State it, keywords={\"noptmax\": N}.")
+        return refused
+
+    def recorded_engine(self, run: RunResult) -> str | None:
+        """The record is the calibrated run's: an ordinary run of the engine the study ran its model on."""
+        return str((run.results.get("study") or {}).get("model_engine") or self.engine)
+
+    async def launch(self, state: Fill) -> RunResult:
+        """The run, in order: the deck, the study's files, its review, the ranking where one is asked for, the
+        ensemble study, then the calibrated deck solved and published."""
+        from trid3nt_server.inputs.run_notes import journal_note
+        from trid3nt_server.render.pipeline_emitter import begin_substeps, current_emitter, substep
+        from trid3nt_server.workflows.runtime.fill import call, production, read
+
+        from . import engine, outputs, staging
+        from .authoring import modflow as study_deck
+        from .authoring.control import write_control
+
+        env = production(state)
+        run = env.run
+        emitter = current_emitter()
+        finished = await read(env, "run")
+        wells = await read(env, "observe")
+        wells = wells if isinstance(wells, tuple) else (wells,)
+        named = dict(await read(env, "parameters") or {})
+        tune = await read(env, "tune")
+        options, _ = keyword_floor([PESTPP], dict(state.keywords))
+        frame = str(((finished.record.get("inputs") or {}).get("vertical_frame") or {}).get("value") or "")
+        chosen, sources = [], {}
+        for identifier, stated in named.items():
+            lower, upper, sources[identifier.lower()] = _bounds(identifier, stated)
+            chosen.append((identifier, lower, upper))
+        ranking = tune is not None and int(tune) < len(chosen)
+        begin_substeps(emitter, 3 + ranking)
+        work = Path(tempfile.mkdtemp(prefix="pestpp-study-"))
+
+        async def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
+            async with substep(emitter, label):
+                run[label] = await call(fn, kwargs, label)
+            return run[label]
+
+        try:
+            deck_dir = work / "deck"
+            await asyncio.to_thread(study_deck.fetch_deck, finished.staged, deck_dir)
+            the_deck = await asyncio.to_thread(study_deck.deck, deck_dir)
+            targets, left = study_deck.head_targets(
+                wells, the_deck=the_deck, mesh=finished.mesh,
+                utm_epsg=int(finished.case["server_facts"]["utm_epsg"]), frame=frame)
+            for line in left:
+                journal_note(f"a well is not held to the run: {line}")
+            if not targets:
+                raise PestppError("no well's reading is a head at a cell of the run, so the study has nothing to be "
+                                  "held to", error_code="PESTPP_OBSERVATIONS_NONE")
+            journal_note(f"every one of the {len(targets)} wells weighs 1 in phi, the sum of the squared residuals")
+            observed = [target for target, _cell in targets]
+
+            async def studied(tool: str, chosen: Sequence[tuple[str, float, float]], stated: Mapping[str, Any]
+                              ) -> tuple[dict[str, Any], Path, list, list]:
+                where = work / tool
+                parameters, templates, instructions = await asyncio.to_thread(
+                    study_deck.interface, deck_dir, where, chosen, the_deck=the_deck, targets=targets)
+                write_control(where, name=staging.CONTROL_FILENAME, parameters=parameters, observations=observed,
+                              templates=templates, instructions=instructions, command="mf6", stated=stated, own=_OWN)
+                staged = await staging.stage_study(where, tool=tool, control=staging.CONTROL_FILENAME,
+                                                   name=f"{self.name} of {finished.run_id}")
+                handle = await stage("ranking" if tool == "sen" else "ensemble", engine.solve_case,
+                                     run=staged, cores=int(staged["case"]["cores"]))
+                files = await asyncio.to_thread(outputs.fetch_study, handle["run_id"], work / f"{tool}-out")
+                return handle, files, parameters, templates
+
+            if ranking:
+                kept = await self._ranked(studied, chosen, options, int(tune))
+                chosen = [row for row in chosen if row[0].lower() in kept]
+            await self._reviewed(chosen, sources, observed, options)
+            handle, files, parameters, templates = await studied("ies", chosen, options)
+            phi = outputs.read_phi(files)
+            ensemble = outputs.read_parameter_ensemble(files)
+            residuals = outputs.read_residuals(files)
+            best = ensemble.get("base")
+            if best is None:
+                raise PestppError("the study's last ensemble carries no base realization, whose parameters the "
+                                  "calibrated run is solved with", error_code="PESTPP_OUTPUT_MISSING")
+            solved = await stage("solve", self._calibrated, finished=finished, study_dir=work / "ies",
+                                 the_deck=the_deck, parameters=parameters, templates=templates, best=best,
+                                 frame=frame)
+            run["study"] = {"run_id": handle["run_id"], "tool": "ies", "model_engine": finished.engine,
+                            "finished_run": finished.run_id, "parameters": {
+                                p.name: {"lower": p.lower, "upper": p.upper, "source": sources.get(p.name) or None,
+                                         "calibrated": best[p.name]} for p in parameters},
+                            "phi": phi, "ensemble": ensemble,
+                            "observations": [{"name": o.name, "target": o.value} for o in observed]}
+            value = await self._publish_calibrated(solved, phi=phi, residuals=residuals, ensemble=ensemble,
+                                          parameters=parameters, finished=finished)
+            return RunResult(value=value, results=dict(run))
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    async def _ranked(self, studied: Any, chosen: Sequence[tuple[str, float, float]],
+                      options: Mapping[str, Any], tune: int) -> list[str]:
+        """A Morris pass over every named parameter, ranked; the top ``tune`` confirmed on a card where a
+        person reviews, taken as ranked otherwise and said."""
+        from trid3nt_server.inputs.gate.input_review import gate_input_review
+        from trid3nt_server.inputs.run_notes import journal_note
+
+        from . import outputs
+
+        sen_options = {k: v for k, v in options.items() if not k.startswith("IES_") and k != "NOPTMAX"}
+        handle, files, _parameters, _templates = await studied("sen", chosen, sen_options)
+        sensitivity = outputs.read_sensitivity(files)
+        order = ranked(sensitivity)
+        outcome = await gate_input_review(
+            tool_name=self.name,
+            entries=[SyntheticInput(param=row["parameter"], value=round(float(row["sen_mean_abs"]), 6),
+                                    basis=Origin.DERIVED, real_source_if_any=f"pestpp-sen {handle['run_id']}",
+                                    note=f"rank {order.index(row['parameter']) + 1} by mean absolute elementary effect")
+                     for row in sensitivity],
+            params={"tuned": order[:tune]})
+        if not outcome.proceed:
+            raise PestppError(f"the ranking was not confirmed: {outcome.cancel_reason or 'declined'}",
+                              error_code="PESTPP_RANKING_DECLINED")
+        kept = [str(name).lower() for name in outcome.params.get("tuned") or order[:tune]]
+        journal_note(f"the sensitivity pass ranks {', '.join(order)}; the study tunes {', '.join(kept)}")
+        return kept
+
+    async def _reviewed(self, chosen: Sequence[tuple[str, float, float]], sources: Mapping[str, str],
+                        observed: list, options: Mapping[str, Any]) -> None:
+        """The study before it runs, on the one review card where a person reviews; a decline ends the run."""
+        from trid3nt_server.inputs.gate.input_review import gate_input_review
+
+        outcome = await gate_input_review(
+            tool_name=self.name,
+            entries=[SyntheticInput(param=name, value=f"{lower:g} to {upper:g} times the run's own",
+                                    basis=Origin.USER, real_source_if_any=sources.get(name.lower()) or None)
+                     for name, lower, upper in chosen] + [SyntheticInput(param="observations", value=len(observed),
+                                                                         basis=Origin.PRODUCER)],
+            params={PESTPP.MODULE_INPUT[k].keyword: v for k, v in options.items()})
+        if not outcome.proceed:
+            raise PestppError(f"the study was not run: {outcome.cancel_reason or 'declined'}",
+                              error_code="PESTPP_STUDY_DECLINED")
+
+    async def _calibrated(self, *, finished: Any, study_dir: Path, the_deck: Any, parameters: list,
+                          templates: list, best: Mapping[str, float], frame: str) -> dict[str, Any]:
+        """The deck with the best parameters written in, staged and solved as an ordinary MODFLOW run -> its handle."""
+        from trid3nt_server.workflows.modflow.authoring.staged_check import check_staged_run
+        from trid3nt_server.workflows.modflow.workflow import run_sheet
+        from trid3nt_server.workflows.solver.staging import new_rundir, stage_run
+
+        from .authoring import modflow as study_deck
+        from .authoring.control import TABLES
+
+        run_id = new_ulid()
+        rundir = new_rundir(run_id, stem="modflow")
+        await asyncio.to_thread(study_deck.substitute, study_dir, templates, parameters, best)
+        own = [template for template, _file in templates] + [f"{study_deck.OBS_OUTPUT}.ins", *TABLES.values()]
+        await asyncio.to_thread(study_deck.copy_deck, study_dir, rundir, own)
+        sheet = await asyncio.to_thread(study_deck.deck_sheet, rundir, the_deck)
+        case = finished.case
+        results = list(case.get("results") or [])
+        staged = await stage_run(
+            rundir, run_id, module=str(case["module"]), steering=str(case["steering"]), results=results,
+            outputs=list(dict.fromkeys([*finished.outputs, study_deck.OBS_OUTPUT])), mesh_inputs=[],
+            prefix="modflow", sheet={}, server_facts=dict(case.get("server_facts") or {}),
+            result_basename=(results or list(finished.outputs))[0], check=check_staged_run)
+        handle = await run_sheet(sheet=sheet, staged=staged, mesh=finished.mesh,
+                                 name=str((case.get("server_facts") or {}).get("name") or "domain"),
+                                 moment=None, frame=frame or None)
+        return {**handle, "deck_sheet": sheet}
+
+    async def _publish_calibrated(self, solved: Mapping[str, Any], *, phi: list, residuals: list,
+                         ensemble: Mapping[str, Mapping[str, float]], parameters: list, finished: Any) -> Any:
+        """The calibrated run published as MODFLOW publishes a run, the study's three charts beside it."""
+        from trid3nt_server.render.formats import Chart, Deliverable, publish
+        from trid3nt_server.workflows.modflow.workflow import publish_outputs
+
+        from .charts import parameter_chart, phi_chart, residual_chart
+
+        record = await publish_outputs(run=solved, sheet=solved["deck_sheet"], outputs=[], captions={}, params={})
+        captions = dict(self._states("CAPTIONS", {}))
+        items = [Deliverable(product=Chart(payload=phi_chart(phi, caption=captions["phi"])), caption=captions["phi"]),
+                 Deliverable(product=Chart(payload=residual_chart(residuals, caption=captions["residuals"])),
+                             caption=captions["residuals"]),
+                 Deliverable(product=Chart(payload=parameter_chart(ensemble, parameters,
+                                                                   caption=captions["parameters"])),
+                             caption=captions["parameters"])]
+        await publish(run_id=str(solved["run_id"]), engine=self.engine, name=f"{finished.run_id} calibrated",
+                      items=items)
+        return record

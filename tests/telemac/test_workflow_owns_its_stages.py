@@ -332,15 +332,19 @@ def test_the_moment_is_the_engines_input_and_no_template_seats_or_coerces_it():
 
 
 def test_every_registered_template_carries_the_moment_and_the_beds_frame():
-    """Agitation among them: it has a bed, so it has the bed's frame."""
+    """Agitation among them: it has a bed, so it has the bed's frame. A study over a finished run states no
+    bed: it stands on that run's frame, and carries the moment its wells are asked at."""
+    from trid3nt_server.inputs.slots import RUN
     from trid3nt_server.tools import TOOL_REGISTRY
     import trid3nt_server.workflows.telemac.templates  # noqa: F401
 
     templates = [tool.fn.workflow for tool in TOOL_REGISTRY.values()
                  if hasattr(tool.fn, "workflow")]
-    assert len(templates) == 19
+    assert len(templates) == 20
     for workflow in templates:
-        assert {"event_time", "vertical_frame"} <= {p.name for p in value_inputs(workflow)}
+        over_a_run = any(row.slot is RUN for row in workflow.inputs)
+        wanted = {"event_time"} if over_a_run else {"event_time", "vertical_frame"}
+        assert wanted <= {p.name for p in value_inputs(workflow)}
 
 
 def _filled_by(workflow, values):

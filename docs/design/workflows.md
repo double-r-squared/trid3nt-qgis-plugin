@@ -630,8 +630,14 @@ and units the simulation owns are one for both models). The engine page
 
 ## PEST++ - a study engine
 
-PEST++ is an engine whose trials run a model the study directory carries; no template speaks it yet.
-Its staging, worker and output table are `docs/design/pestpp.md`.
+PEST++ is an engine whose trials run a model the study directory carries. A study template takes a
+`RUN` row - a finished run of this case, named by its run id or a handle the case shows for one of its
+layers (`inputs/run.py`) - and stands where that run was solved: the run's mesh box is the place every
+later row is matched at, and a row supplied beside it is adopted as a domain row's would be. The
+record of a study is the record of the run its best parameters made: an ordinary run of the engine the
+study ran its model on (`Workflow.recorded_engine`), carrying a `study` entry that names the study and
+keeps its ensemble. The dictionary, the staging, the worker, the output table and the MODFLOW template
+are `docs/design/pestpp.md`.
 
 ## Mesh
 

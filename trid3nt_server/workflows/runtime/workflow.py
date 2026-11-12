@@ -492,6 +492,10 @@ class Workflow:
                 "origin": verdict.origin.value, "source": verdict.source or None}
         return inputs
 
+    def recorded_engine(self, run: RunResult) -> str | None:
+        """The engine the run's record names: this workflow's own solver family."""
+        return self.engine or None
+
     def _correct_end(self, run: RunResult) -> bool | None:
         """Did the solver reach its own correct end? None where the metrics say nothing."""
         if not self.solve_step:
@@ -507,14 +511,14 @@ class Workflow:
         from trid3nt_server.render.pipeline_emitter import current_emitter
 
         journal.append_record(journal.build_record(
-            run_id=run_id, engine=self.engine or None,
+            run_id=run_id, engine=self.recorded_engine(run),
             module=self._module(run), inputs=inputs,
             correct_end=self._correct_end(run),
             result=result, wall_seconds=round(wall_seconds, 3),
             origin=journal.run_origin(live_session=current_emitter() is not None),
             notes=list(notes), outputs=run.outputs,
             mesh=run.results.get("mesh"), settings=run.settings, stopped=stopped,
-            check_steps=run.results.get("check_steps"),
+            check_steps=run.results.get("check_steps"), study=run.results.get("study"),
         ))
         clear_session_run()
 

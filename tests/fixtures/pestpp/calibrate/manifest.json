@@ -1,0 +1,23 @@
+{
+ "case": {
+  "module": "gwt",
+  "steering": "mfsim.nam",
+  "results": [
+   "gwf.hds",
+   "gwf.cbc"
+  ],
+  "server_facts": {
+   "name": "domain mesh",
+   "utm_epsg": 32610,
+   "mesh_size_m": 32.00000000002736
+  }
+ },
+ "outputs": [
+  "gwf.hds",
+  "gwf.cbc",
+  "gwf.lst",
+  "gwt.lst",
+  "mfsim.lst",
+  "modflow_metrics.json"
+ ]
+}

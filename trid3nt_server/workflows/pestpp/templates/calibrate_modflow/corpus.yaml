@@ -1,0 +1,11 @@
+# Template routing phrasings: walked into the main retrieval index directly, so
+# an engine template is an ordinary retrieval-pool tool.
+pestpp_calibrate_modflow:
+- calibrate this groundwater model against the measured well levels
+- tune the hydraulic conductivity so the MODFLOW heads match the wells
+- fit the modflow run to the observed groundwater heads with PEST++
+- run a PEST++ ensemble calibration of the water table model
+- how well does the groundwater run match the monitoring wells, and what conductivity fits them
+- adjust recharge and conductivity multipliers to the measured heads
+- history match the MODFLOW model to USGS well observations
+- which aquifer parameters does the model fit best against the wells

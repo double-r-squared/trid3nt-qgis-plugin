@@ -165,10 +165,12 @@ def build_record(*, run_id: str | None, engine: str | None,
                  mesh: Mapping[str, Any] | None = None,
                  settings: Mapping[str, Mapping[str, Any]] = {},
                  stopped: str | None = None,
-                 check_steps: int | None = None) -> dict[str, Any]:
+                 check_steps: int | None = None,
+                 study: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """One run record, from what the publish stage already holds.
     ``stopped`` is the sentence of a run the user stopped, whose outputs are partial; none on a run that ended.
-    ``check_steps`` is the step count a check run stopped its solve at; none on a full-length run."""
+    ``check_steps`` is the step count a check run stopped its solve at; none on a full-length run.
+    ``study`` names the study whose best parameters the run was solved with, and keeps its ensemble; none on any other run."""
     return {
         "run_id": run_id,
         "recorded_at": datetime.now(timezone.utc).isoformat(),
@@ -196,6 +198,7 @@ def build_record(*, run_id: str | None, engine: str | None,
         # The settings the run read: name, the value in force and the level it resolved at (default, user or run).
         "settings": [{"name": name, "value": _small(row.get("value")), "level": row.get("level")}
                      for name, row in sorted(settings.items())],
+        **({"study": dict(study)} if study else {}),
     }
 
 

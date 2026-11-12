@@ -449,6 +449,17 @@ package SteeringSurface {
         port stageOut : StageOut;
     }
 
+    part pestppCalibratedStage : Sheet {
+        doc /*
+        A study's calibrated deck: the finished MODFLOW run's deck with the study's
+        best parameters written in, staged as an ordinary MODFLOW run with that
+        engine's staged check through the one stager.
+
+        code: trid3nt_server/workflows/pestpp/workflow.py
+        */
+        port stageOut : StageOut;
+    }
+
     part pestppStage : Sheet {
         doc /*
         PEST++'s study directory: the control file, its template and instruction
@@ -573,6 +584,9 @@ package SteeringSurface {
 
     interface pestppStaged : StageRequest
         connect pestppStage.stageOut to stager.stageIn;
+
+    interface pestppCalibratedStaged : StageRequest
+        connect pestppCalibratedStage.stageOut to stager.stageIn;
 
     interface canvasAnswered : DrawnValue
         connect canvasGate.drawOut to fill.drawIn;

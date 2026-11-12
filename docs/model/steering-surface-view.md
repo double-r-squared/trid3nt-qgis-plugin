@@ -19,6 +19,7 @@ flowchart LR
     modflowStage["Sheet<br/>trid3nt_server/workflows/modflow/workflow.py"]
     observationSlot["ObservationSlot<br/>trid3nt_server/inputs/observation.py"]
     output["Output<br/>trid3nt_server/workflows/telemac/modules/telemac2d.py"]
+    pestppCalibratedStage["Sheet<br/>trid3nt_server/workflows/pestpp/workflow.py"]
     pestppStage["Sheet<br/>trid3nt_server/workflows/pestpp/staging.py"]
     point["TypedInput<br/>trid3nt_server/inputs/point.py"]
     runRecord["RunRecord<br/>trid3nt_server/workflows/runtime/journal.py"]
@@ -37,6 +38,7 @@ flowchart LR
     geoclawStage -- "StageRequest" --> stager
     modflowStage -- "StageRequest" --> stager
     steeringDriver -- "SteeringParse" --> steeringGate
+    pestppCalibratedStage -- "StageRequest" --> stager
     pestppStage -- "StageRequest" --> stager
     telemacSheet -- "StageRequest" --> stager
     sheet -- "ResolvedSheet" --> serializer

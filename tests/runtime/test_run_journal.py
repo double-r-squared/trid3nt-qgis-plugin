@@ -281,7 +281,7 @@ def test_the_run_journals_the_mesh_its_mesh_step_returned(monkeypatch):
     lines: list = []
     monkeypatch.setattr(journal, "append_record", lines.append)
     skeleton = SimpleNamespace(engine="telemac", _module=lambda run: None,
-                               _correct_end=lambda run: None)
+                               _correct_end=lambda run: None, recorded_engine=lambda run: "telemac")
     run = RunResult(value=None, results={"mesh": {"key": "5f4d1a42f53e",
                                                   "built_by": "RUN1"}})
     Workflow._journal(skeleton, "RUN2", run,
