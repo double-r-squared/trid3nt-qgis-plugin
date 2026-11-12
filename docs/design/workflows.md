@@ -165,6 +165,11 @@ the run. A wave run's station is matched as its own OBSERVE row, one buoy neares
 window and never the boundary's own; when the only buoy the row matches is the one the
 sea state came from, the observation is taken out of the run's reads before the sheet
 fills or any output answers at it, and the journal says there is no independent check.
+An observation row that names no `at` (a river template's level and discharge) ranks its
+sites against the question's own seed, the point the domain is found from, and takes the
+nearest; it is never ranked against nothing, which would take the source's first row.
+Nearest the seed is not proof of the same water: a tributary's gauge nearer than the
+reach's own is still taken.
 
 AN OBSERVE ROW IS READ AT AN INSTANT AND MAY TAKE A SET. `need(..., when="snapshot")`
 names the run input holding the instant the record is asked and read at, apart from the

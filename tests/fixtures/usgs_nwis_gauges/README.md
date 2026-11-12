@@ -7,3 +7,6 @@ written with pandas `to_csv` and nothing edited:
 - `willamette_14211720_iv_2026-11-10.csv` - USGS 14211720 Willamette River at Portland, 288 five-minute readings.
   Its stage arrives under the site-described column `00065_morrison bridge`, not `00065`.
 - `willamette_14211720_site.csv` - the site's location and its zero (1.55 ft, NGVD29).
+- `etowah_bbox_2026-09-21.fgb` - what `fetch_usgs_nwis_gauges` wrote for the box [-85.240008, 33.991712, -84.727005,
+  34.423822] on 2026-09-21 (the Etowah reach between 02395000 Kingston and 02395980 GA 1 Loop), copied byte for byte
+  from the object-store cache on 2026-11-12: 12 sites, Richland Creek 02394682 first, Kingston sixth.

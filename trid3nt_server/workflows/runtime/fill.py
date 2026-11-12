@@ -617,6 +617,10 @@ async def _ingested(env: _Env, decl: Input, value: Any,
     coercion = dict(decl.coercion)
     if "near" in coercion:
         coercion["near"] = await _seed(env, decl)
+        if coercion["near"] is None and decl.slot.ingestion == "observation":
+            # A record's sites rank against the question's own point where the row names none:
+            # ranked against nothing, the source's row order picks, a tributary's gauge as soon as the reach's own.
+            coercion["near"] = await _question_seed(env)
     coercion.update(_what_the_run_calls_it(
         env, decl, _asked_of(decl, coercion.get("near"))))
     coercion.update(_the_window_it_is_cut_from(decl))

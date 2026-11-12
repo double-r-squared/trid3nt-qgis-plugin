@@ -747,3 +747,36 @@ def test_every_row_empty_is_one_refusal_naming_each_row_tried(hydrography):
     assert "fetch_coastline held nothing here" in text and "fetch_reach held nothing here" in text
     assert "carries no polygon geometry" in text
 
+
+
+#: USGS's own answer for the Etowah box on 2026-09-21 (12 sites), recorded as the router wrote it.
+_ETOWAH_GAUGES = (__import__("pathlib").Path(__file__).resolve().parents[1]
+                  / "fixtures" / "usgs_nwis_gauges" / "etowah_bbox_2026-09-21.fgb")
+
+#: The release the Etowah reach is found from, 224 m above USGS 02395000 on its flowline.
+_ETOWAH_RELEASE = [-84.978229605, 34.207328998]
+
+
+@pytest.mark.parametrize("slot, need, observed", [
+    (LEVEL, "water level series", 186.836),
+    (DISCHARGE, "discharge series", 15.008),
+])
+def test_a_gauge_row_naming_no_point_takes_the_site_nearest_the_question_s_seed(
+        slot, need, observed):
+    """The river templates' level and discharge rows state no ``at``: their sites
+    rank against the point the domain is found from, never the source's own row
+    order, whose first site here is Richland Creek 30 km up a tributary."""
+    from trid3nt_server.tools.fetchers._router.registration import get_spec
+
+    row = next(r for r in get_spec("fetch_usgs_nwis_gauges").coverage
+               if r.data_class == need)
+    env = fill._Env(run=dict(release=list(_ETOWAH_RELEASE),
+                             event_time="2026-09-21T23:00:00Z"),
+                    data={"domain": _row(Input(DOMAIN).need(
+                        "hydrography", at="release"), "domain")},
+                    moment="event_time", slot_units={LEVEL: "m", DISCHARGE: "m3/s"})
+    gauge = _row(Input(slot).need(need), slot.name)
+    found = asyncio.run(fill._ingested(env, gauge, str(_ETOWAH_GAUGES), row))
+    assert found.site_name == "ETOWAH RIVER NEAR KINGSTON,GA"
+    assert found.distance_km == pytest.approx(0.23, abs=0.01)
+    assert found.value == pytest.approx(observed, abs=1e-3)
