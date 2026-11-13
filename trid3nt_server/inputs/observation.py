@@ -38,7 +38,7 @@ logger = logging.getLogger("trid3nt_server.inputs.observation")
 _CODE = "OBSERVATION_INVALID"
 
 #: What a source calls the thing that reported; the journal note needs it to find the number again.
-_SITE_FIELDS = ("site_id", "station_id", "feature_id", "lid")
+_SITE_FIELDS = ("site_id", "station_id", "feature_id", "lid", "site_no")
 
 #: How far AHEAD of the asked moment a record may be read when it sampled nothing before
 #: it: one of the record's OWN cadences, so a daily record's same-day reading is that

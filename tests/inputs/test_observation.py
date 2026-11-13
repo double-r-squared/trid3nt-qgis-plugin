@@ -417,3 +417,17 @@ def test_a_rows_declared_column_wins_over_the_layer_record() -> None:
     layer = {**_fc(_site("A", -122.68, 45.51, 9.5, other_date="2020-01-01")), "stamp_column": "other_date"}
     found = observation(layer, at="2026-03-04T12:00:00Z", stamp_field="result_date")
     assert found.sampled == "2026-03-04"
+
+
+def test_a_usgs_gauge_is_named_by_its_site_no() -> None:
+    """NWIS publishes a gauge's id as ``site_no``: the recorded USGS answer for the
+    Etowah box names Kingston 02395000 by it, and the reading carries that id."""
+    from pathlib import Path
+
+    layer = (Path(__file__).resolve().parents[1] / "fixtures" / "usgs_nwis_gauges"
+             / "etowah_bbox_2026-09-21.fgb")
+    found = observation(str(layer), near=[-84.978229605, 34.207328998],
+                        field="gage_height_ft", series_field="stage_series_csv",
+                        at="2026-09-21T23:00:00Z")
+    assert found.site_name == "ETOWAH RIVER NEAR KINGSTON,GA"
+    assert found.site_id == "02395000"
