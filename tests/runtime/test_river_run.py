@@ -104,3 +104,66 @@ def test_a_typed_pick_is_read_and_the_water_under_it_never_asked(asked):
     row = _domain_row(3.0)
     seed = asyncio.run(fill._seed(env, row))
     assert fill._asked_of(row, seed) == "waterbody"
+
+
+def _spanless_row() -> Input:
+    return dataclasses.replace(Input(DOMAIN).need("hydrography", at="release"), name="domain")
+
+
+@pytest.fixture
+def mode(monkeypatch):
+    """The AUTO setting, and the review card a person answers: what it showed, and the reach they give."""
+    from trid3nt_server.inputs.gate import input_review
+
+    held = {"mode": "auto", "answer": None, "cards": []}
+    monkeypatch.setattr(input_review, "resolve_input_gate_mode", lambda forced=None: forced or held["mode"])
+
+    async def review(*, tool_name, entries, params, present=None, **_):
+        held["cards"].append(await present())
+        given = {} if held["answer"] is None else {"reach_length_km": held["answer"]}
+        return input_review.ReviewOutcome(proceed=True, entries=[], params={**params, **given},
+                                          mode="user_gated")
+
+    monkeypatch.setattr(input_review, "gate_input_review", review)
+    return held
+
+
+def test_auto_refuses_a_river_run_whose_reach_nobody_states(asked, mode):
+    env = fill._Env(run={"release": list(_ETOWAH_RELEASE)}, data={})
+    with pytest.raises(fill.StepFailedError) as refused:
+        asyncio.run(fill._matched(env, _spanless_row()))
+    assert refused.value.error_code == "REACH_LENGTH_UNSTATED"
+    assert "reach_length_km is unstated" in str(refused.value)
+    # NLDI's own default walk is never taken in its place.
+    assert [runner for runner, _ in asked] == ["fetch_nhd_water_surface"]
+    assert mode["cards"] == []
+
+
+def test_a_person_reviewing_is_asked_the_reach_and_the_river_is_walked_that_far(asked, mode):
+    mode.update(mode="user_gated", answer=2.0)
+    env = fill._Env(run={"release": list(_ETOWAH_RELEASE)}, data={})
+    found = asyncio.run(fill._matched(env, _spanless_row()))
+    card, = mode["cards"]
+    row, = card.param_sheet.rows
+    assert row.name == "reach_length_km" and row.value is None and row.units == "km"
+    assert "walked downstream" in row.desc
+    assert env.run["reach_length_km"] == 2.0
+    assert [kw["distance_km"] for runner, kw in asked if runner == "fetch_nhdplus_nldi_navigate"] == [2.0]
+    assert "centerline" in found.companions
+
+
+def test_a_card_answered_with_no_reach_refuses_naming_it(asked, mode):
+    mode.update(mode="user_gated", answer=None)
+    env = fill._Env(run={"release": list(_ETOWAH_RELEASE)}, data={})
+    with pytest.raises(fill.StepFailedError) as refused:
+        asyncio.run(fill._matched(env, _spanless_row()))
+    assert refused.value.error_code == "REACH_LENGTH_UNSTATED"
+    assert len(mode["cards"]) == 1
+
+
+def test_a_stated_reach_or_a_template_s_own_span_asks_nothing(asked, mode):
+    mode.update(mode="user_gated", answer=99.0)
+    stated = fill._Env(run={"release": list(_ETOWAH_RELEASE), "reach_length_km": 2.0}, data={})
+    asyncio.run(fill._matched(stated, _spanless_row()))
+    asyncio.run(fill._matched(fill._Env(run={"release": list(_ETOWAH_RELEASE)}, data={}), _domain_row(2.0)))
+    assert mode["cards"] == []

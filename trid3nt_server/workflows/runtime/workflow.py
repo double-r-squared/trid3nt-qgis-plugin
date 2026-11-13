@@ -113,11 +113,17 @@ class Workflow:
         adds its own; the skeleton declares none."""
         reach = next((row.span_km for row in self.inputs
                       if row.slot is DOMAIN and row.span_km is not None), None)
+        # A domain found from a point with no kind of its own may stand in a river, which then walks a reach.
+        river = any(row.slot is DOMAIN and row.data_class == "hydrography" and row.kind in ("", "flowline")
+                    and row.coercion.get("near") for row in self.inputs)
+        desc = (f"{REACH_LENGTH.desc}. This template reaches {reach:g} km" if reach is not None else
+                "State it only when the user names a reach length: this template states none, so a run on a river "
+                "asks for it on the review card and AUTO refuses without it. " + REACH_LENGTH.desc.split(". ", 1)[1]
+                if river else "")
         return (tuple(stated for slot in dict.fromkeys(
             row.slot for row in self.inputs if row.slot is not None)
             for stated in slot.states)
-            + (() if reach is None else (replace(
-                REACH_LENGTH, desc=f"{REACH_LENGTH.desc}. This template reaches {reach:g} km"),)))
+            + (() if not desc else (replace(REACH_LENGTH, desc=desc),)))
 
     def __init__(self, *, metadata: Any, inputs: Any, template: Any,
                  sensitivity: Sequence[tuple[str, str]] | SensitivityDecl = (),

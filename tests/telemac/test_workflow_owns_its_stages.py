@@ -14,7 +14,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import DeclarationError, tool
-from seated import SEATED
+from seated import REACH, SEATED
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.workflows.telemac.modules import T2D
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
@@ -72,9 +72,10 @@ def _mesh(workflow: TelemacWorkflow):
 def test_the_engine_seats_its_inputs_so_the_template_states_none_of_them():
     workflow = _workflow()
     # The template's own row for the mesh edge keeps its place; every input it
-    # does not state is seated after it, in the order the engine seats them.
+    # does not state is seated after it, in the order the engine seats them; a domain found from a
+    # point with no kind of its own may be a river, so the reach is seated last.
     assert [prm.name for prm in value_inputs(workflow)] == [
-        "mesh_resolution_m", *(n for n in SEATED if n != "mesh_resolution_m")]
+        "mesh_resolution_m", *(n for n in SEATED if n != "mesh_resolution_m"), REACH]
     assert "cores" not in {prm.name for prm in value_inputs(workflow)}
 
 
@@ -89,7 +90,7 @@ def test_the_mesh_edge_is_seated_only_where_the_mesh_ask_names_it():
                              extent="domain", resolution_m=40.0))
     workflow = TelemacWorkflow(metadata=_METADATA, inputs=DATA, template=fixed)
     assert [prm.name for prm in value_inputs(workflow)] == ["event_time",
-                                                     "vertical_frame"]
+                                                     "vertical_frame", REACH]
 
 
 def test_a_sizing_input_is_the_meshers_and_seated_only_where_the_ask_names_it():

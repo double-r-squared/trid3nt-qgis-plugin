@@ -137,11 +137,12 @@ _OWN_PARAMS = {"seed", "warm_temp_c", "cold_temp_c", "thermocline_depth_m",
 def test_the_template_declares_only_its_own_question_and_one_restated_lever():
     """A keyword twin, a domain twin and a lever are each declared once elsewhere.
     The one lever restated here carries no default: the edge is the data's."""
-    from seated import SEATED
+    from seated import REACH, SEATED
 
     workflow = _workflow()
     declared = {p.name for p in value_inputs(workflow)}
-    assert declared == _OWN_PARAMS | set(SEATED)
+    # A seed standing in a river makes a river run, whose reach the call states or the review asks.
+    assert declared == _OWN_PARAMS | set(SEATED) | {REACH}
     rows = {p.name: p for p in value_inputs(workflow)}
     edge = rows["mesh_resolution_m"]
     assert (edge.default, edge.bounds, edge.stated_only) == (None, None, True)

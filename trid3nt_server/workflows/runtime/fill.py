@@ -216,6 +216,8 @@ async def _matched(env: _Env, decl: Input) -> Any:
         return await _bed_surface(env, decl, lambda laid: _ingested(env, decl, laid))
     if decl.slot is DOMAIN and not _asked_of(decl, await _seed(env, decl)):
         decl = await _kind_of_the_water_under(env, decl)
+    if decl.slot is DOMAIN and _asked_of(decl, await _seed(env, decl)) == "flowline" and _span_km(env, decl) is None:
+        await _reach_length_asked(env, decl)
     # The INGESTION rides INSIDE the probe: a source whose rows the slot finds nothing
     # usable in held nothing for this run, so the next survivor takes its turn.
     beside = await _beside(env, decl)
@@ -272,6 +274,45 @@ async def _kind_of_the_water_under(env: _Env, decl: Input) -> Input:
     journal_note(f"{decl.name}: the point it is found from stands in a river's own mapped water (NHD "
                  "StreamRiver), so the domain is the reach walked downstream from it.")
     return dataclasses.replace(decl, kind=kind)
+
+
+async def _reach_length_asked(env: _Env, decl: Input) -> None:
+    """A river run whose reach nobody stated asks for it on the review card; AUTO, or a card left unanswered, refuses naming it.
+
+    The network's own walk length is never taken in its place: how far the reach runs is the run's choice."""
+    from trid3nt_contracts.common import Origin
+    from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
+
+    from trid3nt_server.inputs.gate.input_review import GateCard, gate_input_review, resolve_input_gate_mode
+    from .workflow import REACH_LENGTH
+
+    controls = (f"the {decl.name} stands on a river, so it is the reach walked downstream from the point it is found "
+                f"from and cut square at its two ends: {REACH_LENGTH.name} is how far, in km, and this template "
+                "states none")
+    refused = (f"{REACH_LENGTH.name} is unstated: {controls}. State {REACH_LENGTH.name} (greater than 0); a longer "
+               "reach is a bigger mesh and a longer solve.")
+    if resolve_input_gate_mode() == "auto":
+        raise StepFailedError(refused, error_code="REACH_LENGTH_UNSTATED", step=_data_step_label(decl.name))
+
+    async def card() -> GateCard:
+        row = ParamSheetRow(name=REACH_LENGTH.name, value=None, units="km", desc=controls[:512],
+                            note="nothing states it, and it is never assumed")
+        return GateCard(lines=[f"{REACH_LENGTH.name} = ? km: {controls}"],
+                        param_sheet=ParamSheet(workflow=env.workflow or decl.name, rows=[row],
+                                               title="How long is the river reach?"))
+
+    outcome = await gate_input_review(tool_name=env.workflow or decl.name, entries=[], params={}, present=card)
+    answered = (outcome.params or {}).get(REACH_LENGTH.name) if outcome.proceed else None
+    try:
+        km = float(answered)
+    except (TypeError, ValueError):
+        km = math.nan
+    if not km > 0.0:
+        raise StepFailedError(refused if outcome.proceed else f"{refused} ({outcome.cancel_reason})",
+                              error_code="REACH_LENGTH_UNSTATED", step=_data_step_label(decl.name))
+    env.run[REACH_LENGTH.name] = km
+    env.inputs[REACH_LENGTH.name] = Verdict(ACCEPTED, km, origin=Origin.USER)
+    journal_note(f"{decl.name}: the river reach is {km:g} km, as answered on the review card.")
 
 
 async def _bed_list(env: _Env, decl: Input, listed: list[Any]) -> list[Any]:
@@ -438,13 +479,14 @@ def _span_km(env: _Env, decl: Input) -> float | None:
     from .workflow import REACH_LENGTH
 
     stated = env.run.get(REACH_LENGTH.name)
-    if stated is None or decl.span_km is None:
+    if stated is None or (decl.span_km is None and decl.slot is not DOMAIN):
         return decl.span_km
     if not float(stated) > 0.0:
         raise UserInputError(
             f"{REACH_LENGTH.name}={stated} km is not a reach: it is the length of the line the domain is cut to, "
             f"so it is greater than 0 and a value past the line's own end takes the whole line. "
-            f"Omit it for this template's {decl.span_km:g} km.", code="REACH_LENGTH_INVALID")
+            + (f"Omit it for this template's {decl.span_km:g} km." if decl.span_km is not None
+               else "This template states none."), code="REACH_LENGTH_INVALID")
     return float(stated)
 
 

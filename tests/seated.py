@@ -14,7 +14,8 @@ from trid3nt_server.workflows.runtime.fill import REJECTED, Fill, Verdict, _answ
 #: sheet reads them: the mesh ask's edge, the engine's moment, the bed's frame.
 SEATED = ("mesh_resolution_m", "event_time", "vertical_frame")
 
-#: What a workflow whose domain need states a span seats after them: the reach the domain is cut to.
+#: What a workflow whose domain need states a span, or may be a river found from a point, seats after them:
+#: the reach the domain is cut to.
 REACH = "reach_length_km"
 
 

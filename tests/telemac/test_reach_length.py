@@ -35,8 +35,18 @@ def test_every_span_stating_template_lists_the_reach_with_its_own_default(name, 
     assert reach.stated_only and f"reaches {span:g} km" in reach.desc
 
 
-def test_a_template_stating_no_span_lists_no_reach():
+def test_a_template_stating_no_span_whose_seed_may_stand_in_a_river_lists_the_reach_as_asked():
     workflow = TOOL_REGISTRY["telemac3d_stratified_flow"].fn.workflow
+    reach = next(r for r in workflow.inputs if r.name == REACH_LENGTH.name)
+    assert reach.stated_only and "states none, so a run on a river asks for it" in reach.desc
+    _workflow, row = _row("telemac3d_stratified_flow")
+    assert _span_km(_Env(data={}, run={}), row) is None
+    assert _span_km(_Env(data={}, run={"reach_length_km": 4.0}), row) == 4.0
+
+
+@pytest.mark.parametrize("name", ["modflow_water_table", "tomawac_wave_driven_currents", "geoclaw_tsunami_inundation"])
+def test_a_domain_of_its_own_kind_lists_no_reach(name):
+    workflow = TOOL_REGISTRY[name].fn.workflow
     assert all(r.name != REACH_LENGTH.name for r in workflow.inputs)
 
 
