@@ -20,6 +20,7 @@ from trid3nt_server.workflows.runtime import fill
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 _SURFACE = _FIXTURES / "nhd_water_surface"
+_BODIES = _FIXTURES / "nhd_waterbody_at_point"
 
 #: The Etowah release, 224 m above USGS 02395000 Kingston.
 _ETOWAH_RELEASE = [-84.978229605, 34.207328998]
@@ -34,16 +35,24 @@ _ANSWERS = {
     ("fetch_nhd_water_surface", (-84.72, 34.166)): _SURFACE / "allatoona_lake_3km.fgb",
     ("fetch_nhdplus_nldi_navigate", (-84.978229605, 34.207328998)):
         _FIXTURES / "nhdplus_nldi" / "etowah_release_dm_2km.fgb",
+    ("fetch_nhd_waterbody_at_point", (-84.72, 34.166)): _BODIES / "allatoona_lake.fgb",
 }
 
 
+#: A point on Henry Hagg Lake, the Hagg Lake canaries' seed.
+_HAGG_LAKE = [-123.221649, 45.485595]
+
+
 @pytest.mark.parametrize("seed, water, kind", [
-    (_ETOWAH_RELEASE, "etowah_release_2km.fgb", "flowline"),
-    (_WILLAMETTE_PORTLAND, "willamette_portland_1km.fgb", "flowline"),
-    (_ALLATOONA_LAKE, "allatoona_lake_3km.fgb", ""),
+    (_ETOWAH_RELEASE, _SURFACE / "etowah_release_2km.fgb", "flowline"),
+    (_WILLAMETTE_PORTLAND, _SURFACE / "willamette_portland_1km.fgb", "flowline"),
+    (_ALLATOONA_LAKE, _SURFACE / "allatoona_lake_3km.fgb", ""),
+    (_ALLATOONA_LAKE, _BODIES / "allatoona_lake.fgb", "waterbody"),
+    (_HAGG_LAKE, _BODIES / "hagg_lake.fgb", "waterbody"),
+    (_ETOWAH_RELEASE, _BODIES / "allatoona_lake.fgb", ""),
 ])
-def test_a_seed_is_a_place_on_a_flowline_only_inside_a_streamriver_area(seed, water, kind):
-    assert kind_under(str(_SURFACE / water), seed) == kind
+def test_a_seed_is_the_kind_of_the_mapped_water_it_stands_in(seed, water, kind):
+    assert kind_under(str(water), seed) == kind
 
 
 @pytest.fixture
@@ -91,11 +100,29 @@ def test_a_bare_release_in_a_river_meshes_the_reach_walked_downstream(asked):
     assert line.coords[0] == pytest.approx(tuple(_ETOWAH_RELEASE), abs=1e-3)
 
 
-def test_a_bare_point_on_a_lake_beside_a_river_is_not_made_a_river_run(asked):
+def test_a_bare_point_on_a_reservoir_on_a_river_is_a_lake_run(asked):
+    # Allatoona Lake is the Etowah dammed, and NHD maps its pool as a LakePond, not as the river's water.
     env = fill._Env(run={"release": list(_ALLATOONA_LAKE)}, data={})
     row = _domain_row(3.0)
-    assert asyncio.run(fill._kind_of_the_water_under(env, row)) is row
-    assert [runner for runner, _ in asked] == ["fetch_nhd_water_surface"]
+    assert asyncio.run(fill._kind_of_the_water_under(env, row)).kind == "waterbody"
+    assert [runner for runner, _ in asked] == ["fetch_nhd_water_surface", "fetch_nhd_waterbody_at_point"]
+
+
+def test_a_lake_run_s_domain_is_the_waterbody_it_stands_in(asked):
+    env = fill._Env(run={"release": list(_ALLATOONA_LAKE)}, data={})
+    found = asyncio.run(fill._matched(env, _domain_row(30.0)))
+    assert [runner for runner, _ in asked] == [
+        "fetch_nhd_water_surface", "fetch_nhd_waterbody_at_point", "fetch_nhd_waterbody_at_point"]
+    from shapely.geometry import Point, shape
+
+    from trid3nt_server.inputs.geometry import read_geometry_doc
+
+    lake = shape(read_geometry_doc(str(_BODIES / "allatoona_lake.fgb"))["features"][0]["geometry"])
+    assert shape(found.geometry).covers(Point(*_ALLATOONA_LAKE))
+    # The search box (30 km around the seed) holds the whole reservoir, so nothing of it is cut.
+    assert shape(found.geometry).area == pytest.approx(lake.area, rel=1e-3)
+    assert "centerline" not in found.companions
+    assert not any(runner == "fetch_nhdplus_nldi_navigate" for runner, _ in asked)
 
 
 def test_a_typed_pick_is_read_and_the_water_under_it_never_asked(asked):

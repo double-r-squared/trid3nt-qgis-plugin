@@ -257,22 +257,28 @@ async def _beside(env: _Env, decl: Input) -> dict[str, Any]:
 async def _kind_of_the_water_under(env: _Env, decl: Input) -> Input:
     """A domain whose seed arrived with no kind takes the kind of the mapped water it stands IN.
 
-    The water surface is asked through the match as the banks are; no water there, or water of
-    another kind, leaves the domain matched as it came."""
+    A river's own water surface is asked first, then the waterbody, each through the match as the
+    banks are; no water there, or water of another kind, leaves the domain matched as it came."""
     from trid3nt_server.inputs.domain import kind_under
     from trid3nt_server.inputs.point import lonlat_of
 
     seed = await _seed(env, decl)
     if lonlat_of(seed) is None:
         return decl
-    aside = dataclasses.replace(decl, name=f"{decl.name}_water", kind="", slot=None,
-                                observes="water surface", geometry="polygon")
-    _choice, water = await _probe(env, aside, decl.data_class, aside.name)
-    kind = "" if water is None else await asyncio.to_thread(kind_under, water, seed)
+    kind = ""
+    for name, observes in (("water", "water surface"), ("waterbody", "waterbody")):
+        aside = dataclasses.replace(decl, name=f"{decl.name}_{name}", kind="", slot=None,
+                                    observes=observes, geometry="polygon")
+        _choice, water = await _probe(env, aside, decl.data_class, aside.name)
+        kind = "" if water is None else await asyncio.to_thread(kind_under, water, seed)
+        if kind:
+            break
     if not kind:
         return decl
     journal_note(f"{decl.name}: the point it is found from stands in a river's own mapped water (NHD "
-                 "StreamRiver), so the domain is the reach walked downstream from it.")
+                 "StreamRiver), so the domain is the reach walked downstream from it." if kind == "flowline" else
+                 f"{decl.name}: the point it is found from stands in a lake or reservoir NHD maps (LakePond or "
+                 "Reservoir), so the domain is that waterbody.")
     return dataclasses.replace(decl, kind=kind)
 
 

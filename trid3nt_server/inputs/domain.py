@@ -128,14 +128,15 @@ def place_kind(seed: Any) -> str:
     return _PLACE_KINDS.get(str(kind or "").strip().lower(), "")
 
 
-#: The NHD feature type a river's own mapped water is published under (StreamRiver). A
-#: canal, a lake, a harbour or an estuary is another type, and says nothing here.
-_STREAM_RIVER = 460
+#: The kind of place each NHD feature type a seed can stand IN is: a river's own mapped water
+#: (StreamRiver) a flowline, a lake or a reservoir (LakePond, Reservoir) a waterbody. A canal, a
+#: harbour, an estuary or a marsh is another type, and says nothing here.
+_KIND_OF_FTYPE: Mapping[int, str] = MappingProxyType({460: "flowline", 390: "waterbody", 436: "waterbody"})
 
 
 def kind_under(water: Any, seed: Any) -> str:
-    """WHICH FEATURE a seed that arrived with no kind stands IN, off the mapped water surface
-    around it: "flowline" inside an NHD StreamRiver area, else "".
+    """WHICH FEATURE a seed that arrived with no kind stands IN, off the mapped water around it:
+    "flowline" inside an NHD StreamRiver area, "waterbody" inside a LakePond or Reservoir, else "".
 
     The seed is tested where it stands, never moved onto the water."""
     from shapely.geometry import Point, shape
@@ -151,11 +152,11 @@ def kind_under(water: Any, seed: Any) -> str:
         properties = (feature or {}).get("properties") or {}
         geometry = (feature or {}).get("geometry")
         try:
-            river = int(properties.get("ftype")) == _STREAM_RIVER
+            kind = _KIND_OF_FTYPE.get(int(properties.get("ftype")), "")
         except (TypeError, ValueError):
-            river = False
-        if river and geometry and shape(geometry).covers(point):
-            return "flowline"
+            kind = ""
+        if kind and geometry and shape(geometry).covers(point):
+            return kind
     return ""
 
 
