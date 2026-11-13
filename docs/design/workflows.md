@@ -168,8 +168,16 @@ fills or any output answers at it, and the journal says there is no independent 
 An observation row that names no `at` (a river template's level and discharge) ranks its
 sites against the question's own seed, the point the domain is found from, and takes the
 nearest; it is never ranked against nothing, which would take the source's first row.
-Nearest the seed is not proof of the same water: a tributary's gauge nearer than the
-reach's own is still taken.
+Nearest the seed is not proof of the same water, so on a RIVER RUN (a domain cut along a
+flowline, which carries its centerline) a matched record's site is a candidate only when it
+stands inside the domain AND NLDI's own NWIS index (`fetch_nhdplus_nldi_navigate`
+`nwis_site`, never a snap of its point) lists it on a flowline of the main stem walked UM
+and DM from the release, each the run's reach length (`fill.py::_off_the_reach`); every
+site left out is named on the journal with why, and a record whose sites are all off the
+reach refuses `OBSERVATION_OFF_THE_REACH` naming each. A site NLDI's NWIS index does not
+hold (another network's station) is never shown on the stem and is left out. A record
+handed in, and a run whose domain is no river reach, rank as before. The gauge's
+published drainage area is not checked against the reach's.
 
 AN OBSERVE ROW IS READ AT AN INSTANT AND MAY TAKE A SET. `need(..., when="snapshot")`
 names the run input holding the instant the record is asked and read at, apart from the

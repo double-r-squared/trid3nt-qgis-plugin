@@ -645,6 +645,10 @@ async def _ingested(env: _Env, decl: Input, value: Any,
             # A record's sites rank against the question's own point where the row names none:
             # ranked against nothing, the source's row order picks, a tributary's gauge as soon as the reach's own.
             coercion["near"] = await _question_seed(env)
+    if decl.slot.ingestion == "observation" and row is not None:
+        off = await _off_the_reach(env, value)
+        if off:
+            coercion["off"] = off
     coercion.update(_what_the_run_calls_it(
         env, decl, _asked_of(decl, coercion.get("near"))))
     coercion.update(_the_window_it_is_cut_from(decl))
@@ -688,6 +692,61 @@ async def _ingested(env: _Env, decl: Input, value: Any,
         bind_domain(Domain(bbox=tuple(ingested.bbox), geometry={},
                            label=ingested.name))
     return ingested
+
+
+async def _off_the_reach(env: _Env, value: Any) -> dict[str | None, str]:
+    """The sites of a matched record that are NOT this river run's water, each with why; empty off a river run.
+
+    A site is the reach's when it stands inside the domain AND NLDI's NWIS index lists it on a
+    flowline of the main stem walked UM and DM from the release, each the run's reach length."""
+    from shapely.geometry import Point, shape
+
+    from trid3nt_server.inputs.observation import sites
+
+    row = next((r for r in env.data.values() if r.slot is DOMAIN), None)
+    dom = current_domain()
+    seed = await _question_seed(env)
+    if row is None or dom is None or not dom.geometry or seed is None \
+            or await _domain_companion(env, "centerline") is None:
+        return {}
+    water = shape(dom.geometry)
+    span = _span_km(env, row)
+    walk = {} if span is None else {"distance_km": span}
+    reach = f"the main stem walked {span:g} km up and down from the release" if span is not None \
+        else "the main stem walked up and down from the release"
+    off: dict[str | None, str] = {}
+    stem: frozenset[int] | None = None
+    for site, _name, lon, lat in await asyncio.to_thread(sites, value):
+        if lon is None or lat is None or not water.covers(Point(lon, lat)):
+            off[site] = "stands outside the run's domain, the water the reach is cut to"
+            continue
+        if not site:
+            off[site] = "states no site id, so NLDI's NWIS index cannot list it on a reach"
+            continue
+        if stem is None:
+            stem = frozenset().union(*[
+                await _walked(env, f"reach_stem_{way.lower()}",
+                              {"seed_point": list(seed), "direction": way, **walk})
+                for way in ("UM", "DM")])
+        try:
+            own = await _walked(env, f"gauge_{site}_reach",
+                                {"nwis_site": str(site), "direction": "DM", "distance_km": 0.0})
+        except StepFailedError as exc:
+            # A retryable failure is raised as it came and never lands here.
+            off[site] = f"is placed on no NHDPlus reach ({exc.cause or exc})"
+            continue
+        if not own & stem:
+            off[site] = (f"stands on NHDPlus reach {', '.join(map(str, sorted(own)))}, which is not on {reach}")
+    return off
+
+
+async def _walked(env: _Env, name: str, ask: Mapping[str, Any]) -> frozenset[int]:
+    """The COMIDs one walk of the network answered, as a DATA row the RUNTIME declares."""
+    from trid3nt_server.inputs.domain import REACH_FETCH, flowline_ids
+
+    if name not in env.data:
+        _runtime_row(env, name, REACH_FETCH, ask)
+    return await asyncio.to_thread(flowline_ids, await read(env, name))
 
 
 def _the_window_it_is_cut_from(decl: Input) -> dict[str, Any]:

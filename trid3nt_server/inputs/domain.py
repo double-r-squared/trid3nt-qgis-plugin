@@ -18,8 +18,8 @@ from .boundary import RUN_TYPES, WALL, BoundaryRun, boundary_runs
 from .geometry import flatten_geometries, read_geometry_doc, source_uri
 from .user_input import EmptyResultError, UserInputError, polygon_ring
 
-__all__ = ["Domain", "domain", "domain_ring", "kind_under", "measured_footprint",
-           "needs_beside", "place_kind"]
+__all__ = ["REACH_FETCH", "Domain", "domain", "domain_ring", "flowline_ids", "kind_under",
+           "measured_footprint", "needs_beside", "place_kind"]
 
 logger = logging.getLogger("trid3nt_server.inputs.domain")
 
@@ -157,6 +157,22 @@ def kind_under(water: Any, seed: Any) -> str:
         if river and geometry and shape(geometry).covers(point):
             return "flowline"
     return ""
+
+
+#: The fetch that walks the NHDPlus network: a river run's main stem from its release, and a
+#: gauge's own reach off NLDI's NWIS index. The runtime declares these rows; nothing here calls it.
+REACH_FETCH = "fetch_nhdplus_nldi_navigate"
+
+
+def flowline_ids(layer: Any) -> frozenset[int]:
+    """The NHDPlus COMIDs a walked flowline layer carries."""
+    doc = read_geometry_doc(layer)
+    found = set()
+    for feature in (doc.get("features") or ()) if isinstance(doc, Mapping) else ():
+        comid = ((feature or {}).get("properties") or {}).get("nhdplus_comid")
+        if comid is not None:
+            found.add(int(comid))
+    return frozenset(found)
 
 
 #: WHAT A DOMAIN OF EACH KIND DECLARES BESIDE the row its own class matched, by the word

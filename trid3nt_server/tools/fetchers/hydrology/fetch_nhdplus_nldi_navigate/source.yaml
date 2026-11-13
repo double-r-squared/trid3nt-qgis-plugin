@@ -22,6 +22,9 @@ params:
   comid:
     type: int
     schema_optional: true
+  nwis_site:
+    type: str
+    schema_optional: true
   direction:
     type: enum
     values:
@@ -85,15 +88,16 @@ coverage:
 caveats:
 - "a line, never a polygon: a domain cut from these is the water surface cut at the two ends of the walk, which the domain slot does"
 - CONUS only (NHDPlus v2.1); a seed outside (-130,20,-60,55) -> NHDPLUS_NLDI_INPUT_INVALID
-- exactly one of seed_point / comid (mutual exclusion) -> NHDPLUS_NLDI_INPUT_INVALID
+- exactly one of seed_point / comid / nwis_site (mutual exclusion) -> NHDPLUS_NLDI_INPUT_INVALID
+- nwis_site starts at the reach NLDI's own NWIS index (feature source nwissite) lists the gauge on, never a snap of its point; a site the index does not hold -> NHDPLUS_NLDI_EMPTY
 - a seed at a network terminus / stub reach -> zero flowlines -> NHDPLUS_NLDI_EMPTY (retryable=false)
 - flowline count capped at 5000 (UT traversals truncate)
 docstring: |-
   Walk the NHDPlus stream network from a seed in the requested direction.
 
   What it does:
-      Snaps the seed (a point lon/lat OR a known NHDPlus COMID) to the
-      NHDPlus v2.1 channel network, then asks USGS NLDI to enumerate
+      Snaps the seed (a point lon/lat, a known NHDPlus COMID, or a USGS
+      gauge by its site number) to the NHDPlus v2.1 channel network, then asks USGS NLDI to enumerate
       the connected flowlines in one of four directions -- upstream
       main stem, upstream tributaries, downstream main stem, or
       downstream with diversions -- out to the requested distance.
@@ -139,6 +143,10 @@ docstring: |-
           when chaining off another tool that already produced a
           ``nhdplus_comid`` (``fetch_noaa_nwm_streamflow``, NWIS gauge
           resolution, etc.). Example: ``15334434``.
+      nwis_site: optional USGS site number to start from the reach NLDI's
+          NWIS index lists that gauge on (feature ``USGS-<site>``), never a
+          snap of its point; ``distance_km=0`` returns the gauge's own
+          reach. Example, Etowah River near Kingston GA: ``"02395000"``.
       direction: One of:
           - ``"UM"`` -- upstream main stem (trunk only, single branch)
           - ``"UT"`` -- upstream tributaries (full upstream subnetwork)

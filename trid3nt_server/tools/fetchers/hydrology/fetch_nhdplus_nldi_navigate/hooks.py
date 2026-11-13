@@ -1,6 +1,7 @@
 """NLDI network traversal: the NHDPlus flowlines connected to a seed reach.
 
-A seed_point snaps to a COMID (``nldi.get_features``), or a comid is taken as given;
+A seed_point snaps to a COMID (``nldi.get_features``), an nwis_site is read off NLDI's
+NWIS index, or a comid is taken as given;
 ``get_flowlines`` then navigates UM/UT/DM/DD to the distance. Zero flowlines is the
 typed empty."""
 
@@ -12,7 +13,7 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..._fetch_common import NHDPLUS_DOMAIN
-from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
+from ..._router.errors import RouterUpstreamError, router_empty_error, router_input_error, router_upstream_error
 from ..._router.hooks import register_hook
 from ..._router.hooks.dataretrieval import retrieve
 
@@ -45,21 +46,49 @@ def _nldi_snap(spec: SourceSpec, lon: float, lat: float) -> int:
         raise router_upstream_error(prefix, f"NLDI snap returned a non-integer COMID: {exc}")
 
 
+def _nwis_comid(spec: SourceSpec, site: str) -> int:
+    """The COMID NLDI's own NWIS index lists a USGS gauge on; a site it does not hold is the typed empty."""
+    import dataretrieval.nldi as nldi
+
+    prefix = spec.error_code_prefix
+    feature = f"USGS-{site}"
+    try:
+        gf = retrieve(spec, nldi.get_features, input_on_400=False,
+                      feature_source="nwissite", feature_id=feature)
+    except RouterUpstreamError as exc:
+        # The index answers a site it does not hold with HTTP 404, which is no reach rather than a failure.
+        if getattr(exc.__cause__, "status_code", None) != 404:
+            raise
+        gf = None
+    if gf is None or len(gf) == 0 or "comid" not in getattr(gf, "columns", []):
+        raise router_empty_error(
+            prefix, f"NLDI's NWIS index (nwissite) holds no {feature}, so no NHDPlus reach is listed for it",
+            spec.empty_error_suffix)
+    try:
+        return int(gf.iloc[0]["comid"])
+    except (TypeError, ValueError, KeyError) as exc:
+        raise router_upstream_error(prefix, f"NLDI listed {feature} on a non-integer COMID: {exc}")
+
+
 @register_hook("nldi.validate")
 def validate(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Exactly one of seed_point and comid, a seed inside CONUS, a positive comid."""
+    """Exactly one of seed_point, comid and nwis_site, a seed inside CONUS, a positive comid."""
     prefix = spec.error_code_prefix
     sfx = spec.input_error_suffix
     seed = params.get("seed_point")
     comid = params.get("comid")
-    if (seed is None) == (comid is None):
+    site = params.get("nwis_site")
+    if sum(value is not None for value in (seed, comid, site)) != 1:
         raise router_input_error(
             prefix,
-            f"exactly one of seed_point or comid must be provided; got "
-            f"seed_point={seed!r}, comid={comid!r}",
+            f"exactly one of seed_point, comid or nwis_site must be provided; got "
+            f"seed_point={seed!r}, comid={comid!r}, nwis_site={site!r}",
             sfx,
         )
-    if seed is not None:
+    if site is not None:
+        if not str(site).strip().isdigit():
+            raise router_input_error(prefix, f"nwis_site is a USGS site number of digits; got {site!r}", sfx)
+    elif seed is not None:
         lon, lat = float(seed[0]), float(seed[1])
         w, s, e, n = NHDPLUS_DOMAIN
         if not (w <= lon <= e and s <= lat <= n):
@@ -73,15 +102,18 @@ def validate(spec: SourceSpec, params: dict[str, Any]) -> None:
 @register_hook("nldi.features")
 def features(spec: SourceSpec, params: dict[str, Any], *,
              timeout_s: float) -> list[dict[str, Any]]:
-    """The NLDI flowline LineStrings from the seed reach (seed_point XOR comid)."""
+    """The NLDI flowline LineStrings from the seed reach (seed_point XOR comid XOR nwis_site)."""
     import dataretrieval.nldi as nldi
 
     prefix = spec.error_code_prefix
     seed = params.get("seed_point")
+    site = params.get("nwis_site")
     direction = params.get("direction") or "DM"
     distance_km = params.get("distance_km")
     if seed is not None:
         seed_comid = _nldi_snap(spec, float(seed[0]), float(seed[1]))
+    elif site is not None:
+        seed_comid = _nwis_comid(spec, str(site).strip())
     else:
         seed_comid = int(params["comid"])
 

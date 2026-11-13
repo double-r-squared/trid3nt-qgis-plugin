@@ -31,7 +31,7 @@ from .geometry import read_geometry_doc, source_uri
 from .vertical_datum import DatumError, datum_of, onto_frame
 
 __all__ = ["Observation", "ObservationError", "convert", "note",
-           "observation", "sited"]
+           "observation", "sited", "sites"]
 
 logger = logging.getLogger("trid3nt_server.inputs.observation")
 
@@ -255,14 +255,15 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
                 above_field: str = "", at: Any = None, window_s: Any = None,
                 to_datum: Any = None, offset: Any = None, caption: str = "",
                 quantity: str = "state", label: str = "observation",
-                code: str = _CODE, every: bool = False
+                code: str = _CODE, every: bool = False,
+                off: Mapping[str | None, str] | None = None
                 ) -> Observation | tuple[Observation, ...] | None:
     """THE ingestion: a fetched point layer, or a STATED value -> one reading, or with ``every`` each site's.
 
     A number stands over any record and is already on the slot's datum; a reading on
     another zero reaches ``to_datum`` only through ``offset``. ``near`` ranks several
-    candidates, none outside the window closing at ``at``; ``caption`` names the quantity
-    in every refusal and the journal note."""
+    candidates, none outside the window closing at ``at`` and none ``off`` names (site id ->
+    why it is not this run's water); ``caption`` names the quantity in every refusal and the journal note."""
     if source is None:
         return None
     measures, opens = caption or "this value", _opening(caption)
@@ -293,7 +294,7 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
             "another moment, and a sample outside the window this run is about "
             "is not this run's water. State the value on the call, or ask about "
             "a moment a sample was taken near." + undated)
-    candidates = within
+    candidates = _on_the_water(within, off or {}, label, measures)
     if not candidates:
         raise ObservationError(
             code,
@@ -319,6 +320,36 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
         return found
     _journal(found[0], opens=opens, stated=False)
     return found[0]
+
+
+def _on_the_water(candidates: list[Any], off: Mapping[str | None, str], label: str,
+                  measures: str) -> list[Any]:
+    """The candidates standing on this run's water; every one off it refuses, naming each site and why."""
+    if not off:
+        return candidates
+    kept = [row for row in candidates if _text(row[1].get("properties") or {}, *_SITE_FIELDS) not in off]
+    left = [row[1].get("properties") or {} for row in candidates if row not in kept]
+    if not left:
+        return kept
+    said = "; ".join(f"{_text(props, 'site_name', 'station_name') or 'an unnamed site'} "
+                     f"({_text(props, *_SITE_FIELDS) or 'no site id'}) {off[_text(props, *_SITE_FIELDS)]}"
+                     for props in left)
+    if candidates and not kept:
+        raise ObservationError(
+            "OBSERVATION_OFF_THE_REACH",
+            f"{label} reports {measures} only at sites that are not this reach's water: {said}. "
+            "State the value on the call, or hand the record of a gauge on the reach.")
+    from .run_notes import journal_note
+
+    journal_note(f"{label}: left out, not this reach's water - {said}.")
+    return kept
+
+
+def sites(source: Any) -> list[tuple[str | None, str | None, float | None, float | None]]:
+    """Each site a record reports at: its id, its name and where it stands in lon/lat."""
+    return [(_text(props, *_SITE_FIELDS), _text(props, "site_name", "station_name"), *_site(feature))
+            for feature in _features(source)
+            for props in (feature.get("properties") or {},)]
 
 
 def _found(source: Any, feature: Mapping[str, Any], sampled: str | None, raw: float,

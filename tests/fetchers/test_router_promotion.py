@@ -91,9 +91,9 @@ PROMOTED = {
     },
     "fetch_nhdplus_nldi_navigate": {
         "source_class": "nhdplus_nldi",
-        # all four params carry defaults in the twin -> required=[]; the executor
-        # enforces the seed_point/comid mutual-exclusion + CONUS + comid gate.
-        "properties": ["comid", "direction", "distance_km", "seed_point"],
+        # every param carries a default in the twin -> required=[]; the executor
+        # enforces the seed_point/comid/nwis_site mutual-exclusion + CONUS + comid gate.
+        "properties": ["comid", "direction", "distance_km", "nwis_site", "seed_point"],
         "required": [],
     },
     # --- station family (snapshot mode) ---
@@ -224,6 +224,8 @@ def test_the_dataretrieval_services_route_through_their_library_delegate(name):
     [
         dict(),                                              # neither seed nor comid
         dict(seed_point=(-81.85, 26.55), comid=15334434),    # both (mutual exclusion)
+        dict(comid=123, nwis_site="02395000"),               # comid and a gauge (mutual exclusion)
+        dict(nwis_site="USGS-02395000"),                     # a site number is digits
         dict(comid=0),                                       # comid <= 0
         dict(comid=-1),                                      # comid < 0
         dict(seed_point=(15.0, 35.0)),                       # Mediterranean -> outside CONUS
