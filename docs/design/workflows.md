@@ -174,7 +174,12 @@ stands inside the domain AND NLDI's own NWIS index (`fetch_nhdplus_nldi_navigate
 `nwis_site`, never a snap of its point) lists it on a flowline of the main stem walked UM
 and DM from the release, each the run's reach length (`fill.py::_off_the_reach`); every
 site left out is named on the journal with why, and a record whose sites are all off the
-reach refuses `OBSERVATION_OFF_THE_REACH` naming each. A site NLDI's NWIS index does not
+reach refuses `OBSERVATION_OFF_THE_REACH` naming each. The reach is cut DOWNSTREAM of the
+release, so the INFLOW's discharge (and only it) is also read off a gauge outside the domain
+that NLDI lists on the UM walk, ABOVE the release: on the release's own flowline, which
+both walks hold, that is the smaller measure along the line, NHDPlus digitizing it the way
+it flows (`domain.py::above_on`, neither point moved). A level or an observation is a target
+on the solved water and stays inside the domain. A site NLDI's NWIS index does not
 hold (another network's station) is never shown on the stem and is left out. A record
 handed in, and a run whose domain is no river reach, rank as before. The gauge's
 published drainage area is not checked against the reach's.

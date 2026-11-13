@@ -646,7 +646,7 @@ async def _ingested(env: _Env, decl: Input, value: Any,
             # ranked against nothing, the source's row order picks, a tributary's gauge as soon as the reach's own.
             coercion["near"] = await _question_seed(env)
     if decl.slot.ingestion == "observation" and row is not None:
-        off = await _off_the_reach(env, value)
+        off = await _off_the_reach(env, value, inflow=decl.slot is DISCHARGE)
         if off:
             coercion["off"] = off
     coercion.update(_what_the_run_calls_it(
@@ -694,14 +694,17 @@ async def _ingested(env: _Env, decl: Input, value: Any,
     return ingested
 
 
-async def _off_the_reach(env: _Env, value: Any) -> dict[str | None, str]:
+async def _off_the_reach(env: _Env, value: Any, *, inflow: bool = False) -> dict[str | None, str]:
     """The sites of a matched record that are NOT this river run's water, each with why; empty off a river run.
 
     A site is the reach's when it stands inside the domain AND NLDI's NWIS index lists it on a
-    flowline of the main stem walked UM and DM from the release, each the run's reach length."""
+    flowline of the main stem walked UM and DM from the release, each the run's reach length. The
+    INFLOW is read off a gauge above the release on the UM stem too, standing outside the domain."""
     from shapely.geometry import Point, shape
 
+    from trid3nt_server.inputs.domain import above_on
     from trid3nt_server.inputs.observation import sites
+    from trid3nt_server.inputs.point import lonlat_of
 
     row = next((r for r in env.data.values() if r.slot is DOMAIN), None)
     dom = current_domain()
@@ -714,20 +717,22 @@ async def _off_the_reach(env: _Env, value: Any) -> dict[str | None, str]:
     walk = {} if span is None else {"distance_km": span}
     reach = f"the main stem walked {span:g} km up and down from the release" if span is not None \
         else "the main stem walked up and down from the release"
+    upstream = f"the main stem walked {span:g} km upstream" if span is not None else "the main stem walked upstream"
     off: dict[str | None, str] = {}
-    stem: frozenset[int] | None = None
-    for site, _name, lon, lat in await asyncio.to_thread(sites, value):
-        if lon is None or lat is None or not water.covers(Point(lon, lat)):
+    stem: dict[str, frozenset[int]] = {}
+    for site, name, lon, lat in await asyncio.to_thread(sites, value):
+        placed = lon is not None and lat is not None
+        inside = placed and water.covers(Point(lon, lat))
+        if not inside and not (inflow and placed and site):
             off[site] = "stands outside the run's domain, the water the reach is cut to"
             continue
         if not site:
             off[site] = "states no site id, so NLDI's NWIS index cannot list it on a reach"
             continue
-        if stem is None:
-            stem = frozenset().union(*[
-                await _walked(env, f"reach_stem_{way.lower()}",
-                              {"seed_point": list(seed), "direction": way, **walk})
-                for way in ("UM", "DM")])
+        if not stem:
+            for way in ("UM", "DM"):
+                stem[way] = await _walked(env, f"reach_stem_{way.lower()}",
+                                          {"seed_point": list(seed), "direction": way, **walk})
         try:
             own = await _walked(env, f"gauge_{site}_reach",
                                 {"nwis_site": str(site), "direction": "DM", "distance_km": 0.0})
@@ -735,8 +740,19 @@ async def _off_the_reach(env: _Env, value: Any) -> dict[str | None, str]:
             # A retryable failure is raised as it came and never lands here.
             off[site] = f"is placed on no NHDPlus reach ({exc.cause or exc})"
             continue
-        if not own & stem:
-            off[site] = (f"stands on NHDPlus reach {', '.join(map(str, sorted(own)))}, which is not on {reach}")
+        if inside:
+            if not own & (stem["UM"] | stem["DM"]):
+                off[site] = (f"stands on NHDPlus reach {', '.join(map(str, sorted(own)))}, which is not on {reach}")
+            continue
+        # The release's own flowline is on both walks; a gauge on it is the inflow's only above the release.
+        shared = own & stem["UM"] & stem["DM"]
+        above = bool(own & stem["UM"]) and (not shared or await asyncio.to_thread(
+            above_on, await read(env, "reach_stem_um"), next(iter(shared)), (lon, lat), lonlat_of(seed)))
+        if not above:
+            off[site] = f"stands outside the run's domain and not above the release on {upstream}"
+            continue
+        journal_note(f"{name or site} ({site}) stands outside the run's domain, above the release on {upstream}: "
+                     "a candidate for the inflow's discharge only.")
     return off
 
 

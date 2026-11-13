@@ -18,7 +18,7 @@ from .boundary import RUN_TYPES, WALL, BoundaryRun, boundary_runs
 from .geometry import flatten_geometries, read_geometry_doc, source_uri
 from .user_input import EmptyResultError, UserInputError, polygon_ring
 
-__all__ = ["REACH_FETCH", "Domain", "domain", "domain_ring", "flowline_ids", "kind_under",
+__all__ = ["REACH_FETCH", "Domain", "above_on", "domain", "domain_ring", "flowline_ids", "kind_under",
            "measured_footprint", "needs_beside", "place_kind"]
 
 logger = logging.getLogger("trid3nt_server.inputs.domain")
@@ -173,6 +173,21 @@ def flowline_ids(layer: Any) -> frozenset[int]:
         if comid is not None:
             found.add(int(comid))
     return frozenset(found)
+
+
+def above_on(layer: Any, comid: int, site: tuple[float, float], release: tuple[float, float]) -> bool:
+    """Whether a site stands ABOVE the release along their one shared flowline of a walked layer.
+
+    NHDPlus digitizes a flowline in the direction it flows, so the smaller measure along it is
+    the higher; each point is measured where it stands, never moved onto the line."""
+    from shapely.geometry import Point, shape
+
+    doc = read_geometry_doc(layer)
+    for feature in (doc.get("features") or ()) if isinstance(doc, Mapping) else ():
+        if ((feature or {}).get("properties") or {}).get("nhdplus_comid") == comid:
+            line = shape(feature["geometry"])
+            return line.project(Point(*site)) < line.project(Point(*release))
+    return False
 
 
 #: WHAT A DOMAIN OF EACH KIND DECLARES BESIDE the row its own class matched, by the word
