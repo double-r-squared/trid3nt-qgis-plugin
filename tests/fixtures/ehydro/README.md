@@ -12,4 +12,4 @@ Recorded 2026-11-12 from the USACE eHydro survey ZIPs (the `sourcedatalocation` 
 Packages: MO_11_OMM_20260415_CS_606_614 (CENWO, blank datum, `_FULL.XYZ` stated NAVD88),
 MO_10_OML_20260930_CS_517 (CENWO, blank datum, no elevation file stated), MO_01_LMR_20260902_CS_58_0_59_0_SORT
 (CENWK, `mllw` against depths below the water surface), SP_01_SPH_20261015_CS_2026_180_HF and CB_23_CR3_20261110_CS
-(tidal, MLLW in both places).
+(tidal, MLLW in both places), TB_01_CFL_20261110_AD_TAULAR_CREEK (CESAM, NAVD 1988 coded, Z counted from a 0.0 ft normal pool).

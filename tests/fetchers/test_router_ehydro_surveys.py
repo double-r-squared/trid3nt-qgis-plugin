@@ -382,3 +382,17 @@ def test_a_blank_datum_with_no_water_surface_words_keeps_its_own_refusal(spec):
     with pytest.raises(RouterEmptyError) as refused:
         eh._stated(spec, points, survey)
     assert refused.value.error_code == "EHYDRO_NO_STATED_DATUM"
+
+
+def test_a_z_counted_from_a_normal_pool_contradicts_the_navd88_its_points_code(spec):
+    """CESAM's Coffeeville Lower Pool package codes NAVD 1988 on every point while its
+    XML says the Z is the river bottom elevation against a normal pool of 0.0 ft."""
+    survey = "TB_01_CFL_20261110_AD_TAULAR_CREEK"
+    archive = _Recorded(f"{survey}.XML")
+    points = _recorded_points(survey)
+    assert set(points["elevationDatum"]) == {"NAVD 1988"}
+    with pytest.raises(RouterEmptyError) as refused:
+        eh._vouched_elevations(spec, archive, points, survey)
+    assert refused.value.error_code == "EHYDRO_DATUM_CONTRADICTED"
+    assert survey in str(refused.value)
+    assert "NAVD 1988" in str(refused.value) and "normal pool" in str(refused.value)

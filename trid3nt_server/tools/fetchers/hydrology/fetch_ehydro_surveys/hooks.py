@@ -368,6 +368,11 @@ _SURFACE_DEPTHS = re.compile(
     r"(?:referenced to|below|from)\s+(?:the\s+)?water surface"
     r"|depths? on the date of survey", re.IGNORECASE)
 
+#: A Z the package counts from a normal pool it states at 0.0 ft: the zero is the
+#: pool, whose elevation on any vertical datum the package does not give.
+_NORMAL_POOL_ZERO = re.compile(
+    r"normal pool elevation[^.]{0,80}?\bis\s+0\.0", re.IGNORECASE)
+
 #: The sentence a district writes to say its _FULL.XYZ carries NAVD88 elevations.
 _FULL_NAVD88 = re.compile(
     r"full\.xyz[^.]{0,60}?navd[ _]?88\s+elevation", re.IGNORECASE)
@@ -403,6 +408,14 @@ def _vouched_elevations(spec: SourceSpec, archive: Any, points: Any, survey_id: 
                 f"while its metadata says {surface.group(0)!r}: depths below the day's water "
                 "surface are not elevations on that datum, and no elevation file vouches "
                 "for them.", "DATUM_CONTRADICTED")
+        pool = _NORMAL_POOL_ZERO.search(words)
+        if pool:
+            raise router_empty_error(
+                spec.error_code_prefix,
+                f"survey {survey_id} codes its datum {sorted(datums)} in its geodatabase, "
+                f"while its metadata counts the Z from a pool ({pool.group(0)!r}): the zero "
+                "is the normal pool, whose elevation on that datum the package does not "
+                "state.", "DATUM_CONTRADICTED")
         return None
     full = next((n for n in archive.namelist()
                  if n.upper().endswith("_FULL.XYZ") and "/" not in n), None)
