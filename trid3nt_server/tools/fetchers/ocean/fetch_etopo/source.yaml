@@ -25,6 +25,12 @@ params:
   timeout_s:
     type: float
     default: 120.0
+  surface:
+    type: enum
+    values:
+    - relief
+    - sea_floor
+    default: relief
 ingest:
   access: library_delegate
   delegate:
@@ -60,7 +66,8 @@ coverage:
       kind: surface
       rings:
       - [[-180.0, -90.0], [180.0, -90.0], [180.0, 90.0], [-180.0, 90.0]]
-      note: global and complete - land, shelf and deep ocean in one surface
+      note: global and complete as relief; as a bed it is the sea floor only - every cell above its zero is
+        land and left empty
     window:
       series: false
       latest: '2022-01-01'
@@ -69,6 +76,9 @@ coverage:
     units:
       elevation: m
     value_column: elevation
+    # AS A BED this row is the SEA FLOOR: a land cell under a river or lake is the ground around the water,
+    # never its bed, so the match asks for the cells at or below the relief's zero and an inland box holds none.
+    ask: {surface: sea_floor}
 
 caveats:
 - ETOPO 2022 is a global relief MODEL built by integrating regional and global datasets,
@@ -114,6 +124,9 @@ docstring: |-
       resolution_m: OPTIONAL output cell in metres, floored at the model's own
           15 arc-second cell. It never invents a finer cell than the tile read.
       timeout_s: tile read budget in seconds (default 120).
+      surface: ``relief`` (default) - land and sea floor; ``sea_floor`` - only the
+          cells at or below the relief's zero, land left empty: what a river,
+          lake or sea run reads as its bed, since land is never a bed.
 
   **Returns:**
       A ``LayerURI`` pointing at the merged COG in the cache bucket.
@@ -122,6 +135,6 @@ docstring: |-
   **Errors:**
       - ``ETOPO_INPUT_INVALID``: bad bbox, out of lon/lat range, or spanning
         more tiles than one request merges (retryable=False).
-      - ``ETOPO_COVERAGE_GAP``: the tiles painted no cell of the AOI
-        (retryable=False).
+      - ``ETOPO_COVERAGE_GAP``: the tiles painted no cell of the AOI, or a
+        ``sea_floor`` ask over an AOI that is all land (retryable=False).
       - ``ETOPO_UPSTREAM_ERROR``: tile read or merge failure (retryable=True).

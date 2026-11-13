@@ -527,3 +527,45 @@ def test_the_alaskan_tsunami_dem_is_the_finest_bed_at_sand_point_on_mhw() -> Non
     row = spec.coverage[0]
     assert row.extent.covers(-160.5, 55.35)
     assert not row.extent.covers(-82.5, 27.8)
+
+
+_ETOPO_RECORDED = Path(__file__).resolve().parents[1] / "fixtures" / "etopo"
+
+
+def _recorded_mosaic(monkeypatch, name: str):
+    import rasterio
+
+    with rasterio.open(_ETOPO_RECORDED / name) as src:
+        grid, transform, crs = src.read(1), src.transform, src.crs
+    monkeypatch.setattr(et, "mosaic", lambda *_a, **_kw: (grid.copy(), transform, crs, [True]))
+    return grid
+
+
+def test_etopo_asked_for_the_sea_floor_keeps_the_cells_below_its_zero(monkeypatch) -> None:
+    """On the recorded Washington-shore answer the sea floor is the 25 cells at or
+    below ETOPO's zero; the 227 land cells are not a bed and are left empty."""
+    import numpy as np
+
+    whole = _recorded_mosaic(monkeypatch, "washington_coast_bbox.tif")
+    grid, _t, _c = et.read_etopo(None, {"bbox": (-124.192, 47.092, -124.149, 47.16),
+                                        "surface": "sea_floor"}, timeout_s=10.0)
+    assert int(np.isfinite(grid).sum()) == 25
+    assert np.array_equal(grid[np.isfinite(grid)], whole[whole <= 0.0])
+    relief, _t, _c = et.read_etopo(None, {"bbox": (-124.192, 47.092, -124.149, 47.16)},
+                                   timeout_s=10.0)
+    assert int(np.isfinite(relief).sum()) == 252
+
+
+def test_etopo_asked_for_the_sea_floor_inland_holds_nothing(monkeypatch) -> None:
+    """The recorded Etowah box is all land: asked for a sea floor, ETOPO refuses by name."""
+    _recorded_mosaic(monkeypatch, "etowah_bbox.tif")
+    with pytest.raises(et.EtopoCoverageGapError, match="sea floor"):
+        et.read_etopo(None, {"bbox": (-85.240008, 33.991712, -84.727005, 34.423822),
+                             "surface": "sea_floor"}, timeout_s=10.0)
+
+
+def test_etopo_s_bathymetry_row_asks_for_the_sea_floor() -> None:
+    from trid3nt_server.tools.fetchers._router.registration import get_spec
+
+    row = next(r for r in get_spec("fetch_etopo").coverage if r.data_class == "bathymetry")
+    assert row.ask == {"surface": "sea_floor"}

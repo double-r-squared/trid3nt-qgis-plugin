@@ -144,4 +144,15 @@ def read_etopo(spec: Any, params: dict[str, Any], *,
         ) from exc
     logger.info("fetch_etopo: %d/%d tiles painted over %s",
                 sum(painted), len(paths), bbox)
+    if params.get("surface") == "sea_floor":
+        # The relief's zero is its shoreline: a cell above it is land, never a bed under water.
+        import numpy as np
+
+        grid = np.where(grid <= 0.0, grid, np.float32("nan")).astype(grid.dtype)
+        if not np.isfinite(grid).any():
+            raise EtopoCoverageGapError(
+                f"ETOPO 2022 holds no sea floor over {bbox!r}: every cell it "
+                "painted stands above its zero, which is land. A land surface is "
+                "not the bed of the water over it: a river or lake inland needs a "
+                "channel survey or a bed handed to the run.")
     return grid, transform, crs

@@ -452,6 +452,12 @@ states coverage for the class here and the probe calls them in that order,
 dropping one that held nothing and writing the substitution on the run's
 own journal; when none of them answered, the row refuses typed.
 
+A land surface is never a bed. ETOPO 2022's bathymetry row asks it for the sea floor
+alone (`surface: sea_floor`, the cells at or below the relief's zero), so over an inland
+river or lake with no channel survey it holds nothing and the bed refuses by name rather
+than painting the valley ground around the water as its bottom. Asked by name for its
+relief (GeoClaw's deep rung), it still answers land and sea floor in one surface.
+
 ## Continuing a run - an input, not a derivation
 
 A run that carries another on NAMES the file it picks up from, as a keyword on the module whose engine restarts: TELEMAC's
