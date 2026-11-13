@@ -214,6 +214,8 @@ async def _matched(env: _Env, decl: Input) -> Any:
     await _somewhere_to_ask(env)
     if decl.slot is BED:
         return await _bed_surface(env, decl, lambda laid: _ingested(env, decl, laid))
+    if decl.slot is DOMAIN and not _asked_of(decl, await _seed(env, decl)):
+        decl = await _kind_of_the_water_under(env, decl)
     # The INGESTION rides INSIDE the probe: a source whose rows the slot finds nothing
     # usable in held nothing for this run, so the next survivor takes its turn.
     beside = await _beside(env, decl)
@@ -248,6 +250,28 @@ async def _beside(env: _Env, decl: Input) -> dict[str, Any]:
                 step=_data_step_label(aside.name))
         held[name] = value
     return held
+
+
+async def _kind_of_the_water_under(env: _Env, decl: Input) -> Input:
+    """A domain whose seed arrived with no kind takes the kind of the mapped water it stands IN.
+
+    The water surface is asked through the match as the banks are; no water there, or water of
+    another kind, leaves the domain matched as it came."""
+    from trid3nt_server.inputs.domain import kind_under
+    from trid3nt_server.inputs.point import lonlat_of
+
+    seed = await _seed(env, decl)
+    if lonlat_of(seed) is None:
+        return decl
+    aside = dataclasses.replace(decl, name=f"{decl.name}_water", kind="", slot=None,
+                                observes="water surface", geometry="polygon")
+    _choice, water = await _probe(env, aside, decl.data_class, aside.name)
+    kind = "" if water is None else await asyncio.to_thread(kind_under, water, seed)
+    if not kind:
+        return decl
+    journal_note(f"{decl.name}: the point it is found from stands in a river's own mapped water (NHD "
+                 "StreamRiver), so the domain is the reach walked downstream from it.")
+    return dataclasses.replace(decl, kind=kind)
 
 
 async def _bed_list(env: _Env, decl: Input, listed: list[Any]) -> list[Any]:

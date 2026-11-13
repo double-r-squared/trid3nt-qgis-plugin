@@ -18,7 +18,7 @@ from .boundary import RUN_TYPES, WALL, BoundaryRun, boundary_runs
 from .geometry import flatten_geometries, read_geometry_doc, source_uri
 from .user_input import EmptyResultError, UserInputError, polygon_ring
 
-__all__ = ["Domain", "domain", "domain_ring", "measured_footprint",
+__all__ = ["Domain", "domain", "domain_ring", "kind_under", "measured_footprint",
            "needs_beside", "place_kind"]
 
 logger = logging.getLogger("trid3nt_server.inputs.domain")
@@ -126,6 +126,37 @@ def place_kind(seed: Any) -> str:
     if kind is None and isinstance(seed, Mapping):
         kind = seed.get("place_type")
     return _PLACE_KINDS.get(str(kind or "").strip().lower(), "")
+
+
+#: The NHD feature type a river's own mapped water is published under (StreamRiver). A
+#: canal, a lake, a harbour or an estuary is another type, and says nothing here.
+_STREAM_RIVER = 460
+
+
+def kind_under(water: Any, seed: Any) -> str:
+    """WHICH FEATURE a seed that arrived with no kind stands IN, off the mapped water surface
+    around it: "flowline" inside an NHD StreamRiver area, else "".
+
+    The seed is tested where it stands, never moved onto the water."""
+    from shapely.geometry import Point, shape
+
+    from .point import lonlat_of
+
+    place = lonlat_of(seed)
+    if place is None:
+        return ""
+    point = Point(*place)
+    doc = read_geometry_doc(water)
+    for feature in (doc.get("features") or ()) if isinstance(doc, Mapping) else ():
+        properties = (feature or {}).get("properties") or {}
+        geometry = (feature or {}).get("geometry")
+        try:
+            river = int(properties.get("ftype")) == _STREAM_RIVER
+        except (TypeError, ValueError):
+            river = False
+        if river and geometry and shape(geometry).covers(point):
+            return "flowline"
+    return ""
 
 
 #: WHAT A DOMAIN OF EACH KIND DECLARES BESIDE the row its own class matched, by the word
