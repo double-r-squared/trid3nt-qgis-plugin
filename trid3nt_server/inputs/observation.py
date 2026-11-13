@@ -345,11 +345,14 @@ def _on_the_water(candidates: list[Any], off: Mapping[str | None, str], label: s
     return kept
 
 
-def sites(source: Any) -> list[tuple[str | None, str | None, float | None, float | None]]:
-    """Each site a record reports at: its id, its name and where it stands in lon/lat."""
-    return [(_text(props, *_SITE_FIELDS), _text(props, "site_name", "station_name"), *_site(feature))
+def sites(source: Any) -> list[tuple[str | None, str | None, float | None, float | None, str | None]]:
+    """Each site a record reports at: its id, its name, where it stands in lon/lat, and its USGS site
+    number where the record is NWIS's own (``site_no``), else ``None``."""
+    return [(_text(props, *_SITE_FIELDS), _text(props, "site_name", "station_name"), *_site(feature),
+             usgs.strip() if usgs and usgs.strip().isdigit() else None)
             for feature in _features(source)
-            for props in (feature.get("properties") or {},)]
+            for props in (feature.get("properties") or {},)
+            for usgs in (_text(props, "site_no"),)]
 
 
 def _found(source: Any, feature: Mapping[str, Any], sampled: str | None, raw: float,

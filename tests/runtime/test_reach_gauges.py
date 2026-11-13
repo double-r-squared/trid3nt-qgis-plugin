@@ -190,3 +190,31 @@ def test_a_gauge_below_the_release_outside_the_domain_is_never_the_inflow(asked_
     assert refused.value.error_code == "OBSERVATION_OFF_THE_REACH"
     assert ("(14211720) stands outside the run's domain and not above the release on the main stem walked 3 km "
             "upstream") in str(refused.value)
+
+
+_NWS = _FIXTURES / "nws_river_forecast" / "portland_2026-11-13.fgb"
+
+
+def test_another_network_s_station_inside_the_reach_is_placed_by_the_domain_alone(asked_willamette):
+    # NWS forecast points are not on NLDI's index: inside the reach they stand, outside they are off, and nothing is
+    # asked of NLDI for them.
+    env, token = _willamette(_WILLAMETTE_ABOVE, box(-122.69, 45.50, -122.65, 45.53).__geo_interface__)
+    try:
+        off = asyncio.run(fill._off_the_reach(env, str(_NWS), inflow=True))
+    finally:
+        reset_domain(token)
+    assert "PRTO3" not in off
+    assert set(off) == {"KCMO3", "MIWO3", "TYCO3", "VAPW1", "FNNO3", "DURO3"}
+    assert all(why == "stands outside the run's domain, the water the reach is cut to" for why in off.values())
+    assert asked_willamette == []
+
+
+def test_another_network_s_station_outside_the_reach_is_never_the_inflow(asked_willamette):
+    # The release's reach stops short of PRTO3; with no index placing it on the stem it is never read as above it.
+    env, token = _willamette(_WILLAMETTE_ABOVE, box(-122.69, 45.50, -122.65, 45.512).__geo_interface__)
+    try:
+        off = asyncio.run(fill._off_the_reach(env, str(_NWS), inflow=True))
+    finally:
+        reset_domain(token)
+    assert off["PRTO3"] == "stands outside the run's domain, the water the reach is cut to"
+    assert asked_willamette == []
