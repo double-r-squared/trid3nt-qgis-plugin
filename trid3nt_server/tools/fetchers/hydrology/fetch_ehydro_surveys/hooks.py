@@ -14,7 +14,9 @@ trips and the geodatabase read, and states the datum the survey states.
 # points state. Nothing here converts between datums: the package's own metadata
 # states how far its project datum sits above a national frame, and that sentence is
 # reported as it was measured, on the layer - applying it is its reader's, never
-# this fetch's.
+# this fetch's. A depth counted from the water surface of the survey day is no
+# elevation on any datum: such a package is read only through its own _FULL.XYZ
+# where its metadata states that file to hold NAVD88 elevations, and refuses otherwise.
 
 from __future__ import annotations
 
@@ -232,7 +234,7 @@ def _package(spec: SourceSpec, url: str, survey_id: str) -> Any:
 
 
 def _soundings(spec: SourceSpec, archive: Any, survey_id: str) -> Any:
-    """The survey package's own SurveyPoint feature class, in EPSG:4326."""
+    """The survey package's own SurveyPoint feature class, in the CRS the package states."""
     import geopandas as gpd
 
     sc = spec.error_code_prefix
@@ -259,7 +261,7 @@ def _soundings(spec: SourceSpec, archive: Any, survey_id: str) -> Any:
                 "another survey over this channel.",
                 spec.input_error_suffix,
             )
-    return points.to_crs(4326) if points.crs is not None else points
+    return points
 
 
 #: The national frames a district's metadata names its project datum against, by
@@ -342,15 +344,110 @@ def _stated(spec: SourceSpec, points: Any, survey_id: str) -> tuple[str, str, fl
             "each, and nothing here may choose between them.",
             "NO_STATED_DATUM",
         )
-    scale = _METRES_PER_UNIT.get(units[0].lower().replace(" ", "").replace("_", ""))
+    uom, scale = _unit(spec, units[0], survey_id)
+    return _counted_from(datums[0], spec.normalize.quantity), uom, scale
+
+
+def _unit(spec: SourceSpec, uom: str, survey_id: str) -> tuple[str, float]:
+    """The unit a survey states and the metres in one of it, or a refusal by name."""
+    scale = _METRES_PER_UNIT.get(uom.lower().replace(" ", "").replace("_", ""))
     if scale is None:
         raise router_empty_error(
-            sc,
-            f"survey {survey_id} measures its depths in {units[0]!r}, which is not a "
+            spec.error_code_prefix,
+            f"survey {survey_id} measures its depths in {uom!r}, which is not a "
             f"unit this fetch can convert (known: {sorted(_METRES_PER_UNIT)}).",
             "UNCONVERTIBLE_UNIT",
         )
-    return _counted_from(datums[0], spec.normalize.quantity), units[0], scale
+    return uom, scale
+
+
+#: THE PACKAGE'S OWN WORDS about what its soundings are measured from. A survey
+#: whose metadata says its depths hang below the water surface of the day of
+#: survey states a zero that moves daily, whatever the geodatabase codes beside it.
+_SURFACE_DEPTHS = re.compile(
+    r"(?:referenced to|below|from)\s+(?:the\s+)?water surface"
+    r"|depths? on the date of survey", re.IGNORECASE)
+
+#: The sentence a district writes to say its _FULL.XYZ carries NAVD88 elevations.
+_FULL_NAVD88 = re.compile(
+    r"full\.xyz[^.]{0,60}?navd[ _]?88\s+elevation", re.IGNORECASE)
+
+
+def _words(archive: Any) -> str:
+    """Every XML member of the package as one tag-free line of text."""
+    texts = []
+    for name in archive.namelist():
+        if name.lower().endswith(".xml"):
+            raw = archive.read(name).decode("utf-8", "replace")
+            texts.append(" ".join(re.sub(r"<[^>]+>", " ", raw).split()))
+    return " ".join(texts)
+
+
+def _vouched_elevations(spec: SourceSpec, archive: Any, points: Any, survey_id: str
+                        ) -> tuple[list[tuple[float, float, float]], str] | None:
+    """The NAVD88 elevations the package itself vouches for, or ``None`` to read as stated.
+
+    A depth below the water surface of the survey day is no elevation: a blank
+    datum with the package's own _FULL.XYZ said to carry NAVD88 elevations reads
+    those (as ``(lon, lat, depth below NAVD88 in metres)``, the unit the points
+    state); a blank datum without them, or a datum the metadata contradicts,
+    refuses by name. Nothing here derives an elevation from a depth and a gauge."""
+    words = _words(archive)
+    surface = _SURFACE_DEPTHS.search(words)
+    datums = {str(v).strip() for v in points[_DATUM_FIELD].dropna().unique() if str(v).strip()}
+    if datums:
+        if surface:
+            raise router_empty_error(
+                spec.error_code_prefix,
+                f"survey {survey_id} codes its datum {sorted(datums)} in its geodatabase, "
+                f"while its metadata says {surface.group(0)!r}: depths below the day's water "
+                "surface are not elevations on that datum, and no elevation file vouches "
+                "for them.", "DATUM_CONTRADICTED")
+        return None
+    full = next((n for n in archive.namelist()
+                 if n.upper().endswith("_FULL.XYZ") and "/" not in n), None)
+    if full is not None and _FULL_NAVD88.search(words):
+        return _full_elevations(spec, archive, full, points, survey_id)
+    if surface:
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"survey {survey_id} states no vertical datum and its metadata says its soundings "
+            f"are {surface.group(0)!r} on the day of survey; the package holds no elevation "
+            "file it states to be NAVD88, so there is no bed elevation in it.",
+            "DEPTH_NOT_ELEVATION")
+    return None
+
+
+def _full_elevations(spec: SourceSpec, archive: Any, member: str, points: Any,
+                     survey_id: str) -> tuple[list[tuple[float, float, float]], str]:
+    """The ``_FULL.XYZ`` rows in the package's CRS and unit, as depths below NAVD88 in metres."""
+    from pyproj import Transformer
+
+    units = sorted({str(v).strip() for v in points[_UOM_FIELD].dropna().unique() if str(v).strip()})
+    if len(units) != 1 or points.crs is None:
+        raise router_empty_error(
+            spec.error_code_prefix,
+            f"survey {survey_id}'s {member} cannot be placed: its points state "
+            f"{units or 'no'} unit and {'no' if points.crs is None else 'a'} CRS.",
+            "NO_STATED_DATUM")
+    _uom, scale = _unit(spec, units[0], survey_id)
+    rows = []
+    for line in archive.read(member).decode("utf-8", "replace").splitlines():
+        fields = line.split()
+        try:
+            x, y, z = (float(v) for v in fields[:3])
+        except ValueError:
+            continue
+        if len(fields) >= 3 and all(map(math.isfinite, (x, y, z))):
+            rows.append((x, y, z))
+    if not rows:
+        raise router_empty_error(
+            spec.error_code_prefix, f"survey {survey_id}'s {member} holds no x y z row.",
+            "NO_STATED_DATUM")
+    lon, lat = Transformer.from_crs(points.crs, 4326, always_xy=True).transform(
+        [r[0] for r in rows], [r[1] for r in rows])
+    return [(float(a), float(b), round(-r[2] * scale, 4))
+            for a, b, r in zip(lon, lat, rows)], "NAVD88"
 
 
 def _journal(surveys: list[dict[str, Any]]) -> None:
@@ -383,10 +480,20 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
         survey_id = str(properties.get("surveyjobidpk") or "")
         archive = _package(spec, str(properties.get("sourcedatalocation")), survey_id)
         points = _soundings(spec, archive, survey_id)
-        datum, uom, scale = _stated(spec, points, survey_id)
-        offset_m, offset_frame = _published_offset(archive, survey_id)
-        if offset_m is not None:
-            shifts.append((offset_m, offset_frame))
+        vouched = _vouched_elevations(spec, archive, points, survey_id)
+        if vouched is not None:
+            soundings, datum = vouched
+            uom, offset_m, offset_frame = _stated_unit(points), None, ""
+        else:
+            datum, uom, scale = _stated(spec, points, survey_id)
+            offset_m, offset_frame = _published_offset(archive, survey_id)
+            if offset_m is not None:
+                shifts.append((offset_m, offset_frame))
+            wgs = points.to_crs(4326) if points.crs is not None else points
+            soundings = [(float(g.x), float(g.y), round(float(d) * scale, 4))
+                         for d, g in zip(wgs[_DEPTH_FIELD], wgs.geometry)
+                         if g is not None and not g.is_empty and d is not None
+                         and math.isfinite(float(d))]
         date = _survey_date(feature)
         common = {
             "survey_id": survey_id,
@@ -400,20 +507,17 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
         rows.append({
             "type": "Feature", "geometry": feature.get("geometry"),
             "properties": {**common, "part": "survey", "depth_below_datum_m": None,
-                           "sounding_count": int(len(points))},
+                           "sounding_count": len(soundings)},
         })
-        for depth, geometry in zip(points[_DEPTH_FIELD], points.geometry):
-            if geometry is None or geometry.is_empty or depth is None or not math.isfinite(float(depth)):
-                continue
+        for lon, lat, depth_m in soundings:
             rows.append({
                 "type": "Feature",
-                "geometry": {"type": "Point",
-                             "coordinates": [float(geometry.x), float(geometry.y)]},
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
                 "properties": {**common, "part": "sounding", "sounding_count": None,
-                               "depth_below_datum_m": round(float(depth) * scale, 4)},
+                               "depth_below_datum_m": depth_m},
             })
         logger.info("ehydro: survey %s (%s) -> %d sounding(s), datum %s, offset %s",
-                    survey_id, common["survey_date"], len(points), datum,
+                    survey_id, common["survey_date"], len(soundings), datum,
                     f"{offset_m:+.4f} m on {offset_frame}" if offset_m is not None
                     else "unpublished")
     _one_zero(spec, rows)
@@ -422,6 +526,11 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
         row["properties"].update(datum_offset_m=offset_m,
                                  datum_offset_frame=offset_frame)
     return rows
+
+
+def _stated_unit(points: Any) -> str:
+    """The one unit a package's points state; the caller has already read it."""
+    return next(str(v).strip() for v in points[_UOM_FIELD].dropna().unique() if str(v).strip())
 
 
 def _one_shift(spec: SourceSpec, shifts: list[tuple[float, str]]

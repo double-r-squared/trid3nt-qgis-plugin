@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="ISO-8859-1"?><metadata><idinfo><citation><citeinfo><origin>Brian Price</origin><pubdate>20261104</pubdate><title>USCG Station St. Petersburg</title></citeinfo></citation><descript><abstract>Surveyor’s Report USCG St. Petersburg Pinellas County, FL After-Dredge Survey Survey No. 26-180 Survey Report Prepared by: Nolan Hall, U.S. Army Corps of Engineers, Jacksonville District. Project: United States Coast Guard Station in St. Petersburg, Florida Location: Pinellas County, Florida. Date: Field data was acquired on 15 October 2026 Right of Access: No access issues were encountered. Personnel: System Operator: Nolan Hall, Chad Harralson; Boat Operator: Jeremy Doughtry Datum: The horizontal coordinates are referenced to the State Plane Coordinate System, Florida West, Zone 0902, North American Datum of 1983 (NAD 83). Depths depicted by this survey are referenced to Mean Lower Low Water (MLLW) Tidal Datum, Epoch 1983-2001, as reported by the National Oceanic and Atmospheric Administration (NOAA). KTD File: SPC-FL-West-2010-12-07.ktd was used for relating NAVD88 to MLLW. Instruments: The following instruments were used for data collection: SV Coral Data Collection Software HYPACK 2025 Sounder Odom E20 Echotrac with dual-frequency transducer Teledyne Reson Seabat T20 Positioning Trimble GA830 GNSS IMU Applanix PosMV Ocean Master Field Procedures: This survey was performed utilizing the. Tidal corrections were also obtained via RTX Corrections and were verified prior to surveying each day by checking a tide staff set from survey monument “EDD 60” (COE PID: ACX244). An AMP-3 SVP was used daily to measure and record the speed of sound through the water column prior to and after survey operations. All data was collected using an Inertial Measurement Unit (IMU) to correct for roll, pitch, and heave. 2 HYDROGRAPHIC SURVEYING BRANCH, CESAJ-OD-NH http://www.saj.usace.army.mil/Divisions/Operations/Braches/HydroSurvey/index.htm SURVEY CONTROL Monument COE PID X Coord (sft) Y Coord (sft) GEOID Model Elevation (sft) NAVD88 MLLW EDD60 ACX244 -- -- 18 7.52 8.98 TAMPA HYDRO FIELD OFFICE ARP CM6891 452,327.23 1,245,057.40 18 26.23 -- ST PETE 2 CM7316 452,008.92 1,245,907.73 18 5.26 6.73 Tidal reductions were referenced to MLLW using a HYPACK KTD file provided by Geomatics section, titled “SPC-FL-West-2010-12-07.ktd.” Data Processing: The survey data was processed upon completion of the survey. Sounding spikes were removed and statistics were performed on the data during the QA process. Field Conditions: Sea conditions were calm for the entire survey. 3 HYDROGRAPHIC SURVEYING BRANCH, CESAJ-OD-NH http://www.saj.usace.army.mil/Divisions/Operations/Braches/HydroSurvey/index.htm MAP SHEET NOTES: 1. REFER TO SURVEY NO. 26-180. 2. DEPTHS DEPICTED BY THIS SURVEY ARE REFERENCED TO THE VERTICAL DATUM OF MEAN LOWER LOW WATER (MLLW), TIDAL EPOCH 1983-2001, AS PUBLISHED BY THE NATIONAL OCEANIC AND ATMOSPHERIC ADMINISTRATION (NOAA). 3. NOAA'S VDATUM MODEL, AND PUBLISHED TIDE STATION DATA WERE USED TO GENERATE A HYPACK KINEMATIC TIDE DATUM (KTD) MODEL WHICH IS USED TO CONVERT BETWEEN NAVD88 AND MLLW. THIS KTD MODEL, BEING A COMBINATION OF THOSE TWO SOURCES CANNOT BE CONSIDERED EQUIVALENT TO THE VDATUM MODEL DUE TO POSSIBLE ADDITIONS OR EDITS. DO NOT USE VDATUM IN PLACE OF THE KTD FILE. THE KTD MODEL USED FOR THIS SURVEY IS: “SPC-FL-West-2010-12-07.ktd” CONVERSIONS FROM THE GPS DERIVED ELLIPSOID HEIGHTS TO NAVD88 WAS ACHIEVED VIA THE NOAA GEOID MODEL “GEOID18”. 5. TIDAL REDUCTIONS WERE OBTAINED UTILIZING REAL-TIME KINEMATIC (RTK) GPS AND REFERENCED TO MLLW UTILIZING THE KTD FILE REFERENCED ABOVE, AND CALIBRATED TO THE PUBLISHED MLLW HEIGHTS OF THE BENCHMARKS ASSOCIATED WITH THE NOAA TIDE GAGE SITES SPECIFIED BELOW: AREA SURVEYED TIDE GAGE VERTICAL CALIBRATION BENCHMARK(S) ALL AREAS STATION 872-6520 EDD 60 (COE PID: ACX244) 6. ALL ELEVATIONS ARE BELOW THE CHART DATUM UNLESS PRECEDED BY A (+) SIGN. 7. PLANE COORDINATES ARE BASED ON THE TRANSVERSE MERCATOR PROJECTION FOR THE WEST ZONE OF FLORIDA AND ARE REFERENCED TO THE NORTH AMERICAN DATUM OF 1983 (NAD83), ADJUSTMENT OF 2011. 7. THIS SURVEY WAS PERFORMED USING REAL-TIME KINEMATIC (RTK) GPS POSITIONING. TRIMBLE’S REAL TIME EXTENDED (RTX) CORRECTION SERVICE WAS UNTILIZED. CORRECTIONS WERE VERIFED BY AN RTK CHECK IN-OUT POINT ESTABLISHED FROM THE FOLLOWING REFERENCE BASE LOCATION(S): VESSEL RTK BASE STATION ENTIRE PROJECT TAMPA HYDRO FIELD OFFICE ARP (COE PID: CM6891) 8. VERTICAL MEASUREMENTS WERE MADE USING A RESON T50P MULTIBEAM SYSTEM AND AN ODOM E20 ECHOTRAC WITH DUAL-FREQUENCY TRANSDUCER. SOUNDINGS SHOWN ARE IN MULTIBEAM HIGH FREQUENCY. VESSEL DATE OF SURVEY AREA SURVEYED SV-CORAL 15 OCT 2026 AFTER DREDGE SURVEY 4 HYDROGRAPHIC SURVEYING BRANCH, CESAJ-OD-NH http://www.saj.usace.army.mil/Divisions/Operations/Braches/HydroSurvey/index.htm 9. AIDS TO NAVIGATION WERE LOCATED DURING THIS SURVEY. 10. THE INFORMATION DEPICTED ON THIS MAP REPRESENTS THE RESULTS OF SURVEYS MADE ON THE DATES INDICATED ABOVE AND CAN ONLY BE CONSIDERED AS INDICATING THE GENERAL CONDITIONS AT THAT TIME. THIS CHART IS SOLELY FOR THE DISTRIBUTION OF AVAILABLE DEPTHS AT THE TIME OF THE SURVEY AND IS NOT TO BE USED FOR NAVIGATION. 11. SURVEY ACCURACY PERFORMANCE STANDARDS, QUALITY CONTROL, AND QUALITY ASSURANCE REQUIREMENTS WERE FOLLOWED IN ACCORDANCE WITH USACE EM 1110-2-1003, HYDROGRAPHIC SURVEYING, 30 NOV 2013 AND EM 1110-2-6056, STANDARDS AND PROCEDURES FOR REFERENCING PROJECT ELEVATION GRADES TO NATIONWIDE VERTICAL DATUMS, 31 DEC 2010.</abstract><purpose>USCG St. Petersburg Pinellas County, FL After-Dredge Survey Survey No. 26-180</purpose></descript><timeperd><timeinfo><sngdate><caldate>20261015</caldate></sngdate><current></current></timeinfo></timeperd><status><progress>Complete</progress><update>As Needed</update></status><spdom><bounding><westbc>-082.632840</westbc><eastbc>-082.627632</eastbc><northbc>+27.759077</northbc><southbc>+27.758262</southbc></bounding></spdom><keywords><themekt>Theme_Keyword  Hydrographic
+Theme_Keyword  Topographic
+Theme_Keyword  Orthometric
+Theme_Keyword  Bathymetric
+Theme_Keyword  Survey
+Theme_Keyword  Sounding
+Theme_Keyword  Point</themekt></keywords><accconst></accconst><useconst></useconst><ptcontac><cntinfo><cntperp><cntper>Brian Brodehl</cntper><cntorg>USACE</cntorg></cntperp><cntaddr><addrtype>mailing</addrtype><address></address><city></city><state></state><postal></postal></cntaddr><cntvoice>9042323600</cntvoice></cntinfo></ptcontac></idinfo><spref><horizsys><planar><gridsys><gridsysn>State_Plane_Coordinate_System SPCS_Zone_Identifier</gridsysn></gridsys><planci><plance>coordinate pair</plance><absres>0.01</absres><ordres>0.01</ordres></planci></planar></horizsys><vertdef><altsys><altdatum>MLLW</altdatum><altres>0.001</altres><altunits>US Survey Foot</altunits><altenc>Explicit elevation coordinate included with horizontal coordinates</altenc></altsys><depthsys><depthdn></depthdn><depthres>0.001</depthres><depthdu>US Survey Foot</depthdu><depthem>Explicit elevation coordinate included with horizontal coordinates</depthem></depthsys></vertdef></spref><metainfo><metd>20261104</metd><metc><cntinfo><cntperp><cntper>Brian Price</cntper><cntorg>USACE</cntorg></cntperp><cntaddr><addrtype>mailing</addrtype><address></address><city></city><state></state><postal></postal></cntaddr><cntvoice>9042321021</cntvoice></cntinfo></metc><metstdn>FGDC Content Standard for Digital Geospatial Metadata</metstdn><metstdv>FGDC-STD-001-1998</metstdv></metainfo>Other_Information:
+Element_Name:
+Area_of_Coverage: [X+00 to X+00] (For multiple sections use commas)
+Type_of_Survey: Hydrographic Survey
+Survey_File_Name: SP_01_SPH_20261015_CS_2026_180_HF.xyz
+Associated_Data_File:
+Data_File_Delimiter: Space
+Team_Leader: Nolan Hall
+Survey_Manager:
+Project_Manager:
+QA_Person: [To be filled out by individual reviewing this metadata form]
+QA_Date: 20261104
+Projected_Coordinate_System: State Plane Coordinate System 1983
+Horizontal_Zone: FL-0902 FLORIDA WEST<ellips>WGS-84</ellips>Units: US Survey Foot
+Implied_Horizontal_Accuracy: +/- 1 Feet
+Data_Transformation_Method: Point to Point Software
+Tidal_Epoch: 1983-2001
+Geoid_Model: Geoid 18
+Implied_Vertical_Accuracy: +/- 0.5 Feet
+Vessel_Name: SV-Coral
+Positioning_System: Real Time Kinematic (RTK)
+System: Multi Beam Echosounder
+Transducer_Beam_Angle:
+Multi-beam_Swath_Width:
+Bin_Size:
+Shot_Selection_Method:
+Shot_Positioning_Method:
+Edited: Yes
+Tide_Applied: Yes
+Tide_Gauge_Location:
+Controlling_Benchmarks:
+Tide_Gauge_Application_Method:
+Squat_Applied:
+Squat_Application_Method:
+Heave_Applied:
+Heave_Application_Method:
+Pitch_Roll_Applied:
+Topographic_Data_Included: No
+Topographic_Method:</metadata>

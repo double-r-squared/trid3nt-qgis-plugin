@@ -299,3 +299,86 @@ def test_surveys_on_one_frame_publish_one_shift_and_two_frames_refuse(spec):
         eh._one_shift(spec, [(1.6, "NAVD88"), (0.3, "NGVD29")])
     assert "DATUMS_DIFFER" in refused.value.error_code
     assert "NAVD88" in str(refused.value) and "NGVD29" in str(refused.value)
+
+
+_PACKAGES = __import__("pathlib").Path(__file__).parents[1] / "fixtures" / "ehydro"
+
+
+class _Recorded:
+    """A recorded package's members, read from tests/fixtures/ehydro."""
+
+    def __init__(self, *names: str) -> None:
+        self._members = {n: (_PACKAGES / n).read_bytes() for n in names}
+
+    def namelist(self) -> list[str]:
+        return list(self._members)
+
+    def read(self, name: str) -> bytes:
+        return self._members[name]
+
+
+def _recorded_points(survey_id: str):
+    import geopandas as gpd
+
+    return gpd.read_file(_PACKAGES / f"{survey_id}_SurveyPoint_head20.fgb")
+
+
+OMAHA = "MO_11_OMM_20260415_CS_606_614"
+LABADIE = "MO_01_LMR_20260902_CS_58_0_59_0_SORT"
+
+
+def test_a_blank_datum_reads_the_elevations_the_package_states_to_be_navd88(spec):
+    """CENWO's geodatabase states no datum; its XML names the _FULL.XYZ as the
+    NAVD88 elevation file, so those rows are read, as depths below NAVD88."""
+    archive = _Recorded(f"{OMAHA}.XML")
+    # the recorded head of the 14605-row file, under the member name the package uses
+    archive._members[f"{OMAHA}_FULL.XYZ"] = (_PACKAGES / f"{OMAHA}_FULL_head300.XYZ").read_bytes()
+    points = _recorded_points(OMAHA)
+    assert eh._stated_unit(points) == "usSurveyFoot"
+    soundings, datum = eh._vouched_elevations(spec, archive, points, OMAHA)
+    assert datum == "NAVD88" and len(soundings) == 300
+    lon, lat, depth_m = soundings[0]
+    # 945.37 ft NAVD88 is 288.1494 m above the datum: a depth of -288.1494 m below it
+    assert depth_m == pytest.approx(-288.1494, abs=1e-4)
+    assert (lon, lat) == pytest.approx((-95.8422, 41.1797), abs=1e-4)
+
+
+def test_the_blank_datum_without_a_stated_elevation_file_refuses_as_a_depth(spec):
+    """CENWO's Lower Omaha package says its depths are below the water surface of the
+    survey date and names no NAVD88 file, though a _FULL.XYZ sits beside it."""
+    survey = "MO_10_OML_20260930_CS_517"
+    archive = _Recorded(f"{survey}.XML")
+    archive._members[f"{survey}_FULL.XYZ"] = b"1 2 3\n"
+    with pytest.raises(RouterEmptyError) as refused:
+        eh._vouched_elevations(spec, archive, _recorded_points(survey), survey)
+    assert refused.value.error_code == "EHYDRO_DEPTH_NOT_ELEVATION"
+    assert survey in str(refused.value)
+
+
+def test_a_datum_the_metadata_contradicts_refuses_by_name(spec):
+    """CENWK codes 'mllw' on soundings its XML refers to the water surface at the
+    time of collection - a tidal datum on a river that has none."""
+    archive = _Recorded(f"{LABADIE}.XML")
+    with pytest.raises(RouterEmptyError) as refused:
+        eh._vouched_elevations(spec, archive, _recorded_points(LABADIE), LABADIE)
+    assert refused.value.error_code == "EHYDRO_DATUM_CONTRADICTED"
+    assert LABADIE in str(refused.value) and "mllw" in str(refused.value)
+
+
+@pytest.mark.parametrize("survey", ["SP_01_SPH_20261015_CS_2026_180_HF",
+                                    "CB_23_CR3_20261110_CS"])
+def test_a_tidal_survey_stating_mllw_in_both_places_reads_as_before(spec, survey):
+    archive = _Recorded(f"{survey}.XML")
+    points = _recorded_points(survey)
+    assert eh._vouched_elevations(spec, archive, points, survey) is None
+    assert eh._stated(spec, points, survey)[0] == "MLLW"
+
+
+def test_a_blank_datum_with_no_water_surface_words_keeps_its_own_refusal(spec):
+    survey = "MO_10_OML_20260930_CS_517"
+    points = _recorded_points(survey)
+    assert eh._vouched_elevations(spec, _Archive({"X.XML": "Soundings in feet."}),
+                                  points, survey) is None
+    with pytest.raises(RouterEmptyError) as refused:
+        eh._stated(spec, points, survey)
+    assert refused.value.error_code == "EHYDRO_NO_STATED_DATUM"
