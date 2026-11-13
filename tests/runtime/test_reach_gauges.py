@@ -175,6 +175,8 @@ def test_an_inflow_gauge_above_the_release_is_read_for_the_discharge_alone(asked
         reset_domain(token)
     assert found.site_id == "14211720"
     assert found.value == pytest.approx(501.208, abs=1e-3)
+    # The walks are the runtime's own rows, never inputs the fill accepted: those are read as engine keywords.
+    assert asked_willamette and not env.inputs
     # A level or an observation is a target on the solved water: the same gauge is never one.
     assert level == {"14211720": "stands outside the run's domain, the water the reach is cut to"}
 

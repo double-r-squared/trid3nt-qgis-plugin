@@ -810,12 +810,14 @@ async def _off_the_reach(env: _Env, value: Any, *, inflow: bool = False) -> dict
 
 
 async def _walked(env: _Env, name: str, ask: Mapping[str, Any]) -> frozenset[int]:
-    """The COMIDs one walk of the network answered, as a DATA row the RUNTIME declares."""
+    """The COMIDs one walk of the network answered, as a DATA row the RUNTIME declares.
+
+    Held in the run's mapping and never given a verdict: an accepted input the body does not declare is an engine keyword."""
     from trid3nt_server.inputs.domain import REACH_FETCH, flowline_ids
 
-    if name not in env.data:
-        _runtime_row(env, name, REACH_FETCH, ask)
-    return await asyncio.to_thread(flowline_ids, await read(env, name))
+    if name not in env.run:
+        env.run[name] = await _produce(env, _runtime_row(env, name, REACH_FETCH, ask))
+    return await asyncio.to_thread(flowline_ids, env.run[name])
 
 
 def _the_window_it_is_cut_from(decl: Input) -> dict[str, Any]:
