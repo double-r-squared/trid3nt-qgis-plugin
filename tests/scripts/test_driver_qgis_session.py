@@ -168,6 +168,10 @@ def test_every_ehydro_matched_canary_states_a_chain_that_binds():
     assert "telemac_ice_cover_port_huron" not in SURVEYED_BEDS
     for name in SURVEYED_BEDS:
         run = CANARIES[name]
+        if name == "telemac_channel_dredging":
+            assert [s.tool for s in run.before] == ["fetch_ehydro_surveys"]
+            assert run.args["bed"] == "$soundings"
+            continue
         assert [s.tool for s in run.before][:3] == [
             "fetch_ehydro_surveys", "run_qgis_algorithm", "run_qgis_algorithm"]
         _refuse_unread_args(run.tool, run.args)

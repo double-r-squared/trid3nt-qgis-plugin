@@ -190,7 +190,7 @@ def over_the_cut(won: Any, crs: Any, transform: Any, polygon: Any
     reproject(source=won, destination=out, src_transform=transform, src_crs=crs,
               dst_transform=grid, dst_crs=crs, src_nodata=UNMEASURED,
               dst_nodata=UNMEASURED, resampling=Resampling.nearest)
-    wet = geometry_mask(shapes, out_shape=out.shape, transform=grid, invert=True)
+    wet = geometry_mask(shapes, out_shape=out.shape, transform=grid, invert=True, all_touched=True)
     return out, wet
 
 

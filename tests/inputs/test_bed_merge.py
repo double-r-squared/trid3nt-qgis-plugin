@@ -378,3 +378,16 @@ def test_the_datum_quantity_and_shift_survive_fetch_and_qgis_into_the_bed(monkey
     values, _won = _bands(laid.source)
     assert values[0, 4] == pytest.approx(1.6093 - 5.0, abs=1e-4)
     assert laid.source.vertical_datum == "NAVD88"
+
+
+def test_a_cell_the_cut_touches_is_filled_though_its_centre_is_outside_it():
+    """The mesh's rim nodes stand on the cut's edge; the cell under one is in the fill and in the water count."""
+    values = np.full((10, 10), -6.0, dtype="float32")
+    values[:, 4] = _NAN
+    layer = _layer(_write(values, west=-82.5, north=43.0, cell=0.001, crs="EPSG:4326"), "bed")
+    edge = {"type": "Polygon", "coordinates": [[
+        [-82.5, 42.99], [-82.4958, 42.99], [-82.4958, 43.0], [-82.5, 43.0], [-82.5, 42.99]]]}
+    laid, said = _said(lambda: bed(layer, frame="NAVD88", water=edge))
+    values, won = _bands(laid.source)
+    assert np.all(np.isfinite(values[:, 4])) and np.all(won[:, 4] == FILLED)
+    assert any("filled" in line for line in said if line.startswith("Over the WATER"))

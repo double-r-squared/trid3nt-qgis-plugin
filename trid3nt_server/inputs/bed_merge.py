@@ -187,7 +187,7 @@ def _inside(region: list[Any], crs: Any, transform: Any, shape: tuple[int, int])
 
     if not region:
         return np.ones(shape, dtype=bool)
-    return geometry_mask(region, out_shape=shape, transform=transform, invert=True)
+    return geometry_mask(region, out_shape=shape, transform=transform, invert=True, all_touched=True)
 
 
 def laid(surfaces: list[Any], labels: list[str], *, region: Any = None,
