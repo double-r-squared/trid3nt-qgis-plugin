@@ -746,8 +746,9 @@ async def _off_the_reach(env: _Env, value: Any, *, inflow: bool = False) -> dict
     """The sites of a matched record that are NOT this river run's water, each with why; empty off a river run.
 
     A site is the reach's when it stands inside the domain AND NLDI's NWIS index lists it on a
-    flowline of the main stem walked UM and DM from the release, each the run's reach length; a station
-    of a network the index does not hold is placed by the domain alone. The INFLOW is read off a USGS
+    flowline of the main stem walked UM and DM from the release, each the run's reach length; a National Water
+    Model reach is placed by its own feature_id, which is a COMID; a station of any other network is placed
+    by the domain alone. The INFLOW is read off a USGS
     gauge above the release on the UM stem too, standing outside the domain."""
     from shapely.geometry import Point, shape
 
@@ -769,16 +770,16 @@ async def _off_the_reach(env: _Env, value: Any, *, inflow: bool = False) -> dict
     upstream = f"the main stem walked {span:g} km upstream" if span is not None else "the main stem walked upstream"
     off: dict[str | None, str] = {}
     stem: dict[str, frozenset[int]] = {}
-    for site, name, lon, lat, usgs in await asyncio.to_thread(sites, value):
+    for site, name, lon, lat, usgs, comid in await asyncio.to_thread(sites, value):
         placed = lon is not None and lat is not None
         inside = placed and water.covers(Point(lon, lat))
-        if not inside and not (inflow and placed and site and usgs):
+        if not inside and not (inflow and placed and site and (usgs or comid)):
             off[site] = "stands outside the run's domain, the water the reach is cut to"
             continue
         if not site:
             off[site] = "states no site id, so no index can list it on a reach"
             continue
-        if not usgs:
+        if not (usgs or comid):
             journal_note(f"{name or site} ({site}) stands inside the run's domain and is placed by it alone: "
                          "NLDI indexes no station of its network on NHDPlus.")
             continue
@@ -787,8 +788,8 @@ async def _off_the_reach(env: _Env, value: Any, *, inflow: bool = False) -> dict
                 stem[way] = await _walked(env, f"reach_stem_{way.lower()}",
                                           {"seed_point": list(seed), "direction": way, **walk})
         try:
-            own = await _walked(env, f"gauge_{usgs}_reach",
-                                {"nwis_site": usgs, "direction": "DM", "distance_km": 0.0})
+            own = frozenset({comid}) if comid else await _walked(
+                env, f"gauge_{usgs}_reach", {"nwis_site": usgs, "direction": "DM", "distance_km": 0.0})
         except StepFailedError as exc:
             # A retryable failure is raised as it came and never lands here.
             off[site] = f"is placed on no NHDPlus reach ({exc.cause or exc})"
@@ -797,9 +798,10 @@ async def _off_the_reach(env: _Env, value: Any, *, inflow: bool = False) -> dict
             if not own & (stem["UM"] | stem["DM"]):
                 off[site] = (f"stands on NHDPlus reach {', '.join(map(str, sorted(own)))}, which is not on {reach}")
             continue
-        # The release's own flowline is on both walks; a gauge on it is the inflow's only above the release.
+        # The release's own flowline is on both walks; a gauge on it is the inflow's only above the release. A
+        # reach-wide NWM value has no point along the flowline to measure, so its own reach is the release's.
         shared = own & stem["UM"] & stem["DM"]
-        above = bool(own & stem["UM"]) and (not shared or await asyncio.to_thread(
+        above = bool(own & stem["UM"]) and (not shared or comid is not None or await asyncio.to_thread(
             above_on, await read(env, "reach_stem_um"), next(iter(shared)), (lon, lat), lonlat_of(seed)))
         if not above:
             off[site] = f"stands outside the run's domain and not above the release on {upstream}"

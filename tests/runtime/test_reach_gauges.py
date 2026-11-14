@@ -220,3 +220,34 @@ def test_another_network_s_station_outside_the_reach_is_never_the_inflow(asked_w
         reset_domain(token)
     assert off["PRTO3"] == "stands outside the run's domain, the water the reach is cut to"
     assert asked_willamette == []
+
+
+_NWM = _FIXTURES / "noaa_nwm_streamflow" / "portland_2026-11-14.fgb"
+
+
+def test_an_nwm_reach_is_placed_by_its_own_comid_inside_the_domain(asked_willamette):
+    # NWM's feature_id is an NHDPlus COMID: the stem's own reach 23815040 is kept, the tributary reaches inside
+    # the domain are not, and nothing is asked of NLDI's NWIS index for any of them.
+    env, token = _willamette(_WILLAMETTE_ABOVE, box(-122.69, 45.46, -122.62, 45.53).__geo_interface__)
+    try:
+        off = asyncio.run(fill._off_the_reach(env, str(_NWM)))
+    finally:
+        reset_domain(token)
+    assert "23815040" not in off
+    assert off["23815452"] == ("stands on NHDPlus reach 23815452, which is not on the main stem walked 3 km "
+                               "up and down from the release")
+    assert off["23815444"].startswith("stands on NHDPlus reach 23815444")
+    assert all("nwis_site" not in call for call in asked_willamette)
+
+
+def test_an_nwm_reach_on_the_stem_outside_the_domain_is_the_inflow_s_only(asked_willamette):
+    env, token = _willamette(_WILLAMETTE_ABOVE, box(-122.69, 45.50, -122.65, 45.512).__geo_interface__)
+    try:
+        target = asyncio.run(fill._off_the_reach(env, str(_NWM)))
+        inflow = asyncio.run(fill._off_the_reach(env, str(_NWM), inflow=True))
+    finally:
+        reset_domain(token)
+    assert target["23815040"] == "stands outside the run's domain, the water the reach is cut to"
+    assert "23815040" not in inflow
+    assert inflow["23815444"] == ("stands outside the run's domain and not above the release on the main stem "
+                                  "walked 3 km upstream")

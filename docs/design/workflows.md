@@ -179,10 +179,13 @@ release, so the INFLOW's discharge (and only it) is also read off a gauge outsid
 that NLDI lists on the UM walk, ABOVE the release: on the release's own flowline, which
 both walks hold, that is the smaller measure along the line, NHDPlus digitizing it the way
 it flows (`domain.py::above_on`, neither point moved). A level or an observation is a target
-on the solved water and stays inside the domain. A station of a network NLDI's index does
-not hold (a record that is not NWIS's own, `site_no`: NWS, CO-OPS, USBR, NWM) is placed by
-the reach-cut domain alone - inside it it is a candidate, journaled as placed by the domain
-alone; outside it it is off, never the inflow. Each network stays its own fetch row. A record
+on the solved water and stays inside the domain. A National Water Model reach is placed by its own
+`feature_id`, which is an NHDPlus COMID, against the same walks (no NWIS lookup): inside the domain it
+is kept on the stem and off on a tributary; outside it, on the UM walk, it is the inflow's discharge
+only, its own reach on the release's flowline counting as the release's (a reach-wide value has no
+point along the line). A station of a network NLDI's index does not hold (not NWIS's own `site_no`,
+not NWM: NWS, CO-OPS, USBR) is placed by the reach-cut domain alone - inside it it is a candidate,
+journaled as placed by the domain alone; outside it it is off, never the inflow. Each network stays its own fetch row. A record
 handed in, and a run whose domain is no river reach, rank as before. The gauge's
 published drainage area is not checked against the reach's.
 

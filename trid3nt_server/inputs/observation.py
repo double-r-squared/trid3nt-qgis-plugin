@@ -345,14 +345,16 @@ def _on_the_water(candidates: list[Any], off: Mapping[str | None, str], label: s
     return kept
 
 
-def sites(source: Any) -> list[tuple[str | None, str | None, float | None, float | None, str | None]]:
-    """Each site a record reports at: its id, its name, where it stands in lon/lat, and its USGS site
-    number where the record is NWIS's own (``site_no``), else ``None``."""
+def sites(source: Any) -> list[tuple[str | None, str | None, float | None, float | None, str | None, int | None]]:
+    """Each site a record reports at: its id, its name, where it stands in lon/lat, its USGS site number
+    where the record is NWIS's own (``site_no``) and the NHDPlus COMID where the record's id IS one
+    (a National Water Model reach, ``feature_id``); ``None`` for what a record does not state."""
     return [(_text(props, *_SITE_FIELDS), _text(props, "site_name", "station_name"), *_site(feature),
-             usgs.strip() if usgs and usgs.strip().isdigit() else None)
+             usgs.strip() if usgs and usgs.strip().isdigit() else None,
+             int(reach) if reach and reach.strip().isdigit() else None)
             for feature in _features(source)
             for props in (feature.get("properties") or {},)
-            for usgs in (_text(props, "site_no"),)]
+            for usgs, reach in ((_text(props, "site_no"), _text(props, "feature_id")),)]
 
 
 def _found(source: Any, feature: Mapping[str, Any], sampled: str | None, raw: float,
