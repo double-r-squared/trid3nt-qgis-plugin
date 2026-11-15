@@ -95,10 +95,12 @@ def extract_boundary_loops(cells: np.ndarray) -> list[list[int]]:
     Longest loop first - the domain exterior; every boundary node appears."""
     # Boundary edges are consumed exactly once (Eulerian decomposition): a naive node-walk strands nodes at pinch points where two loops touch.
     edge_count: dict[tuple[int, int], int] = {}
+    directed: set[tuple[int, int]] = set()
     for tri in cells:
         for a, b in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])):
             key = (int(a), int(b)) if a < b else (int(b), int(a))
             edge_count[key] = edge_count.get(key, 0) + 1
+            directed.add((int(a), int(b)))
 
     adj: dict[int, list[int]] = {}
     for (a, b), n in edge_count.items():
@@ -127,6 +129,9 @@ def extract_boundary_loops(cells: np.ndarray) -> list[list[int]]:
                 _pop_edge(cur, nnl)
                 nxt = nnl
             if len(loop) >= 3:
+                # The cells run counter-clockwise, so a boundary edge a->b has the domain on its left; TELEMAC's KP1BOR runs that way and its liquid-boundary numbering follows it.
+                if (loop[0], loop[1]) not in directed:
+                    loop.reverse()
                 loops.append(loop)
     loops.sort(key=len, reverse=True)
     return loops

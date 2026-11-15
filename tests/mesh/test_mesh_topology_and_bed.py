@@ -496,6 +496,30 @@ def test_the_boundary_numbering_is_one_count_across_every_loop():
     assert sorted(len(loop) for loop in loops) == [4, 4]
 
 
+def test_the_outer_boundary_runs_counter_clockwise_whatever_order_the_cells_come_in():
+    """TELEMAC's KP1BOR runs the boundary with the domain on the left, and its
+    liquid-boundary numbering follows it: a loop written the other way round
+    numbers the boundaries in reverse."""
+    import numpy as np
+
+    from trid3nt_server.tools.mesh.shared.formats.tin_topology import (
+        boundary_numbering,
+    )
+
+    points = np.array([[i, j] for j in range(3) for i in range(4)], dtype=float)
+    cells = []
+    for j in range(2):
+        for i in range(3):
+            a = j * 4 + i
+            cells += [[a, a + 1, a + 5], [a, a + 5, a + 4]]
+    for ordered in (np.array(cells), np.array(cells[::-1])):
+        _ipobo, loops = boundary_numbering(ordered, points.shape[0])
+        ring = points[loops[0]]
+        area = 0.5 * np.sum(ring[:, 0] * np.roll(ring[:, 1], -1)
+                            - np.roll(ring[:, 0], -1) * ring[:, 1])
+        assert area > 0
+
+
 def test_a_boundary_walk_whose_loops_share_a_node_refuses_naming_it():
     """A node two loops both pass through would need two positions and gets the
     second; what follows is an index error several functions later."""
