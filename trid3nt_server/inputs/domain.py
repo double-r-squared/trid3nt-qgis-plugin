@@ -506,8 +506,14 @@ def _clipped(line: Any, near: Any, span_km: Any, label: str, code: str) -> Any:
     back = Transformer.from_crs(epsg, 4326, always_xy=True)
     metric = _transform(forward.transform, line)
     at_seed = metric.project(_transform(forward.transform, Point(*seed)))
-    cut = substring(metric, at_seed,
-                    min(at_seed + float(span_km) * 1000.0, metric.length))
+    available = metric.length - at_seed
+    if available < float(span_km) * 1000.0:
+        raise UserInputError(
+            f"the {label} states a reach of {float(span_km):g} km below the seed, but the mapped "
+            f"network runs only {available / 1000.0:.3f} km on from where the seed stands (a "
+            "terminal flowline, a coast or a sink ends it). State a reach no longer than that, or "
+            "supply the outline itself.", code="DOMAIN_REACH_PAST_NETWORK_END")
+    cut = substring(metric, at_seed, at_seed + float(span_km) * 1000.0)
     if cut.is_empty or cut.length <= 0.0:
         raise UserInputError(
             f"the {label} seed stands at the far end of the line it was given, "

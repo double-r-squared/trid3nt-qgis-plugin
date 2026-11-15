@@ -3,8 +3,8 @@
 What `fetch_nhdplus_nldi_navigate` wrote (NLDI flowlines tagged `nhdplus_comid`), copied byte for byte from the
 object-store cache on 2026-11-13, nothing edited:
 
-- `etowah_release_dm_2km.fgb` - seed_point (-84.978229605, 34.207328998), direction DM, distance_km 2.0 (cache key
-  1c682f992cbdcbd7491b3d24792cce58).
+- `etowah_release_dm_2km.fgb` - seed_point (-84.978229605, 34.207328998), direction DM, distance_km 2.0, re-recorded 2026-11-14 through the hook
+  that asks the seed flowline's own length further (4 flowlines; the earlier recording held the seed flowline alone).
 - `etowah_release_um_24km.fgb` / `etowah_release_dm_24km.fgb` - the same seed, direction UM / DM, distance_km 24.0
   (cache keys 3ece016d2906cd18b810d91775b171bf / 700b6164841c1cca22d59766f843e9f3): the Etowah's main stem from the
   release's reach 6498944, 12 and 15 flowlines.
@@ -32,3 +32,10 @@ edited (the Willamette at Portland, all on the one 14 km flowline 23815040, digi
   02395120, 02388350, 02388500, 02388525, 02395996, 02395980, 02394820) - nwis_site <site>, direction DM,
   distance_km 0.0, recorded the same way on 2026-11-13: the one reach NLDI's NWIS index lists each on, none of them
   on the Etowah release's 24 km UM walk.
+
+Recorded from the NLDI API itself on 2026-11-14 (the raw answers, through dataretrieval): the Missouri at Omaha, the release
+(-95.921233757, 41.257659140) standing 6.6 km down the 10.07 km flowline 17219468:
+
+- `missouri_snap.json` - `GET /comid/position` for the release; `missouri_dm_0_0km.json` / `missouri_um_0_0km.json` - the
+  seed flowline alone; `missouri_dm_17_07km.json` / `missouri_um_17_07km.json` - navigation of 17.07 km (7 km plus the
+  flowline's own length), four flowlines each.

@@ -46,6 +46,24 @@ def _nldi_snap(spec: SourceSpec, lon: float, lat: float) -> int:
         raise router_upstream_error(prefix, f"NLDI snap returned a non-integer COMID: {exc}")
 
 
+def _own_length_km(spec: SourceSpec, comid: int) -> float:
+    """The ground length of one NHDPlus flowline, read off its own geometry."""
+    import dataretrieval.nldi as nldi
+    from pyproj import Geod
+
+    fc = retrieve(spec, nldi.get_flowlines, input_on_400=False, navigation_mode="DM",
+                  distance=0.0, comid=comid, as_json=True)
+    geod = Geod(ellps="WGS84")
+    total = 0.0
+    for feat in (fc or {}).get("features", []) if isinstance(fc, dict) else []:
+        geom = feat.get("geometry") if isinstance(feat, dict) else None
+        if isinstance(geom, dict) and geom.get("type") == "LineString" \
+                and str((feat.get("properties") or {}).get("nhdplus_comid")) == str(comid):
+            lons, lats = zip(*[(c[0], c[1]) for c in geom["coordinates"]])
+            total += geod.line_length(lons, lats) / 1000.0
+    return total
+
+
 def _nwis_comid(spec: SourceSpec, site: str) -> int:
     """The COMID NLDI's own NWIS index lists a USGS gauge on; a site it does not hold is the typed empty."""
     import dataretrieval.nldi as nldi
@@ -117,6 +135,13 @@ def features(spec: SourceSpec, params: dict[str, Any], *,
     else:
         seed_comid = int(params["comid"])
 
+    # NLDI counts the distance from the seed COMID's own start, not from where a seed point
+    # stands on it, so a point's reach is asked the comid's whole length further: the walk then
+    # covers the stated distance measured from the point, and the caller cuts it there.
+    ask_km = float(distance_km)
+    if seed is not None:
+        ask_km += _own_length_km(spec, seed_comid)
+
     # Navigate the connected flowlines: get_flowlines(as_json) returns the raw NLDI
     # GeoJSON FeatureCollection, LineStrings tagged with nhdplus_comid.
     fc = retrieve(
@@ -128,7 +153,7 @@ def features(spec: SourceSpec, params: dict[str, Any], *,
         # a 0.5 km ask rounded to 0 returns the seed reach alone - one
         # flowline where the ask means four, and a shorter river than the
         # caller asked to model. NLDI accepts the fraction.
-        distance=float(distance_km),
+        distance=ask_km,
         comid=seed_comid,
         as_json=True,
     )

@@ -490,7 +490,7 @@ def _span_km(env: _Env, decl: Input) -> float | None:
     if not float(stated) > 0.0:
         raise UserInputError(
             f"{REACH_LENGTH.name}={stated} km is not a reach: it is the length of the line the domain is cut to, "
-            f"so it is greater than 0 and a value past the line's own end takes the whole line. "
+            f"so it is greater than 0, and a value past the end of the mapped network refuses. "
             + (f"Omit it for this template's {decl.span_km:g} km." if decl.span_km is not None
                else "This template states none."), code="REACH_LENGTH_INVALID")
     return float(stated)
