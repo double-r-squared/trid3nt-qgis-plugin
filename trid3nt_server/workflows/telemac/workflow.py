@@ -313,8 +313,21 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
 
 
 def _record(solved: Solved, *, name: str) -> LayerURI:
-    """The run's own record: the mesh every published group rides; it binds no group, so it is DRAWN rather than measured."""
+    """The run's own record: the mesh every published group rides; it binds no group, so it is DRAWN rather than measured.
+
+    A run with liquid boundaries says whether it ended steady, off its own listing's balance."""
+    from trid3nt_server.inputs.run_notes import journal_note
     from trid3nt_server.store import objects as storage
+    from trid3nt_server.workflows.telemac.modules.listing import steadiness
+
+    steady = steadiness(solved.listing) if solved.run.get("liquid_boundaries") else None
+    if steady is not None:
+        last = steady["printouts"][-1]
+        journal_note(
+            f"the run ended {'STEADY' if steady['steady'] else 'UNSTEADY'}: over its last "
+            f"{len(steady['printouts'])} balance printouts the water entering and leaving differ by at most "
+            f"{100.0 * steady['worst_imbalance']:.1f}% (tolerance {100.0 * steady['tolerance']:g}%); at "
+            f"t = {last['t_s']:g} s {last['entering_m3s']:g} m3/s entered and {last['leaving_m3s']:g} m3/s left.")
 
     return LayerURI(
         layer_id=f"telemac-{solved.run_id}", name=name, layer_type="mesh",
@@ -575,6 +588,9 @@ class TelemacWorkflow(Workflow):
             await stage(mark.name, settle_release, point=held,
                         mesh=run["mesh"], domain=await read(env, domain),
                         label=mark.label,
+                        # A channel opens flat at its outflow level, so a source is wet only where the bed stands under it.
+                        **({"level_m": run["channel"].get("level_m")}
+                           if inflow and isinstance(run.get("channel"), Mapping) else {}),
                         **({"continue_from": previous} if mark.continues else {}))
         await measure("produce")
         settles = self._settled_by()

@@ -740,25 +740,15 @@ package SolveSeam {
 
         The value it replaced was not a property of the reach: 2 m was the same
         number on a mountain creek and a coastal plain river, on the one boundary
-        the run's entire water surface is anchored to. The SAME derivation is
-        now also what a fresh run STARTS from: the normal DEPTH, laid
-        bed-parallel, which is the uniform-flow surface the outflow stage is the
-        downstream end of - so the initial free surface and the prescribed
-        outflow agree by construction and the reach opens at its own equilibrium.
-        ``init_depth_m`` had no role left once that followed: a blanket 2 m start
-        drained into the derived boundary over the first minutes of every
-        horizon, which was a transient the run had to spend before it was
-        answering the question it was asked.
-
-        Bed-parallel, and NOT a constant elevation at the stage. The stage is
-        derived only where the reach falls - the derivation refuses a reach that
-        does not - so a horizontal surface at the outlet's level leaves every
-        node above it dry, the prescribed-flowrate face among them, and the
-        engine refuses a discharge it has no water to impose (DEBIMP: PROBLEM ON
-        BOUNDARY NUMBER). Measured on the flagship coarse reach: 14 of 907 nodes
-        wet, exit code 2. The two statements carry the same number and only one
-        of them is a river. Spin-up as REFINED-run behaviour is a separate, later
-        choice; this is the fresh-run start.
+        the run's entire water surface is anchored to. A fresh run STARTS flat
+        at that derived stage (CONSTANT ELEVATION): a sheet of one depth laid over
+        a surveyed bed follows every bar and pool and stands metres over the
+        outflow it drains through. A flat start whose level stands wholly under the
+        prescribed-flowrate face refuses (TELEMAC_INFLOW_FACE_DRY) - the engine
+        has no water there to impose the discharge on. Whether a run reached its
+        steady state is read off its own listing: the water entering and leaving
+        through the liquid boundaries over its last balance printouts, said on
+        the run's record as STEADY or UNSTEADY.
 
         Uniform flow is a numerically convenient fiction rather than a measured
         boundary, so every input it cannot measure REFUSES by name: a reach with

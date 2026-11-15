@@ -1,0 +1,582 @@
+
+
+Loading Options and Configurations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   ___       ___  
+  / _ \     / _ \ 
+ | (_) |   | | | |
+  \__, |   | | | |
+    / /  _ | |_| |
+   /_/  (_) \___/ 
+                  
+                  
+
+
+Running your CAS file(s) for:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+gnu.shared: 
+    
+
+    +> Shared build using GFortran and Open MPI.
+
+    +> root:    /opt/conda/opentelemac
+    +> module: ad / api / artemis / bief
+               damocles  / gaia  / gretel  / hermes
+               identify_liq_bnd  / khione  / mascaret  / nestor
+               parallel  / partel  / postel3d  / special
+               stbtel  / telemac2d  / telemac3d  / tomawac
+               waqtel
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+... processing the steering file
+  ~> Checking keyword/rubrique coherence
+
+... checking parallelisation
+
+... handling temporary directories
+         copying: telemac2d_telemac_dye_release.cas -> /data/telemac2d_telemac_dye_release.cas_2026-11-15-10h23min41s/T2DCAS
+         copying: telemac2d.dico -> /data/telemac2d_telemac_dye_release.cas_2026-11-15-10h23min41s/T2DDICO
+         copying: domain.slf -> /data/telemac2d_telemac_dye_release.cas_2026-11-15-10h23min41s/T2DGEO
+         copying: domain.cli -> /data/telemac2d_telemac_dye_release.cas_2026-11-15-10h23min41s/T2DCLI
+         copying: river_boundaries.txt -> /data/telemac2d_telemac_dye_release.cas_2026-11-15-10h23min41s/T2DIMP
+         copying: river_sources.txt -> /data/telemac2d_telemac_dye_release.cas_2026-11-15-10h23min41s/T2DVEF
+
+... partitioning base files (geo, conlim, sections, zones and weirs)
+     +> /opt/conda/opentelemac/builds/gnu.shared/bin/partel < partel_T2DGEO.par >> partel_T2DGEO.log
+STOP 0
+
+... splitting / copying other input files
+    duplicating: T2DIMP
+    duplicating: T2DVEF
+
+... checking the executable
+
+
+Running your simulation(s) :
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+In /data/telemac2d_telemac_dye_release.cas_2026-11-15-10h23min41s:
+mpirun --use-hwthread-cpus -np 7 /data/telemac2d_telemac_dye_release.cas_2026-11-15-10h23min41s/out_telemac2d
+
+
+ MASTER PROCESSOR NUMBER            0  OF THE GROUP OF            7
+ EXECUTABLE FILE: /data/telemac2d_telemac_dye_release.cas_2026-11-15-10h23min41s/A.EXE
+ LISTING OF TELEMAC2D------------------------------------------------------------------------------
+
+                TTTTT  EEEEE  L      EEEEE  M   M  AAAAA  CCCCC
+                  T    E      L      E      MM MM  A   A  C
+                  T    EEE    L      EEE    M M M  AAAAA  C
+                  T    E      L      E      M   M  A   A  C
+                  T    EEEEE  LLLLL  EEEEE  M   M  A   A  CCCCC
+
+                        2D    VERSION 9.0    FORTRAN 2003
+
+                        ~^~^~^~^~^~^~^~^~^~^~^^~^~^~^~^~^~
+                          ~                            ~
+                               \   '    o      '
+                               /\ o       \  o
+                             >=)'>    '   /\ '
+                               \/   \   >=)'>        ~
+                               /    /\    \/
+                        ~         >=)'>   /     .
+                                    \/                   )
+                                    /                   (
+                                          ~          )   )
+                          }     ~              (    (   (
+                         {                      )    )   )
+                          }  }         .       (    (   (
+                         {  {               /^^^^^^^^^^^^
+                        ^^^^^^^^^\         /
+                                  ^^^^^^^^^
+
+                   ********************************************
+                   *               LECDON:                    *
+                   *        AFTER CALLING DAMOCLES            *
+                   *        CHECKING OF DATA  READ            *
+                   *         IN THE STEERING FILE             *
+                   ********************************************
+
+ TREATMENT OF NEGATIVE DEPTHS =           2
+ MASS-LUMPING ON H AUTOMATICALLY SET TO 1.D0
+ CONTINUITY CORRECTION AUTOMATICALLY SET TO YES
+ SUPG OPTION AUTOMATICALLY SET TO 0 FOR H
+
+ EXITING LECDON. NAME OF THE STUDY:
+ nhdplus_nldi_nhdplus_nldi_mesh DOMAIN
+
+ OPENING FILES FOR TELEMAC2D
+ OPENING: T2DGEO-domain.slf
+ OPENING: T2DCLI-domain.cli
+ OPENING: T2DRST-restart_domain.slf
+ OPENING: T2DRES-r2d_domain.slf
+ OPENING: T2DIMP-river_boundaries.txt
+ OPENING: T2DVEF-river_sources.txt
+
+                          *****************************
+                          *    MEMORY ORGANIZATION    *
+                          *****************************
+
+ READ_MESH_INFO: TITLE= TRID3NT 01M7FBQCSV7A7E0700JN3T63YG
+            NUMBER OF ELEMENTS:      221
+            NUMBER OF POINTS:      141
+
+            TYPE OF ELEMENT: TRIANGLE
+            TYPE OF BND ELEMENT: POINT
+
+            DOUBLE PRECISION FORMAT (R8)
+
+ MXPTEL (BIEF) : MAXIMUM NUMBER OF ELEMENTS AROUND A POINT:   8
+                 MAXIMUM NUMBER OF POINTS AROUND A POINT:   9
+ (GLOBAL MESH)
+ SEGBOR (BIEF) : NUMBER OF BOUNDARY SEGMENTS =     59
+ INCLUDING THOSE DUE TO DOMAIN DECOMPOSITION
+ USER_CORRXY (BIEF):NO MODIFICATION OF COORDINATES
+
+ MESH: MESH   ALLOCATED
+
+                     *************************************
+                     *    END OF MEMORY ORGANIZATION:    *
+                     *************************************
+
+ INITIALIZING TELEMAC2D FOR
+ INBIEF (BIEF): NOT A VECTOR MACHINE (ACCORDING TO YOUR DATA)
+ STRCHE (BIEF): NO MODIFICATION OF FRICTION
+
+ NUMBER OF LIQUID BOUNDARIES:           2
+
+ USER_CORFON (TELEMAC2D): NO MODIFICATION OF BOTTOM
+
+ CORFON (TELEMAC2D): NO BOTTOM SMOOTHINGS
+
+ SOURCE POINT            1 PUT ON POINT
+   255255.46387100001       AND    4571467.1777430000
+ LOCATED AT    13.305650822242001       METRES
+
+================================================================================
+ ITERATION        0    TIME:   0.0000 S
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+     INITIAL QUANTITY OF TRACER   :    0.000000
+ TELEMAC2D INITIALIZED
+ THE LIQUID BOUNDARIES FILE CONTAINS
+           4  LINES WITH:
+ Q(2)
+ USING STREAMLINE VERSION 9.0 FOR CHARACTERISTICS
+
+================================================================================
+ ITERATION      500    TIME:  2 MN  54.5000 S   (      174.5000 S)
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : TR(1,1)  =   0.0000000000000000
+ LIQUID BOUNDARY: Q(2)     =   889.14898300000004
+--------------------------------------------------------------------------------
+                          ADVECTION STEP
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP
+ GRACJG (BIEF) :        3 ITERATIONS, RELATIVE PRECISION:   0.1273990E-07
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.9507649E-12
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     37470.94
+     FINAL QUANTITY                    :     37465.64
+     BOUNDARY   1 FLUX:            -0.000000     ( >0 : ENTERING  <0 : EXITING )
+     BOUNDARY   2 FLUX:            -0.000000     ( >0 : ENTERING  <0 : EXITING )
+     TOTAL QUANTITY LOST               :     5.293548
+     RELATIVE ERROR                    :    0.1412708E-03
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME
+     VOLUME IN THE DOMAIN :    8080658.     M3
+     FLUX BOUNDARY    1:    -2672.209     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     FLUX BOUNDARY    2:     889.3327     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     RELATIVE ERROR IN VOLUME AT T =        174.5     S :    0.1106246E-15
+
+================================================================================
+ ITERATION     1000    TIME:  5 MN  49.0000 S   (      349.0000 S)
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : TR(1,1)  =   0.0000000000000000
+ LIQUID BOUNDARY: Q(2)     =   889.14898300000004
+--------------------------------------------------------------------------------
+                          ADVECTION STEP
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP
+ GRACJG (BIEF) :        2 ITERATIONS, RELATIVE PRECISION:   0.9036959E-06
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.4363556E-12
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     36056.73
+     FINAL QUANTITY                    :     36053.23
+     BOUNDARY   1 FLUX:           -0.2381963-168 ( >0 : ENTERING  <0 : EXITING )
+     BOUNDARY   2 FLUX:            -0.000000     ( >0 : ENTERING  <0 : EXITING )
+     TOTAL QUANTITY LOST               :     3.497967
+     RELATIVE ERROR                    :    0.9701289E-04
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME
+     VOLUME IN THE DOMAIN :    7853160.     M3
+     FLUX BOUNDARY    1:    -1792.627     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     FLUX BOUNDARY    2:     889.1273     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     RELATIVE ERROR IN VOLUME AT T =        349.0     S :   -0.1616309E-15
+
+================================================================================
+ ITERATION     1500    TIME:  8 MN  43.5000 S   (      523.5000 S)
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : TR(1,1)  =   0.0000000000000000
+ LIQUID BOUNDARY: Q(2)     =   889.14898300000004
+--------------------------------------------------------------------------------
+                          ADVECTION STEP
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP
+ GRACJG (BIEF) :        2 ITERATIONS, RELATIVE PRECISION:   0.6139066E-06
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.3591952E-12
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     34016.73
+     FINAL QUANTITY                    :     34013.68
+     BOUNDARY   1 FLUX:           -0.1821581-106 ( >0 : ENTERING  <0 : EXITING )
+     BOUNDARY   2 FLUX:            -0.000000     ( >0 : ENTERING  <0 : EXITING )
+     TOTAL QUANTITY LOST               :     3.043568
+     RELATIVE ERROR                    :    0.8947270E-04
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME
+     VOLUME IN THE DOMAIN :    7690249.     M3
+     FLUX BOUNDARY    1:    -1770.807     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     FLUX BOUNDARY    2:     889.2163     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     RELATIVE ERROR IN VOLUME AT T =        523.5     S :    0.1821444E-15
+
+================================================================================
+ ITERATION     2000    TIME: 11 MN  38.0000 S   (      698.0000 S)
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : TR(1,1)  =   0.0000000000000000
+ LIQUID BOUNDARY: Q(2)     =   889.14898300000004
+--------------------------------------------------------------------------------
+                          ADVECTION STEP
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP
+ GRACJG (BIEF) :        2 ITERATIONS, RELATIVE PRECISION:   0.5644754E-06
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.1668278E-12
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     32386.53
+     FINAL QUANTITY                    :     32385.61
+     BOUNDARY   1 FLUX:           -0.3099228E-72 ( >0 : ENTERING  <0 : EXITING )
+     BOUNDARY   2 FLUX:            -0.000000     ( >0 : ENTERING  <0 : EXITING )
+     TOTAL QUANTITY LOST               :    0.9237563
+     RELATIVE ERROR                    :    0.2852285E-04
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME
+     VOLUME IN THE DOMAIN :    7524101.     M3
+     FLUX BOUNDARY    1:    -1862.606     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     FLUX BOUNDARY    2:     889.1968     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     RELATIVE ERROR IN VOLUME AT T =        698.0     S :   -0.1999541E-15
+
+================================================================================
+ ITERATION     2500    TIME: 14 MN  32.5000 S   (      872.5000 S)
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : TR(1,1)  =   0.0000000000000000
+ LIQUID BOUNDARY: Q(2)     =   889.14898300000004
+--------------------------------------------------------------------------------
+                          ADVECTION STEP
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP
+ GRACJG (BIEF) :        2 ITERATIONS, RELATIVE PRECISION:   0.4480702E-06
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.3328461E-12
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     31268.20
+     FINAL QUANTITY                    :     31265.38
+     BOUNDARY   1 FLUX:           -0.1151139E-54 ( >0 : ENTERING  <0 : EXITING )
+     BOUNDARY   2 FLUX:            -0.000000     ( >0 : ENTERING  <0 : EXITING )
+     TOTAL QUANTITY LOST               :     2.818598
+     RELATIVE ERROR                    :    0.9014265E-04
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME
+     VOLUME IN THE DOMAIN :    7351959.     M3
+     FLUX BOUNDARY    1:    -2109.387     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     FLUX BOUNDARY    2:     889.0445     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     RELATIVE ERROR IN VOLUME AT T =        872.5     S :    0.7834570E-16
+
+================================================================================
+ ITERATION     3000    TIME: 17 MN  27.0000 S   (     1047.0000 S)
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : TR(1,1)  =   0.0000000000000000
+ LIQUID BOUNDARY: Q(2)     =   888.68647444999976
+--------------------------------------------------------------------------------
+                          ADVECTION STEP
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP
+ GRACJG (BIEF) :        2 ITERATIONS, RELATIVE PRECISION:   0.3309034E-06
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.3227346E-12
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     29983.06
+     FINAL QUANTITY                    :     29980.62
+     BOUNDARY   1 FLUX:           -0.2939019E-44 ( >0 : ENTERING  <0 : EXITING )
+     BOUNDARY   2 FLUX:            -0.000000     ( >0 : ENTERING  <0 : EXITING )
+     TOTAL QUANTITY LOST               :     2.433460
+     RELATIVE ERROR                    :    0.8116119E-04
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME
+     VOLUME IN THE DOMAIN :    7147197.     M3
+     FLUX BOUNDARY    1:    -2031.147     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     FLUX BOUNDARY    2:     888.6554     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     RELATIVE ERROR IN VOLUME AT T =        1047.     S :   -0.1529807E-15
+
+================================================================================
+ ITERATION     3500    TIME: 20 MN  21.5000 S   (     1221.5000 S)
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : TR(1,1)  =   0.0000000000000000
+ LIQUID BOUNDARY: Q(2)     =   888.13744219166665
+--------------------------------------------------------------------------------
+                          ADVECTION STEP
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP
+ GRACJG (BIEF) :        2 ITERATIONS, ABSOLUTE PRECISION:   0.1675915E-06
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.2403577E-12
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     28741.35
+     FINAL QUANTITY                    :     28738.80
+     BOUNDARY   1 FLUX:           -0.5464596E-37 ( >0 : ENTERING  <0 : EXITING )
+     BOUNDARY   2 FLUX:            -0.000000     ( >0 : ENTERING  <0 : EXITING )
+     TOTAL QUANTITY LOST               :     2.547161
+     RELATIVE ERROR                    :    0.8862357E-04
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME
+     VOLUME IN THE DOMAIN :    6957710.     M3
+     FLUX BOUNDARY    1:    -1921.674     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     FLUX BOUNDARY    2:     888.1031     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     RELATIVE ERROR IN VOLUME AT T =        1222.     S :    0.1102030E-15
+
+================================================================================
+ ITERATION     4000    TIME: 23 MN  16.0000 S   (     1396.0000 S)
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : TR(1,1)  =   0.0000000000000000
+ LIQUID BOUNDARY: Q(2)     =   887.58840993333342
+--------------------------------------------------------------------------------
+                          ADVECTION STEP
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP
+ GRACJG (BIEF) :        2 ITERATIONS, ABSOLUTE PRECISION:   0.8527803E-07
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.1684228E-12
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     27530.41
+     FINAL QUANTITY                    :     27528.20
+     BOUNDARY   1 FLUX:           -0.2221671E-31 ( >0 : ENTERING  <0 : EXITING )
+     BOUNDARY   2 FLUX:            -0.000000     ( >0 : ENTERING  <0 : EXITING )
+     TOTAL QUANTITY LOST               :     2.207790
+     RELATIVE ERROR                    :    0.8019458E-04
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME
+     VOLUME IN THE DOMAIN :    6787302.     M3
+     FLUX BOUNDARY    1:    -1819.434     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     FLUX BOUNDARY    2:     887.5784     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     RELATIVE ERROR IN VOLUME AT T =        1396.     S :   -0.7210007E-16
+
+================================================================================
+ ITERATION     4500    TIME: 26 MN  10.5000 S   (     1570.5000 S)
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : TR(1,1)  =   0.0000000000000000
+ LIQUID BOUNDARY: Q(2)     =   887.03937767500020
+--------------------------------------------------------------------------------
+                          ADVECTION STEP
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP
+ GRACJG (BIEF) :        2 ITERATIONS, ABSOLUTE PRECISION:   0.3522403E-07
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.1590738E-12
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     26561.22
+     FINAL QUANTITY                    :     26559.64
+     BOUNDARY   1 FLUX:           -0.1110437E-26 ( >0 : ENTERING  <0 : EXITING )
+     BOUNDARY   2 FLUX:            -0.000000     ( >0 : ENTERING  <0 : EXITING )
+     TOTAL QUANTITY LOST               :     1.588348
+     RELATIVE ERROR                    :    0.5979949E-04
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME
+     VOLUME IN THE DOMAIN :    6631944.     M3
+     FLUX BOUNDARY    1:    -1784.238     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     FLUX BOUNDARY    2:     887.0240     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     RELATIVE ERROR IN VOLUME AT T =        1570.     S :   -0.8331163E-16
+
+================================================================================
+ ITERATION     5000    TIME: 29 MN   5.0000 S   (     1745.0000 S)
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : TR(1,1)  =   0.0000000000000000
+ LIQUID BOUNDARY: Q(2)     =   886.49034541666697
+--------------------------------------------------------------------------------
+                          ADVECTION STEP
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP
+ GRACJG (BIEF) :        2 ITERATIONS, ABSOLUTE PRECISION:   0.2835237E-07
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.1589858E-12
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     25937.24
+     FINAL QUANTITY                    :     25936.18
+     BOUNDARY   1 FLUX:           -0.1710135E-22 ( >0 : ENTERING  <0 : EXITING )
+     BOUNDARY   2 FLUX:            -0.000000     ( >0 : ENTERING  <0 : EXITING )
+     TOTAL QUANTITY LOST               :     1.060186
+     RELATIVE ERROR                    :    0.4087506E-04
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME
+     VOLUME IN THE DOMAIN :    6481513.     M3
+     FLUX BOUNDARY    1:    -1697.468     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     FLUX BOUNDARY    2:     886.4802     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     RELATIVE ERROR IN VOLUME AT T =        1745.     S :    0.5897005E-15
+
+================================================================================
+ ITERATION     5158    TIME: 30 MN   0.1420 S   (     1800.1420 S)
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : Q(1)     =   0.0000000000000000
+ SOURCES : TR(1,1)  =   0.0000000000000000
+ LIQUID BOUNDARY: Q(2)     =   886.31774477743977
+--------------------------------------------------------------------------------
+                          ADVECTION STEP
+--------------------------------------------------------------------------------
+                    DIFFUSION-PROPAGATION STEP
+ GRACJG (BIEF) :        2 ITERATIONS, ABSOLUTE PRECISION:   0.1959050E-07
+ POSITIVE DEPTHS OBTAINED IN     1 ITERATIONS
+--------------------------------------------------------------------------------
+                     DIFFUSION OF TRACERS STEP
+ GRACJG (BIEF) :        1 ITERATIONS, RELATIVE PRECISION:   0.1583377E-12
+
+                            BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     25807.77
+     FINAL QUANTITY                    :     25806.96
+     BOUNDARY   1 FLUX:           -0.2445271E-21 ( >0 : ENTERING  <0 : EXITING )
+     BOUNDARY   2 FLUX:            -0.000000     ( >0 : ENTERING  <0 : EXITING )
+     TOTAL QUANTITY LOST               :    0.8048539
+     RELATIVE ERROR                    :    0.3118650E-04
+
+                      FINAL BALANCE OF DYE (UNIT: MG/L * M3)
+
+     INITIAL QUANTITY                  :     0.000000
+     FINAL QUANTITY                    :     25806.96
+     QUANTITY CREATED BY SOURCE TERM   :     47916.08
+     TOTAL QUANTITY LOST               :     22109.12
+     RELATIVE ERROR                    :    0.4614134
+
+--------------------------------------------------------------------------------
+                       BALANCE OF WATER VOLUME
+     VOLUME IN THE DOMAIN :    6437666.     M3
+     FLUX BOUNDARY    1:    -1664.684     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     FLUX BOUNDARY    2:     886.3056     M3/S  ( >0 : ENTERING  <0 : EXITING )
+     RELATIVE ERROR IN VOLUME AT T =        1800.     S :   -0.2455925E-15
+--------------------------------------------------------------------------------
+                   FINAL BALANCE OF WATER VOLUME
+
+     RELATIVE ERROR CUMULATED ON VOLUME:    0.3545275E-14
+
+     INITIAL VOLUME              :     8406209.     M3
+     FINAL VOLUME                :     6437666.     M3
+     VOLUME THAT ENTERED THE DOMAIN:    -1969023.     M3  ( IF <0 EXIT )
+     VOLUME ADDED BY SOURCE TERM   :     480.8382     M3
+     TOTAL VOLUME LOST             :    0.2980232E-07 M3
+
+ END OF TIME LOOP
+
+ EXITING MPI
+
+                     *************************************
+                     *    END OF MEMORY ORGANIZATION:    *
+                     *************************************
+
+ CORRECT END OF RUN
+
+ ELAPSE TIME :
+                              1  SECONDS
+Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG IEEE_DENORMAL
+STOP 0
+Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG IEEE_DENORMAL
+STOP 0
+Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG IEEE_DENORMAL
+STOP 0
+Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG IEEE_DENORMAL
+STOP 0
+Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG IEEE_DENORMAL
+STOP 0
+Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG IEEE_DENORMAL
+STOP 0
+Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG IEEE_DENORMAL
+STOP 0
+... merging separated result files
+
+     collecting: T2DRST
+     +> /opt/conda/opentelemac/builds/gnu.shared/bin/gretel < gretel_T2DRST.par >> gretel_T2DRST.log
+STOP 0
+     collecting: T2DRES
+     +> /opt/conda/opentelemac/builds/gnu.shared/bin/gretel < gretel_T2DRES.par >> gretel_T2DRES.log
+Note: The following floating-point exceptions are signalling: IEEE_DENORMAL
+STOP 0
+... handling result files
+
+        moving: restart_domain.slf
+        moving: r2d_domain.slf
+... deleting working dir
+
+
+
+My work is done
+
+

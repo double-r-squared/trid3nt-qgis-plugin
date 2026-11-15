@@ -72,12 +72,19 @@ def _continuation_state(uri: str, node_count: int) -> dict[str, Any]:
     }
 
 
-def initial_state_of(continue_from: str | None, node_count: int) -> dict[str, Any]:
-    """What the run starts from: a fresh reach opens at the derived normal depth laid
-    bed-parallel; a continued one at the restart record's wet/dry field and instant.
+def initial_state_of(continue_from: str | None, node_count: int, *,
+                     bed: Any = None, level_m: float | None = None) -> dict[str, Any]:
+    """What the run starts from: a fresh run opened flat at ``level_m`` is wet where the bed stands under it;
+    a continued one at the restart record's wet/dry field and instant.
     """
     if continue_from:
         return _continuation_state(str(continue_from), node_count)
+    if level_m is not None and bed is not None:
+        import numpy as np
+
+        wet = np.asarray(bed, dtype=float) < float(level_m)
+        return {"start_s": None, "wet": wet,
+                "note": (f"the run opens flat at {float(level_m):.3f} m: {int(wet.sum())} of {node_count} nodes "
+                         "stand under it")}
     return {"start_s": None, "wet": [True] * node_count,
-            "note": "the template's own constant initial depth, the derived normal "
-                    "depth laid bed-parallel over every node of the accepted mesh"}
+            "note": "the template's own opening, laid over every node of the accepted mesh"}

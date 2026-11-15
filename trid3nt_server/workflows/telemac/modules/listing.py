@@ -14,6 +14,7 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.modules.listing")
 
 __all__ = [
     "boundary_flux",
+    "steadiness",
     "continuity_rel_error",
     "worst_closure",
     "engine_demand",
@@ -256,3 +257,46 @@ def final_balance(listing_text: str) -> dict[str, Any]:
         except ValueError:
             pass
     return out
+
+
+#: How many of the last balance blocks a steady run must close in, and within what share of its inflow.
+STEADY_PRINTOUTS = 3
+STEADY_TOLERANCE = 0.02
+
+
+def steadiness(listing_text: str) -> dict[str, Any] | None:
+    """Whether the water entering through the liquid boundaries equals the water leaving, over the last printouts.
+
+    Read off the engine's own balance blocks; ``None`` where fewer blocks were printed than are read."""
+    blocks: list[tuple[float, float, float]] = []
+    pending: dict[int, float] | None = None
+    for line in (listing_text or "").splitlines():
+        if re.search(_BALANCE_HEAD, line):
+            pending = {}
+            continue
+        if pending is None:
+            continue
+        flux = re.search(_FLUX_BOUNDARY, line)
+        if flux is not None:
+            try:
+                pending[int(flux.group(1))] = float(flux.group(2))
+            except ValueError:
+                pass
+            continue
+        stamp = re.search(_BALANCE_TIME, line)
+        if stamp is None:
+            continue
+        try:
+            entering = sum(v for v in pending.values() if v > 0.0)
+            leaving = -sum(v for v in pending.values() if v < 0.0)
+            blocks.append((float(stamp.group(1)), entering, leaving))
+        except ValueError:
+            pass
+        pending = None
+    last = blocks[-STEADY_PRINTOUTS:]
+    if len(last) < STEADY_PRINTOUTS:
+        return None
+    worst = max(abs(e - o) / max(e, o, 1e-12) for _t, e, o in last)
+    return {"steady": worst <= STEADY_TOLERANCE, "worst_imbalance": round(worst, 6),
+            "tolerance": STEADY_TOLERANCE,
+            "printouts": [{"t_s": t, "entering_m3s": round(e, 3), "leaving_m3s": round(o, 3)} for t, e, o in last]}

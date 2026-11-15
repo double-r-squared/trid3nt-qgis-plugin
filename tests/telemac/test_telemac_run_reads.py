@@ -217,3 +217,25 @@ def test_the_engine_s_own_demand_is_read_by_name_out_of_the_listing():
 def test_a_listing_that_demanded_nothing_reads_as_nothing():
     assert R.engine_demand(" MURD3D: ITERATION NO. REACHED 100 , STOP.") is None
     assert R.engine_demand("") is None
+
+
+def test_a_run_still_draining_its_opening_reads_unsteady_off_its_own_listing():
+    """The recorded Missouri listing (tests/fixtures/telemac_missouri): opened at a constant depth over a surveyed bed,
+    1697-1820 m3/s left through the elevation face against 886-888 m3/s in over the last three balance printouts."""
+    from pathlib import Path
+
+    from trid3nt_server.workflows.telemac.modules.listing import steadiness
+
+    text = (Path(__file__).resolve().parents[1] / "fixtures" / "telemac_missouri" / "full_listing.txt").read_text()
+    found = steadiness(text)
+    assert found["steady"] is False
+    assert [p["t_s"] for p in found["printouts"]] == [1570.0, 1745.0, 1800.0]
+    assert found["printouts"][-1] == {"t_s": 1800.0, "entering_m3s": 886.306, "leaving_m3s": 1664.684}
+    assert found["worst_imbalance"] == pytest.approx((1784.238 - 887.024) / 1784.238, abs=1e-5)
+
+
+def test_a_balance_whose_boundaries_close_reads_steady():
+    block = ("BALANCE OF WATER VOLUME\nFLUX BOUNDARY    1:    -100.5 M3/S\nFLUX BOUNDARY    2:     100.0 M3/S\n"
+             "RELATIVE ERROR IN VOLUME AT T =        {t}     S :    0.1E-15\n")
+    found = R.steadiness("".join(block.format(t=t) for t in (10.0, 20.0, 30.0)))
+    assert found["steady"] is True and found["worst_imbalance"] == pytest.approx(0.5 / 100.5, abs=1e-6)

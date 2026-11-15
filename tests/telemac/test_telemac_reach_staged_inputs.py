@@ -244,3 +244,11 @@ def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):
     doc = json.loads(fake.put["Body"])
     assert doc["agitation"] == {"name": "harbour"}
     assert doc["inputs"] == []
+
+
+def test_a_fresh_run_opened_flat_is_wet_only_where_the_bed_stands_under_its_level():
+    from trid3nt_server.workflows.telemac.authoring.initial_state import initial_state_of
+
+    state = initial_state_of(None, 3, bed=[289.33, 291.385, 292.28], level_m=291.385)
+    assert list(state["wet"]) == [True, False, False]
+    assert "291.385" in state["note"] and "1 of 3" in state["note"]

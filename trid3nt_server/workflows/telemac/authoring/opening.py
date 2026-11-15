@@ -30,13 +30,11 @@ from .accepted_mesh import (
     topology_of,
 )
 
-__all__ = ["BED_PARALLEL", "FLAT", "open_channel", "open_water"]
+__all__ = ["FLAT", "open_channel", "open_water"]
 
-# What the engine is told to lay: a flat surface at the level, or a sheet of one depth following the bed (what a reach that falls holds).
+# What the engine is told to lay: a flat surface at the level. A sheet of one depth over a measured bed follows every bar and
+# pool of it, so a channel opens flat at its outflow level too and the inflow fills the reach to its uniform-flow surface.
 FLAT = "CONSTANT ELEVATION"
-
-
-BED_PARALLEL = "CONSTANT DEPTH"
 
 
 # The three keys every template reads the water off, and the two an addition fills; a body with no stated level carries None in all of them.
@@ -161,6 +159,19 @@ def _level_opening(bed: Mapping[str, Any], held: tuple[float, str], *,
             "held": note, "q_m3s": float(discharge_q)}
 
 
+def _refuse_a_dry_inflow_face(roles: Mapping[str, Any], node_bed: Any, level_m: float) -> None:
+    """A flat opening the prescribed-flowrate face stands wholly above has no water to impose the inflow on."""
+    import numpy as np
+
+    face = np.asarray(node_bed, dtype=float)[[int(n) for n in roles["inflow"]]]
+    lowest = float(np.nanmin(face))
+    if level_m <= lowest:
+        raise TelemacError(
+            f"the run opens flat at the derived outflow stage {level_m:.3f} m and the inflow face's lowest node "
+            f"stands at {lowest:.3f} m, so the face the discharge is prescribed on opens dry. State a shorter reach "
+            "(reach_length_km) or a level that reaches it.", error_code="TELEMAC_INFLOW_FACE_DRY")
+
+
 def _reported_discharge(carrier: Any) -> tuple[float, str]:
     """The streamflow the carrier observation reports, with what reported it.
 
@@ -254,16 +265,6 @@ def _opening(level: Any, mesh: Mapping[str, Any]) -> dict[str, Any]:
         measured["outflow_stage_m"] = measured["level_m"]
         measured["outflow_stage_series"] = _window(level)
     measured["opening"] = measured["opening"] or FLAT
-    if measured["opening"] == BED_PARALLEL:
-        # A sheet of one depth following the bed; the level is where the outflow section stands under it.
-        depth = float(measured["depth_m"])
-        measured["max_depth_m"] = round(depth, 2)
-        journal_note(
-            f"the opening: bed-parallel at {depth:.3f} m over a bed the "
-            f"accepted mesh carries between {floor:.3f} m and {ceiling:.3f} m, "
-            f"so every node holds that depth and the outflow section stands at "
-            f"{measured['level_m']:.3f} m.")
-        return measured
     deepest = surface - floor
     if deepest <= 0.0:
         raise TelemacError(
@@ -421,18 +422,18 @@ async def open_channel(
     else:
         normal = normal_depth_stage(bed, law=law, coefficient=coefficient,
                                     discharge_q=inflow_q)
+        _refuse_a_dry_inflow_face(roles, node_bed, normal["stage_m"])
         journal_note(
-            f"the open channel: constant depth {normal['depth_m']:.3f} m - the SAME "
-            f"normal depth the outflow stage {normal['stage_m']:.3f} m is derived "
-            f"as ({normal['q_m3s']:g} m3/s over the measured outflow section at "
-            f"{normal['law']} {normal['coefficient']:g}). Bed-parallel at the "
-            f"friction slope {normal['slope']:.6f}, which IS the uniform-flow "
-            f"surface. {discharge_note}")
+            f"the open channel: the outflow stage {normal['stage_m']:.3f} m is the "
+            f"normal depth {normal['q_m3s']:g} m3/s is conveyed at over the measured "
+            f"outflow section at {normal['law']} {normal['coefficient']:g} and the "
+            f"friction slope {normal['slope']:.6f}; the run opens FLAT at it and the "
+            f"inflow fills the reach to its uniform-flow surface. {discharge_note}")
     return {
-        # The level the base opens at, and how: a falling reach holds one depth on its friction slope, otherwise flat at the measured level.
+        # The level the base opens at: flat at the measured level, or at the derived outflow stage.
         "level_m": round(float(normal["stage_m"]), 3),
         "depth_m": round(float(normal["depth_m"]), 3),
-        "opening": FLAT if float(normal["slope"]) == 0.0 else BED_PARALLEL,
+        "opening": FLAT,
         "outflow_stage_m": round(float(normal["stage_m"]), 3),
         "inflow_q_m3s": inflow_q,
         # The window each number came out of; the boundary writes the series and the number stands for the rest.

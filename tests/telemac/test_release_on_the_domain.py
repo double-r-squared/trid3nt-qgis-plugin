@@ -63,7 +63,7 @@ def _cells() -> np.ndarray:
 def _offline(monkeypatch):
     monkeypatch.setattr(D, "accepted_mesh_nodes",
                         lambda mesh: (_XY, _cells(), None, None))
-    monkeypatch.setattr(D, "initial_state_of", lambda continue_from, count: {
+    monkeypatch.setattr(D, "initial_state_of", lambda continue_from, count, **_: {
         "wet": np.ones(len(_XY), dtype=bool), "note": "dry start", "start_s": 0.0})
     monkeypatch.setattr(D, "journal_note", lambda note: None)
 
@@ -98,7 +98,7 @@ def test_a_point_whose_node_is_dry_refuses_rather_than_moving_to_water(monkeypat
     here = D.as_utm(Point(-122.65, 45.53), 32610)
     near = int(np.argmin(np.hypot(_XY[:, 0] - here[0], _XY[:, 1] - here[1])))
     dry[near] = False
-    monkeypatch.setattr(D, "initial_state_of", lambda continue_from, count: {
+    monkeypatch.setattr(D, "initial_state_of", lambda continue_from, count, **_: {
         "wet": dry, "note": "a stand-in state", "start_s": 0.0})
     with pytest.raises(PointNotViableError) as caught:
         _settle(Point(-122.65, 45.53), ingest(_POND))

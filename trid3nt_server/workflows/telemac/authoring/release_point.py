@@ -78,6 +78,7 @@ async def settle_release(
     label: str,
     domain: Any = None,
     continue_from: str | None = None,
+    level_m: float | None = None,
 ) -> dict[str, Any]:
     """Where a source enters the water: the stated point, checked against the accepted mesh, unmoved.
 
@@ -87,8 +88,9 @@ async def settle_release(
     import numpy as np
 
     utm_epsg = mesh_zone(mesh)
-    node_xy, cells, _bed, _lonlat = await asyncio.to_thread(accepted_mesh_nodes, mesh)
-    initial_state = await asyncio.to_thread(initial_state_of, continue_from, len(node_xy))
+    node_xy, cells, bed, _lonlat = await asyncio.to_thread(accepted_mesh_nodes, mesh)
+    initial_state = await asyncio.to_thread(initial_state_of, continue_from, len(node_xy),
+                                            bed=bed, level_m=level_m)
     # A source may enter where wet at t0 and off the edge; boundary conditions are imposed on the rim.
     wet = _inside_water(cells, initial_state["wet"])
     region = await asyncio.to_thread(_domain_m, mesh_artifact(mesh), utm_epsg)

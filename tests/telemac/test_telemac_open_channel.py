@@ -13,6 +13,7 @@ from trid3nt_server.workflows.telemac.authoring.selafin_io import (
 )
 
 import asyncio
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -59,7 +60,7 @@ def settled(monkeypatch):
 
 def _run(**over):
     ask = {"mesh": _mesh(), "files": _files(), "friction_law": 3,
-           "friction_coefficient": 33.0, "carrier": 50.0}
+           "friction_coefficient": 33.0, "carrier": 600.0}
     ask.update(over)
     return asyncio.run(D.open_channel(**ask))
 
@@ -74,38 +75,37 @@ def test_the_channel_measures_its_slope_between_the_two_runs_own_nodes(settled):
                                            [50.0, 94.0], [60.0, 97.0]]
 
 
-def test_the_run_opens_at_the_same_normal_depth_the_outflow_stage_is(settled):
-    """One derivation read twice: a horizontal surface at the outlet's level
-    would leave every node upstream of it dry."""
+def test_the_outflow_stage_is_the_normal_depth_over_the_outflow_section(settled):
+    """The depth the section conveys the inflow at, at the deck's roughness and the measured fall."""
     channel = _run()
     assert channel["depth_m"] == pytest.approx(
         channel["outflow_stage_m"] - 94.0, abs=1e-3)
-    assert channel["inflow_q_m3s"] == 50.0
+    assert channel["inflow_q_m3s"] == 600.0
     assert channel["friction_law"] == 3
     assert channel["normal"]["slope"] == pytest.approx(0.003)
 
 
 def test_the_addition_hands_the_base_the_level_and_how_it_is_laid(settled):
-    """What the addition MEASURED is what the base opens the water at: the level
-    and the keyword saying whether that surface follows the bed or lies flat."""
+    """What the addition MEASURED is what the base opens the water at: flat at the derived outflow level, never a
+    sheet of one depth over a measured bed's bars and pools."""
     channel = _run()
     assert channel["level_m"] == channel["outflow_stage_m"]
-    assert channel["opening"] == "CONSTANT DEPTH"
+    assert channel["opening"] == "CONSTANT ELEVATION"
 
 
 def test_a_stated_discharge_reads_as_the_value_it_is(settled):
     """The inflow run carries ONE value however it arrived: the slot hands over
     a number the caller stated the same way it hands over a reading, and the
     note says which of the two this was."""
-    channel = _run(carrier=Observation(value=50.0))
-    assert channel["inflow_q_m3s"] == 50.0
+    channel = _run(carrier=Observation(value=600.0))
+    assert channel["inflow_q_m3s"] == 600.0
     assert "was stated" in channel["discharge_note"]
 
 
 def test_the_carrier_reading_fills_the_flow_and_says_who_reported_it(settled):
-    reading = Observation(value=12.5, site_name="Willamette", sampled="2026-01-01")
+    reading = Observation(value=600.0, site_name="Willamette", sampled="2026-01-01")
     channel = _run(carrier=reading)
-    assert channel["inflow_q_m3s"] == pytest.approx(12.5)
+    assert channel["inflow_q_m3s"] == pytest.approx(600.0)
     assert "Willamette" in channel["discharge_note"]
     assert "2026-01-01" in channel["discharge_note"]
 
@@ -196,8 +196,46 @@ def test_a_measured_level_over_the_reach_stands_over_the_derivation(settled):
 
 def test_a_level_that_does_not_reach_the_inflow_face_leaves_the_derivation(settled):
     """A horizontal surface at the outflow's level would leave the inflow face
-    dry - the flowrate face among them - so the uniform-flow depth is what the
-    run opens at, and it says which of the two it took."""
+    dry - the flowrate face among them - so the uniform-flow depth is derived and the run opens flat at it."""
     channel = _run(stage=Observation(value=95.0, site_name="a gauge"))
-    assert channel["opening"] == "CONSTANT DEPTH"
+    assert channel["opening"] == "CONSTANT ELEVATION"
     assert channel["normal"]["slope"] > 0.0
+    assert channel["level_m"] > 97.0
+
+
+def test_a_derived_level_under_the_whole_inflow_face_refuses_by_name(settled):
+    """50 m3/s is conveyed 0.8 m over the outflow thalweg, 2.2 m under the inflow face's lowest node: opened flat,
+    the face the flow is prescribed on would be dry."""
+    with pytest.raises(TelemacError) as exc:
+        _run(carrier=50.0)
+    assert exc.value.error_code == "TELEMAC_INFLOW_FACE_DRY"
+    assert "97.000" in str(exc.value)
+
+
+
+#: The Missouri calibration reach's recorded mesh and boundary file (tests/fixtures/telemac_missouri/README.md).
+_MISSOURI = Path(__file__).resolve().parents[1] / "fixtures" / "telemac_missouri"
+
+
+def _missouri_roles():
+    roles = {"inflow": [], "outflow": []}
+    for line in (_MISSOURI / "domain.cli").read_text().splitlines():
+        code = tuple(line.split()[:3])
+        if code in (("4", "5", "5"), ("5", "4", "4")):
+            roles["inflow" if code[0] == "4" else "outflow"].append(int(line.split()[11]) - 1)
+    return roles
+
+
+def test_the_missouri_reach_opens_flat_at_its_derived_outflow_level(monkeypatch):
+    """The recorded survey bed carries bars 3-4 m over its pools: a sheet of the 5.896 m normal depth over it stood
+    at 291.06-298.17 m and drained through the outflow for the whole run. Flat at 291.385 m it starts under its
+    uniform-flow surface with the inflow face wet."""
+    from trid3nt_server.tools.mesh.shared.nodes import read_accepted_mesh_nodes
+
+    xy, _cells, bed, _ll = read_accepted_mesh_nodes(str(_MISSOURI / "mesh.2dm"), utm_epsg=32615)
+    monkeypatch.setattr(D, "mesh_nodes", lambda mesh: (xy, bed))
+    roles = _missouri_roles()
+    channel = _run(files=_files(roles=roles), carrier=889.1489829888001)
+    assert channel["opening"] == "CONSTANT ELEVATION"
+    assert channel["level_m"] == pytest.approx(291.385, abs=1e-3)
+    assert float(np.min(bed[roles["inflow"]])) < channel["level_m"]
