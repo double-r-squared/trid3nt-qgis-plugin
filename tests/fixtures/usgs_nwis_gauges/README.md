@@ -22,3 +22,7 @@ written with pandas `to_csv` and nothing edited:
   end="2026-11-10", multi_index=False)` and the expanded `nwis.get_info` of the same sites, the site frame cut to
   site_no, station_nm, dec_lat_va, dec_long_va, alt_va, alt_datum_cd), written with pandas `to_csv`: 576 readings
   2026-11-08T06:00Z .. 2026-11-11T05:45Z, the three CST days; both zeros NAVD88.
+- `missouri_hwy370_2026-11-08_09.fgb` - recorded 2026-11-15: the layer `fetch_usgs_nwis_gauges(bbox=[-95.8845,
+  41.1354, -95.8805, 41.1394], start_date="2026-11-08", end_date="2026-11-09", parameter="00065")` wrote to the cache,
+  copied byte for byte: one site, 06610670 Missouri River at Hwy 370 at Bellevue, Nebr., its 15-min stage series
+  (16.66 ft at 2026-11-09T00:15Z) and its zero 936.34 ft NAVD88.

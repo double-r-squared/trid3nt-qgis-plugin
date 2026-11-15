@@ -141,7 +141,7 @@ async def _produce(env: _Env, decl: Input) -> Any:
         return await _ingested(env, decl, await _bed_list(env, decl, handed_in))
     if handed_in is not None:
         _validate_supplied(env, decl, handed_in)
-        return await _ingested(env, decl, handed_in)
+        return await _ingested(env, decl, handed_in, stated_by=_handed_row(decl, handed_in))
     if decl.stated_only:
         # The user MAY state one; unstated, the run's own machinery answers - the
         # supplied-mesh builder, the mesher's own edge. No verdict, no sentence.
@@ -452,6 +452,16 @@ def _spec_of(fetcher: str) -> Any:
     return get_spec(fetcher)
 
 
+def _handed_row(decl: Input, handed_in: Any) -> Any:
+    """The row of the fetch a handed-in layer came from, for the class an observation slot asks; ``None`` otherwise."""
+    if decl.slot is None or decl.slot.ingestion != "observation" or not isinstance(handed_in, str):
+        return None
+    from trid3nt_server.render import uri_registry
+
+    fetcher = uri_registry.producer_of_handle(handed_in)
+    return _fetcher_row(fetcher, decl.data_class) if fetcher else None
+
+
 def _fetcher_row(fetcher: str, data_class: str, kind: str = "") -> Any:
     """The row THIS source states about THIS class, or ``None``.
 
@@ -693,9 +703,11 @@ async def _domain_companion(env: _Env, named: str) -> Any:
 
 
 async def _ingested(env: _Env, decl: Input, value: Any,
-                    row: Any = None, beside: Mapping[str, Any] | None = None
-                    ) -> Any:
+                    row: Any = None, beside: Mapping[str, Any] | None = None,
+                    stated_by: Any = None) -> Any:
     """A SLOT's value through the one ingestion its type reads; a plain row's value as it came.
+    ``row`` is the row the match took; ``stated_by`` the row of the fetch a handed-in layer came from, which says
+    how its record reads and is put to no test of whether it is this run's water.
 
     Runs off the loop: reading a layer's geometry is object-store IO."""
     if decl.slot is None:
@@ -716,7 +728,7 @@ async def _ingested(env: _Env, decl: Input, value: Any,
     coercion.update(_what_the_run_calls_it(
         env, decl, _asked_of(decl, coercion.get("near"))))
     coercion.update(_the_window_it_is_cut_from(decl))
-    coercion.update(_what_the_record_reports(env, decl, row))
+    coercion.update(_what_the_record_reports(env, decl, row if row is not None else stated_by))
     coercion.update(await _on_the_run_s_frame(env, decl, value, coercion))
     # WHAT THE SLOT DECLARED BESIDE the matched row, and how far the question
     # reaches: the ingestion that states a need is the ingestion that reads it.

@@ -24,7 +24,7 @@ def rungs(monkeypatch):
     """Every rung records that it was reached and answers with its own name."""
     reached: list[str] = []
 
-    async def _ingested(env, decl, value, *rest):
+    async def _ingested(env, decl, value, *rest, **told):
         return value
 
     async def _matched(env, decl):

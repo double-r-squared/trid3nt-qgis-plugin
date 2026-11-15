@@ -758,6 +758,16 @@ def lookup_layer_for_handle(handle: str) -> dict[str, Any] | None:
             "uri": uri}
 
 
+def producer_of_handle(handle: str) -> str | None:
+    """The tool that produced the layer a handle (or its uri) stands for, or ``None`` where nothing recorded one."""
+    uri = lookup_uri_for_handle(handle)
+    reg = _ACTIVE_REGISTRY.get()
+    if not uri or reg is None:
+        return None
+    record = reg._records.get(handle.strip()) or reg._records.get(reg._uri_to_handle.get(uri, ""))
+    return record.tool_name if record else None
+
+
 def observe_published_layer(layer_id: str, uri: str | None = None) -> None:
     """Record a loaded layer's handle and the one uri it carries; a handle already recorded keeps its producer.
 

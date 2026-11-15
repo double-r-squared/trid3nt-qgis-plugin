@@ -301,7 +301,10 @@ A row resolves in ONE order (pinned by `tests/runtime/test_resolution_order.py`)
 what the caller supplied, then the row's one source - its producer, or the
 match its need asks; a row declares one or neither - then, for a row that
 declares neither, the canvas, and nothing answering refuses by name
-(`DATA_SLOT_UNSATISFIED`). A need nothing measures refuses
+(`DATA_SLOT_UNSATISFIED`). A supplied layer an observation slot reads is read
+by the row of the fetch that produced it - its value and series columns, the
+zero its sites state - exactly as the matched one; it is the caller's choice, so
+no reach test is put to it. A need nothing measures refuses
 (`DATA_NEED_UNMATCHED`) and is never drawn instead. A stated-only row nothing
 supplied stops after the first rung with no verdict. A row stated `'none'` (the
 word an `event_time` with no moment is stated in) is a stated absence: accepted

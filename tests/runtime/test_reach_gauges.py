@@ -308,3 +308,29 @@ def test_an_inflow_discharge_is_asked_over_the_upstream_stem_and_omaha_is_read(a
     assert found.site_id == "06610000"
     assert found.value == pytest.approx(30900.0 * 0.028316846592, abs=1e-3)
     assert not env.inputs
+
+
+_HWY_370 = _FIXTURES / "usgs_nwis_gauges" / "missouri_hwy370_2026-11-08_09.fgb"
+
+
+def test_a_handed_gauge_layer_is_read_as_its_fetch_row_states_it(monkeypatch):
+    """The Hwy 370 stage layer handed to the level slot is read the way the matched one is: the gage
+    height off its stage series at the run's moment, above the zero the site states (936.34 ft NAVD88) - 16.66 ft at
+    2026-11-09T00:15Z is 953.00 ft, 290.474 m NAVD88. Handed in, it is the run's own choice: no reach test is put to it."""
+    from trid3nt_server.render import uri_registry
+
+    monkeypatch.setattr(uri_registry, "producer_of_handle", raising=False, value=(
+        lambda handle: "fetch_usgs_nwis_gauges" if handle == str(_HWY_370) else None))
+    monkeypatch.setattr(fill, "_validate_supplied", lambda *_a: None)
+    env, token = _env(mapping(box(*_MISSOURI_DOMAIN_BOX)), release=_MISSOURI_RELEASE, reach_km=7.0,
+                      at="2026-11-09T00:15:00Z")
+    level = dataclasses.replace(Input(LEVEL).need("water level series"), name="level")
+    env.data["level"] = level
+    env.supplied["level"] = str(_HWY_370)
+    try:
+        found = asyncio.run(fill._produce(env, level))
+    finally:
+        reset_domain(token)
+    assert found.site_id == "06610670"
+    assert found.value == pytest.approx((936.34 + 16.66) * 0.3048, abs=1e-3)
+    assert found.datum == "NAVD88"
