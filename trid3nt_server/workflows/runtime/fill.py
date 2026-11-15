@@ -723,6 +723,8 @@ async def _ingested(env: _Env, decl: Input, value: Any,
     coercion.update(dict(beside or {}))
     if beside:
         coercion["span_km"] = _span_km(env, decl)
+        # The reach's inflow face stands one mesh edge above the release, so the release is meshed off the rim.
+        coercion["above_m"] = _mesh_m(env)
     if decl.slot is BED:
         # THE CUT IS WHERE THE WATER IS: the bed states its coverage over it, fills
         # inside it and refuses a wet hole, and an empty one says the run was cut with none.

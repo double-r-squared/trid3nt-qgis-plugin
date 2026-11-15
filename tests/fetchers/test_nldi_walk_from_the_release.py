@@ -78,3 +78,24 @@ def test_a_reach_past_the_end_of_the_walked_network_refuses_naming_both_lengths(
         _clipped(line, _RELEASE, 40.0, "domain", "X")
     assert refused.value.error_code == "DOMAIN_REACH_PAST_NETWORK_END"
     assert "40 km" in str(refused.value) and "runs only" in str(refused.value)
+
+
+def test_the_cut_starts_one_stated_length_above_the_release(asked):
+    # The inflow face is meshed on the rim, so a source at the release stands off it: the 40 m mesh edge above.
+    from pyproj import Geod
+    from shapely.geometry import LineString, Point
+
+    line = _one_line(_walk("DM", 7.0), "domain", "X")
+    cut = _clipped(line, _RELEASE, 7.0, "domain", "X", 40.0)
+    xs, ys = zip(*cut.coords)
+    geod = Geod(ellps="WGS84")
+    assert geod.line_length(xs, ys) == pytest.approx(7040.0, abs=15.0)
+    to_release = LineString(cut.coords).project(Point(*_RELEASE), normalized=True) * geod.line_length(xs, ys)
+    assert to_release == pytest.approx(40.0, abs=5.0)
+
+
+def test_a_cut_reaching_above_the_start_of_the_walked_network_refuses(asked):
+    line = _one_line(_walk("DM", 7.0), "domain", "X")
+    with pytest.raises(UserInputError) as refused:
+        _clipped(line, _RELEASE, 7.0, "domain", "X", 7000.0)
+    assert refused.value.error_code == "DOMAIN_SEED_AT_NETWORK_START"

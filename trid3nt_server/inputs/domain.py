@@ -220,16 +220,16 @@ def needs_beside(kind: str) -> tuple[tuple[str, str, str], ...]:
 
 def domain(value: Any, *, label: str = "domain", code: str = _CODE,
            extent: Any = None, banks: Any = None, span_km: Any = None,
-           near: Any = None, window: Any = None) -> Domain | None:
+           near: Any = None, window: Any = None, above_m: Any = None) -> Domain | None:
     """THE ingestion: a drawing, a layer, a fetched polygon, a ring -> Domain.
 
     ``None`` only when nothing came; anything not a closed polygon refuses typed.
-    ``extent`` cuts a land-water edge; ``banks``, ``span_km`` and ``near`` close a line;
+    ``extent`` cuts a land-water edge; ``banks``, ``span_km``, ``near`` and ``above_m`` close a line;
     ``window`` is the box a searched polygon is cut to."""
     if value is None or isinstance(value, Domain):
         return value
     if banks is not None:
-        return _between_the_ends(value, banks, near, span_km, label, code)
+        return _between_the_ends(value, banks, near, span_km, label, code, above_m)
     uri = getattr(value, "uri", None) or (value if isinstance(value, str) else None)
     if isinstance(uri, str) and uri.strip().lower().endswith(_RASTER_SUFFIXES):
         # A SURVEY handed in as the domain: the ground it sounded is the ground
@@ -453,7 +453,7 @@ _ON_CUT_M = 1.0e-6
 
 
 def _between_the_ends(line_doc: Any, banks: Any, near: Any, span_km: Any,
-                      label: str, code: str) -> Domain:
+                      label: str, code: str, above_m: Any = None) -> Domain:
     """The WATER SURFACE cut square to a line, between the two ends of the span.
 
     The two end transects are the runs the water crosses; the centerline rides along
@@ -461,7 +461,7 @@ def _between_the_ends(line_doc: Any, banks: Any, near: Any, span_km: Any,
     from shapely.geometry import mapping
 
     centre = _clipped(_one_line(line_doc, label, code), near, span_km, label,
-                      code)
+                      code, above_m)
     polygon, faces = _cut_square(_surfaces(banks, label, code), centre, label,
                                  code)
     runs = boundary_runs(
@@ -498,10 +498,11 @@ def _one_line(doc: Any, label: str, code: str) -> Any:
     return line
 
 
-def _clipped(line: Any, near: Any, span_km: Any, label: str, code: str) -> Any:
-    """``span_km`` of the line DOWNSTREAM of the seed, in the line's flow order.
+def _clipped(line: Any, near: Any, span_km: Any, label: str, code: str, above_m: Any = None) -> Any:
+    """``span_km`` of the line DOWNSTREAM of the seed, in the line's flow order, starting ``above_m`` above it.
 
-    Measured on the ground, not in degrees; a run stating no seed takes the line as it came."""
+    Measured on the ground, not in degrees; a run stating no seed takes the line as it came. The inflow face stands
+    ``above_m`` above the seed, so a source at the seed is off the rim the face is meshed on."""
     from pyproj import Transformer
     from shapely.geometry import Point
     from shapely.ops import substring, transform as _transform
@@ -524,7 +525,13 @@ def _clipped(line: Any, near: Any, span_km: Any, label: str, code: str) -> Any:
             f"network runs only {available / 1000.0:.3f} km on from where the seed stands (a "
             "terminal flowline, a coast or a sink ends it). State a reach no longer than that, or "
             "supply the outline itself.", code="DOMAIN_REACH_PAST_NETWORK_END")
-    cut = substring(metric, at_seed, at_seed + float(span_km) * 1000.0)
+    above = float(above_m or 0.0)
+    if above > at_seed:
+        raise UserInputError(
+            f"the {label} starts {above:g} m above the seed so a source there is off the inflow face, but the mapped "
+            f"network runs only {at_seed:.1f} m above where the seed stands (the network begins there). Seed a point "
+            "further down the line, or supply the outline itself.", code="DOMAIN_SEED_AT_NETWORK_START")
+    cut = substring(metric, at_seed - above, at_seed + float(span_km) * 1000.0)
     if cut.is_empty or cut.length <= 0.0:
         raise UserInputError(
             f"the {label} seed stands at the far end of the line it was given, "
