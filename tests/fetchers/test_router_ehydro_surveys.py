@@ -396,3 +396,48 @@ def test_a_z_counted_from_a_normal_pool_contradicts_the_navd88_its_points_code(s
     assert refused.value.error_code == "EHYDRO_DATUM_CONTRADICTED"
     assert survey in str(refused.value)
     assert "NAVD 1988" in str(refused.value) and "normal pool" in str(refused.value)
+
+
+DEPTHS_2024 = "MO_11_OMM_20240507_CS_609_617_5"
+
+
+def _omaha_and_2024(monkeypatch, *survey_ids: str) -> None:
+    """The read over the recorded 2026 NAVD88 package and the recorded 2024 depth-only one."""
+    def archive(_spec, _url, survey_id):
+        recorded = _Recorded(f"{survey_id}.XML")
+        if survey_id == OMAHA:
+            recorded._members[f"{OMAHA}_FULL.XYZ"] = (
+                _PACKAGES / f"{OMAHA}_FULL_head300.XYZ").read_bytes()
+        return recorded
+
+    monkeypatch.setattr(eh, "_index", lambda *_a: [])
+    monkeypatch.setattr(eh, "_selected", lambda *_a: [
+        _feature("2026-04-15" if s == OMAHA else "2024-05-07", s) for s in survey_ids])
+    monkeypatch.setattr(eh, "_package", archive)
+    monkeypatch.setattr(eh, "_soundings", lambda _spec, _a, survey_id: _recorded_points(survey_id))
+
+
+def test_a_package_stating_depths_is_left_out_and_the_navd88_package_kept(spec, monkeypatch):
+    """CENWO's 2024 RM 609-617.5 package states depths on the survey date and no NAVD88
+    file; the 2026 package beside it states NAVD88 elevations. The bed keeps the 2026
+    soundings and the run is told which package was left out and why."""
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+
+    _omaha_and_2024(monkeypatch, OMAHA, DEPTHS_2024)
+    token = bind_notes()
+    rows = eh.read(spec, {"bbox": (-95.945, 41.175, -95.87, 41.265)}, timeout_s=60.0)
+    notes = drain_notes(token)
+    assert {r["properties"]["survey_id"] for r in rows} == {OMAHA}
+    assert sum(r["properties"]["part"] == "sounding" for r in rows) == 300
+    assert {r["properties"]["vertical_datum"] for r in rows} == {"NAVD88"}
+    left_out = [n for n in notes if DEPTHS_2024 in n and "left out" in n]
+    assert len(left_out) == 1 and "EHYDRO_DEPTH_NOT_ELEVATION" in left_out[0]
+    assert not any(DEPTHS_2024 in n for n in notes if "measured by" in n)
+
+
+def test_a_fetch_whose_every_package_refuses_still_refuses(spec, monkeypatch):
+    _omaha_and_2024(monkeypatch, DEPTHS_2024)
+    with pytest.raises(RouterEmptyError) as refused:
+        eh.read(spec, {"bbox": (-95.945, 41.175, -95.87, 41.265)}, timeout_s=60.0)
+    assert refused.value.error_code == "EHYDRO_DEPTH_NOT_ELEVATION"
+    assert DEPTHS_2024 in str(refused.value)

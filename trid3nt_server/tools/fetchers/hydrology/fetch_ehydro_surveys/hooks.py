@@ -32,7 +32,9 @@ from trid3nt_contracts.source_spec import SourceSpec
 
 from trid3nt_server.settings import setting
 
-from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
+from ..._router.errors import (
+    RouterEmptyError, RouterError, RouterInputError, router_empty_error, router_input_error,
+    router_upstream_error)
 from ..._router.hooks import register_hook
 from ..._router.transport import TransportError, get_bytes, get_client, get_zip
 
@@ -485,28 +487,24 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
     transport's own, which owns every socket here and enforces it."""
     since = _since(spec, params)
     surveys = _selected(spec, _index(spec, params), since, params["bbox"])
-    _journal(surveys)
     rows: list[dict] = []
     shifts: list[tuple[float, str]] = []
+    kept: list[dict[str, Any]] = []
+    refused: list[RouterError] = []
     for feature in surveys:
         properties = feature.get("properties") or {}
         survey_id = str(properties.get("surveyjobidpk") or "")
         archive = _package(spec, str(properties.get("sourcedatalocation")), survey_id)
-        points = _soundings(spec, archive, survey_id)
-        vouched = _vouched_elevations(spec, archive, points, survey_id)
-        if vouched is not None:
-            soundings, datum = vouched
-            uom, offset_m, offset_frame = _stated_unit(points), None, ""
-        else:
-            datum, uom, scale = _stated(spec, points, survey_id)
-            offset_m, offset_frame = _published_offset(archive, survey_id)
-            if offset_m is not None:
-                shifts.append((offset_m, offset_frame))
-            wgs = points.to_crs(4326) if points.crs is not None else points
-            soundings = [(float(g.x), float(g.y), round(float(d) * scale, 4))
-                         for d, g in zip(wgs[_DEPTH_FIELD], wgs.geometry)
-                         if g is not None and not g.is_empty and d is not None
-                         and math.isfinite(float(d))]
+        try:
+            soundings, datum, uom, offset_m, offset_frame = _bed_of(
+                spec, archive, survey_id)
+        except (RouterEmptyError, RouterInputError) as exc:
+            # The package states no bed; the others over the extent still do.
+            refused.append(exc)
+            continue
+        kept.append(feature)
+        if offset_m is not None:
+            shifts.append((offset_m, offset_frame))
         date = _survey_date(feature)
         common = {
             "survey_id": survey_id,
@@ -533,12 +531,56 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
                     survey_id, common["survey_date"], len(soundings), datum,
                     f"{offset_m:+.4f} m on {offset_frame}" if offset_m is not None
                     else "unpublished")
+    _left_out(spec, refused, kept)
+    _journal(kept)
     _one_zero(spec, rows)
     offset_m, offset_frame = _one_shift(spec, shifts)
     for row in rows:
         row["properties"].update(datum_offset_m=offset_m,
                                  datum_offset_frame=offset_frame)
     return rows
+
+
+def _bed_of(spec: SourceSpec, archive: Any, survey_id: str
+            ) -> tuple[list[tuple[float, float, float]], str, str, float | None, str]:
+    """One package's soundings, its zero, its unit and its published shift, or its refusal."""
+    points = _soundings(spec, archive, survey_id)
+    vouched = _vouched_elevations(spec, archive, points, survey_id)
+    if vouched is not None:
+        soundings, datum = vouched
+        return soundings, datum, _stated_unit(points), None, ""
+    datum, uom, scale = _stated(spec, points, survey_id)
+    offset_m, offset_frame = _published_offset(archive, survey_id)
+    wgs = points.to_crs(4326) if points.crs is not None else points
+    soundings = [(float(g.x), float(g.y), round(float(d) * scale, 4))
+                 for d, g in zip(wgs[_DEPTH_FIELD], wgs.geometry)
+                 if g is not None and not g.is_empty and d is not None
+                 and math.isfinite(float(d))]
+    return soundings, datum, uom, offset_m, offset_frame
+
+
+def _left_out(spec: SourceSpec, refused: list[RouterError], kept: list[dict[str, Any]]) -> None:
+    """Say which packages were left out and why; refuse when none is left.
+
+    A package left out takes no other survey's place over its ground: the bed
+    there is what the kept packages and the fill make of it."""
+    if not refused:
+        return
+    if not kept:
+        if len(refused) == 1:
+            raise refused[0]
+        raise router_empty_error(
+            spec.error_code_prefix,
+            "every eHydro survey over this extent refused: "
+            + " | ".join(f"{exc.error_code}: {exc}" for exc in refused),
+            spec.empty_error_suffix,
+        )
+    from trid3nt_server.inputs.run_notes import journal_note
+
+    for exc in refused:
+        text = f"eHydro package left out of the bed ({exc.error_code}): {exc}"
+        logger.warning("ehydro: %s", text)
+        journal_note(text)
 
 
 def _stated_unit(points: Any) -> str:

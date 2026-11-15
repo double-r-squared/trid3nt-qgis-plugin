@@ -146,6 +146,7 @@ coverage:
 caveats:
   - "the soundings are DEPTHS BELOW the survey's own stated datum, positive down, in metres - not elevations; the datum is on every row and is a local project datum on many rivers (Columbia River Datum on the Willamette) or a chart datum on the lakes (the Low Water Datum on IGLD85, published as LWD_IGLD85), so a bed built from these needs a deliberate datum shift"
   - "a survey whose points state no vertical datum or no unit of measure refuses by name rather than guessing one"
+  - "a package that refuses (depths below the day's water surface, a contradicted datum, no stated datum or unit) is left out of the layer and the run is told which and why; the other packages over the extent are kept, and the fetch refuses only when every package does"
   - "the surveys are picked by COVERAGE, newest first over each part of the bbox nothing newer reached, up to twelve packages - so a reach whose southern half was last surveyed years ago comes back with that older pass beside the recent ones, and every survey's date is on its own rows and on the run journal"
   - "``since`` is a filter the caller states, for comparing one dredging against another; unstated, age only RANKS the surveys and never drops one"
   - "``datum_offset_m`` is the shift the survey's OWN package metadata publishes between its project datum and a national frame (``datum_offset_frame``), read off the sentence the district wrote it in; it is null where the package states none, and applying it is the consumer's"
