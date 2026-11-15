@@ -10,3 +10,6 @@ edited:
   elevation face (5 4 4) south.
 - `full_listing.txt` - the engine's listing (its full_listing.log, renamed: the repo ignores .log). The run opened at CONSTANT DEPTH 5.896 m and was still draining at its end:
   1664.684 m3/s left through the elevation face against 886.306 m3/s in at t = 1800 s.
+- `telemac2d_telemac_dye_release.cas` - the steering file of the reach's 4 h run 01M7FDZZC49BQYYNTFY9SZAE37 (opened flat at
+  CONSTANT ELEVATION 291.385 m, PRESCRIBED ELEVATIONS 291.385;0.0, PRESCRIBED FLOWRATES 0.0;889.149, Strickler 33; it ended
+  STEADY, 889.149 in and 889.061 m3/s out), on the same mesh and boundary file as above (domain.cli byte-identical).

@@ -2750,7 +2750,7 @@
     "calibrate": {
       "parameters": {
         "type": "dict",
-        "desc": "The run's own arrays to tune, each by its MODFLOW identifier (NPF_K, NPF_K33, STO_SS, ...) as a multiplier on the values the run solved with, bounded by a lower and an upper factor around 1: {\"NPF_K\": {\"lower\": 0.1, \"upper\": 10, \"source\": \"where the bounds are read\"}}. A parameter stating no bounds refuses; one array read from its own file, or stated per layer with different factors, refuses"
+        "desc": "The run's own values to tune, each by its engine's identifier - a MODFLOW array or SFR column (NPF_K, NPF_K33, STO_SS, SFR_RHK, ...), a TELEMAC-2D FRICTION_COEFFICIENT - as a multiplier on the value the run solved with, bounded by a lower and an upper factor around 1: {\"NPF_K\": {\"lower\": 0.1, \"upper\": 10, \"source\": \"where the bounds are read\"}}, or by lower_value and upper_value in the run's own unit. A parameter stating no bounds refuses; one array read from its own file, or stated per layer with different factors, refuses"
       },
       "tune": {
         "type": "int",

@@ -72,6 +72,18 @@ def test_the_launch_line_mounts_the_rundir_and_appends_args(tmp_path, monkeypatc
                     "-w", "/data", DEFAULT_PESTPP_IMAGE, "--x"]
 
 
+def test_a_study_whose_trials_run_telemac_launches_on_the_telemac_image(tmp_path, monkeypatch):
+    import json
+
+    monkeypatch.delenv("TRID3NT_PESTPP_TELEMAC_IMAGE", raising=False)
+    (tmp_path / "manifest.json").write_text(json.dumps(
+        {"case": {"module": "ies", "server_facts": {"name": "study", "model": "telemac"}}}))
+    assert _build_argv("R1", tmp_path, [])[-1] == "trid3nt-local/pestpp-telemac:latest"
+    (tmp_path / "manifest.json").write_text(json.dumps(
+        {"case": {"module": "ies", "server_facts": {"name": "study", "model": "modflow"}}}))
+    assert _build_argv("R1", tmp_path, [])[-1] == DEFAULT_PESTPP_IMAGE
+
+
 def test_a_completed_study_is_ok(tmp_path):
     shutil.copy(_FIXTURES / "ies" / "pestpp_metrics.json", tmp_path)
     status, code, error, extra = classify_exit(tmp_path, 0)

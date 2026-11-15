@@ -7,6 +7,7 @@ and the run stated. Each table is one CSV with the header PEST++ reads it by.
 from __future__ import annotations
 
 import csv
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -14,7 +15,7 @@ from typing import Any, Mapping, Sequence
 from ..errors import PestppError
 from ..modules import LOCKED, PESTPP
 
-__all__ = ["Observed", "Parameter", "TABLES", "write_control"]
+__all__ = ["Observed", "Parameter", "TABLES", "substitute", "write_control"]
 
 #: The tables the control file names, each written beside it.
 TABLES = {"parameter data": "study_parameters.csv", "observation data": "study_observations.csv",
@@ -101,3 +102,20 @@ def write_control(directory: Path, *, name: str, parameters: Sequence[Parameter]
     path = directory / name
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
+
+
+def substitute(directory: Path, templates: Sequence[tuple[str, str]],
+               parameters: Sequence[Parameter], values: Mapping[str, float]) -> None:
+    """Each template written to its model file with ``values`` through each parameter's scale and offset,
+    as PEST writes it; a parameter without a value refuses."""
+    held = {p.name: p for p in parameters}
+    for template, model_file in templates:
+        text = (directory / template).read_text().split("\n", 1)[1]
+
+        def written(match: re.Match) -> str:
+            name = match.group(1).strip().lower()
+            if name not in values:
+                raise PestppError(f"{name} has no value to write", error_code="PESTPP_PARAMETER_UNPLACED")
+            return f"{values[name] * held[name].scale + held[name].offset:.12G}"
+
+        (directory / model_file).write_text(re.sub(r"~([^~]+)~", written, text))

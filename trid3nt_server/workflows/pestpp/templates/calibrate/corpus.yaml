@@ -9,3 +9,6 @@ calibrate:
 - adjust recharge and conductivity multipliers to the measured heads
 - history match the MODFLOW model to USGS well observations
 - which aquifer parameters does the model fit best against the wells
+- calibrate the river model's friction against the stream gauge water level
+- tune the Strickler coefficient of this TELEMAC run so it matches the USGS gauge
+- fit the hydraulic model roughness to the measured stage

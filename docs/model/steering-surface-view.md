@@ -21,6 +21,7 @@ flowchart LR
     output["Output<br/>trid3nt_server/workflows/telemac/modules/telemac2d.py"]
     pestppCalibratedStage["Sheet<br/>trid3nt_server/workflows/pestpp/authoring/modflow.py"]
     pestppStage["Sheet<br/>trid3nt_server/workflows/pestpp/staging.py"]
+    pestppTelemacCalibratedStage["Sheet<br/>trid3nt_server/workflows/pestpp/authoring/telemac.py"]
     point["TypedInput<br/>trid3nt_server/inputs/point.py"]
     runRecord["RunRecord<br/>trid3nt_server/workflows/runtime/journal.py"]
     serializer["Serializer<br/>trid3nt_server/workflows/telemac/authoring/serializer.py"]
@@ -40,6 +41,7 @@ flowchart LR
     steeringDriver -- "SteeringParse" --> steeringGate
     pestppCalibratedStage -- "StageRequest" --> stager
     pestppStage -- "StageRequest" --> stager
+    pestppTelemacCalibratedStage -- "StageRequest" --> stager
     telemacSheet -- "StageRequest" --> stager
     sheet -- "ResolvedSheet" --> serializer
     wrapper -- "WrapperSurface" --> sheet

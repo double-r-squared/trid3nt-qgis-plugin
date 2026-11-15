@@ -37,21 +37,36 @@ __all__ = ["PESTPP_SOLVER_NAME", "classify_exit", "read_run_metrics",
 #: is the manifest's ``case.module``, which the worker states back in its metrics.
 PESTPP_SOLVER_NAME: str = "pestpp"
 
-#: Default worker image (override via env TRID3NT_PESTPP_IMAGE).
+#: Default worker image (override via env TRID3NT_PESTPP_IMAGE): its trials run mf6.
 DEFAULT_PESTPP_IMAGE: str = "trid3nt-local/pestpp:latest"
+
+#: The image whose trials run each other model the case's ``server_facts.model`` names (override via env
+#: TRID3NT_PESTPP_<MODEL>_IMAGE): a trial runs inside the manager's container, so the model is in its image.
+MODEL_IMAGES: dict[str, str] = {"telemac": "trid3nt-local/pestpp-telemac:latest"}
 
 _METRICS_FILENAME: str = "pestpp_metrics.json"
 
 
-def _pestpp_image() -> str:
+def _pestpp_image(model: str = "") -> str:
+    if model in MODEL_IMAGES:
+        return os.environ.get(f"TRID3NT_PESTPP_{model.upper()}_IMAGE") or MODEL_IMAGES[model]
     return os.environ.get("TRID3NT_PESTPP_IMAGE") or DEFAULT_PESTPP_IMAGE
 
 
+def _model(rundir: Path) -> str:
+    """The model the staged study's trials run, as its manifest's case states it; "" where it states none."""
+    try:
+        manifest = json.loads((rundir / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    return str(((manifest.get("case") or {}).get("server_facts") or {}).get("model") or "")
+
+
 def _build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
-    """The volume-mount launch line; ``args`` (the manifest's optional
-    ``pestpp_args``) is appended after the image."""
+    """The volume-mount launch line, on the image whose trials run the case's model; ``args`` (the
+    manifest's optional ``pestpp_args``) is appended after the image."""
     return ["docker", "run", "--rm", "--name", run_id,
-            "-v", f"{rundir}:/data", "-w", "/data", _pestpp_image(), *args]
+            "-v", f"{rundir}:/data", "-w", "/data", _pestpp_image(_model(rundir)), *args]
 
 
 def _metrics(rundir: Path) -> dict[str, Any]:

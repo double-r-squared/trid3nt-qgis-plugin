@@ -7,7 +7,7 @@ from types import MappingProxyType
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs.input import Input
-from trid3nt_server.inputs.slots import OBSERVE, RUN
+from trid3nt_server.inputs.slots import LEVEL, OBSERVE, RUN
 from trid3nt_server.workflows.pestpp.workflow import ENGINES, PestppWorkflow
 from trid3nt_server.workflows.runtime import register_workflow
 
@@ -24,8 +24,14 @@ class INPUTS:
     observe = Input(OBSERVE, desc=(
         "The wells the run is held to: a point layer of wells reporting their water level; unfilled, every "
         "measured groundwater level the source reports over the run's ground. A depth below the land surface "
-        "is read as a head at the well's cell, an elevation only on the run's own frame.")).need(
+        "is read as a head at the well's cell, an elevation only on the run's own frame; a MODFLOW run's.")).need(
         "groundwater level", geometry="point", every=True)
+    gauges = Input(LEVEL, desc=(
+        "The gauges a TELEMAC run is held to: a point layer of gauges reporting their water level; unfilled, "
+        "every gauge the source reports over the run's ground. Each reading is lifted onto the run's own frame "
+        "and held against the free surface at the run's end, at the node the run's point read lands the gauge "
+        "on; a gauge the mesh does not hold is left out and said.")).need(
+        "water level series", geometry="point", every=True)
 
 
 CAPTIONS = {"phi": "objective function per iteration",

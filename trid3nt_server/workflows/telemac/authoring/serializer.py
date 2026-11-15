@@ -15,7 +15,7 @@ from .cas_validate import run_cas_driver, validate_authored_steering
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.serializer")
 
-__all__ = ["serialize"]
+__all__ = ["restate", "serialize"]
 
 
 def serialize(sheet: Any, rundir: Path | str, *,
@@ -39,6 +39,14 @@ def serialize(sheet: Any, rundir: Path | str, *,
     top = steering or f"{sheet.module}.cas"
     return {"steering": top, "keywords": sorted(decks[top]["values"]),
             "files": sorted(decks), "written": written[top]}
+
+
+def restate(rundir: Path | str, steering: str, module: str, values: Mapping[str, Any]) -> None:
+    """The steering file ``steering`` already in ``rundir`` written again with ``values`` (by keyword) over what it
+    states, through the same driver; the engine's parser reads it back, a refusal carrying its words."""
+    run_cas_driver(rundir, {"restate": {steering: {"module": module, "values": dict(values)}}},
+                   what=f"restate {steering}")
+    validate_authored_steering(rundir, {steering: module})
 
 
 def _spread(sheet: Any, rundir: Path, steering: str,

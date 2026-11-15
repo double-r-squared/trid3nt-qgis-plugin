@@ -59,8 +59,9 @@ template and instruction tables as CSVs beside it.
 One study over a finished run (`run`), whatever engine solved it: the run's record names its engine and the study
 takes that engine's PIECE, `authoring/<engine>.py` - the parameter writer, the observation reader, the command a
 trial runs, and the calibrated run's solve and publish. A run of an engine with no piece refuses
-(`PESTPP_ENGINE_UNCALIBRATED`) naming the engines a study calibrates (`workflow.ENGINES`: MODFLOW), and what is
-tunable is the piece's own. Unstated, `run` is this case's finished run of one of those engines: the one there is,
+(`PESTPP_ENGINE_UNCALIBRATED`) naming the engines a study calibrates (`workflow.ENGINES`: MODFLOW and TELEMAC), and
+what is tunable is the piece's own. Each piece reads its own observation row - the wells (`observe`) for MODFLOW, the
+gauges (`gauges`) for TELEMAC - and a stated row the run's piece does not read refuses (`PESTPP_OBSERVATIONS_UNREAD`). Unstated, `run` is this case's finished run of one of those engines: the one there is,
 taken; of several, the one confirmed on the review card, which lists them newest first and offers the newest (AUTO
 takes it, said on the run); none refuses `RUN_NONE_IN_CASE` naming the engines. A stated run wins.
 
@@ -91,7 +92,31 @@ read from; unstated bounds refuse), how many of them to tune (`tune`), the momen
    over a sheet read off the calibrated deck itself; phi per iteration, the residual at each well (simulated
    minus observed) and each multiplier's ensemble range are charted beside it.
 
-The run's record is that MODFLOW run's, its `study` entry naming the study run, the finished run, each
+Over a TELEMAC run (`authoring/telemac.py`), a TELEMAC-2D deck (another module refuses):
+
+1. The parameter is `FRICTION_COEFFICIENT`, a multiplier written into the steering file's own `FRICTION COEFFICIENT`
+   through a PEST template (PEST's scale the coefficient the run stated); bounds in the run's own unit are divided by
+   it. Zoned friction (`FRICTION DATA`) is not written and refuses; so does any other identifier.
+2. Each gauge's water level, lifted onto the run's frame by the level slot's own ingestion (a gauge on a frame the
+   offset row cannot bridge is left out), is a target at the node the run's own point read (`read_series` over the
+   finished run's result, the point contract: a gauge the mesh does not hold is left out and said) lands it on.
+   TELEMAC-2D prints the free surface at its remarkable points (`LIST OF POINTS`, `NAMES OF POINTS`, `VARIABLES TO
+   BE PRINTED = 'S'`) into its `FORMATTED RESULTS FILE` once, at the last time step, so a target is held against the
+   run's END; a deck already stating one of those keywords refuses.
+3. A trial runs `workers/pestpp/telemac_trial.py`, which ends in TELEMAC's own launcher (`telemac2d.py <steering>`),
+   in the image `trid3nt-local/pestpp-telemac` (workers/pestpp/Dockerfile.telemac: the PEST++ release and the steering
+   driver on the TELEMAC worker image), which the engine picks by the case's `server_facts.model`. Where the finished
+   run's outflow level is the normal depth it derived (the stated level equals the derivation at its own coefficient),
+   the study writes `outflow_levels.json`: that level derived at 81 coefficients across the tuned range. The trial reads
+   its own coefficient, takes its level off the table and restates `PRESCRIBED ELEVATIONS` and `INITIAL ELEVATION`
+   through TelemacCas before solving, so no trial is bounded by a level another friction set. A level a gauge held
+   stays as stated.
+4. The calibrated run is the finished deck with the best coefficient - and, where derived, the outflow level and flat
+   opening re-derived at it - written into its steering file, staged with TELEMAC's staged check, solved by the
+   TELEMAC solver and published as TELEMAC publishes a run. A finished run whose record says it ended UNSTEADY is not
+   calibrated (`PESTPP_RUN_UNSTEADY`).
+
+The run's record is that engine's run's, its `study` entry naming the study run, the finished run, each
 parameter's bounds, source and calibrated value, phi and the last ensemble.
 
 ## What is not built yet

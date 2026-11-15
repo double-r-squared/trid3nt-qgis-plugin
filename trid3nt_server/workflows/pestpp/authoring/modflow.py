@@ -15,15 +15,15 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping, Sequence
 
-from ..authoring.control import Observed, Parameter
+from ..authoring.control import Observed, Parameter, substitute
 from ..errors import PestppError
 
-__all__ = ["COMMAND", "Deck", "OBSERVED", "OBS_FILE", "OBS_OUTPUT", "OWN", "PLACE", "SITE", "calibrated", "copy_deck",
-           "deck", "deck_sheet", "head_targets", "interface", "multiplier", "observe_heads", "published", "substitute",
+__all__ = ["Deck", "OBSERVED", "OBS_FILE", "OBS_OUTPUT", "OWN", "PLACE", "ROW", "SITE", "calibrated", "command",
+           "copy_deck", "deck", "deck_sheet", "head_targets", "interface", "multiplier", "observe_heads", "published", "substitute",
            "targets"]
 
-#: What a trial runs: the deck alone, every multiplier already written into its own files.
-COMMAND = "mf6"
+#: The study's row the targets are read off: the wells.
+ROW = "observe"
 
 #: The option the study's instruction files are written for: the heads CSV's own separator.
 OWN = MappingProxyType({"additional_ins_delimiters": ","})
@@ -68,7 +68,12 @@ def _block(text: str, name: str) -> list[str]:
                                      if line.split("#", 1)[0].strip()]
 
 
-def deck(directory: Path) -> Deck:
+def command(the_deck: Deck) -> str:
+    """What a trial runs: the deck alone, every multiplier already written into its own files."""
+    return "mf6"
+
+
+def deck(directory: Path, finished: Any = None) -> Deck:
     """The deck's flow model, read off the simulation's name file and the model's own; one flow model, or a refusal."""
     import flopy
 
@@ -278,23 +283,6 @@ def observe_heads(directory: Path, targets: Sequence[tuple[Observed, int]], *, t
     reads = " ".join(f"~,~ !{target.name}!" for target, _cell in targets)
     (directory / instruction).write_text(f"pif ~\nl2 {reads}\n")
     return instruction, OBS_OUTPUT
-
-
-def substitute(directory: Path, templates: Sequence[tuple[str, str]],
-               parameters: Sequence[Parameter], values: Mapping[str, float]) -> None:
-    """Each template written to its model file with ``values`` through each parameter's scale and offset,
-    as PEST writes it; a parameter without a value refuses."""
-    held = {p.name: p for p in parameters}
-    for template, model_file in templates:
-        text = (directory / template).read_text().split("\n", 1)[1]
-
-        def written(match: re.Match) -> str:
-            name = match.group(1).strip().lower()
-            if name not in values:
-                raise PestppError(f"{name} has no value to write", error_code="PESTPP_PARAMETER_UNPLACED")
-            return f"{values[name] * held[name].scale + held[name].offset:.12G}"
-
-        (directory / model_file).write_text(re.sub(r"~([^~]+)~", written, text))
 
 
 def deck_sheet(directory: Path, the_deck: Deck) -> Any:

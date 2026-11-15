@@ -92,11 +92,11 @@ def check_staged(rundir: Path, *, steering: str, **_: Any) -> None:
 
 
 async def stage_study(source: Path, *, tool: str, control: str, name: str,
-                      agents: int | None = None) -> dict[str, Any]:
+                      agents: int | None = None, model: str = "") -> dict[str, Any]:
     """A study directory -> the staged run the box receives.
 
     ``control`` is the control file's name in ``source``; ``agents`` the PEST++ agents the
-    manager is given, unstated the CONTAINER_CORES setting."""
+    manager is given, unstated the CONTAINER_CORES setting; ``model`` the engine its trials run."""
     if not (source / control).is_file():
         raise PestppError(f"{control} is not in {source}", error_code="PESTPP_CONTROL_MISSING")
     run_id = new_ulid()
@@ -108,7 +108,7 @@ async def stage_study(source: Path, *, tool: str, control: str, name: str,
     return await stage_run(
         rundir, run_id, module=tool, steering=CONTROL_FILENAME,
         results=[RECORD_FILENAME, *_RESULTS.get(tool, ())], outputs=list(_OUTPUTS),
-        mesh_inputs=[], prefix="pestpp", sheet={}, server_facts={"name": name},
+        mesh_inputs=[], prefix="pestpp", sheet={}, server_facts={"name": name, **({"model": model} if model else {})},
         result_basename=RECORD_FILENAME, check=check_staged, cores=count)
 
 

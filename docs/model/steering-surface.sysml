@@ -460,6 +460,18 @@ package SteeringSurface {
         port stageOut : StageOut;
     }
 
+    part pestppTelemacCalibratedStage : Sheet {
+        doc /*
+        A study's calibrated TELEMAC deck: the finished TELEMAC-2D run's deck with the
+        study's best friction coefficient stated in its steering file by the steering
+        writer, staged as an ordinary TELEMAC run with that engine's staged check
+        through the one stager.
+
+        code: trid3nt_server/workflows/pestpp/authoring/telemac.py
+        */
+        port stageOut : StageOut;
+    }
+
     part pestppStage : Sheet {
         doc /*
         PEST++'s study directory: the control file, its template and instruction
@@ -587,6 +599,9 @@ package SteeringSurface {
 
     interface pestppCalibratedStaged : StageRequest
         connect pestppCalibratedStage.stageOut to stager.stageIn;
+
+    interface pestppTelemacCalibratedStaged : StageRequest
+        connect pestppTelemacCalibratedStage.stageOut to stager.stageIn;
 
     interface canvasAnswered : DrawnValue
         connect canvasGate.drawOut to fill.drawIn;

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Mapping, Sequence
 from trid3nt_contracts.common import Origin, SyntheticInput
 
 from trid3nt_server.inputs.instant import event_time
+from trid3nt_server.inputs.slots import BED
 from trid3nt_server.workflows.runtime import DeclarationError, RunResult, Workflow
 from trid3nt_server.workflows.runtime.workflow import EVENT_TIME
 from trid3nt_server.workflows.runtime.module import identify_on, keyword_floor
@@ -37,7 +38,10 @@ __all__ = ["ENGINES", "PestppWorkflow", "piece", "ranked"]
 
 #: The engines a study calibrates, each by its piece ``authoring/<engine>.py``: the parameter writer, the
 #: observation reader, the trial's command, and the calibrated run's solve and publish.
-ENGINES = ("modflow",)
+ENGINES = ("modflow", "telemac")
+
+#: The study's observation rows; each piece reads one, and a stated row its piece does not read refuses.
+_ROWS = ("observe", "gauges")
 
 
 def piece(engine: str) -> ModuleType:
@@ -155,12 +159,19 @@ class PestppWorkflow(Workflow):
         emitter = current_emitter()
         finished = await read(env, "run")
         study = piece(finished.engine)
-        observations = await read(env, "observe")
+        unread = sorted(name for name in _ROWS if name != study.ROW and env.supplied.get(name) is not None)
+        if unread:
+            raise PestppError(f"{', '.join(unread)} is stated, and a {finished.engine} run is held to {study.ROW}",
+                              error_code="PESTPP_OBSERVATIONS_UNREAD")
+        frame = str(((finished.record.get("inputs") or {}).get("vertical_frame") or {}).get("value") or "")
+        if frame:
+            # An elevation the study reads is read on the frame the finished run counted its bed from.
+            env.run.setdefault(BED.states[0].name, frame)
+        observations = await read(env, study.ROW)
         observations = observations if isinstance(observations, tuple) else (observations,)
         named = dict(await read(env, "parameters") or {})
         tune = await read(env, "tune")
         options, _ = keyword_floor([PESTPP], dict(state.keywords))
-        frame = str(((finished.record.get("inputs") or {}).get("vertical_frame") or {}).get("value") or "")
         chosen, sources = [], {}
         for identifier, stated in named.items():
             lower, upper, sources[identifier.lower()], absolute = _bounds(identifier, stated)
@@ -177,7 +188,7 @@ class PestppWorkflow(Workflow):
         try:
             deck_dir = work / "deck"
             await asyncio.to_thread(staging.fetch_deck, finished.staged, deck_dir)
-            the_deck = await asyncio.to_thread(study.deck, deck_dir)
+            the_deck = await asyncio.to_thread(study.deck, deck_dir, finished)
             targets, left = study.targets(observations, the_deck=the_deck, finished=finished, frame=frame)
             for line in left:
                 journal_note(f"a {study.SITE} is not held to the run: {line}")
@@ -194,10 +205,11 @@ class PestppWorkflow(Workflow):
                 parameters, templates, instructions = await asyncio.to_thread(
                     study.interface, deck_dir, where, chosen, the_deck=the_deck, targets=targets)
                 write_control(where, name=staging.CONTROL_FILENAME, parameters=parameters, observations=observed,
-                              templates=templates, instructions=instructions, command=study.COMMAND,
+                              templates=templates, instructions=instructions, command=study.command(the_deck),
                               stated=stated, own=study.OWN)
                 staged = await staging.stage_study(where, tool=tool, control=staging.CONTROL_FILENAME,
-                                                   name=f"{self.name} of {finished.run_id}")
+                                                   name=f"{self.name} of {finished.run_id}",
+                                                   model=finished.engine)
                 handle = await stage("ranking" if tool == "sen" else "ensemble", engine.solve_case,
                                      run=staged, cores=int(staged["case"]["cores"]))
                 files = await asyncio.to_thread(outputs.fetch_study, handle["run_id"], work / f"{tool}-out")

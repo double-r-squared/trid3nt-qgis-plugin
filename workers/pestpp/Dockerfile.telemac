@@ -1,0 +1,81 @@
+# The PEST++ worker over TELEMAC: the same entrypoint and PEST++ release as the
+# MODFLOW-trial image, on top of the TELEMAC worker image, so every trial runs
+# the very TELEMAC build (opentelemac v9.0.0, its launcher-gate patch, numpy
+# 1.26.4) the TELEMAC worker solves a run with.
+#
+# The launcher bind-mounts a run directory at /data carrying manifest.json, the
+# PEST++ control file, its template and instruction files and the staged
+# TELEMAC deck. Each trial runs the deck through TELEMAC's own launcher
+# (``telemac2d.py``) inside the agent's copy, under --network none.
+#
+# PIN DISCIPLINE: PEST++ 5.2.27 is the release tarball and checksum
+# workers/pestpp/Dockerfile installs; its executables link libstdc++, libgcc,
+# libm and libc only, which this debian12 base carries (ldd shows none missing).
+# The base is the locally built TELEMAC image: rebuild it first, then this.
+#
+# Build context = THIS worker dir, plus the steering driver as the named context `engine` (a trial restates its
+# outflow level through the same TelemacCas driver the server writes steering files with):
+#   docker build -t trid3nt-local/pestpp-telemac:latest -f workers/pestpp/Dockerfile.telemac \
+#     --build-context engine=trid3nt_server/workflows/telemac/authoring/engine_scripts workers/pestpp/
+
+FROM trid3nt-local/telemac:latest
+
+LABEL org.opencontainers.image.title="trid3nt-pestpp-telemac-worker" \
+      org.opencontainers.image.description="TRID3NT PEST++ worker whose trials run TELEMAC: a staged study directory in, a finished study directory out (one PEST++ manager and its agents on localhost)." \
+      org.opencontainers.image.licenses="GPL-3.0"
+
+ARG PESTPP_VERSION=5.2.27
+ARG PESTPP_SHA256=966547108168c63a28f08c8660f9cb9f12b02192488e0a7f4f055ef3db3ba37b
+
+# The base env is activated for every RUN below, as in the TELEMAC image itself: an
+# ARG is scoped to its own build, so it is stated again here.
+ARG MAMBA_DOCKERFILE_ACTIVATE=1
+
+USER root
+
+# The fetch runs under the activated base env's python: the base image carries
+# no curl, and stdlib urllib and tarfile are enough.
+RUN python -c "\
+import hashlib, tarfile, urllib.request;\
+url = 'https://github.com/pestpp/pestpp/releases/download/${PESTPP_VERSION}/pestpp-${PESTPP_VERSION}-linux.tar.gz';\
+data = urllib.request.urlopen(url, timeout=120).read();\
+got = hashlib.sha256(data).hexdigest();\
+assert got == '${PESTPP_SHA256}', got;\
+open('/tmp/pestpp.tar.gz', 'wb').write(data);\
+tarfile.open('/tmp/pestpp.tar.gz').extractall('/usr/local')" \
+    && rm -f /tmp/pestpp.tar.gz \
+    && for tool in glm ies sen swp opt mou da sqp; do test -x /usr/local/bin/pestpp-$tool; done
+
+COPY --chown=root:root entrypoint.py telemac_trial.py /opt/trid3nt/workers/pestpp/
+COPY --from=engine --chown=root:root cas.py /opt/trid3nt/workers/pestpp/cas.py
+
+ENV PYTHONUNBUFFERED=1 \
+    TRID3NT_PESTPP_DATA_DIR=/data
+
+WORKDIR /data
+
+# Build-time smoke: the entrypoint imports under the activated env, TELEMAC's
+# launcher is on the path a trial's command is run from, and the strict gate
+# refuses an unknown case field.
+RUN python -c "\
+import shutil, sys;\
+sys.path.insert(0, '/opt/trid3nt/workers/pestpp');\
+import entrypoint as E;\
+assert E._PARSER_VERSION == 'pestpp-case-1', E._PARSER_VERSION;\
+assert shutil.which('telemac2d.py'), 'telemac2d.py not on PATH';\
+assert shutil.which('pestpp-ies'), 'pestpp-ies not on PATH';\
+import cas, telemac_trial as T;\
+assert T.level_at({'coefficients': [20.0, 40.0], 'stages': [292.0, 291.0]}, 30.0) == 291.5;\
+print('pestpp-telemac worker OK: parser', E._PARSER_VERSION, 'trial', T.LEVELS)"
+RUN (python -c "\
+import sys;\
+sys.path.insert(0, '/opt/trid3nt/workers/pestpp');\
+import entrypoint as E;\
+E._strict_section('case', {'module': 'ies', 'bogus_key': 1}, E._CASE_FIELDS)" \
+        > /tmp/strict_gate.log 2>&1; echo "exit=$?" >> /tmp/strict_gate.log) \
+    && grep -q "^exit=1$" /tmp/strict_gate.log \
+    && grep -q "UnknownManifestFieldError" /tmp/strict_gate.log \
+    && rm -f /tmp/strict_gate.log \
+    && echo "pestpp-telemac strict gate OK: an unknown case field refused"
+
+CMD ["python", "/opt/trid3nt/workers/pestpp/entrypoint.py"]

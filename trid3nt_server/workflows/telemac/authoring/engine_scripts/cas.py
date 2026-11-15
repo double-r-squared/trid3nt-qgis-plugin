@@ -65,6 +65,20 @@ def write_steering(cfg: dict) -> dict:
     return rows
 
 
+def restate_steering(cfg: dict) -> dict:
+    """Write every ``{basename: {module, values}}`` the config names AGAIN: the file as telapy reads it, the values
+    over what it states -> the rows."""
+    rows = {}
+    for basename, spec in dict(cfg.get("restate") or {}).items():
+        path = cfg["data_dir"] + "/" + basename
+        cas = TelemacCas(path, get_dico(spec["module"]), access="r", check_files=False)
+        for keyword, value in spec["values"].items():
+            cas.values[keyword] = _engine(value)
+        cas.write(path)
+        rows[basename] = {"module": spec["module"], "keywords": len(cas.values)}
+    return rows
+
+
 def parse_steering(cfg: dict) -> dict:
     """Every steering file the config names, read against its own dictionary."""
     # The parse runs with the file existence check OFF: a steering file is
@@ -91,6 +105,9 @@ def main() -> int:
     #   write     {basename: {"module": ..., "values": {KEYWORD: value}}} -
     #             telapy writes each file from the values given. Emits
     #             telemac_cas_written.json.
+    #   restate   {basename: {"module": ..., "values": {KEYWORD: value}}} - telapy
+    #             reads each file and writes it again with the values over what it
+    #             states. Emits telemac_cas_restated.json.
     #   steering  {basename: module}, the module naming the dictionary the file
     #             is read against. Emits telemac_cas_stats.json: one row per
     #             file with the keyword count it parsed, or the parse error and
@@ -102,6 +119,10 @@ def main() -> int:
         written = write_steering(cfg)
         json.dump(written, open(out + "/telemac_cas_written.json", "w"), indent=2)
         print("TELEMAC_CAS_WRITTEN", json.dumps(written))
+    if cfg.get("restate"):
+        restated = restate_steering(cfg)
+        json.dump(restated, open(out + "/telemac_cas_restated.json", "w"), indent=2)
+        print("TELEMAC_CAS_RESTATED", json.dumps(restated))
     if cfg.get("steering"):
         rows = parse_steering(cfg)
         json.dump(rows, open(out + "/telemac_cas_stats.json", "w"), indent=2)
