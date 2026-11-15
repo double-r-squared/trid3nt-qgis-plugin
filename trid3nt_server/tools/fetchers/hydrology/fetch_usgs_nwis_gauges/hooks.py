@@ -184,13 +184,36 @@ def _column_of(sub: Any, code: str) -> str | None:
     return held[0] if len(held) == 1 else None
 
 
-def _readings_by_site(iv_df: Any, parameter_cd: str, mode: str) -> dict[str, dict[str, Any]]:
+def _utc_days(window: Any) -> tuple[Any, Any, dict[str, str]]:
+    """A date pair's UTC span [first day 00:00Z, the day after the last) and the dates NWIS is asked.
+
+    NWIS reads a date pair as the SITE's local days, so it is asked one day wider each side and the readings are cut
+    on their own timestamps to the UTC days asked."""
+    import datetime as _dt
+
+    d0, d1 = (_dt.date.fromisoformat(str(v)) for v in window)
+    day = _dt.timedelta(days=1)
+    lo = _dt.datetime.combine(d0, _dt.time(), tzinfo=_dt.timezone.utc)
+    hi = _dt.datetime.combine(d1 + day, _dt.time(), tzinfo=_dt.timezone.utc)
+    return lo, hi, {"start": (d0 - day).isoformat(), "end": (d1 + day).isoformat()}
+
+
+def _readings_by_site(iv_df: Any, parameter_cd: str, mode: str,
+                      cut: tuple[Any, Any] | None = None) -> dict[str, dict[str, Any]]:
     """Group ``get_iv``'s long DataFrame (one row per timestep) by ``site_no`` into
     one record per site, latest-value columns for ``instantaneous`` and full inline
-    series + rollups for ``hydrograph``."""
+    series + rollups for ``hydrograph``; ``cut`` keeps the readings in [lo, hi) UTC."""
     by_site: dict[str, dict[str, Any]] = {}
     if iv_df is None or len(iv_df) == 0 or "site_no" not in iv_df.columns:
         return by_site
+    if cut is not None:
+        import pandas as pd
+
+        stamps = pd.DatetimeIndex(iv_df.index)
+        stamps = stamps.tz_localize("UTC") if stamps.tz is None else stamps.tz_convert("UTC")
+        iv_df = iv_df[(stamps >= cut[0]) & (stamps < cut[1])]
+        if len(iv_df) == 0:
+            return by_site
     codes = [c for c in parameter_cd.split(",") if c in _COLUMNS]
     for site_no, sub in iv_df.groupby("site_no"):
         site_no = str(site_no)
@@ -258,11 +281,12 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
     mode = params.get("_mode", "instantaneous")
     window = params.get("window")
     window_kwargs: dict[str, str] = {}
+    cut = None
     if isinstance(window, str):
         window_kwargs["period"] = window
     elif isinstance(window, (list, tuple)):
-        window_kwargs["start"] = str(window[0])
-        window_kwargs["end"] = str(window[1])
+        lo, hi, window_kwargs = _utc_days(window)
+        cut = (lo, hi)
 
     iv_df, _md = retrieve(
         spec, nwis.get_iv, parameterCd=parameter_cd, siteStatus="active",
@@ -273,7 +297,7 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
         hasDataTypeCd="iv", siteOutput="expanded", **sel,
     )
 
-    readings = _readings_by_site(iv_df, parameter_cd, mode)
+    readings = _readings_by_site(iv_df, parameter_cd, mode, cut)
 
     sites: dict[str, dict[str, Any]] = {}
     if site_df is not None and len(site_df):

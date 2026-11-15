@@ -13,3 +13,12 @@ written with pandas `to_csv` and nothing edited:
 - `willamette_portland_2026-11-10.fgb` - what `fetch_usgs_nwis_gauges` wrote for the box [-122.69, 45.505, -122.65,
   45.53] on 2026-11-10, copied byte for byte from the object-store cache on 2026-11-13 (cache key
   bd147a70612de96c5105ff6e35ca50f1): one site, 14211720 Willamette River at Portland.
+- `missouri_omaha_2026-11-09.fgb` - what `fetch_usgs_nwis_gauges` wrote for the Missouri calibration canary's discharge
+  ask on 2026-11-15 (the domain's box joined with the 7 km UM walk's), copied byte for byte from the object-store cache
+  (cache key e60b6ee8dc9f229c434d4d208450e90b): 06610000 Omaha with 96 discharge readings 2026-11-09T06:00Z ..
+  2026-11-10T05:45Z (NWIS read the asked date 2026-11-09 as the site's CST day) and 06610490 Hwy 92 with no discharge.
+- `omaha_06610000_06610490_iv_2026-11-08_10.csv` / `omaha_06610000_06610490_site.csv` - recorded 2026-11-15 from
+  dataretrieval (`nwis.get_iv(sites="06610000,06610490", parameterCd="00060,00065", start="2026-11-08",
+  end="2026-11-10", multi_index=False)` and the expanded `nwis.get_info` of the same sites, the site frame cut to
+  site_no, station_nm, dec_lat_va, dec_long_va, alt_va, alt_datum_cd), written with pandas `to_csv`: 576 readings
+  2026-11-08T06:00Z .. 2026-11-11T05:45Z, the three CST days; both zeros NAVD88.

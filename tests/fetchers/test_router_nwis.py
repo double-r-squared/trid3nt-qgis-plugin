@@ -189,7 +189,8 @@ def test_the_window_reaches_the_library_as_the_form_it_was_asked_in(spec, nwis_c
         spec, {"bbox": [-82.4, 26.3, -81.6, 26.9],
                "start_date": "2024-01-01", "end_date": "2024-01-05"})
     _read(spec, nwis_calls, **dates)
-    assert nwis_calls["iv"]["start"] == "2024-01-01" and nwis_calls["iv"]["end"] == "2024-01-05"
+    # NWIS reads a date pair as the site's local days: asked a day wider each side, cut back to the UTC days.
+    assert nwis_calls["iv"]["start"] == "2023-12-31" and nwis_calls["iv"]["end"] == "2024-01-06"
 
 
 def test_empty_readings_degrade_to_the_station_locations(spec, nwis_calls):
@@ -428,3 +429,25 @@ def test_a_code_reported_under_two_descriptions_is_not_read(spec, nwis_calls):
     nwis_calls["iv_df"], nwis_calls["site_df"] = iv, site
     p = _read(spec, nwis_calls, bbox=[-122.70, 45.49, -122.65, 45.55], _mode="hydrograph")[0]["properties"]
     assert p["stage_series_csv"] == "" and p["gage_height_ft"] is None
+
+
+def _recorded_omaha():
+    """What dataretrieval returned for 06610000 and 06610490 asked 2026-11-08..2026-11-10: the CST days, 06:00Z on."""
+    iv = pd.read_csv(_RECORDED / "omaha_06610000_06610490_iv_2026-11-08_10.csv", index_col="datetime",
+                     parse_dates=True, dtype={"site_no": str})
+    site = pd.read_csv(_RECORDED / "omaha_06610000_06610490_site.csv", dtype={"site_no": str})
+    return iv, site
+
+
+def test_a_date_pair_holds_the_utc_days_asked_though_nwis_reads_local_days(spec, nwis_calls):
+    nwis_calls["iv_df"], nwis_calls["site_df"] = _recorded_omaha()
+    dates = hooks.HOOK_REGISTRY["usgs_nwis.resolve"](
+        spec, {"bbox": [-95.94, 41.19, -95.90, 41.27], "start_date": "2026-11-09", "end_date": "2026-11-09"})
+    feats = {f["properties"]["site_no"]: f["properties"] for f in _read(spec, nwis_calls, **dates)}
+    assert nwis_calls["iv"]["start"] == "2026-11-08" and nwis_calls["iv"]["end"] == "2026-11-10"
+    omaha, hwy92 = feats["06610000"], feats["06610490"]
+    assert omaha["time_start"] == "2026-11-09T00:00:00+0000" and omaha["time_end"] == "2026-11-09T23:45:00+0000"
+    assert omaha["n_timesteps"] == 96
+    assert "2026-11-09T00:15:00+0000,31400.000000" in omaha["time_series_csv"].splitlines()
+    assert "2026-11-09T00:15:00+0000,15.040000" in hwy92["stage_series_csv"].splitlines()
+    assert hwy92["gauge_datum_ft"] == 945.71 and hwy92["vertical_datum"] == "NAVD88"
