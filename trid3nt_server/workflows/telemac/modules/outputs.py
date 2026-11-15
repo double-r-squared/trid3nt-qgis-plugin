@@ -37,6 +37,8 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.modules.outputs")
 
 __all__ = [
     "PRIMITIVES",
+    "reading",
+    "solved_run",
     "SelafinReadError",
     "SolveNonFinite",
     "Solved",
@@ -101,21 +103,47 @@ def reference_line(value: Any, *, label: str) -> Any:
     return lines
 
 
+def reading(module: str, file: str = "") -> str:
+    """The key a solved result is held under: the module's name, and the keyword of the companion file it is read from when it is not the module's own."""
+    return f"{module}@{file}" if file else module
+
+
+def solved_run(run: Mapping[str, Any], key: str) -> "Solved":
+    """The solved result a ``reading`` key names."""
+    from . import wrapper_for
+
+    module, _, file = key.partition("@")
+    return Solved(run, wrapper_for(module), file)
+
+
 class Solved:
     """One solved run's files, each opened once: the module's result, the listing.
 
     ``run`` is the handle the solve step returned; ``body`` names the module.
     """
 
-    def __init__(self, run: Mapping[str, Any], body: Any) -> None:
+    def __init__(self, run: Mapping[str, Any], body: Any, file: str = "") -> None:
         self.run = run
         self.body = body
         self.run_id = str(run["run_id"])
         self.utm_epsg = int(run["utm_epsg"])
-        self.result_file = str(getattr(body, "RESULT_FILE", "") or run["result_basename"])
+        # ``file`` is the keyword whose named file is read instead of the module's own result.
+        self.companion = file
+        self.result_file = (self._named(file) if file else
+                            str(getattr(body, "RESULT_FILE", "") or run["result_basename"]))
         # A 3D result is no mesh format: the module writes the 2D result beside it, which is the mesh its planes are read onto.
         self.display_file = str(run.get("display_basename") or self.result_file)
         self._beside: dict[str, dict[str, Any]] = {}
+
+    def _named(self, keyword: str) -> str:
+        """The file this run's deck named under ``keyword``."""
+        filled = (self.run.get("sheet") or {}).get("filled") or {}
+        basename = str((filled.get(keyword) or {}).get("value") or "")
+        if not basename:
+            raise OutputEmpty(
+                f"this run's deck names no {self.body.slot(keyword).keyword}, so "
+                "the run wrote no such file and there is nothing to read.")
+        return basename
 
     @cached_property
     def result(self) -> dict[str, Any]:
@@ -260,7 +288,7 @@ class Solved:
         from trid3nt_server.workflows.solver.solver import download_result
 
         basename = str(self.run.get("result_basename") or self.result_file)
-        if basename == self.result_file:
+        if basename == self.result_file or self.companion:
             return self.result
         local = download_result(self.run_id, basename)
         try:
@@ -275,12 +303,7 @@ class Solved:
         """
         from trid3nt_server.workflows.solver.solver import download_result
 
-        filled = (self.run.get("sheet") or {}).get("filled") or {}
-        basename = str((filled.get(keyword) or {}).get("value") or "")
-        if not basename:
-            raise OutputEmpty(
-                f"this run's deck names no {self.body.slot(keyword).keyword}, so "
-                "the run wrote no such file and there is nothing to read.")
+        basename = self._named(keyword)
         if basename not in self._beside:
             local = download_result(self.run_id, basename)
             try:

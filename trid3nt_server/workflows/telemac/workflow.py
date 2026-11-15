@@ -44,7 +44,8 @@ from trid3nt_server.workflows.runtime.primitives import (
     publish_reads,
     unanchored,
 )
-from trid3nt_server.workflows.telemac.modules.outputs import Solved
+from trid3nt_server.workflows.telemac.modules.outputs import (Solved, reading,
+                                                              solved_run)
 from trid3nt_server.workflows.runtime.review import _seat_on, fill_sheet
 from trid3nt_server.workflows.runtime.sheet import (
     Keyword,
@@ -173,7 +174,8 @@ def _painted(row: Mapping[str, Any]) -> list[Primitive]:
     A still beside a time series would copy a frame the temporal layer already carries."""
     from trid3nt_server.workflows.runtime.primitives import field
 
-    token, module, style = row["token"], row["module"], row.get("style")
+    token, style = row["token"], row.get("style")
+    module = reading(row["module"], row.get("file", ""))
     if row.get("varies"):
         return [field(token, t="every", module=module).animate(style=style)]
     return [field(token, t=-1, module=module).layer(style=style)]
@@ -216,7 +218,7 @@ def _written(run: Mapping[str, Any],
 
     rows = list(run.get("module_output") or ())
     for row in rows:
-        read = solved(str(row["module"]))
+        read = solved(reading(str(row["module"]), row.get("file", "")))
         try:
             variable, _ = read.variable(str(row["token"]))
         except OutputEmpty:
@@ -227,7 +229,8 @@ def _written(run: Mapping[str, Any],
         _claim(_painted(row), read.result_file, variable.strip(), True)
     walked: set[str] = set()
     for module in dict.fromkeys([str(run["module"]),
-                                 *(str(row["module"]) for row in rows)]):
+                                 *(reading(str(row["module"]), row.get("file", ""))
+                                   for row in rows)]):
         read = solved(module)
         if read.result_file in walked:
             continue
@@ -308,7 +311,7 @@ async def publish_outputs(*, run: Mapping[str, Any], outputs: Sequence[Primitive
     return await publish_reads(
         engine="telemac", run=run, outputs=outputs, captions=captions,
         params=params, anchors=anchors,
-        solved=lambda module: Solved(run, wrapper_for(module)), table=_table,
+        solved=lambda key: solved_run(run, key), table=_table,
         record=lambda solved, name: _record(solved, name=name), partial=partial)
 
 
@@ -396,6 +399,7 @@ async def run_sheet(*, sheet: TelemacSheet, staged: Mapping[str, Any],
                 "reference_time": reference_time(moment, handle),
                 "display_basename": display or None,
                 "module_output": [{"token": token, "module": module,
+                                   "file": row.file,
                                    "name": row.name, "unit": row.unit,
                                    "style": row.style, "varies": row.varies,
                                    "has_edge": bool(row.has_edge),

@@ -26,7 +26,9 @@ __all__ = ["T3D", "Atmosphere", "Column", "MODULE_OUTPUT", "USER_FORTRAN_DIR",
 # A signed component reads about zero, so its ramp diverges.
 _SIGNED = {"kind": "mesh", "ramp": "rdbu", "units": "m/s", "center": 0.0}
 
-# What the module writes, by VARIABLES FOR 3D GRAPHIC PRINTOUTS mnemonic. A 3D variable is read on one plane, bottom first; ``TA`` is the tracer row, one per NAMES OF TRACERS entry.
+_COMPANION = "ED_RESULT_FILE"
+
+# What the module writes, by VARIABLES FOR 3D GRAPHIC PRINTOUTS mnemonic. A 3D variable is read on one plane, bottom first; ``TA`` is the tracer row, one per NAMES OF TRACERS entry. ``H`` and ``B`` are the 2D companion's own, by VARIABLES FOR 2D GRAPHIC PRINTOUTS mnemonic, read from the file 2D RESULT FILE names.
 MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "Z": Output("ELEVATION Z", "m",
                 style={"kind": "mesh", "ramp": "blues", "units": "m"}),
@@ -34,6 +36,10 @@ MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({
     "V": Output("VELOCITY V", "m/s", style=_SIGNED),
     "W": Output("VELOCITY W", "m/s", style=_SIGNED),
     "TA": Output("TRACER", "", style={"kind": "mesh", "ramp": "viridis"}),
+    "H": Output("WATER DEPTH", "m", file=_COMPANION,
+                style={"kind": "mesh", "ramp": "ylgnbu", "units": "m", "floor": 0}),
+    "B": Output("BOTTOM", "m", file=_COMPANION, varies=False,
+                style={"kind": "mesh", "ramp": "terrain", "units": "m"}),
 })
 
 

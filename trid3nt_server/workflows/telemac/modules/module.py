@@ -110,11 +110,11 @@ class TelemacModule(Module):
                 ) -> tuple[str, ...]:
         """The tokens the printouts keyword carries, past the run's tracers.
 
-        A row the module prints or derives is published or read, never asked for.
+        A row the module prints or derives is published or read, never asked for; one read from another result file is that file's own printout.
         """
-        return tuple(token for token in cls.table(stated)
+        return tuple(token for token, row in cls.table(stated).items()
                      if token not in cls.LISTING and token not in cls.DERIVED
-                     and token != cls.TRACER)
+                     and token != cls.TRACER and not row.file)
 
     @classmethod
     def printouts(cls, *, tracers: int = 0,

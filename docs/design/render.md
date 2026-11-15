@@ -54,6 +54,13 @@ A 3D SELAFIN is NOT an MDAL mesh: MDAL rejects the file. TELEMAC-3D writes the
 2D result beside it, and that file is the mesh a plane is drawn onto - the run
 states it as `display_basename`.
 
+A module may write more than one result file, and an engine's written results are
+all retrievable: an output row states the keyword of the file it is read from
+(`Output.file`; TELEMAC-3D rows `H` and `B` read 2D RESULT FILE, which the 3D
+printout keyword never carries). The row exists where the deck names that file;
+the publish seam reads it off that file and a spelling two files carry is one
+layer, off the first.
+
 ## Style
 
 A producer declares a style ROW (`kind`, `ramp`, `units`, `label`, and where the

@@ -296,6 +296,8 @@ class Output:
     injected: bool | None = None
     # The keyword this row exists under: the engine allocates the variable only with it true, and asking for an unallocated one stops the solve. Empty on a row always carried. A deck leaving it unstated decides it at the dictionary default.
     under: str = ""
+    # The identifier of the keyword naming the result file this row is read from, when it is not the module's own result (TELEMAC-3D's 2D companion). Empty reads the module's own result; a deck that leaves the keyword unstated writes no such file and carries no such row.
+    file: str = ""
 
 
 @lru_cache(maxsize=None)
@@ -541,11 +543,12 @@ class Module(metaclass=_Body):
               ) -> Mapping[str, Output]:
         """The module's output table as this deck carries it, by token.
 
-        A row existing only under a keyword is here where the deck switches it on; per-class numbered rows follow the deck's count.
+        A row existing only under a keyword is here where the deck switches it on, and a row read from another result file where the deck names that file; per-class numbered rows follow the deck's count.
         """
         return MappingProxyType({
             token: row for token, row in cls.MODULE_OUTPUT.items()
-            if not row.under or cls.switched(row.under, stated)})
+            if (not row.under or cls.switched(row.under, stated))
+            and (not row.file or stated.get(row.file))})
 
     @classmethod
     def slot(cls, identifier: str) -> Slot:
