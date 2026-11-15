@@ -251,3 +251,60 @@ def test_an_nwm_reach_on_the_stem_outside_the_domain_is_the_inflow_s_only(asked_
     assert "23815040" not in inflow
     assert inflow["23815444"] == ("stands outside the run's domain and not above the release on the main stem "
                                   "walked 3 km upstream")
+
+
+#: The Missouri at Omaha: the release 6.6 km down flowline 17219468, the reach cut 7 km below it. USGS 06610000 stands on
+#: the bank above the release on that flowline, 28 m north of the box the domain is asked in (the domain's own box with
+#: the 120 m margin a 40 m mesh asks at). The gauge layer is what the discharge row got over the box joined with the
+#: UM walk; NWIS read its date pair as the site's local day, so its readings open at 2026-11-09 06:00Z.
+_MISSOURI_GAUGES = _FIXTURES / "usgs_nwis_gauges" / "missouri_omaha_2026-11-09.fgb"
+_MISSOURI_RELEASE = [-95.921233757, 41.257659140]
+_OMAHA = (-95.92325, 41.25905556)
+_MISSOURI_DOMAIN_BOX = (-95.929416, 41.199796, -95.909204, 41.257726)
+_MISSOURI_WALKS = {"UM": _NLDI / "missouri_release_um_7km.fgb", "DM": _NLDI / "missouri_release_dm_7km.fgb"}
+
+
+@pytest.fixture
+def asked_missouri(monkeypatch):
+    calls: list[dict] = []
+
+    async def _runner(runner, kwargs, label):
+        assert runner == "fetch_nhdplus_nldi_navigate", runner
+        calls.append(dict(kwargs))
+        if "nwis_site" in kwargs:
+            assert kwargs["direction"] == "DM" and kwargs["distance_km"] == 0.0
+            return str(_NLDI / f"nwis_{kwargs['nwis_site']}_dm_0km.fgb")
+        assert kwargs["seed_point"] == _MISSOURI_RELEASE and kwargs["distance_km"] == 7.0
+        return str(_MISSOURI_WALKS[kwargs["direction"]])
+
+    monkeypatch.setattr(fill, "_call_runner", _runner)
+    return calls
+
+
+def _asked_box(env, slot, need, monkeypatch):
+    boxes: list = []
+    monkeypatch.setattr(fill, "filled", lambda choice, purpose, bbox, *rest: boxes.append(bbox) or {})
+    from types import SimpleNamespace
+
+    asyncio.run(fill._ask_for(env, SimpleNamespace(need=need), dataclasses.replace(Input(slot).need(need),
+                                                                                   name=slot.name)))
+    return box(*boxes[0])
+
+
+def test_an_inflow_discharge_is_asked_over_the_upstream_stem_and_omaha_is_read(asked_missouri, monkeypatch):
+    env, token = _env(mapping(box(*_MISSOURI_DOMAIN_BOX)), release=_MISSOURI_RELEASE, reach_km=7.0,
+                      at="2026-11-09T06:00:00Z")
+    env.run["mesh_resolution_m"] = 40.0
+    try:
+        inflow = _asked_box(env, DISCHARGE, "discharge series", monkeypatch)
+        target = _asked_box(env, LEVEL, "water level series", monkeypatch)
+        found = _read(env, DISCHARGE, "discharge series", _MISSOURI_GAUGES)
+    finally:
+        reset_domain(token)
+    from shapely.geometry import Point
+    assert inflow.covers(Point(*_OMAHA))
+    # The domain is unchanged: a target is asked in its own box, which Omaha stands outside.
+    assert not target.covers(Point(*_OMAHA))
+    assert found.site_id == "06610000"
+    assert found.value == pytest.approx(30900.0 * 0.028316846592, abs=1e-3)
+    assert not env.inputs

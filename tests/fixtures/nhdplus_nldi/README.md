@@ -39,3 +39,14 @@ Recorded from the NLDI API itself on 2026-11-14 (the raw answers, through datare
 - `missouri_snap.json` - `GET /comid/position` for the release; `missouri_dm_0_0km.json` / `missouri_um_0_0km.json` - the
   seed flowline alone; `missouri_dm_17_07km.json` / `missouri_um_17_07km.json` - navigation of 17.07 km (7 km plus the
   flowline's own length), four flowlines each.
+
+Copied byte for byte from the object-store cache on 2026-11-15, nothing edited (what `fetch_nhdplus_nldi_navigate` wrote for
+the Missouri calibration canary's asks, the release (-95.921233757, 41.257659140), reach 7 km):
+
+- `missouri_release_um_7km.fgb` / `missouri_release_dm_7km.fgb` - seed_point the release, direction UM / DM, distance_km 7.0
+  (cache keys fd84a1c6f916d4f50b52540535dd623b / a39a6c16fa687f23253c0467c210e69a): four flowlines each, the walks the
+  raw `missouri_um_17_07km.json` / `missouri_dm_17_07km.json` answers hold.
+- `nwis_06610000_dm_0km.fgb` - nwis_site 06610000 (Missouri River at Omaha), direction DM, distance_km 0.0 (cache key
+  a5f07d3139c09256e123c890f11ea2a2): NLDI's NWIS index lists it on 17219468, the release's own flowline.
+- `nwis_06610490_dm_0km.fgb` - nwis_site 06610490 (Missouri River at Hwy 92), direction DM, distance_km 0.0 (cache key
+  afb98796d55fb058bc34ce178d891301): the flowline 17219476.

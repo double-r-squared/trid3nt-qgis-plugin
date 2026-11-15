@@ -178,7 +178,8 @@ reach refuses `OBSERVATION_OFF_THE_REACH` naming each. The reach is cut DOWNSTRE
 release, so the INFLOW's discharge (and only it) is also read off a gauge outside the domain
 that NLDI lists on the UM walk, ABOVE the release: on the release's own flowline, which
 both walks hold, that is the smaller measure along the line, NHDPlus digitizing it the way
-it flows (`domain.py::above_on`, neither point moved). A level or an observation is a target
+it flows (`domain.py::above_on`, neither point moved); the discharge row is asked over the domain's box
+joined with the UM walk's (`fill._with_the_upstream_stem`), so such a gauge is in the answer at all. A level or an observation is a target
 on the solved water and stays inside the domain. A National Water Model reach is placed by its own
 `feature_id`, which is an NHDPlus COMID, against the same walks (no NWIS lookup): inside the domain it
 is kept on the stem and off on a tributary; outside it, on the UM walk, it is the inflow's discharge
@@ -302,7 +303,10 @@ match its need asks; a row declares one or neither - then, for a row that
 declares neither, the canvas, and nothing answering refuses by name
 (`DATA_SLOT_UNSATISFIED`). A need nothing measures refuses
 (`DATA_NEED_UNMATCHED`) and is never drawn instead. A stated-only row nothing
-supplied stops after the first rung with no verdict. The keyword sheet has its
+supplied stops after the first rung with no verdict. A row stated `'none'` (the
+word an `event_time` with no moment is stated in) is a stated absence: accepted
+empty, nothing fetched, and its stage reads nothing measured - a TELEMAC river
+run stating `level: 'none'` derives its outflow stage. The keyword sheet has its
 own three tiers: the engine's dictionary default, under the template's
 statement, under the fill's.
 

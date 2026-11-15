@@ -627,7 +627,7 @@ async def _ask_for(env: _Env, choice: SourceChoice,
     opens = _opens(env, decl)
     return filled(
         choice, decl.name.replace("_", " "),
-        _around(dom.bbox, _mesh_m(env)) if dom is not None and dom.bbox
+        _around(await _with_the_upstream_stem(env, decl, dom.bbox), _mesh_m(env)) if dom is not None and dom.bbox
         else None if lon is None or lat is None else _about(lon, lat, _span_km(env, decl)),
         Need(slot=decl.name, data_class=choice.need, lon=lon, lat=lat,
              opens=str(opens) if opens else None,
@@ -635,6 +635,22 @@ async def _ask_for(env: _Env, choice: SourceChoice,
         {"span_km": _span_km(env, decl), "of": _asked_of(decl, seed) or None,
          "measured": _measured(env, decl) or None,
          "seed_point": None if lon is None or lat is None else [lon, lat]})
+
+
+async def _with_the_upstream_stem(env: _Env, decl: Input, bbox: Sequence[float]) -> Sequence[float]:
+    """The box an INFLOW discharge is asked in: on a river run, the domain's joined with the main stem walked upstream.
+
+    The inflow rule admits a gauge above the release on that walk, outside the domain, so the ask holds the walk."""
+    from trid3nt_server.inputs.domain import walked_bbox
+
+    walk = await _stem(env, "UM") if decl.slot is DISCHARGE else None
+    if walk is None:
+        return bbox
+    over = await asyncio.to_thread(walked_bbox, env.run[walk])
+    if over is None:
+        return bbox
+    west, south, east, north = (float(v) for v in bbox)
+    return [min(west, over[0]), min(south, over[1]), max(east, over[2]), max(north, over[3])]
 
 
 async def _searched_in(env: _Env, decl: Input) -> list[float] | None:
@@ -752,19 +768,17 @@ async def _off_the_reach(env: _Env, value: Any, *, inflow: bool = False) -> dict
     gauge above the release on the UM stem too, standing outside the domain."""
     from shapely.geometry import Point, shape
 
-    from trid3nt_server.inputs.domain import above_on
+    from trid3nt_server.inputs.domain import above_on, flowline_ids
     from trid3nt_server.inputs.observation import sites
     from trid3nt_server.inputs.point import lonlat_of
 
     row = next((r for r in env.data.values() if r.slot is DOMAIN), None)
     dom = current_domain()
-    seed = await _question_seed(env)
-    if row is None or dom is None or not dom.geometry or seed is None \
-            or await _domain_companion(env, "centerline") is None:
+    seed = await _river_seed(env)
+    if seed is None:
         return {}
     water = shape(dom.geometry)
     span = _span_km(env, row)
-    walk = {} if span is None else {"distance_km": span}
     reach = f"the main stem walked {span:g} km up and down from the release" if span is not None \
         else "the main stem walked up and down from the release"
     upstream = f"the main stem walked {span:g} km upstream" if span is not None else "the main stem walked upstream"
@@ -785,8 +799,7 @@ async def _off_the_reach(env: _Env, value: Any, *, inflow: bool = False) -> dict
             continue
         if not stem:
             for way in ("UM", "DM"):
-                stem[way] = await _walked(env, f"reach_stem_{way.lower()}",
-                                          {"seed_point": list(seed), "direction": way, **walk})
+                stem[way] = await asyncio.to_thread(flowline_ids, env.run[await _stem(env, way)])
         try:
             own = frozenset({comid}) if comid else await _walked(
                 env, f"gauge_{usgs}_reach", {"nwis_site": usgs, "direction": "DM", "distance_km": 0.0})
@@ -809,6 +822,35 @@ async def _off_the_reach(env: _Env, value: Any, *, inflow: bool = False) -> dict
         journal_note(f"{name or site} ({site}) stands outside the run's domain, above the release on {upstream}: "
                      "a candidate for the inflow's discharge only.")
     return off
+
+
+async def _river_seed(env: _Env) -> Any:
+    """The release a RIVER run's main stem is walked from, or ``None`` off a river run."""
+    row = next((r for r in env.data.values() if r.slot is DOMAIN), None)
+    dom = current_domain()
+    if row is None or dom is None or not dom.geometry:
+        return None
+    seed = await _question_seed(env)
+    if seed is None or await _domain_companion(env, "centerline") is None:
+        return None
+    return seed
+
+
+async def _stem(env: _Env, way: str) -> str | None:
+    """The name the run holds the main stem walked ``way`` (UM or DM) from the release under, or ``None`` off a river run.
+
+    Walked once, the run's reach length each way, and held in the run's mapping as the runtime's own row."""
+    from trid3nt_server.inputs.domain import REACH_FETCH
+
+    seed = await _river_seed(env)
+    if seed is None:
+        return None
+    span = _span_km(env, next(r for r in env.data.values() if r.slot is DOMAIN))
+    name = f"reach_stem_{way.lower()}"
+    if name not in env.run:
+        env.run[name] = await _produce(env, _runtime_row(env, name, REACH_FETCH, {
+            "seed_point": list(seed), "direction": way, **({} if span is None else {"distance_km": span})}))
+    return name
 
 
 async def _walked(env: _Env, name: str, ask: Mapping[str, Any]) -> frozenset[int]:
@@ -1331,6 +1373,11 @@ async def _answer(state: Fill, name: str, held: Any, value: Any) -> None:
     row = getattr(held, "is_row", False)
     stated = held.default if value is None else value
     if name == getattr(state.workflow, "moment", "") and isinstance(stated, str) and stated.strip().lower() == NO_MOMENT_WORD:
+        state.inputs[name] = Verdict(ACCEPTED, None, origin=Origin.USER)
+        return
+    if row and isinstance(value, str) and value.strip().lower() == NO_MOMENT_WORD:
+        # A row stated "none" is a stated absence: nothing is fetched, and the run reads it as nothing measured.
+        production(state).run[name] = None
         state.inputs[name] = Verdict(ACCEPTED, None, origin=Origin.USER)
         return
     try:

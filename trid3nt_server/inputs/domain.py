@@ -19,7 +19,7 @@ from .geometry import flatten_geometries, read_geometry_doc, source_uri
 from .user_input import EmptyResultError, UserInputError, polygon_ring
 
 __all__ = ["REACH_FETCH", "Domain", "above_on", "domain", "domain_ring", "flowline_ids", "kind_under",
-           "measured_footprint", "needs_beside", "place_kind"]
+           "measured_footprint", "needs_beside", "place_kind", "walked_bbox"]
 
 logger = logging.getLogger("trid3nt_server.inputs.domain")
 
@@ -174,6 +174,17 @@ def flowline_ids(layer: Any) -> frozenset[int]:
         if comid is not None:
             found.add(int(comid))
     return frozenset(found)
+
+
+def walked_bbox(layer: Any) -> tuple[float, float, float, float] | None:
+    """The box a walked flowline layer spans, or ``None`` where it holds no line."""
+    from shapely.geometry import shape
+    from shapely.ops import unary_union
+
+    doc = read_geometry_doc(layer)
+    lines = [shape(f["geometry"]) for f in ((doc.get("features") or ()) if isinstance(doc, Mapping) else ())
+             if (f or {}).get("geometry")]
+    return tuple(unary_union(lines).bounds) if lines else None
 
 
 def above_on(layer: Any, comid: int, site: tuple[float, float], release: tuple[float, float]) -> bool:

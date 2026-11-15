@@ -14,7 +14,8 @@ from .user_input import WireArgsError
 
 __all__ = ["NO_MOMENT_WORD", "event_time", "instant"]
 
-#: What a wire event_time says when the ask has no moment; the coercion passes it through and the fill reads it as a stated absence.
+#: The word a stated ABSENCE is said in: an event_time with no moment (the coercion passes it through), or a data row
+#: nothing is fetched for; the fill reads either as stated and empty.
 NO_MOMENT_WORD = "none"
 
 
