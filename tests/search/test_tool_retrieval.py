@@ -193,6 +193,10 @@ _RECALL_FIXTURE = [
      "drop_minor_divergences"),
     ("make the stream network dendritic so every line flows into one line",
      "drop_minor_divergences"),
+    ("turn sand silt and clay percent into Green-Ampt hydraulic conductivity and wetting front suction",
+     "green_ampt_parameters"),
+    ("which USDA texture class is each soil cell and what are its infiltration parameters",
+     "green_ampt_parameters"),
     ("calibrate this groundwater model against the measured well levels", "calibrate"),
     ("tune the run's parameters so it matches what was measured", "calibrate"),
 ]

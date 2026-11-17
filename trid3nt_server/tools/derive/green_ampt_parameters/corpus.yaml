@@ -1,0 +1,8 @@
+green_ampt_parameters:
+- Green-Ampt infiltration parameters from soil texture
+- turn sand silt and clay percent into hydraulic conductivity and wetting front suction
+- soil texture class to Green-Ampt saturated conductivity and effective porosity
+- classify the soil into USDA texture classes and give me infiltration parameters
+- Rawls Brakensiek Miller Green-Ampt parameters for these soil rasters
+- infiltration parameters raster from SoilGrids sand silt clay
+- what are the Green-Ampt Ks, suction head and porosity of this soil
