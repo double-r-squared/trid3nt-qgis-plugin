@@ -9,3 +9,5 @@ byte from the object-store cache on 2026-11-13, nothing edited:
   (cache key 1b2ff27d6707e4c63b0ccf3f567c7e36): the same Etowah StreamRiver polygon, 1.03 km from the seed.
 - `willamette_portland_1km.fgb` - seed (-122.669784, 45.518485), the Willamette at Portland, radius_km 1.0 (cache
   key 5efb3f52ed2cc732131ce6a4e74e85f6): one StreamRiver polygon (26.99 km2) holding the seed.
+- `missouri_release_7_5km.fgb` - seed (-95.921233757, 41.257659140), the Missouri calibration canary's release, radius_km 7.5
+  (cache key 37db43357d3781c239030d6cc4e42c9e, recorded 2026-11-16): three StreamRiver polygons, 1840 ha.

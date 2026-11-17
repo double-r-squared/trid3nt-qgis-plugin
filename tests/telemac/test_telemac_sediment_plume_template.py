@@ -186,7 +186,7 @@ def test_every_slot_a_user_can_fill_reaches_the_wire():
     supersedes the matched bed, so both slots are arguments though both name a
     class."""
     assert {row.name for row in row_inputs(_workflow()) if row.fills_from_user} == {
-        "domain", "bed", "discharge", "level", "mesh"}
+        "domain", "banks", "bed", "discharge", "level", "mesh"}
 
 
 def test_every_published_read_carries_its_caption():

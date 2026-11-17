@@ -108,7 +108,7 @@ def test_every_slot_a_user_can_fill_reaches_the_wire():
     so all name a class or a role though none names a producer; the two areas
     are supplied and the line names none either."""
     assert {row.name for row in row_inputs(_WORKFLOW) if row.fills_from_user} == {
-        "domain", "line", "bed", "discharge", "level", "dredge_area",
+        "domain", "banks", "line", "bed", "discharge", "level", "dredge_area",
         "dump_area", "mesh"}
 
 

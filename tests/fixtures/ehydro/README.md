@@ -14,3 +14,7 @@ MO_10_OML_20260930_CS_517 (CENWO, blank datum, no elevation file stated), MO_01_
 (CENWK, `mllw` against depths below the water surface), SP_01_SPH_20261015_CS_2026_180_HF and CB_23_CR3_20261110_CS
 (tidal, MLLW in both places), TB_01_CFL_20261110_AD_TAULAR_CREEK (CESAM, NAVD 1988 coded, Z counted from a 0.0 ft normal pool),
 MO_11_OMM_20240507_CS_609_617_5 (CENWO, blank datum, depths on the date of survey, no `_FULL.XYZ`; recorded 2026-11-15).
+
+`missouri_omaha_survey_footprints.fgb` - the two `part = 'survey'` rows (the packages' own footprint polygons) of what
+`fetch_ehydro_surveys` returned over the box [-95.945, 41.19, -95.895, 41.265] on 2026-11-16 (cache key
+f89d0cfbd71a6b771970ca86738cb017): MO_11_OMM_20260416_CS_614_621 and MO_11_OMM_20260415_CS_606_614; the 28279 sounding rows left out.

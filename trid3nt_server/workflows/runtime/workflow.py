@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from .fill import Fill
     from .primitives import Primitive
 
-__all__ = ["EVENT_TIME", "REACH_LENGTH", "RunResult", "Workflow", "register_workflow"]
+__all__ = ["BANKS", "EVENT_TIME", "REACH_LENGTH", "RunResult", "Workflow", "register_workflow"]
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.workflow")
 
@@ -57,6 +57,13 @@ REACH_LENGTH = Input(
     desc="Leave unset unless the user names a reach length; the template's own span is used. How far downstream "
          "of the release or seed point the domain reaches, in km, greater than 0; the line's own end cuts a "
          "longer one short. A longer reach is a bigger mesh and a longer solve").stated()
+
+
+#: The water surface a river domain is cut from, when the run hands one instead of the fetch it would make.
+BANKS = Input(
+    name="banks", geometry="polygon",
+    desc="Leave unset unless the user hands the water surface of the reach: a polygon layer the reach is cut square "
+         "from, used as it is in place of the mapped water surface the run would fetch").stated()
 
 
 def _names_untaken(value: Any, untaken: set[str]) -> bool:
@@ -123,7 +130,7 @@ class Workflow:
         return (tuple(stated for slot in dict.fromkeys(
             row.slot for row in self.inputs if row.slot is not None)
             for stated in slot.states)
-            + (() if not desc else (replace(REACH_LENGTH, desc=desc),)))
+            + (() if not desc else (replace(REACH_LENGTH, desc=desc), BANKS)))
 
     def __init__(self, *, metadata: Any, inputs: Any, template: Any,
                  sensitivity: Sequence[tuple[str, str]] | SensitivityDecl = (),

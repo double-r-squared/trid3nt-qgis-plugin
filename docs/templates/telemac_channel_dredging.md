@@ -21,6 +21,7 @@ MAINTENANCE DREDGING of a navigation channel: how much comes out, and what the b
 | `dredge_area` | supplied by the caller | a polygon layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `dump_area` | supplied by the caller | a polygon layer you supply, as a uri or a layer name; required - the template names no source for it. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
+| `banks` | supplied by the caller | Leave unset unless the user hands the water surface of the reach: a polygon layer the reach is cut square from, used as it is in place of the mapped water surface the run would fetch | - |
 | `mesh` | supplied by the caller | a mesh this case already built, as its uri or its layer name, solved on in place of the one the run would build; the user may state one; unstated, the run builds its own. | - |
 
 ## The inputs

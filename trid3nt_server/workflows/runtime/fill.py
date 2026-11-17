@@ -240,6 +240,9 @@ async def _beside(env: _Env, decl: Input) -> dict[str, Any]:
     seed = await _seed(env, decl)
     held: dict[str, Any] = {}
     for name, word, geometry in needs_of(decl.slot, _asked_of(decl, seed)):
+        if (handed := await _handed_beside(env, name)) is not None:
+            held[name] = handed
+            continue
         aside = dataclasses.replace(decl, name=f"{decl.name}_{name}", kind="",
                                     slot=None, observes=word, geometry=geometry)
         _choice, value = await _probe(env, aside, decl.data_class, aside.name)
@@ -252,6 +255,15 @@ async def _beside(env: _Env, decl: Input) -> dict[str, Any]:
                 step=_data_step_label(aside.name))
         held[name] = value
     return held
+
+
+async def _handed_beside(env: _Env, name: str) -> Any:
+    """The layer the run was handed for a row its domain declares beside itself, or ``None``; used as it is, never fetched."""
+    if name not in env.data or env.supplied.get(name) is None:
+        return None
+    value = await read(env, name)
+    journal_note(f"{name} is the layer the run was handed: the run's own fetch of it is not made.")
+    return value
 
 
 async def _kind_of_the_water_under(env: _Env, decl: Input) -> Input:
@@ -269,7 +281,9 @@ async def _kind_of_the_water_under(env: _Env, decl: Input) -> Input:
     for name, observes in (("water", "water surface"), ("waterbody", "waterbody")):
         aside = dataclasses.replace(decl, name=f"{decl.name}_{name}", kind="", slot=None,
                                     observes=observes, geometry="polygon")
-        _choice, water = await _probe(env, aside, decl.data_class, aside.name)
+        water = await _handed_beside(env, "banks") if name == "water" else None
+        if water is None:
+            _choice, water = await _probe(env, aside, decl.data_class, aside.name)
         kind = "" if water is None else await asyncio.to_thread(kind_under, water, seed)
         if kind:
             break

@@ -304,7 +304,9 @@ declares neither, the canvas, and nothing answering refuses by name
 (`DATA_SLOT_UNSATISFIED`). A supplied layer an observation slot reads is read
 by the row of the fetch that produced it - its value and series columns, the
 zero its sites state - exactly as the matched one; it is the caller's choice, so
-no reach test is put to it. A need nothing measures refuses
+no reach test is put to it. A river domain's water surface (`banks`, the polygon
+its reach is cut square from) may be handed the same way: it is used as it is,
+the run's own fetch of it is not made, and the cut is unchanged. A need nothing measures refuses
 (`DATA_NEED_UNMATCHED`) and is never drawn instead. A stated-only row nothing
 supplied stops after the first rung with no verdict. A row stated `'none'` (the
 word an `event_time` with no moment is stated in) is a stated absence: accepted
