@@ -1,7 +1,7 @@
 # PEST++ - a study engine
 
 PEST++ (5.2.27, github.com/pestpp/pestpp) runs studies over a model: sensitivity (`pestpp-sen`), ensemble
-calibration (`pestpp-ies`) and the release's other tools. It is an engine like the others - one image, one
+calibration (`pestpp-ies`), Gauss-Levenberg-Marquardt calibration (`pestpp-glm`) and the release's other tools. It is an engine like the others - one image, one
 `LocalSolverSpec`, one dictionary, one output table - whose trials run a model the study directory carries.
 One template speaks it, `calibrate`, over a finished run of any engine with a piece.
 
@@ -27,12 +27,17 @@ path. Everything the manager writes, `pestpp.*`, is uploaded under the run prefi
 
 ## What it produces
 
-`outputs.OUTPUTS`, read off the study's files (`outputs.fetch_study` downloads them): `phi` per iteration of
-an ensemble study (`pestpp.phi.actual.csv`: run count, mean, spread, range, the base realization's),
-`parameter_ensemble` at an iteration (`pestpp.<i>.par.csv`, the last one unstated), `residuals` of the base
-realization per observation (`pestpp.<i>.base.rei`: group, measured, modelled, measured minus modelled,
-weight), and `sensitivity`, the Method of Morris summary per parameter (`pestpp.msn`). A read whose file the
-study did not write refuses `PESTPP_OUTPUT_MISSING`.
+`outputs.OUTPUTS`, read off the study's files (`outputs.fetch_study` downloads them): `phi` per iteration
+(an ensemble study's `pestpp.phi.actual.csv`: run count, mean, spread, range, the base realization's; a glm
+study's `pestpp.iobj`: run count and the phi of its one parameter set, measurement and regularization parts),
+`parameter_ensemble` at an iteration (`pestpp.<i>.par.csv`, the last one unstated), glm's `parameters` (the
+best set, `pestpp.par`, or the set at an iteration, `pestpp.<i>.par`) and `parameter_iterations` (`pestpp.ipar`,
+from the start), `jacobian` (glm's last, `pestpp.jcb`: each observation's derivative by each parameter, in PEST's
+transformed space), `residuals` per observation (the base realization's, `pestpp.<i>.base.rei`, or glm's best set's,
+`pestpp.rei`: group, measured, modelled, measured minus modelled, weight), and `sensitivity`, the Method of Morris
+summary per parameter (`pestpp.msn`). A read both ies and glm answer takes the tool, ies unstated. A read whose file
+the study did not write refuses `PESTPP_OUTPUT_MISSING`. A glm study also writes, by PEST++'s default, a FOSM
+posterior from the observations' weights (`pestpp.post.cov`, `pestpp.par.usum.csv`); nothing reads it.
 
 ## The dictionary
 
@@ -65,7 +70,9 @@ gauges (`gauges`) for TELEMAC - and a stated row the run's piece does not read r
 taken; of several, the one confirmed on the review card, which lists them newest first and offers the newest (AUTO
 takes it, said on the run); none refuses `RUN_NONE_IN_CASE` naming the engines. A stated run wins.
 
-Beside the run: the parameters to tune (`parameters`, each an identifier of the run's engine with its lower and
+Beside the run: the method (`method`, `ies` unstated: an ensemble smoother whose realizations are drawn inside the
+bounds; or `glm`, regression of one parameter set from the run's own values over a finite-difference Jacobian; any
+other refuses `PESTPP_METHOD_UNKNOWN` at fill), the parameters to tune (`parameters`, each an identifier of the run's engine with its lower and
 upper factor - or, as `lower_value` and `upper_value`, its bounds in the run's own unit - and the source they are
 read from; unstated bounds refuse), how many of them to tune (`tune`), the moment the observations are asked at
 (`event_time`) and the observations (`observe`). `workflow.py` runs one order; over a MODFLOW run
@@ -86,11 +93,13 @@ read from; unstated bounds refuse), how many of them to tune (`tune`), the momen
    file the study adds reads the heads; a run of more than one layer or one time step refuses.
 3. Where `tune` is below the number of parameters, a pestpp-sen pass ranks them by the mean absolute elementary
    effect and the top ones are confirmed on the review card (AUTO takes them as ranked, said).
-4. The study is reviewed on the one review card, then pestpp-ies runs.
-5. The deck is solved again with the base realization's last parameters, staged and solved as an ordinary MODFLOW
-   run (`stage_run` with MODFLOW's staged check, the MODFLOW solver) and published as MODFLOW publishes a run,
-   over a sheet read off the calibrated deck itself; phi per iteration, the residual at each well (simulated
-   minus observed) and each multiplier's ensemble range are charted beside it.
+4. The study is reviewed on the one review card (the method on it), then the method's tool runs: pestpp-ies, or
+   pestpp-glm. noptmax unstated refuses for either.
+5. The deck is solved again with the calibrated parameters - the base realization's last (ies), the best set
+   (glm) - staged and solved as an ordinary MODFLOW run (`stage_run` with MODFLOW's staged check, the MODFLOW
+   solver) and published as MODFLOW publishes a run, over a sheet read off the calibrated deck itself; phi per
+   iteration, simulated against observed, the residual at each well (simulated minus observed) and each
+   multiplier's range (across the last ensemble, or across glm's iterations from the start) are charted beside it.
 
 Over a TELEMAC run (`authoring/telemac.py`), a TELEMAC-2D deck (another module refuses):
 
@@ -120,7 +129,8 @@ Over a TELEMAC run (`authoring/telemac.py`), a TELEMAC-2D deck (another module r
    calibrated (`PESTPP_RUN_UNSTEADY`).
 
 The run's record is that engine's run's, its `study` entry naming the study run, the finished run, each
-parameter's bounds, source and calibrated value, phi and the last ensemble.
+parameter's bounds, source and calibrated value, phi, the method (`tool`) and the last ensemble (ies) or the set at
+each iteration (glm).
 
 ## What is not built yet
 

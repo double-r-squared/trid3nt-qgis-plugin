@@ -26,7 +26,8 @@ RECORD_FILENAME = "pestpp.rec"
 
 #: What each tool writes that a finished study is read by, beside its record; a tool not
 #: listed is held to its record alone.
-_RESULTS = {"ies": ("pestpp.phi.actual.csv",), "sen": ("pestpp.msn",)}
+_RESULTS = {"ies": ("pestpp.phi.actual.csv",), "sen": ("pestpp.msn",),
+            "glm": ("pestpp.iobj", "pestpp.par", "pestpp.rei", "pestpp.jcb")}
 
 #: Everything the manager writes is named after the control file, and so is uploaded by that stem.
 _OUTPUTS = ["pestpp.*", "pestpp_metrics.json"]

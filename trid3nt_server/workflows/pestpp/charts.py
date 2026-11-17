@@ -18,11 +18,13 @@ def _title(caption: str) -> str:
 
 
 def phi_chart(phi: Sequence[Mapping[str, Any]], *, caption: str) -> dict[str, Any]:
-    """Phi per iteration: the ensemble's mean, its range, and the base realization's where the study kept one."""
+    """Phi per iteration: the ensemble's mean, its range, and the base realization's where the study kept one;
+    a glm study's one parameter set's."""
     rows = [{"iteration": row["iteration"], "phi": row[key], "series": label}
             for row in phi for key, label in (("mean", "mean"), ("min", "lowest"), ("max", "highest"),
-                                              ("base", "base realization")) if key in row]
+                                              ("base", "base realization"), ("phi", "parameter set")) if key in row]
     first, last = phi[0], phi[-1]
+    key, said = ("mean", "the ensemble's mean phi") if "mean" in first else ("phi", "phi")
     return build_chart_payload(
         vega_lite_spec={"mark": {"type": "line", "point": True}, "data": {"values": rows},
                         "encoding": {"x": {"field": "iteration", "type": "ordinal", "title": "Iteration"},
@@ -30,8 +32,8 @@ def phi_chart(phi: Sequence[Mapping[str, Any]], *, caption: str) -> dict[str, An
                                            "title": "Phi (sum of weighted squared residuals)"},
                                      "color": {"field": "series", "type": "nominal", "title": None}}},
         title=_title(caption),
-        caption=(f"The {caption}: the ensemble's mean phi falls from {first['mean']:.4g} at iteration "
-                 f"{first['iteration']} to {last['mean']:.4g} at iteration {last['iteration']}."))
+        caption=(f"The {caption}: {said} falls from {first[key]:.4g} at iteration "
+                 f"{first['iteration']} to {last[key]:.4g} at iteration {last['iteration']}."))
 
 
 def fit_chart(residuals: Sequence[Mapping[str, Any]], *, caption: str) -> dict[str, Any]:
@@ -73,8 +75,8 @@ def residual_chart(residuals: Sequence[Mapping[str, Any]], *, caption: str) -> d
 
 def parameter_chart(ensemble: Mapping[str, Mapping[str, float]], parameters: Sequence[Any], *,
                     caption: str) -> dict[str, Any]:
-    """Each parameter's multiplier across the last ensemble - its range and the base realization's value -
-    against the bounds it was tuned inside."""
+    """Each parameter's multiplier across the last ensemble, or a glm study's iterations - its range and the
+    calibrated value under ``base`` - against the bounds it was tuned inside."""
     rows = []
     for parameter in parameters:
         values = [float(real[parameter.name]) for real in ensemble.values()]

@@ -678,7 +678,7 @@ layers (`inputs/run.py`) - and stands where that run was solved: the run's mesh 
 later row is matched at, and a row supplied beside it is adopted as a domain row's would be. The
 record of a study is the record of the run its best parameters made: an ordinary run of the engine the
 study ran its model on (`Workflow.recorded_engine`), carrying a `study` entry that names the study and
-keeps its ensemble. The dictionary, the staging, the worker, the output table and the MODFLOW template
+its method and keeps its last ensemble (ies) or its parameters at each iteration (glm). The dictionary, the staging, the worker, the output table and the MODFLOW template
 are `docs/design/pestpp.md`.
 
 ## Mesh

@@ -2,8 +2,9 @@
 
 ``launch`` runs one order - the finished run's deck fetched, its engine's piece writing a template over each
 named parameter and observing each target, the study reviewed, a sensitivity pass where it ranks more
-parameters than are tuned, the ensemble study, then the deck solved once more with the base realization's
-last parameters through the run's own engine and published as that engine publishes a run.
+parameters than are tuned, the calibration by the study's method (an ensemble, pestpp-ies, or one parameter
+set over its Jacobian, pestpp-glm), then the deck solved once more with the calibrated parameters through the
+run's own engine and published as that engine publishes a run.
 """
 
 from __future__ import annotations
@@ -34,11 +35,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("trid3nt_server.workflows.pestpp.workflow")
 
-__all__ = ["ENGINES", "PestppWorkflow", "piece", "ranked"]
+__all__ = ["ENGINES", "METHODS", "PestppWorkflow", "piece", "ranked"]
 
 #: The engines a study calibrates, each by its piece ``authoring/<engine>.py``: the parameter writer, the
 #: observation reader, the trial's command, and the calibrated run's solve and publish.
 ENGINES = ("modflow", "telemac")
+
+#: The PEST++ tools a calibration runs, the study's ``method``, each by the stage it is shown as: an ensemble
+#: smoother, or Gauss-Levenberg-Marquardt regression of one parameter set over a finite-difference Jacobian.
+METHODS = {"ies": "ensemble", "glm": "regression"}
 
 #: The study's observation rows; each piece reads one, and a stated row its piece does not read refuses.
 _ROWS = ("observe", "gauges")
@@ -56,6 +61,36 @@ def piece(engine: str) -> ModuleType:
 def ranked(sensitivity: Sequence[Mapping[str, Any]]) -> list[str]:
     """The parameters of a Morris summary, most sensitive first: by the mean absolute elementary effect."""
     return [row["parameter"] for row in sorted(sensitivity, key=lambda row: -float(row["sen_mean_abs"]))]
+
+
+def _method(stated: Any) -> str:
+    """The study's method as stated, ies unstated; one PEST++ calibrates by no other way refuses naming them."""
+    method = "ies" if stated in (None, "") else str(stated).strip().lower()
+    if method not in METHODS:
+        raise PestppError(f"a study calibrates by {' or '.join(METHODS)}, and {stated!r} is neither",
+                          error_code="PESTPP_METHOD_UNKNOWN")
+    return method
+
+
+def _calibration(method: str, files: Path) -> dict[str, Any]:
+    """What a finished calibration is read for: phi per iteration, the residuals and the calibrated parameters
+    (the base realization's last, an ensemble's; the best set, glm's), and the values each parameter took - the
+    last ensemble, or glm's set at each iteration."""
+    from . import outputs
+
+    phi = outputs.read_phi(files, tool=method)
+    residuals = outputs.read_residuals(files, tool=method)
+    if method == "glm":
+        best, iterations = outputs.read_parameters(files), outputs.read_parameter_iterations(files)
+        return {"phi": phi, "residuals": residuals, "best": best,
+                "spread": {**{f"iteration {i}": values for i, values in iterations.items()}, "base": best},
+                "kept": {"iterations": iterations}}
+    ensemble = outputs.read_parameter_ensemble(files)
+    best = ensemble.get("base")
+    if best is None:
+        raise PestppError("the study's last ensemble carries no base realization, whose parameters the "
+                          "calibrated run is solved with", error_code="PESTPP_OUTPUT_MISSING")
+    return {"phi": phi, "residuals": residuals, "best": best, "spread": ensemble, "kept": {"ensemble": ensemble}}
 
 
 def _bounds(identifier: str, stated: Any) -> tuple[float, float, str, bool]:
@@ -132,12 +167,19 @@ class PestppWorkflow(Workflow):
         from trid3nt_server.workflows.runtime.fill import REJECTED, Verdict
 
         refused = super().judged(state)
+        stated = getattr(state, "inputs", {}).get("method")
+        try:
+            method = _method(getattr(stated, "value", None))
+        except PestppError as unknown:
+            refused["method"] = Verdict(REJECTED, stated.value, code=unknown.error_code, reason=str(unknown))
+            method = "ies"
         own, _ = keyword_floor([PESTPP], dict(state.keywords))
         if own.get("NOPTMAX") in (None, 0):
+            evaluated = "ensemble is" if method == "ies" else "starting parameters are"
             refused["noptmax"] = Verdict(
                 REJECTED, own.get("NOPTMAX"), code="PESTPP_ITERATIONS_UNSTATED",
-                reason="noptmax states how many iterations PEST++ runs, and unstated it is PEST++'s own 0: the "
-                       "ensemble is evaluated and nothing is calibrated. State it, keywords={\"noptmax\": N}.")
+                reason=f"noptmax states how many iterations PEST++ runs, and unstated it is PEST++'s own 0: the "
+                       f"{evaluated} evaluated and nothing is calibrated. State it, keywords={{\"noptmax\": N}}.")
         return refused
 
     def recorded_engine(self, run: RunResult) -> str | None:
@@ -146,7 +188,7 @@ class PestppWorkflow(Workflow):
 
     async def launch(self, state: Fill) -> RunResult:
         """The run, in order: the deck, the study's files, its review, the ranking where one is asked for, the
-        ensemble study, then the calibrated deck solved and published."""
+        calibration by the study's method, then the calibrated deck solved and published."""
         from trid3nt_server.inputs.run_notes import journal_note
         from trid3nt_server.render.pipeline_emitter import begin_substeps, current_emitter, substep
         from trid3nt_server.workflows.runtime.fill import call, production, read
@@ -157,6 +199,7 @@ class PestppWorkflow(Workflow):
         env = production(state)
         run = env.run
         emitter = current_emitter()
+        method = _method(await read(env, "method"))
         finished = await read(env, "run")
         study = piece(finished.engine)
         unread = sorted(name for name in _ROWS if name != study.ROW and env.supplied.get(name) is not None)
@@ -210,7 +253,7 @@ class PestppWorkflow(Workflow):
                 staged = await staging.stage_study(where, tool=tool, control=staging.CONTROL_FILENAME,
                                                    name=f"{self.name} of {finished.run_id}",
                                                    model=finished.engine)
-                handle = await stage("ranking" if tool == "sen" else "ensemble", engine.solve_case,
+                handle = await stage(METHODS.get(tool, "ranking"), engine.solve_case,
                                      run=staged, cores=int(staged["case"]["cores"]))
                 files = await asyncio.to_thread(outputs.fetch_study, handle["run_id"], work / f"{tool}-out")
                 return handle, files, parameters, templates
@@ -218,25 +261,22 @@ class PestppWorkflow(Workflow):
             if ranking:
                 kept = await self._ranked(studied, chosen, options, int(tune))
                 chosen = [row for row in chosen if row[0].lower() in kept]
-            await self._reviewed(chosen, sources, observed, options)
-            handle, files, parameters, templates = await studied("ies", chosen, options)
-            phi = outputs.read_phi(files)
-            ensemble = outputs.read_parameter_ensemble(files)
-            residuals = outputs.read_residuals(files)
-            best = ensemble.get("base")
-            if best is None:
-                raise PestppError("the study's last ensemble carries no base realization, whose parameters the "
-                                  "calibrated run is solved with", error_code="PESTPP_OUTPUT_MISSING")
-            solved = await stage("solve", study.calibrated, finished=finished, study_dir=work / "ies",
+            await self._reviewed(chosen, sources, observed, options, method,
+                                 stated=env.supplied.get("method") is not None)
+            handle, files, parameters, templates = await studied(method, chosen, options)
+            read_off = await asyncio.to_thread(_calibration, method, files)
+            best = read_off["best"]
+            solved = await stage("solve", study.calibrated, finished=finished, study_dir=work / method,
                                  the_deck=the_deck, parameters=parameters, templates=templates, best=best,
                                  frame=frame)
-            run["study"] = {"run_id": handle["run_id"], "tool": "ies", "model_engine": finished.engine,
+            run["study"] = {"run_id": handle["run_id"], "tool": method, "model_engine": finished.engine,
                             "finished_run": finished.run_id, "parameters": {
                                 p.name: {"lower": p.lower, "upper": p.upper, "source": sources.get(p.name) or None,
                                          "calibrated": best[p.name]} for p in parameters},
-                            "phi": phi, "ensemble": ensemble,
+                            "phi": read_off["phi"], **read_off["kept"],
                             "observations": [{"name": o.name, "target": o.value} for o in observed]}
-            value = await self._publish_calibrated(study, solved, phi=phi, residuals=residuals, ensemble=ensemble,
+            value = await self._publish_calibrated(study, solved, phi=read_off["phi"],
+                                                   residuals=read_off["residuals"], ensemble=read_off["spread"],
                                                    parameters=parameters, finished=finished)
             return RunResult(value=value, results=dict(run))
         finally:
@@ -270,7 +310,7 @@ class PestppWorkflow(Workflow):
         return kept
 
     async def _reviewed(self, chosen: Sequence[tuple[str, float, float, bool]], sources: Mapping[str, str],
-                        observed: list, options: Mapping[str, Any]) -> None:
+                        observed: list, options: Mapping[str, Any], method: str, *, stated: bool) -> None:
         """The study before it runs, on the one review card where a person reviews; a decline ends the run."""
         from trid3nt_server.inputs.gate.input_review import gate_input_review
 
@@ -280,7 +320,10 @@ class PestppWorkflow(Workflow):
                                         "in the run's own unit" if absolute else "times the run's own"),
                                     basis=Origin.USER, real_source_if_any=sources.get(name.lower()) or None)
                      for name, lower, upper, absolute in chosen] + [SyntheticInput(param="observations", value=len(observed),
-                                                                         basis=Origin.PRODUCER)],
+                                                                         basis=Origin.PRODUCER),
+                                                          SyntheticInput(param="method", value=f"pestpp-{method}",
+                                                                         basis=Origin.USER if stated
+                                                                         else Origin.TEMPLATE)],
             params={PESTPP.MODULE_INPUT[k].keyword: v for k, v in options.items()})
         if not outcome.proceed:
             raise PestppError(f"the study was not run: {outcome.cancel_reason or 'declined'}",

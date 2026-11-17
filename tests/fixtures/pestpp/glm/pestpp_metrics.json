@@ -1,0 +1,11 @@
+{
+  "name": "calibrate of 01M7N1797S8ZR0VGK22N1PKPVQ",
+  "model": "modflow",
+  "module": "glm",
+  "agents": 7,
+  "completed": true,
+  "correct_end": true,
+  "status": "ok",
+  "run_id": "01M7N18VZJVQRRR1EBCB1JQZVS",
+  "wall_s": 46.07
+}

@@ -33,3 +33,11 @@ base model's own outputs: a synthetic benchmark, read here for file shapes only.
   `study/`, the pestpp-ies study over it (`pestpp.pst` as the template wrote it, `pestpp.phi.actual.csv`, the
   last ensemble `pestpp.3.par.csv` and the base realization's residuals `pestpp.3.base.rei`, one well); and
   `calibrated_study_heads.csv`, the head the calibrated MODFLOW run itself wrote at that well's cell.
+- `glm/` - from the pestpp-glm study of the `pestpp_calibrate_des_moines_glm` canary (a fetched MODFLOW water table,
+  NPF_K and SFR_RHK against 15 published steady head targets, noptmax 3, 7 agents): `pestpp.pst` as the template
+  wrote it, the objective per iteration `pestpp.iobj`, the parameters per iteration `pestpp.ipar`, the best set
+  `pestpp.par` and the last iteration's `pestpp.3.par`, the best set's residuals `pestpp.rei` and the last
+  iteration's `pestpp.rei3`, the Jacobian `pestpp.jcb` (PEST's own binary layout: every name fits it), and the
+  worker's `pestpp_metrics.json`.
+- `glm_freyberg/` - `pestpp.jcb` of a serial pestpp-glm run (noptmax 1) over the `study/` interface with its model:
+  PEST++'s long-name binary layout. The targets are the base model's outputs, so it is read for its layout only.
