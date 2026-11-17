@@ -239,3 +239,69 @@ def test_the_missouri_reach_opens_flat_at_its_derived_outflow_level(monkeypatch)
     assert channel["opening"] == "CONSTANT ELEVATION"
     assert channel["level_m"] == pytest.approx(291.385, abs=1e-3)
     assert float(np.min(bed[roles["inflow"]])) < channel["level_m"]
+
+
+#: The main stem NLDI walked downstream from the Missouri release (tests/fixtures/nhdplus_nldi/README.md): the line the
+#: reach was cut along, which a river run's domain carries as its centerline.
+_MISSOURI_WALK = Path(__file__).resolve().parents[1] / "fixtures" / "nhdplus_nldi" / "missouri_release_dm_7km.fgb"
+
+
+def _missouri_held(monkeypatch, level_m):
+    from types import SimpleNamespace
+
+    from trid3nt_server.tools.mesh.shared.nodes import read_accepted_mesh_nodes
+
+    xy, _cells, bed, _ll = read_accepted_mesh_nodes(str(_MISSOURI / "mesh.2dm"), utm_epsg=32615)
+    monkeypatch.setattr(D, "mesh_nodes", lambda mesh: (xy, bed))
+    mesh = {"artifact": type("A", (), {"utm_epsg": 32615, "probes": {}})(), "min_edge_m": 40.0, "mesh_id": "m"}
+    domain = SimpleNamespace(companions={"centerline": str(_MISSOURI_WALK)})
+    channel = _run(mesh=mesh, files=_files(roles=_missouri_roles()), carrier=889.1489829888001,
+                   stage=Observation(value=level_m, site_name="a gauge below the reach"), domain=domain)
+    return channel, xy, bed
+
+
+def test_a_reach_held_under_its_inflows_level_opens_sloped_along_its_walked_line(monkeypatch):
+    """The recorded Missouri reach at Strickler 33 and 889.149 m3/s: its inflow section conveys the flow at 293.95 m on
+    the fall the measured bed makes along the walked line (0.888 m over 7037 m). A level measured under it at the
+    outflow opens the reach on the plane between the two, never flat at the outflow's level over the whole reach."""
+    channel, xy, bed = _missouri_held(monkeypatch, 292.0)
+    surface = channel["surface"]
+    assert channel["opening"] == D.SLOPED == "SPECIAL"
+    assert channel["outflow_stage_m"] == pytest.approx(292.0) and surface["z_out"] == pytest.approx(292.0)
+    assert surface["z_in"] == pytest.approx(293.95, abs=1e-3)
+    assert surface["length_m"] == pytest.approx(7037.4, abs=0.5)
+    roles = _missouri_roles()
+    faces = D.surface_at(surface, np.array([xy[roles[r]].mean(axis=0) for r in ("inflow", "outflow")]))
+    assert faces == pytest.approx([293.95, 292.0], abs=1e-3)
+    levels = D.surface_at(surface, xy)
+    assert levels.min() >= 292.0 - 1e-9 and levels.max() <= 293.95 + 1e-9
+    assert bool(np.all(levels > bed))
+
+
+def test_a_level_over_the_inflows_own_opens_flat_at_it(monkeypatch):
+    channel, _xy, _bed = _missouri_held(monkeypatch, 294.5)
+    assert channel["opening"] == "CONSTANT ELEVATION" and channel["surface"] is None
+    assert channel["level_m"] == pytest.approx(294.5)
+
+
+def test_the_sloped_openings_routine_is_the_engines_own_hook_in_fixed_form(monkeypatch):
+    channel, _xy, _bed = _missouri_held(monkeypatch, 292.0)
+    surface = channel["surface"]
+    text = D.surface_routine(surface)
+    assert "SUBROUTINE USER_CONDIN_H" in text and f"NL = {len(surface['line'])}" in text
+    assert "Z_IN = 293.950D0" in text and "Z_OUT = 292.000D0" in text
+    assert all(len(line) <= 72 for line in text.splitlines())
+
+
+def test_the_sloped_opening_is_compiled_beside_the_boundary_lists():
+    from trid3nt_server.workflows.telemac.modules.telemac2d import _boundaries
+
+    surface = {"line": [[0.0, 0.0], [1000.0, 0.0]], "s_in": 0.0, "s_out": 1000.0, "z_in": 98.0, "z_out": 96.0}
+    measured = {"liquid_boundary_order": ["inflow", "outflow"], "liquid_boundary_prescribes": ["flowrate", "elevation"],
+                "inflow_q_m3s": 600.0, "outflow_stage_m": 96.0, "inflow_q_series": None,
+                "outflow_stage_series": None, "start_time_s": 0.0, "until_s": 60.0, "time_step_s": 1.0}
+    keywords, files = _boundaries({"measured": {**measured, "surface": surface}, "tracers": []})
+    assert keywords["FORTRAN_FILE"] == "user_fortran"
+    assert "SUBROUTINE USER_CONDIN_H" in files["user_fortran/user_condin_h.f"]
+    keywords, files = _boundaries({"measured": measured, "tracers": []})
+    assert "FORTRAN_FILE" not in keywords and files == {}

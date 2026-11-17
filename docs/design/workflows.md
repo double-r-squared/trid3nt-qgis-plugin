@@ -311,7 +311,11 @@ the run's own fetch of it is not made, and the cut is unchanged. A need nothing 
 supplied stops after the first rung with no verdict. A row stated `'none'` (the
 word an `event_time` with no moment is stated in) is a stated absence: accepted
 empty, nothing fetched, and its stage reads nothing measured - a TELEMAC river
-run stating `level: 'none'` derives its outflow stage. The keyword sheet has its
+run stating `level: 'none'` derives its outflow stage; one handed a gauge's
+measured level holds its outflow there and, where its inflow section derives a
+higher level, opens on the plane between the two along the walked line
+(`INITIAL CONDITIONS 'SPECIAL'`, the engine's `USER_CONDIN_H` written from the
+settle into the run's user Fortran). The keyword sheet has its
 own three tiers: the engine's dictionary default, under the template's
 statement, under the fill's.
 

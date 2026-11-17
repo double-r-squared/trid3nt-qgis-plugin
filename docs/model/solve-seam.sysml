@@ -766,6 +766,14 @@ package SolveSeam {
         own deepest node refuses by naming both numbers, because a height above
         a gauge's own zero is a different surface and adopting one silently is
         the second vertical datum this derivation exists without.
+
+        A reach held at a measured outflow level whose inflow section conveys
+        the discharge higher - the normal depth there at the fall the measured
+        bed makes along the walked line between the faces - opens SLOPED: on
+        the plane between those two levels, linear in distance along the
+        walked line (INITIAL CONDITIONS 'SPECIAL', the engine's own
+        USER_CONDIN_H compiled from the run's user Fortran). A flat start at
+        the outflow level would leave a long falling reach's inflow face dry.
         */
     }
 
@@ -1053,6 +1061,10 @@ package SolveSeam {
 
     satisfy requirement OutflowStageIsNormalDepth by uniformFlow;
     satisfy requirement OutflowStageIsNormalDepth by opening;
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/telemac/test_telemac_open_channel.py::test_a_reach_held_under_its_inflows_level_opens_sloped_along_its_walked_line";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/telemac/test_telemac_open_channel.py::test_the_sloped_opening_is_compiled_beside_the_boundary_lists";
     verify requirement OutflowStageIsNormalDepth by
         "tests/telemac/test_telemac_outflow_stage.py::test_the_stage_is_the_depth_at_which_the_section_conveys_the_discharge";
     verify requirement OutflowStageIsNormalDepth by

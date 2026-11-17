@@ -73,6 +73,18 @@ def test_a_level_a_gauge_held_is_not_rederived(staged):
     assert piece._level_at(directory, held, 25.0) == {}
 
 
+def test_a_measured_outflow_under_a_sloped_opening_is_never_rederived(staged):
+    """A river run held at a downstream gauge's measured level opens sloped (INITIAL CONDITIONS 'SPECIAL', its own
+    routine): no trial and no calibrated rerun restates the level or the opening."""
+    directory, the_deck = staged
+    stated = dict(the_deck.stated, **{"PRESCRIBED ELEVATIONS": ["290.474", "0.0"],
+                                      "INITIAL CONDITIONS": ["SPECIAL"], "FORTRAN FILE": ["user_fortran"]})
+    held = piece.Deck(**{**the_deck.__dict__, "stated": stated})
+    assert piece.outflow_levels(directory, the_deck=held, parameters=[_friction()]) is None
+    assert piece._level_at(directory, held, 25.0) == {}
+    assert piece._level_at(directory, held, 40.0) == {}
+
+
 def test_a_coefficient_outside_the_derived_range_is_no_trial():
     trial = _trial_module()
     with pytest.raises(SystemExit):

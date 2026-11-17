@@ -13,7 +13,7 @@ from trid3nt_server.inputs.run_notes import journal_note
 from trid3nt_server.tools.mesh.shared.nodes import read_centerline_utm
 from ..errors import TelemacError
 from .accepted_mesh import mesh_nodes, to_utm
-from .opening import FLAT
+from .opening import FLAT, SLOPED
 
 __all__ = ["settle_dredge"]
 
@@ -187,6 +187,11 @@ async def settle_dredge(*, mesh: dict[str, Any], line: Any, domain: Any,
     fields = {name: await asyncio.to_thread(
                   _dredge_field, source, name, utm_epsg=utm_epsg, node_xy=node_xy)
               for name, source in areas.items() if source is not None}
+    if str(settled.get("opening") or "") == SLOPED:
+        raise TelemacError(
+            "the dredge's reference surface is read off one level the water stands at, and this run opens sloped "
+            "between a measured outflow level and its inflow's: there is no one level to grade against.",
+            error_code="TELEMAC_REFERENCE_LEVEL_SLOPED")
     flat = str(settled.get("opening") or "") == FLAT
     await asyncio.to_thread(
         _refuse_a_cut_past_the_stock, fields[dug_area]["vertices"],

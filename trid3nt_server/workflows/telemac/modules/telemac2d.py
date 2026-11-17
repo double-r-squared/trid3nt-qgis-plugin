@@ -294,13 +294,20 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
         **({} if not flowrates else {"PRESCRIBED_FLOWRATES": flowrates}),
         **({} if not elevations else {"PRESCRIBED_ELEVATIONS": elevations}),
         **({} if not tracers else {"PRESCRIBED_TRACERS_VALUES": tracers})}
-    if not columns:
-        return (keywords, {})
-    return ({**keywords, "LIQUID_BOUNDARIES_FILE": LIQUID_BOUNDARIES_FILENAME},
-            {LIQUID_BOUNDARIES_FILENAME: liquid_boundaries_file(
-                columns, start_s=start_s,
-                until_s=float(measured["until_s"]), tail_s=_SERIES_TAIL_S,
-                note=str(measured.get("discharge_note") or ""))})
+    files: dict[str, Any] = {}
+    if columns:
+        keywords["LIQUID_BOUNDARIES_FILE"] = LIQUID_BOUNDARIES_FILENAME
+        files[LIQUID_BOUNDARIES_FILENAME] = liquid_boundaries_file(
+            columns, start_s=start_s,
+            until_s=float(measured["until_s"]), tail_s=_SERIES_TAIL_S,
+            note=str(measured.get("discharge_note") or ""))
+    if measured.get("surface") is not None:
+        # The sloped opening between the run's boundary levels: the settle states SPECIAL, the routine lays it.
+        from ..authoring.opening import SURFACE_ROUTINE, surface_routine
+
+        keywords["FORTRAN_FILE"] = USER_FORTRAN_DIR
+        files[f"{USER_FORTRAN_DIR}/{SURFACE_ROUTINE}"] = surface_routine(measured["surface"])
+    return (keywords, files)
 
 
 def _tracer_note(per_tracer: Sequence[Any]) -> None:

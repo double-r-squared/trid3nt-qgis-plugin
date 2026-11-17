@@ -110,7 +110,8 @@ Over a TELEMAC run (`authoring/telemac.py`), a TELEMAC-2D deck (another module r
    the study writes `outflow_levels.json`: that level derived at 81 coefficients across the tuned range. The trial reads
    its own coefficient, takes its level off the table and restates `PRESCRIBED ELEVATIONS` and `INITIAL ELEVATION`
    through TelemacCas before solving, so no trial is bounded by a level another friction set. A level a gauge held
-   stays as stated.
+   stays as stated, and so does the sloped opening a measured outflow level opens on (`INITIAL CONDITIONS 'SPECIAL'`
+   and its user Fortran, copied with the deck).
 4. The calibrated run is the finished deck with the best coefficient - and, where derived, the outflow level and flat
    opening re-derived at it - written into its steering file, staged with TELEMAC's staged check, solved by the
    TELEMAC solver and published as TELEMAC publishes a run. A finished run whose record says it ended UNSTEADY is not

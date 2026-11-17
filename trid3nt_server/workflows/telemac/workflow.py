@@ -580,6 +580,7 @@ class TelemacWorkflow(Workflow):
             await stage("channel", open_channel, mesh=run["mesh"],
                         files=run["mesh_files"], carrier=await read(env, inflow),
                         stage=await read(env, level) if level else None,
+                        domain=await read(env, domain),
                         friction_law=self._asserted(run, "LAW_OF_BOTTOM_FRICTION"),
                         friction_coefficient=self._asserted(
                             run, "FRICTION_COEFFICIENT"))
@@ -592,8 +593,8 @@ class TelemacWorkflow(Workflow):
             await stage(mark.name, settle_release, point=held,
                         mesh=run["mesh"], domain=await read(env, domain),
                         label=mark.label,
-                        # A channel opens flat at its outflow level, so a source is wet only where the bed stands under it.
-                        **({"level_m": run["channel"].get("level_m")}
+                        # A channel opens at its outflow level, flat or sloped, so a source is wet only where the bed stands under it.
+                        **({"level_m": run["channel"].get("level_m"), "surface": run["channel"].get("surface")}
                            if inflow and isinstance(run.get("channel"), Mapping) else {}),
                         **({"continue_from": previous} if mark.continues else {}))
         await measure("produce")
