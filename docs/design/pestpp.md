@@ -107,7 +107,9 @@ Over a TELEMAC run (`authoring/telemac.py`), a TELEMAC-2D deck (another module r
    in the image `trid3nt-local/pestpp-telemac` (workers/pestpp/Dockerfile.telemac: the PEST++ release and the steering
    driver on the TELEMAC worker image), which the engine picks by the case's `server_facts.model`. Where the finished
    run's outflow level is the normal depth it derived (the stated level equals the derivation at its own coefficient),
-   the study writes `outflow_levels.json`: that level derived at 81 coefficients across the tuned range. The trial reads
+   the study writes `outflow_levels.json`: that level derived at 81 coefficients across the tuned range, over the
+   length the run measured its friction slope along its walked line (`server_facts.reach_length_m`; the chord between
+   the faces where the domain holds no line). The trial reads
    its own coefficient, takes its level off the table and restates `PRESCRIBED ELEVATIONS` and `INITIAL ELEVATION`
    through TelemacCas before solving, so no trial is bounded by a level another friction set. A level a gauge held
    stays as stated, and so does the sloped opening a measured outflow level opens on (`INITIAL CONDITIONS 'SPECIAL'`

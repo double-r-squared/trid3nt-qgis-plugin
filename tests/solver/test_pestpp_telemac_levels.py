@@ -85,6 +85,20 @@ def test_a_measured_outflow_under_a_sloped_opening_is_never_rederived(staged):
     assert piece._level_at(directory, held, 40.0) == {}
 
 
+def test_a_trial_derives_its_level_over_the_length_the_run_measured(staged):
+    """A run that measured its friction slope along its walked line (7037.4 m, server_facts.reach_length_m) derived
+    291.489 m at Strickler 33; the study derives over that same length, so it knows the level as its own."""
+    directory, the_deck = staged
+    stated = dict(the_deck.stated, **{"PRESCRIBED ELEVATIONS": ["291.489", "0.0"]})
+    along = piece.Deck(**{**the_deck.__dict__, "stated": stated, "reach_length_m": 7037.4})
+    table = piece.outflow_levels(directory, the_deck=along, parameters=[_friction()])
+    at_33 = table["coefficients"].index(pytest.approx(33.0))
+    assert table["stages"][at_33] == pytest.approx(291.489, abs=1e-3)
+    # The chord's 291.385 m is not what that length derives, so it reads as a held level.
+    chord = piece.Deck(**{**the_deck.__dict__, "reach_length_m": 7037.4})
+    assert piece.outflow_levels(directory, the_deck=chord, parameters=[_friction()]) is None
+
+
 def test_a_coefficient_outside_the_derived_range_is_no_trial():
     trial = _trial_module()
     with pytest.raises(SystemExit):

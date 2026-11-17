@@ -62,13 +62,16 @@ _SAME_LEVEL_M = 1.0e-3
 @dataclass(frozen=True)
 class Deck:
     """What a staged TELEMAC deck states that a study reads: its steering file's name, every keyword it states, the
-    module, the result file the finished run wrote, and the frame its UTM coordinates are in."""
+    module, the result file the finished run wrote, the frame its UTM coordinates are in, and the length its outflow
+    level was derived over."""
 
     steering: str
     stated: Mapping[str, list[str]]
     module: str
     result: str
     utm_epsg: int
+    #: The length the run measured its friction slope over, along its walked line; None for a run that held none.
+    reach_length_m: float | None = None
 
 
 def command(the_deck: Deck) -> str:
@@ -107,7 +110,8 @@ def deck(directory: Path, finished: Any) -> Deck:
                           "print its gauges", error_code="PESTPP_OBSERVATION_UNPLACED")
     results = list(case.get("results") or finished.outputs)
     return Deck(steering=steering, stated=stated, module=module, result=str(results[0]),
-                utm_epsg=int(case["server_facts"]["utm_epsg"]))
+                utm_epsg=int(case["server_facts"]["utm_epsg"]),
+                reach_length_m=case["server_facts"].get("reach_length_m"))
 
 
 def _templated(text: str, identifier: str, field: str) -> tuple[str, float]:
@@ -270,7 +274,7 @@ def _derived(directory: Path, the_deck: Deck) -> tuple[Any, int, float, int, lis
     if not (faces["inflow"] and faces["outflow"]):
         return None
     xy, bed = _nodes(directory, the_deck)
-    channel = _measured_channel(faces, xy, bed)
+    channel = _measured_channel(faces, xy, bed, length_m=the_deck.reach_length_m)
     law, coefficient = int(stated["LAW OF BOTTOM FRICTION"][0]), float(stated["FRICTION COEFFICIENT"][0])
     stage = normal_depth_stage(channel, law=law, coefficient=coefficient, discharge_q=flows[0])["stage_m"]
     which = [k for k, value in enumerate(elevations) if abs(value - stage) <= _SAME_LEVEL_M]

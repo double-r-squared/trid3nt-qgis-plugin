@@ -31,7 +31,7 @@ from .accepted_mesh import (
     topology_of,
 )
 
-__all__ = ["FLAT", "SLOPED", "SURFACE_ROUTINE", "open_channel", "open_water", "surface_at",
+__all__ = ["FLAT", "SLOPED", "SURFACE_ROUTINE", "open_channel", "open_water", "reach_length_along", "surface_at",
            "surface_routine"]
 
 # What the engine is told to lay: a flat surface at the level. A sheet of one depth over a measured bed follows every bar and
@@ -51,6 +51,7 @@ _NO_WATER: dict[str, Any] = {
     "inflow_q_series": None, "outflow_stage_series": None,
     # The sloped opening's plane along the walked line; None for a flat one.
     "surface": None,
+    "reach_length_m": None,
 }
 
 
@@ -209,8 +210,10 @@ def _reported_discharge(carrier: Any) -> tuple[float, str]:
 
 
 def _measured_channel(roles: Mapping[str, Any], node_xy: Any,
-                      node_bed: Any) -> dict[str, Any]:
-    """The two bed medians are over the inflow and outflow runs' nodes; the fall between them over their distance is the friction slope."""
+                      node_bed: Any, *, length_m: float | None = None) -> dict[str, Any]:
+    """The two bed medians are over the inflow and outflow runs' nodes; the fall between them over their distance is the friction slope.
+    ``length_m`` is that distance along the walked line where the run holds one (``reach_length_along``); else the chord
+    between the two faces, which a meander makes shorter than the river."""
     import numpy as np
 
     bed = None if node_bed is None else np.asarray(node_bed, dtype=float)
@@ -236,7 +239,7 @@ def _measured_channel(roles: Mapping[str, Any], node_xy: Any,
         medians[role] = median
         centres[role] = xy[nodes].mean(axis=0)
         role_nodes[role] = nodes
-    length = float(np.hypot(*(centres["outflow"] - centres["inflow"])))
+    length = float(length_m) if length_m else float(np.hypot(*(centres["outflow"] - centres["inflow"])))
     return {"bed_top_m": medians["inflow"],
             "bed_drop_m": medians["inflow"] - medians["outflow"],
             "reach_length_m": round(length, 3),
@@ -391,7 +394,8 @@ async def open_water(
             "duration_s": duration_s,
             "time_step_s": time_step_s,
             "result_slf": result,
-            "bed_source": facts["bed_source"]},
+            "bed_source": facts["bed_source"],
+            **({"reach_length_m": opening["reach_length_m"]} if opening.get("reach_length_m") else {})},
     }
 
 
@@ -426,7 +430,9 @@ async def open_channel(
     law, coefficient = int(friction_law), float(friction_coefficient)
     inflow_q, discharge_note = _reported_discharge(carrier)
     line = (getattr(domain, "companions", None) or {}).get("centerline")
-    bed = _measured_channel(roles, node_xy, node_bed)
+    along = None if line is None else await asyncio.to_thread(
+        reach_length_along, roles, node_xy, line, utm_epsg=mesh_zone(mesh))
+    bed = _measured_channel(roles, node_xy, node_bed, length_m=along)
     surface = None
     if held is not None and line is not None:
         surface = await asyncio.to_thread(
@@ -468,6 +474,8 @@ async def open_channel(
         "depth_m": round(float(normal["depth_m"]), 3),
         "opening": FLAT if surface is None else SLOPED,
         "surface": surface,
+        # The length the friction slope was measured over, along the walked line; a study re-deriving the level reads it.
+        "reach_length_m": along,
         "outflow_stage_m": round(float(normal["stage_m"]), 3),
         "inflow_q_m3s": inflow_q,
         # The window each number came out of; the boundary writes the series and the number stands for the rest.
@@ -523,6 +531,12 @@ def _ordered_line(roles: Mapping[str, Any], node_xy: Any, line_source: Any, utm_
         line = line[::-1]
         s_in, s_out = _chainage(line, centres)
     return line, float(s_in), float(s_out)
+
+
+def reach_length_along(roles: Mapping[str, Any], node_xy: Any, line_source: Any, *, utm_epsg: int) -> float:
+    """How far the water runs between the inflow and outflow faces, measured along the walked line."""
+    _line, s_in, s_out = _ordered_line(roles, node_xy, line_source, utm_epsg)
+    return round(s_out - s_in, 3)
 
 
 def _sloped(roles: Mapping[str, Any], node_xy: Any, node_bed: Any, line_source: Any, held_m: float, *,

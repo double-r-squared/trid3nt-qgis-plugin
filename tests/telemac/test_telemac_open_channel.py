@@ -305,3 +305,24 @@ def test_the_sloped_opening_is_compiled_beside_the_boundary_lists():
     assert "SUBROUTINE USER_CONDIN_H" in files["user_fortran/user_condin_h.f"]
     keywords, files = _boundaries({"measured": measured, "tracers": []})
     assert "FORTRAN_FILE" not in keywords and files == {}
+
+
+def test_the_derived_outflows_friction_slope_is_measured_along_the_walked_line(monkeypatch):
+    """The recorded Missouri reach meanders: its faces stand 6481.3 m apart in a straight line and 7037.4 m apart along
+    the walked line the reach was cut from. The fall the bed makes between them is over the river's length, so the
+    slope is gentler and the same flow stands higher: 291.489 m, not the 291.385 m the chord gave."""
+    from types import SimpleNamespace
+
+    from trid3nt_server.tools.mesh.shared.nodes import read_accepted_mesh_nodes
+
+    xy, _cells, bed, _ll = read_accepted_mesh_nodes(str(_MISSOURI / "mesh.2dm"), utm_epsg=32615)
+    monkeypatch.setattr(D, "mesh_nodes", lambda mesh: (xy, bed))
+    mesh = {"artifact": type("A", (), {"utm_epsg": 32615, "probes": {}})(), "min_edge_m": 40.0, "mesh_id": "m"}
+    channel = _run(mesh=mesh, files=_files(roles=_missouri_roles()), carrier=889.1489829888001,
+                   domain=SimpleNamespace(companions={"centerline": str(_MISSOURI_WALK)}))
+    assert channel["reach_length_m"] == pytest.approx(7037.4, abs=0.5)
+    assert channel["normal"]["length_m"] == pytest.approx(7037.4, abs=0.5)
+    assert channel["outflow_stage_m"] == pytest.approx(291.489, abs=1e-3)
+    # A domain holding no walked line (a drawn one) measures the chord, as before.
+    assert _run(mesh=mesh, files=_files(roles=_missouri_roles()), carrier=889.1489829888001
+                )["outflow_stage_m"] == pytest.approx(291.385, abs=1e-3)
