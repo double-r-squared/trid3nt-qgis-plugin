@@ -23,7 +23,7 @@ description is not it. The template-grammar lint refuses a DOC name, a
 controls= argument, or a desc= on a value input.
 
 A template states NO MESH RECIPE either, unless the question cannot be asked
-over the one the workflow builds from those slots: `rain_on_grid` triangulates a
+over the one the workflow builds from those slots: `rain_on_grid` (and `rain_on_soil`, by import) triangulates a
 catchment as a band, `agitation` punches a structure out of the water, and those
 two state their own. Every other package lets the workflow own its stages - the
 recipe, the seated settle, the inputs the mesh ask, the engine and the bed
@@ -61,6 +61,7 @@ a hyetograph against a constant rate.
 | `micropollutant_release/` | `telemac_micropollutant_release` - a sorbing substance released into a reach: where it ends up dissolved, on the river's suspended sediment and on the bed, over the five tracers the micropol process appends. |
 | `eutrophication/` | `telemac_eutrophication` - what ONE PASS down an enriched reach does to it: algal growth on stated nitrate and phosphate, the nutrient drawdown, and the oxygen the growth and its decay drive, all read along the reach rather than over a season. |
 | `rain_on_grid/` | `telemac_rain_on_grid` - a storm over the domain this run solves on, to the peak depth and the outlet hydrograph, charted and placed as the station that carries it; the domain is the catchment traced upslope of a pour point or the basin the user drew, and the land-cover table its infiltration surface is read from is the template's value. |
+| `rain_on_soil/` | `telemac_rain_on_soil` - the same storm over the same catchment and mesh band, infiltrating by Green-Ampt (RAINFALL-RUNOFF MODEL 3): the conductivity at each node off the soil row's texture, the roughness off `rain_on_grid`'s land-cover table, the suction and saturated water content offered off the soil and the initial water content stated. |
 | `agitation/` | `artemis_harbor_agitation` - swell at the harbour mouth to the agitation coefficient behind a declared structure, `field("KD")` off ARTEMIS and its profile along the transect the workflow measures through the structure on the incident direction; the water it solves over is the domain slot and the structure's centreline becomes the footprint the mesh subtracts through the shared structure ingestion. |
 | `nearshore_waves/` | `tomawac_nearshore_waves` - what the offshore swell becomes at the shore: the TOMAWAC spectrum carried in across the seaward rim at the sea state the wave slot read off a buoy, shoaling and refracting over the charted bed until depth-induced breaking takes it down; the height, the period and the direction charted at the matched buoy, and the breaking band drawn as the shape it is. Its domain is the water the coastline leaves inside the drawn window. |
 | `wave_driven_currents/` | `tomawac_wave_driven_currents` - the current breaking waves drive along the shore: TELEMAC-2D coupled to TOMAWAC on one mesh, the wave field recomputed on the deck's own coupling period and its radiation stresses driving the flow, the speed and its two components charted beside the wave height at the matched buoy. Its domain is the water the coastline leaves inside the drawn window. |

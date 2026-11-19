@@ -190,6 +190,7 @@ from trid3nt_server.workflows.telemac.templates.eutrophication.eutrophication im
 from trid3nt_server.workflows.telemac.templates.ice_cover.ice_cover import telemac_ice_cover as _telemac_ice_cover  # noqa: E402,F401
 from trid3nt_server.workflows.telemac.templates.channel_dredging.channel_dredging import telemac_channel_dredging as _telemac_channel_dredging  # noqa: E402,F401
 from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.templates.rain_on_soil.rain_on_soil import telemac_rain_on_soil as _telemac_rain_on_soil  # noqa: E402,F401
 from trid3nt_server.workflows.telemac.templates.agitation.agitation import artemis_harbor_agitation as _artemis_harbor_agitation  # noqa: E402,F401
 from trid3nt_server.workflows.telemac.templates.nearshore_waves.nearshore_waves import tomawac_nearshore_waves as _tomawac_nearshore_waves  # noqa: E402,F401
 from trid3nt_server.workflows.telemac.templates.wave_driven_currents.wave_driven_currents import tomawac_wave_driven_currents as _tomawac_wave_driven_currents  # noqa: E402,F401

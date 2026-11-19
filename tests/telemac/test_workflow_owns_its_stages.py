@@ -341,7 +341,7 @@ def test_every_registered_template_carries_the_moment_and_the_beds_frame():
 
     templates = [tool.fn.workflow for tool in TOOL_REGISTRY.values()
                  if hasattr(tool.fn, "workflow")]
-    assert len(templates) == 20
+    assert len(templates) == 21
     for workflow in templates:
         over_a_run = any(row.slot is RUN for row in workflow.inputs)
         wanted = {"event_time"} if over_a_run else {"event_time", "vertical_frame"}

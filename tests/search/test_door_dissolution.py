@@ -31,6 +31,7 @@ EXPECTED_TEMPLATES = {
     "telemac_eutrophication",
     "telemac_ice_cover",
     "telemac_rain_on_grid",
+    "telemac_rain_on_soil",
     "telemac3d_stratified_flow",
     "artemis_harbor_agitation",
     "tomawac_nearshore_waves",

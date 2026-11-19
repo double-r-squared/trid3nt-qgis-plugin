@@ -267,7 +267,7 @@ def rog_run(monkeypatch, tmp_path):
                         lambda _uri, utm_epsg=None: _NODES)
     monkeypatch.setattr(
         nodes_mod, "sample_raster_at_nodes",
-        lambda _path, lonlat, interp="nearest": np.array(
+        lambda _path, lonlat, interp="nearest", fill_holes=True: np.array(
             [_CLASSES[(round(float(a), 2), round(float(b), 2))] for a, b in lonlat],
             dtype=float))
     monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3",

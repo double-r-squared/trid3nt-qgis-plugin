@@ -2,7 +2,7 @@
 
 # Templates
 
-19 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+20 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
 
 ## [`artemis_harbor_agitation`](artemis_harbor_agitation.md)
 
@@ -91,6 +91,12 @@ Module `telemac2d`.
 ## [`telemac_rain_on_grid`](telemac_rain_on_grid.md)
 
 How much RUNOFF a storm produces from the catchment a point drains, as an outlet hydrograph and a flood-depth map.
+
+Module `telemac2d`.
+
+## [`telemac_rain_on_soil`](telemac_rain_on_soil.md)
+
+How much of a storm the SOIL takes in and how much RUNS OFF the catchment a point drains, by the soil's texture, as an outlet hydrograph and a flood-depth map.
 
 Module `telemac2d`.
 

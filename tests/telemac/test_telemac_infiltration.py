@@ -73,7 +73,7 @@ def surface(monkeypatch):
     monkeypatch.setattr(nodes_mod, "read_accepted_mesh_nodes",
                         lambda _uri, utm_epsg=None: (_POINTS, _CELLS, _BED, _LONLAT))
     monkeypatch.setattr(nodes_mod, "sample_raster_at_nodes",
-                        lambda _path, lonlat, interp="nearest":
+                        lambda _path, lonlat, interp="nearest", fill_holes=True:
                         np.array([41.0, 22.0, 7.0]))
     monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3",
                         lambda _uri: b"")
@@ -164,7 +164,7 @@ def test_the_land_cover_is_read_as_class_codes_never_blended(surface, monkeypatc
 
     kernels: list[str] = []
     monkeypatch.setattr(nodes_mod, "sample_raster_at_nodes",
-                        lambda _path, lonlat, interp="nearest":
+                        lambda _path, lonlat, interp="nearest", fill_holes=True:
                         kernels.append(interp) or np.array([41.0, 22.0, 7.0]))
     surface()
     assert kernels == ["nearest"]

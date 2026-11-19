@@ -18,7 +18,7 @@ from typing import Any, Callable, Mapping
 from .input import Input
 
 __all__ = ["BED", "DISCHARGE", "DOMAIN", "DRAW", "EXTENT", "LEVEL", "LINE",
-           "MESH", "OBSERVE", "RAIN", "RUN", "Slot", "WAVE", "WEATHER",
+           "MESH", "OBSERVE", "RAIN", "RUN", "SOIL", "Slot", "WAVE", "WEATHER",
            "ask_on_canvas", "draw_on_canvas", "ingest_slot", "needs_of"]
 
 logger = logging.getLogger("trid3nt_server.inputs.slots")
@@ -143,6 +143,12 @@ RAIN = Slot("rain", ingestion="rain",
             classes=frozenset({"precipitation series"}), record=True,
             reads="record")
 
+#: The soil under the domain, as the Green-Ampt parameters of its texture: the row matches the sand fraction and
+#: the silt, clay and organic carbon are produced beside it on the same grid.
+SOIL = Slot("soil", ingestion="soil", classes=frozenset({"soil"}), reads="raster",
+            desc="the soil under the domain: the sand percent raster its texture is read from, with silt, clay and "
+                 "organic carbon fetched beside it on the same grid, derived into Green-Ampt parameters")
+
 #: The sea state at the open edge: one record, several columns, measured somewhere near.
 WAVE = Slot("wave", ingestion="wave", classes=frozenset({"wave series"}), record=True)
 
@@ -162,7 +168,11 @@ def needs_of(slot: Slot | None, kind: str) -> tuple[tuple[str, str, str], ...]:
     """The rows a row of this TYPE declares beside the one its own class
     matched, for a value of this KIND.
 
-    Only the domain declares any; the slot states the need and never fetches."""
+    The domain and the soil declare them; the slot states the need and never fetches."""
+    if slot is SOIL:
+        from .soil import BESIDE
+
+        return BESIDE
     if slot is not DOMAIN:
         return ()
     from .domain import needs_beside

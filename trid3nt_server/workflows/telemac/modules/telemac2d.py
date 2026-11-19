@@ -23,7 +23,7 @@ from trid3nt_server.workflows.runtime.module import MOMENT
 from .module import ORIGIN_OF_TIME, USER_FORTRAN_DIR, TelemacModule
 from .outputs import PRIMITIVES, read_drogues
 
-__all__ = ["T2D", "Atmosphere", "Boundaries", "Breach", "Friction", "Infiltration",
+__all__ = ["T2D", "Atmosphere", "Boundaries", "Breach", "Friction", "GreenAmpt", "Infiltration",
            "MODULE_OUTPUT", "Oil", "Storm", "Rating", "Runoff", "Sources",
            "TracerNames", "Wind", "SOURCES_FILENAME"]
 
@@ -62,6 +62,7 @@ LISTING: frozenset[str] = frozenset({"FLUX"})
 SOURCES_FILENAME = "river_sources.txt"
 # Distributed fields of a rain-fed catchment: per-node curve number, friction zones and laws, the block hyetograph, and the outlet's Z(Q).
 CN_MAP_FILENAME = "rog_cn_map.dat"
+GREEN_AMPT_MAP_FILENAME = "rog_ks_map.dat"
 FRICTION_LAWS_FILENAME = "rog_friction.tbl"
 ZONES_FILENAME = "rog_zones.dat"
 HYETOGRAPH_FILENAME = "rog_hyeto.txt"
@@ -433,13 +434,10 @@ def _infiltration(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     from trid3nt_server.tools.mesh.shared.nodes import (
         accepted_mesh_nodes,
         node_slopes_from_mesh,
-        sample_layer_at_nodes,
     )
 
     points_utm, cells, bed, lonlat = accepted_mesh_nodes(value["mesh"])
-    table = {int(code): tuple(row) for code, row in dict(value["table"]).items()}
-    rows = [table.get(int(round(float(code))), tuple(value["unmapped"]))
-            for code in sample_layer_at_nodes(value["landcover"], lonlat, interp="nearest")]
+    rows = _landcover_rows(value, lonlat)
     uniform = value.get("uniform_cn")
     cn2 = [float(uniform) if uniform is not None else float(row[0]) for row in rows]
     if value.get("steep_slope_correction"):
@@ -458,6 +456,104 @@ def _infiltration(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     friction, friction_files = _friction({
         "manning_per_node": [float(row[1]) for row in rows]})
     return ({**runoff, **friction}, {**runoff_files, **friction_files})
+
+
+def _landcover_rows(value: Mapping[str, Any], lonlat: Any) -> list[tuple[Any, ...]]:
+    """The land-cover table's row at each node: the class under it, else the ``unmapped`` row."""
+    from trid3nt_server.tools.mesh.shared.nodes import sample_layer_at_nodes
+
+    table = {int(code): tuple(row) for code, row in dict(value["table"]).items()}
+    return [table.get(int(round(float(code))), tuple(value["unmapped"]))
+            for code in sample_layer_at_nodes(value["landcover"], lonlat, interp="nearest")]
+
+
+def GreenAmpt(*, soil: Any, landcover: Any, table: Any, unmapped: Any  # noqa: N802
+              ) -> Mapping[str, Any]:
+    """The Green-Ampt surface: the soil's conductivity and the land cover's roughness at every node, read at the mesh's nodes at fill time.
+
+    ``table`` maps a land-cover class to a row whose second column is Manning n; ``unmapped`` is the row for a class outside it.
+    """
+    return MappingProxyType({"mesh": "mesh", "soil": soil, "landcover": landcover,
+                             "table": table, "unmapped": unmapped})
+
+
+# Table 2 of Rawls, Brakensiek and Miller (1983), clay to sand, in mm/h: outside it a K is used as stated with a note.
+_USUAL_GREEN_AMPT_K = (0.3, 117.8)
+# The global keywords the routine reads beside the per-node conductivity; none is a dictionary default a run may start from.
+_GREEN_AMPT_GLOBALS = ("SUCTION", "SATURATED_WATER_CONTENT", "INITIAL_WATER_CONTENT")
+
+
+def _green_ampt(value: Mapping[str, Any], *, run: Mapping[str, Any]
+                ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """The surface -> the conductivity scatter, the friction zones and their files.
+
+    The per-node value is the Green-Ampt K of the soil (Rawls et al. 1983 Eq. 1), cm/h written as the mm/h the routine reads.
+    """
+    import numpy as np
+
+    from trid3nt_server.inputs.run_notes import journal_note
+    from trid3nt_server.tools.mesh.shared.nodes import accepted_mesh_nodes, sample_layer_at_nodes
+
+    unstated = [T2D.slot(name).keyword for name in _GREEN_AMPT_GLOBALS if run.get(name) is None]
+    if unstated:
+        raise SlotRefused(
+            f"{', '.join(unstated)} {'is' if len(unstated) == 1 else 'are'} unstated: the Green-Ampt capacity reads "
+            "the suction head and the moisture deficit SATURATED minus INITIAL WATER CONTENT once over the domain, "
+            "nothing measured the soil's moisture before this storm, and the engine's defaults are no soil's. State "
+            "each in keywords (SUCTION in m, the two water contents in m3/m3).")
+    theta_s, theta_i = float(run["SATURATED_WATER_CONTENT"]), float(run["INITIAL_WATER_CONTENT"])
+    if not 0.0 <= theta_i <= theta_s <= 1.0 or float(run["SUCTION"]) < 0.0:
+        raise SlotRefused(
+            f"INITIAL WATER CONTENT {theta_i:g} and SATURATED WATER CONTENT {theta_s:g} with SUCTION "
+            f"{float(run['SUCTION']):g} m are no soil: the water contents lie between 0 and 1, the initial at most "
+            "the saturated, and the suction is not negative. State them again.")
+    points_utm, _cells, _bed, lonlat = accepted_mesh_nodes(value["mesh"])
+    k_cm_h = np.asarray(sample_layer_at_nodes(value["soil"].layer("green_ampt_hydraulic_conductivity"), lonlat,
+                                              interp="nearest", fill_holes=False), dtype=float)
+    holes = ~np.isfinite(k_cm_h)
+    if holes.any():
+        lon, lat = lonlat[int(np.flatnonzero(holes)[0])][:2]
+        raise SlotRefused(
+            f"the soil states no conductivity under {int(holes.sum())} of {holes.size} mesh nodes ({lon:.5f}, "
+            f"{lat:.5f} among them): its texture is unmapped there or falls in no class. Hand the soil row a "
+            "texture that covers the whole domain.")
+    ks = _checked("Green-Ampt conductivity K (mm/h)", k_cm_h * 10.0, above=0.0, usual=_USUAL_GREEN_AMPT_K)
+    rows = ["#X Y KS (Green-Ampt conductivity K of the soil, mm/h)",
+            *(f"{a:.3f} {b:.3f} {k:.4f}" for (a, b), k in zip(points_utm[:, :2], ks))]
+    journal_note(
+        f"Green-Ampt: K at {ks.size} nodes, {ks.min():.3g}-{ks.max():.3g} mm/h; SUCTION {float(run['SUCTION']):.4g} m, "
+        f"SATURATED WATER CONTENT {theta_s:.4g}, INITIAL WATER CONTENT {theta_i:.4g}.")
+    friction, friction_files = _friction({
+        "manning_per_node": [float(row[1]) for row in _landcover_rows(value, lonlat)]})
+    return ({"FORMATTED_DATA_FILE_2": GREEN_AMPT_MAP_FILENAME, **friction},
+            {GREEN_AMPT_MAP_FILENAME: "\n".join(rows) + "\n", **friction_files})
+
+
+def _over_the_mesh(soil: Any, run: Mapping[str, Any], quantity: str) -> float | None:
+    """One soil parameter averaged over the mesh, each node weighted by a third of the area of every triangle it holds.
+
+    Nodes the parameter has no value under are left out; ``None`` where no node has one or the run has no mesh yet.
+    """
+    import numpy as np
+
+    from trid3nt_server.tools.mesh.shared.nodes import accepted_mesh_nodes, sample_layer_at_nodes
+
+    if soil is None or not run.get("mesh"):
+        return None
+    points_utm, cells, _bed, lonlat = accepted_mesh_nodes(run["mesh"])
+    values = np.asarray(sample_layer_at_nodes(soil.layer(quantity), lonlat, interp="nearest", fill_holes=False),
+                        dtype=float)
+    a, b, c = (np.asarray(points_utm)[np.asarray(cells)[:, i], :2] for i in range(3))
+    third = 0.5 * np.abs((b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (c[:, 0] - a[:, 0]) * (b[:, 1] - a[:, 1])) / 3.0
+    area = np.zeros(len(values))
+    for i in range(3):
+        np.add.at(area, np.asarray(cells)[:, i], third)
+    held = np.isfinite(values) & (area > 0)
+    return float(np.sum(values[held] * area[held]) / np.sum(area[held])) if held.any() else None
+
+
+def _scaled(value: float | None, factor: float) -> float | None:
+    return None if value is None else value * factor
 
 
 def Friction(*, manning_per_node: Any) -> Mapping[str, Any]:  # noqa: N802
@@ -581,8 +677,8 @@ def storm_rain(series: Any, record: Rain | None) -> Rain | None:
     return Rain.every(_STORM_INTERVAL_S, series)
 
 
-def _storm(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
-                                              Mapping[str, Any]]:
+def _storm(value: Mapping[str, Any], *, run: Mapping[str, Any] | None = None
+           ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """The storm -> either the block file and its reader, or the rate keywords.
 
     A record is ``[t_end_s, gross_mm]`` blocks with a dry tail past the last instant so the recession limb can fall; a design rate is the engine's constant branch.
@@ -606,17 +702,18 @@ def _storm(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                max(0.0, depth) * min(1.0, (opens + rain.interval_s) / rain.interval_s))
               for opens, depth in zip(rain.series.times_s, rain.series.values)
               if opens + rain.interval_s > 0.0]
-    keywords, files = _blocks_file(blocks, value["settled"]["until_s"])
+    keywords, files = _blocks_file(blocks, value["settled"]["until_s"],
+                                   (run or {}).get("RAINFALL_RUNOFF_MODEL"))
     return ({**keywords, **_rain_tracers(value["tracers"])}, files)
 
 
-def _blocks_file(blocks: Any,
-                 until_s: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """Gross rain per interval -> the block file and the routine that reads it.
+def _blocks_file(blocks: Any, until_s: Any, model: Any = None
+                 ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """Gross rain per interval -> the block file and the deck's ``model``'s routine that reads it.
 
     Blocks are ``[t_end_s, gross_mm]``; the tail past the last instant is dry.
     """
-    from ..authoring.storm import BLOCK_ROUTINE_FILENAME, block_routine
+    from ..authoring.storm import block_routine
 
     rows: list[tuple[float, float]] = []
     previous = 0.0
@@ -635,6 +732,7 @@ def _blocks_file(blocks: Any,
     tail = float(until_s) + _STORM_INTERVAL_S
     if rows[-1][0] < tail:
         rows.append((tail, 0.0))
+    routine, text = block_routine(model)
     lines = ["#HYETOGRAPH FILE (block type; mm per interval)",
              "#T (s) RAINFALL (mm)", "0.",
              *(f"{t:.3f} {mm:.5f}" for t, mm in rows)]
@@ -646,7 +744,7 @@ def _blocks_file(blocks: Any,
              "FORMATTED_DATA_FILE_1": HYETOGRAPH_FILENAME,
              "FORTRAN_FILE": USER_FORTRAN_DIR},
             {HYETOGRAPH_FILENAME: "\n".join(lines) + "\n",
-             f"{USER_FORTRAN_DIR}/{BLOCK_ROUTINE_FILENAME}": block_routine()})
+             f"{USER_FORTRAN_DIR}/{routine}": text})
 
 
 def _rain_tracers(tracers: Any) -> Mapping[str, Any]:
@@ -681,13 +779,14 @@ T2D.composites(reads={
     "friction": ("manning_per_node",),
     "infiltration": ("mesh", "landcover", "uniform_cn", "steep_slope_correction",
                      "initial_abstraction"),
+    "green_ampt": ("mesh", "soil", "landcover"),
     "rating": ("measured",),
     "storm": ("mm_per_day", "hours", "settled", "series", "record", "tracers"),
     "tracer_names": ("named_by",)},
                sources=_sources, wind=_wind, breach=_breach, atmosphere=expand_atmosphere,
                oil=_oil, coupling=couples(water_column=False),
                boundaries=_boundaries, runoff=_runoff, friction=_friction,
-               infiltration=_infiltration,
+               infiltration=_infiltration, green_ampt=_green_ampt,
                rating=_rating, storm=_storm, tracer_names=_tracer_names)
 T2D.reads(**PRIMITIVES, drogues=read_drogues)
 # A settled release point is where the one source enters, in the mesh's metres; a measured sample is what the one declared tracer opens at.
@@ -695,6 +794,11 @@ T2D.FILLED_BY = MappingProxyType({
     "source": {"ABSCISSAE_OF_SOURCES": lambda placed: [placed["at"][0]],
                "ORDINATES_OF_SOURCES": lambda placed: [placed["at"][1]]},
     "observe": {"INITIAL_VALUES_OF_TRACERS": lambda sample: [sample.value]},
+    # The suction head and the saturated water content the routine reads once over the domain, area-weighted off the
+    # soil at the nodes: Rawls et al. (1983) Eq. 1 takes the deficit off the effective porosity, so that is the saturated
+    # content; cm of suction is the routine's m. A run stating either keyword wins.
+    "soil": {"SUCTION": lambda soil, run: _scaled(_over_the_mesh(soil, run, "green_ampt_wetting_front_suction"), 0.01),
+             "SATURATED_WATER_CONTENT": lambda soil, run: _over_the_mesh(soil, run, "green_ampt_effective_porosity")},
     # The latitude is what a coupled ice module computes the sun at; no other term of a cartesian, tide-free deck reads it.
     MOMENT: {**ORIGIN_OF_TIME,
              "LATITUDE_OF_ORIGIN_POINT": lambda moment: moment["lat"]}})

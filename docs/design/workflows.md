@@ -605,6 +605,37 @@ The engine's `launch` hands it to `Workflow.stopped`, which publishes through th
 in their name, and the run's journal record carries `stopped`. A run whose output cannot be read honestly
 publishes nothing and says why on the record; either way the launch ends as the stop.
 
+## Green-Ampt infiltration - the soil row and the conductivity it hands
+
+`telemac_rain_on_soil` is the rain-on-grid catchment with TELEMAC-2D's RAINFALL-RUNOFF MODEL 3. Its
+SOIL row (`inputs/slots.py`, `inputs/soil.py`) matches the sand fraction (`need("soil", of="sand")`;
+SoilGrids is the soil row that asks by the property's own word) and produces the silt, clay and
+organic carbon beside it on the same grid; its ingestion composes the `green_ampt_parameters` derive,
+which classes each cell on its three fractions as given (USDA Soil Survey Manual ch. 3; a cell in no
+class or two is nodata) and takes the class's row of Rawls, Brakensiek and Miller (1983) Table 2, or,
+for silt, Saxton and Rawls (2006) through the 1983 paper's Eqs. 4 and 6.
+
+WHICH CONDUCTIVITY. The engine's `runoff_greenampt.f` reads one value per node from FORMATTED DATA
+FILE 2 in mm/h and uses it as `FCAPA = KS (1 + (HF + CC)(THETAS - THETAI) / F)`: the conductivity of
+the Green-Ampt rate equation, which is Rawls et al.'s (1983) Eq. 1 K and which that paper takes as half
+the saturated conductivity (Eq. 6, after Bouwer). The node therefore carries the soil's GREEN-AMPT K
+(about Ks/2), not Ks, though the routine calls it the saturated soil's; cm/h is written as mm/h (x 10).
+It is the soil's value at the cell under the node, and a node the soil states none under refuses.
+
+SUCTION and SATURATED WATER CONTENT are single keywords the routine reads once over the domain. Unstated,
+each is filled DERIVED off the soil (`FILLED_BY` "soil"): the mean over the mesh, each node weighted by a
+third of the area of every triangle it holds, of the wetting-front suction (cm read as m) and of the
+EFFECTIVE porosity - Eq. 1's available porosity is effective porosity minus the initial content, so the
+deficit `THETAS - THETAI` is read off it. A run stating either wins; the card shows the derived value
+labelled derived and AUTO takes it, the journal's inputs map carrying the origin. INITIAL WATER CONTENT
+has no source: unstated it refuses in every mode, and contents outside 0 <= initial <= saturated <= 1
+refuse. The engine's own defaults (0.2 m, 0.5, 0.0) are never started from.
+
+A measured storm compiles the routine OF THE DECK'S MODEL with the block-hyetograph branch
+(`authoring/storm.py`: `runoff_greenampt.f` under model 3, `runoff_scs_cn.f` otherwise, each the
+engine's v9.0.0 source with RAINDEF=3 and no other change). Roughness is Manning n off the same
+land-cover table `telemac_rain_on_grid` reads.
+
 ## MODFLOW - a sheet over the accepted mesh
 
 The engine's own page - the simulation, the three module wrappers, the

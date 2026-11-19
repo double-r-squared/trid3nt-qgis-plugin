@@ -197,6 +197,10 @@ _RECALL_FIXTURE = [
      "green_ampt_parameters"),
     ("which USDA texture class is each soil cell and what are its infiltration parameters",
      "green_ampt_parameters"),
+    ("how much of the storm infiltrates into the soil by Green-Ampt and how much runs off the catchment",
+     "telemac_rain_on_soil"),
+    ("rainfall runoff from the soil texture's conductivity and suction instead of a curve number",
+     "telemac_rain_on_soil"),
     ("calibrate this groundwater model against the measured well levels", "calibrate"),
     ("tune the run's parameters so it matches what was measured", "calibrate"),
 ]

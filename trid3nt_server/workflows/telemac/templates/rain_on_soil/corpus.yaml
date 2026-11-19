@@ -1,0 +1,11 @@
+# Template routing phrasings: walked into the main retrieval index directly, so
+# an engine template is an ordinary retrieval-pool tool.
+telemac_rain_on_soil:
+- how much of the storm infiltrates into the soil and how much runs off the catchment
+- Green-Ampt infiltration rainfall-runoff on a real watershed with an outlet hydrograph
+- runoff from a storm driven by the soil texture, sand silt and clay, rather than a curve number
+- infiltration by the soil's hydraulic conductivity and wetting front suction during a flash flood
+- does a sandy soil soak up this storm where a clay soil would flood, rain on the basin
+- physically based infiltration from soil properties for a rain-on-grid flood of the valley
+- outlet hydrograph from a past storm's real rainfall infiltrating by Green-Ampt into SoilGrids soil
+- how wet the soil was before the storm changes the runoff, initial water content Green-Ampt

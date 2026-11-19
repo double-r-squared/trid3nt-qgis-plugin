@@ -1,0 +1,17 @@
+summary: How much of a storm the SOIL takes in and how much RUNS OFF the catchment a point
+  drains, by the soil's texture, as an outlet hydrograph and a flood-depth map.
+routing: THE tool for "how much of this storm infiltrates into the soil", "Green-Ampt
+  infiltration runoff over this catchment", "runoff by the soil texture". TELEMAC-2D
+  RAIN-ON-GRID over the catchment traced upslope of `pour_point` (or a basin handed as
+  `domain`), meshed fine along its channels, GREEN-AMPT infiltration (RAINFALL-RUNOFF
+  MODEL 3) - conductivity per node from the SoilGrids texture under it, Manning n from land
+  cover. SUCTION and SATURATED WATER CONTENT are offered off the soil; INITIAL WATER
+  CONTENT is always stated in keywords. For a REAL event state `event_time`; else a
+  design storm drives it.
+not_for: a curve-number runoff (`telemac_rain_on_grid`); coastal or pluvial inundation depth;
+  urban pipe drainage; groundwater recharge
+returns: 'On success the run''s record (a `LayerURI`): every variable its module wrote, styled
+  on one mesh layer, animated where it varies, plus the outlet hydrograph charted at the pour
+  point and placed there as a station. Applicability: SINGLE-STORM flash-flood events in small
+  steep catchments. Infiltrated water is permanently lost, so there is no baseflow and no
+  inter-peak recovery. On failure a dict with `status="error"` + `error_code`.'

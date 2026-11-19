@@ -11,7 +11,7 @@ One wrapper per TELEMAC module. A wrapper is the module's own dictionary, read a
 | `artemis` | 118 | `incident_wave` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `gaia` | 148 | `bed`, `dredging`, `suspension` | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `khione` | 133 | - | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
-| `telemac2d` | 376 | `atmosphere`, `boundaries`, `breach`, `coupling`, `friction`, `infiltration`, `oil`, `rating`, `runoff`, `sources`, `storm`, `tracer_names`, `wind` | `drogues`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
+| `telemac2d` | 376 | `atmosphere`, `boundaries`, `breach`, `coupling`, `friction`, `green_ampt`, `infiltration`, `oil`, `rating`, `runoff`, `sources`, `storm`, `tracer_names`, `wind` | `drogues`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `telemac3d` | 355 | `atmosphere`, `column`, `coupling`, `vertical_grid`, `wind` | `column`, `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series` |
 | `tomawac` | 223 | - | `extent`, `field`, `mass_balance`, `max_over_time`, `mesh`, `profile`, `series`, `spectrum` |
 | `waqtel` | 91 | `degradation` | - |

@@ -174,10 +174,10 @@ def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any,
 
 
 def sample_layer_at_nodes(layer: Any, points_lonlat: Any,
-                          interp: str | None = None) -> Any:
+                          interp: str | None = None, fill_holes: bool = True) -> Any:
     """A fetched raster layer sampled at (N,2) lon/lat nodes -> (N,) values.
 
-    The layer's ``uri`` names the raster, in the store or on disk."""
+    The layer's ``uri`` names the raster, in the store or on disk; ``fill_holes`` as ``sample_raster_at_nodes`` reads it."""
     import tempfile
 
     from trid3nt_server.tools.cache import read_object_bytes_s3
@@ -189,11 +189,11 @@ def sample_layer_at_nodes(layer: Any, points_lonlat: Any,
             "MESH_LAYER_NO_RASTER",
             f"the layer {layer!r} names no raster uri to sample at the nodes.")
     if not uri.startswith("s3://"):
-        return sample_raster_at_nodes(uri, points_lonlat, interp=interp)
+        return sample_raster_at_nodes(uri, points_lonlat, interp=interp, fill_holes=fill_holes)
     with tempfile.TemporaryDirectory(prefix="mesh-sample-") as scratch:
         local = Path(scratch) / "layer.tif"
         local.write_bytes(read_object_bytes_s3(uri))
-        return sample_raster_at_nodes(local, points_lonlat, interp=interp)
+        return sample_raster_at_nodes(local, points_lonlat, interp=interp, fill_holes=fill_holes)
 
 
 def _bilinear(src: Any, xs: Any, ys: Any, nodata: Any) -> Any:
