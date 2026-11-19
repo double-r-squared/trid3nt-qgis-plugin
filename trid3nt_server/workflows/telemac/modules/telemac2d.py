@@ -677,6 +677,10 @@ def storm_rain(series: Any, record: Rain | None) -> Rain | None:
     return Rain.every(_STORM_INTERVAL_S, series)
 
 
+# The engine fixes this model's rain to the constant keyword: no routine of it reads a hyetograph.
+_HORTON_MODEL = 2
+
+
 def _storm(value: Mapping[str, Any], *, run: Mapping[str, Any] | None = None
            ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """The storm -> either the block file and its reader, or the rate keywords.
@@ -697,6 +701,13 @@ def _storm(value: Mapping[str, Any], *, run: Mapping[str, Any] | None = None
                     >= float(value["settled"]["until_s"])
                     else {"DURATION_OF_RAIN_OR_EVAPORATION_IN_HOURS":
                           float(value["hours"])})}, {})
+    model = (run or {}).get("RAINFALL_RUNOFF_MODEL")
+    if model is not None and int(model) == _HORTON_MODEL:
+        raise SlotRefused(
+            f"RAINFALL-RUNOFF MODEL {_HORTON_MODEL} (Horton) cannot take this measured storm ({len(rain.series.values)} "
+            f"intervals of {rain.interval_s:g} s): runoff_horton.f fixes its rain to the constant RAIN_MMPD keyword, so "
+            "the storm would be dropped and a constant rate rained instead. Use model 1 (SCS curve number) or 3 "
+            "(Green-Ampt), which read the hyetograph, or state a design rate under model 2.")
     # A block is written by the instant it CLOSES at; one closed before the run opens is not this run's rain, and one open across the run's zero gives the share that falls after it.
     blocks = [(opens + rain.interval_s,
                max(0.0, depth) * min(1.0, (opens + rain.interval_s) / rain.interval_s))
@@ -789,6 +800,8 @@ T2D.composites(reads={
                infiltration=_infiltration, green_ampt=_green_ampt,
                rating=_rating, storm=_storm, tracer_names=_tracer_names)
 T2D.reads(**PRIMITIVES, drogues=read_drogues)
+# The soil's three global keywords are stated by the person when the run does not: the first two are offered the soil's value, the third has no source.
+T2D.ASKED = MappingProxyType({"soil": _GREEN_AMPT_GLOBALS})
 # A settled release point is where the one source enters, in the mesh's metres; a measured sample is what the one declared tracer opens at.
 T2D.FILLED_BY = MappingProxyType({
     "source": {"ABSCISSAE_OF_SOURCES": lambda placed: [placed["at"][0]],

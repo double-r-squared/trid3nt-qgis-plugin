@@ -58,7 +58,7 @@ _RESERVED = frozenset((
     "MODULE", "MODULE_INPUT", "COMPOSITES", "READS", "ASSERTED", "ARMS",
     "ARMS_ON_HOST", "MODULE_OUTPUT", "LISTING", "DERIVED", "PRINTOUTS",
     "CADENCE", "CLOCK", "TRACER", "APPENDS", "APPENDABLE", "ONLY_3D",
-    "UNWRITTEN", "RESULT_FILE", "RESULT_FILES", "RESULT_KEYWORD", "FILLED_BY",
+    "UNWRITTEN", "RESULT_FILE", "RESULT_FILES", "RESULT_KEYWORD", "FILLED_BY", "ASKED",
     "CODE_ON_HOST", "PLACED_AGAINST", "PARTITION_KEYWORD", "CARRIER_OWNED",
     "SOLVE_SECONDS",
     "composites",
@@ -413,6 +413,8 @@ class Module(metaclass=_Body):
     COMPOSITES: Mapping[str, Composite] = MappingProxyType({})
     # Keywords a run input fills itself, by the NAME of the row's type or of a placement: identifier -> value read off what the input holds. A body that states one wins.
     FILLED_BY: Mapping[str, Mapping[str, Callable[[Any], Any]]] = MappingProxyType({})
+    # Keywords a held run input asks the person for when unstated, by the input's name; one FILLED_BY also reads is asked with that value offered.
+    ASKED: Mapping[str, tuple[str, ...]] = MappingProxyType({})
     # What the module writes, by printouts mnemonic: one row per variable; a variable the dictionary offers and this table does not row is not written.
     MODULE_OUTPUT: Mapping[str, Output] = MappingProxyType({})
     # The primitives over that output: kind -> the read off a solved run.

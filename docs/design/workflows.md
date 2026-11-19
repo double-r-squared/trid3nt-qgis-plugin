@@ -622,19 +622,27 @@ the saturated conductivity (Eq. 6, after Bouwer). The node therefore carries the
 (about Ks/2), not Ks, though the routine calls it the saturated soil's; cm/h is written as mm/h (x 10).
 It is the soil's value at the cell under the node, and a node the soil states none under refuses.
 
-SUCTION and SATURATED WATER CONTENT are single keywords the routine reads once over the domain. Unstated,
-each is filled DERIVED off the soil (`FILLED_BY` "soil"): the mean over the mesh, each node weighted by a
-third of the area of every triangle it holds, of the wetting-front suction (cm read as m) and of the
-EFFECTIVE porosity - Eq. 1's available porosity is effective porosity minus the initial content, so the
-deficit `THETAS - THETAI` is read off it. A run stating either wins; the card shows the derived value
-labelled derived and AUTO takes it, the journal's inputs map carrying the origin. INITIAL WATER CONTENT
-has no source: unstated it refuses in every mode, and contents outside 0 <= initial <= saturated <= 1
-refuse. The engine's own defaults (0.2 m, 0.5, 0.0) are never started from.
+SUCTION, SATURATED WATER CONTENT and INITIAL WATER CONTENT are single keywords the routine reads once over
+the domain, and the module declares them `ASKED` of the soil row (`T2D.ASKED`): unstated, the person states
+them. Before the sheet stage the launch runs `review.py::ask_unstated`: user-gated, a card offers SUCTION and
+SATURATED WATER CONTENT the soil's value, labelled "derived from the soil" (the mean over the mesh, each node
+weighted by a third of the area of every triangle it holds, of the wetting-front suction - cm read as m - and
+of the EFFECTIVE porosity, since Eq. 1's available porosity is effective porosity minus the initial content),
+and asks INITIAL WATER CONTENT with no offer (nothing measures antecedent moisture). An answer equal to an offer
+leaves the keyword derived (`FILLED_BY` "soil", origin derived on the deck); a different answer is stated. A
+stated keyword wins and is never asked. AUTO takes the derived pair and says so in a run note; INITIAL WATER
+CONTENT unstated refuses by name in AUTO and when the card leaves it unanswered. Contents outside
+0 <= initial <= saturated <= 1 refuse. The engine's own defaults (0.2 m, 0.5, 0.0) are never started from.
 
 A measured storm compiles the routine OF THE DECK'S MODEL with the block-hyetograph branch
 (`authoring/storm.py`: `runoff_greenampt.f` under model 3, `runoff_scs_cn.f` otherwise, each the
 engine's v9.0.0 source with RAINDEF=3 and no other change). Roughness is Manning n off the same
 land-cover table `telemac_rain_on_grid` reads.
+
+RAINFALL-RUNOFF MODEL 2 (Horton) cannot take a measured storm: `runoff_horton.f` fixes its rain definition to the
+constant RAIN_MMPD keyword and no routine of it reads a hyetograph. A deck stating model 2 beside a measured
+series or matched record refuses naming the model and the storm; model 2 with only a design rate is the constant
+branch and runs.
 
 ## MODFLOW - a sheet over the accepted mesh
 

@@ -46,7 +46,7 @@ from trid3nt_server.workflows.runtime.primitives import (
 )
 from trid3nt_server.workflows.telemac.modules.outputs import (Solved, reading,
                                                               solved_run)
-from trid3nt_server.workflows.runtime.review import _seat_on, fill_sheet
+from trid3nt_server.workflows.runtime.review import _seat_on, ask_unstated, fill_sheet
 from trid3nt_server.workflows.runtime.sheet import (
     Keyword,
     SheetIncomplete,
@@ -637,11 +637,13 @@ class TelemacWorkflow(Workflow):
                 steering=(self._states("STEERING_FILE", "") or f"{self.steering.MODULE}_{self.name}.cas"),
                 prefix=prefix))
 
+        produced = {**run, **{slot.name: run[name] for slot, name in slots.items() if name in run}}
+        keywords = await ask_unstated(steering=self.steering, produced=produced, workflow=self.name,
+                                      stated=stated(steering=self.steering, keywords=keywords), keywords=keywords)
         try:
             await stage("sheet", fill_sheet, steering=self.steering,
                         # A module fills keywords from a row by the NAME of its type, so each type's row is held under that name beside its own.
-                        produced={**run, **{slot.name: run[name] for slot, name
-                                            in slots.items() if name in run}},
+                        produced=produced,
                         params={name: run[name] for name in declared},
                         settled=run[_SETTLED].get("keywords") or {},
                         workflow=self.name,

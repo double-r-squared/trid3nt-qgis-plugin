@@ -17,10 +17,10 @@ from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 from trid3nt_server.errors import DeclarativeError
 
 from .module import SlotRefused, accept
-from .sheet import Sheet, fill_coupled
+from .sheet import Sheet, fill_coupled, filled_by
 from .sheet import fill as fill_slots
 
-__all__ = ["card_rows", "fill_sheet"]
+__all__ = ["ask_unstated", "card_rows", "fill_sheet"]
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +150,69 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
     if seat is not None:
         seat(values)
     return sheet
+
+
+async def ask_unstated(*, steering: type, produced: Mapping[str, Any], stated: Mapping[str, Any],
+                       keywords: Mapping[str, Any], workflow: str) -> dict[str, Any]:
+    """The keywords a held input asks the person for and the run leaves unstated -> ``keywords`` with the person's answers stated.
+
+    A keyword the input also fills is offered that value, labelled derived; an answer equal to the offer leaves it derived. AUTO takes each offer
+    and says so on the run, and a keyword with no offer is left to refuse by name where the deck reads it."""
+    from trid3nt_server.inputs.gate.input_review import (
+        GateCard,
+        gate_input_review,
+        render_input_review_lines,
+        resolve_input_gate_mode,
+    )
+    from trid3nt_server.inputs.run_notes import journal_note
+
+    asked = {source: [name for name in names if stated.get(name) is None]
+             for source, names in steering.ASKED.items() if produced.get(source) is not None}
+    asked = {source: names for source, names in asked.items() if names}
+    if not asked:
+        return dict(keywords)
+    offers = {name: value for source, name, value in filled_by(steering, produced, only=tuple(asked))
+              if name in asked[source]}
+    names = [name for held in asked.values() for name in held]
+    slots = {name: steering.slot(name) for name in names}
+    if resolve_input_gate_mode() == "auto":
+        for name, value in offers.items():
+            journal_note(f"{slots[name].keyword} = {value:.4g} {slots[name].unit or ''}".rstrip()
+                         + ", derived from the soil: nothing states it and AUTO has no one to ask.")
+        return dict(keywords)
+
+    def row(name: str) -> ParamSheetRow:
+        offer = offers.get(name)
+        return ParamSheetRow(
+            name=name, value=offer, units=slots[name].unit or None, desc=slots[name].desc[:512],
+            bounds=slots[name].whole_bounds, group="Asked",
+            origin=None if offer is None else Origin.DERIVED,
+            source_badge="derived from the soil" if offer is not None else "nothing offers it: state it",
+            note=None if offer is not None else "no source measures it, and it is never assumed")
+
+    async def card() -> GateCard:
+        rows = [row(name) for name in names]
+        return GateCard(lines=render_input_review_lines(_entries(rows)) or [f"{n} = ?" for n in names],
+                        param_sheet=ParamSheet(workflow=workflow, rows=rows,
+                                               title="State the soil's moisture and suction"))
+
+    outcome = await gate_input_review(tool_name=workflow, entries=[], params={}, present=card)
+    answers = outcome.params or {}
+    taken = dict(keywords)
+    for name in names:
+        answer = answers.get(name) if outcome.proceed else None
+        if answer is None or answer == "":
+            if name in offers:
+                continue
+            raise SlotRefused(f"{slots[name].keyword} is unstated: nothing states it and no source measures it, so "
+                              f"it is asked of the person and never assumed. State {slots[name].keyword}"
+                              + ("" if outcome.proceed else f" ({outcome.cancel_reason})") + ".")
+        value = slots[name].check(answer)
+        if name in offers and value == offers[name]:
+            continue
+        taken[name] = value
+        journal_note(f"{slots[name].keyword} = {value:g}, as answered on the review card.")
+    return taken
 
 
 def _strings(value: Any) -> set[str]:

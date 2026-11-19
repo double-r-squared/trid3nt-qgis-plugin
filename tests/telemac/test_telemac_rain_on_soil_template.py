@@ -219,3 +219,87 @@ def test_the_soil_ingestion_composes_the_derive_over_recorded_soilgrids(tmp_path
     assert set(found.layers) == {"green_ampt_hydraulic_conductivity", "green_ampt_wetting_front_suction",
                                  "green_ampt_porosity", "green_ampt_effective_porosity"}
     assert found.layer("green_ampt_hydraulic_conductivity").units == "cm/h"
+
+
+@pytest.fixture()
+def card(monkeypatch, ros_run):
+    """The ask's gate: the cards it drew, answered by ``held['answer']``; the mode is ``held['mode']``."""
+    import trid3nt_server.inputs.gate.input_review as review_mod
+
+    held = {"mode": "user_gated", "answer": {}, "cards": []}
+
+    async def gate(*, tool_name, entries, params, present, **_kw):
+        held["cards"].append(await present())
+        return review_mod.ReviewOutcome(proceed=True, entries=[], params={**params, **held["answer"]}, mode="user_gated")
+
+    monkeypatch.setattr(review_mod, "gate_input_review", gate)
+    monkeypatch.setattr(review_mod, "resolve_input_gate_mode", lambda forced=None: held["mode"])
+    return held
+
+
+def _asked(keywords=None):
+    from trid3nt_server.workflows.runtime.review import ask_unstated
+    from trid3nt_server.workflows.telemac.templates.rain_on_soil.rain_on_soil import STEERING
+    from trid3nt_server.workflows.telemac.workflow import stated
+
+    keywords = dict(keywords or {})
+    return ask_unstated(steering=STEERING, produced={"soil": _SOIL, "mesh": _mesh()}, workflow="telemac_rain_on_soil",
+                        stated=stated(steering=STEERING, keywords=keywords), keywords=keywords)
+
+
+@pytest.mark.asyncio
+async def test_the_card_offers_the_derived_pair_labelled_and_asks_the_initial_content_bare(card):
+    card["answer"] = {"INITIAL_WATER_CONTENT": 0.27}
+    taken = await _asked()
+    rows = {row.name: row for row in card["cards"][0].param_sheet.rows}
+    assert set(rows) == {"SUCTION", "SATURATED_WATER_CONTENT", "INITIAL_WATER_CONTENT"}
+    assert rows["SUCTION"].value == pytest.approx((8.89 + 2 * 11.01 + 2 * 16.68 + 31.63) / 6 / 100, abs=1e-9)
+    assert rows["SATURATED_WATER_CONTENT"].value == pytest.approx((0.434 + 2 * 0.412 + 2 * 0.486 + 0.385) / 6, abs=1e-9)
+    assert rows["SUCTION"].source_badge == rows["SATURATED_WATER_CONTENT"].source_badge == "derived from the soil"
+    assert rows["INITIAL_WATER_CONTENT"].value is None and "derived" not in rows["INITIAL_WATER_CONTENT"].source_badge
+    # the pair is left to the soil, so the deck's origin stays derived; only the answered value is stated
+    assert taken == {"INITIAL_WATER_CONTENT": 0.27}
+
+
+@pytest.mark.asyncio
+async def test_an_answer_over_an_offer_is_stated_and_one_equal_to_it_is_not(card):
+    offer = (8.89 + 2 * 11.01 + 2 * 16.68 + 31.63) / 6 / 100
+    card["answer"] = {"INITIAL_WATER_CONTENT": 0.27, "SUCTION": 0.25, "SATURATED_WATER_CONTENT": 0.45}
+    assert await _asked() == {"INITIAL_WATER_CONTENT": 0.27, "SUCTION": 0.25, "SATURATED_WATER_CONTENT": 0.45}
+    card["answer"] = {"INITIAL_WATER_CONTENT": 0.27, "SUCTION": offer}
+    assert await _asked() == {"INITIAL_WATER_CONTENT": 0.27}
+
+
+@pytest.mark.asyncio
+async def test_an_unanswered_initial_water_content_refuses_naming_it(card):
+    with pytest.raises(SlotRefused) as refused:
+        await _asked()
+    assert "INITIAL WATER CONTENT is unstated" in str(refused.value)
+
+
+@pytest.mark.asyncio
+async def test_a_run_stating_all_three_is_asked_nothing(card):
+    stated = {"INITIAL_WATER_CONTENT": 0.27, "SUCTION": 0.25, "SATURATED_WATER_CONTENT": 0.45}
+    assert await _asked(stated) == stated and card["cards"] == []
+
+
+@pytest.mark.asyncio
+async def test_auto_takes_the_derived_pair_and_says_so_and_leaves_the_initial_content_to_refuse(card):
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+
+    card["mode"] = "auto"
+    token = bind_notes()
+    assert await _asked() == {}
+    notes = drain_notes(token)
+    assert card["cards"] == []
+    assert sum("derived from the soil" in note for note in notes) == 2 and not any("INITIAL" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_horton_cannot_take_a_measured_storm_and_refuses_naming_both(ros_run):
+    with pytest.raises(SlotRefused) as refused:
+        await ros_run(keywords={"INITIAL_WATER_CONTENT": 0.15, "RAINFALL_RUNOFF_MODEL": 2}, rain_series_mm=[3.0, 12.5, 0.0])
+    assert "MODEL 2 (Horton)" in str(refused.value) and "measured storm (3 intervals" in str(refused.value)
+    # the design rate alone is the constant branch Horton reads
+    sheet = await ros_run(keywords={"INITIAL_WATER_CONTENT": 0.15, "RAINFALL_RUNOFF_MODEL": 2})
+    assert dict(sheet.resolved())["RAINFALL-RUNOFF MODEL"] == 2
