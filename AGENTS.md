@@ -120,6 +120,11 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
    for isolated verification gates only, banner-labeled, never the
    deliverable.
 
+## Opinions
+
+`docs/OPINIONS.md` holds the system's stances: defaults, what is assumed about each input, which step owns what.
+Read it before changing behaviour. A change that contradicts an opinion is NATE's call; surface it, do not decide it.
+
 ## How to write code here
 
 - EVERY KIND OF CODE HAS ONE HOME. The engine's module is the unit: a
