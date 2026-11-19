@@ -36,5 +36,5 @@ enforced opinion becomes a law in AGENTS.md. Laws and conventions already writte
 20. An uncertain input becomes a parameter whose starting uncertainty is its stated accuracy, not a widened sigma.
 
 ## Compute and testing
-21. Compute budgets are settings that apply to every solver; engine-specific limits stay engine-native.
+21. Compute budgets are settings that apply to every solver; engine-specific limits stay engine-native. A PEST++ study is bounded by PEST++'s own settings.
 22. A test that does not exercise the LLM is declarative: every input stated, data handed as real fetch chains.
