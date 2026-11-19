@@ -152,6 +152,10 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
     return sheet
 
 
+def _source_of(asked: Mapping[str, list[str]], name: str) -> str:
+    return next(source for source, held in asked.items() if name in held)
+
+
 async def ask_unstated(*, steering: type, produced: Mapping[str, Any], stated: Mapping[str, Any],
                        keywords: Mapping[str, Any], workflow: str) -> dict[str, Any]:
     """The keywords a held input asks the person for and the run leaves unstated -> ``keywords`` with the person's answers stated.
@@ -178,7 +182,7 @@ async def ask_unstated(*, steering: type, produced: Mapping[str, Any], stated: M
     if resolve_input_gate_mode() == "auto":
         for name, value in offers.items():
             journal_note(f"{slots[name].keyword} = {value:.4g} {slots[name].unit or ''}".rstrip()
-                         + ", derived from the soil: nothing states it and AUTO has no one to ask.")
+                         + f", derived from {_source_of(asked, name)}: nothing states it and AUTO has no one to ask.")
         return dict(keywords)
 
     def row(name: str) -> ParamSheetRow:
@@ -187,14 +191,14 @@ async def ask_unstated(*, steering: type, produced: Mapping[str, Any], stated: M
             name=name, value=offer, units=slots[name].unit or None, desc=slots[name].desc[:512],
             bounds=slots[name].whole_bounds, group="Asked",
             origin=None if offer is None else Origin.DERIVED,
-            source_badge="derived from the soil" if offer is not None else "nothing offers it: state it",
+            source_badge=f"derived from {_source_of(asked, name)}" if offer is not None else "nothing offers it: state it",
             note=None if offer is not None else "no source measures it, and it is never assumed")
 
     async def card() -> GateCard:
         rows = [row(name) for name in names]
         return GateCard(lines=render_input_review_lines(_entries(rows)) or [f"{n} = ?" for n in names],
                         param_sheet=ParamSheet(workflow=workflow, rows=rows,
-                                               title="State the soil's moisture and suction"))
+                                               title=f"State what the {', '.join(asked)} input leaves unstated"))
 
     outcome = await gate_input_review(tool_name=workflow, entries=[], params={}, present=card)
     answers = outcome.params or {}

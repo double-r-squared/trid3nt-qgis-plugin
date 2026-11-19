@@ -255,7 +255,7 @@ async def test_the_card_offers_the_derived_pair_labelled_and_asks_the_initial_co
     assert set(rows) == {"SUCTION", "SATURATED_WATER_CONTENT", "INITIAL_WATER_CONTENT"}
     assert rows["SUCTION"].value == pytest.approx((8.89 + 2 * 11.01 + 2 * 16.68 + 31.63) / 6 / 100, abs=1e-9)
     assert rows["SATURATED_WATER_CONTENT"].value == pytest.approx((0.434 + 2 * 0.412 + 2 * 0.486 + 0.385) / 6, abs=1e-9)
-    assert rows["SUCTION"].source_badge == rows["SATURATED_WATER_CONTENT"].source_badge == "derived from the soil"
+    assert rows["SUCTION"].source_badge == rows["SATURATED_WATER_CONTENT"].source_badge == "derived from soil"
     assert rows["INITIAL_WATER_CONTENT"].value is None and "derived" not in rows["INITIAL_WATER_CONTENT"].source_badge
     # the pair is left to the soil, so the deck's origin stays derived; only the answered value is stated
     assert taken == {"INITIAL_WATER_CONTENT": 0.27}
@@ -292,14 +292,27 @@ async def test_auto_takes_the_derived_pair_and_says_so_and_leaves_the_initial_co
     assert await _asked() == {}
     notes = drain_notes(token)
     assert card["cards"] == []
-    assert sum("derived from the soil" in note for note in notes) == 2 and not any("INITIAL" in note for note in notes)
+    assert sum("derived from soil" in note for note in notes) == 2 and not any("INITIAL" in note for note in notes)
 
 
 @pytest.mark.asyncio
-async def test_horton_cannot_take_a_measured_storm_and_refuses_naming_both(ros_run):
-    with pytest.raises(SlotRefused) as refused:
-        await ros_run(keywords={"INITIAL_WATER_CONTENT": 0.15, "RAINFALL_RUNOFF_MODEL": 2}, rain_series_mm=[3.0, 12.5, 0.0])
-    assert "MODEL 2 (Horton)" in str(refused.value) and "measured storm (3 intervals" in str(refused.value)
-    # the design rate alone is the constant branch Horton reads
-    sheet = await ros_run(keywords={"INITIAL_WATER_CONTENT": 0.15, "RAINFALL_RUNOFF_MODEL": 2})
+async def test_a_model_reading_only_the_constant_runs_on_it_and_warns_the_series_was_not_used(ros_run):
+    from trid3nt_server.errors import INPUT_NOT_USED
+    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+
+    token = bind_notes()
+    sheet = await ros_run(keywords={"INITIAL_WATER_CONTENT": 0.15, "RAINFALL_RUNOFF_MODEL": 2}, rain_series_mm=[3.0, 12.5, 0.0])
+    notes = drain_notes(token)
     assert dict(sheet.resolved())["RAINFALL-RUNOFF MODEL"] == 2
+    warned = [note for note in notes if note.startswith(INPUT_NOT_USED)]
+    assert len(warned) == 1
+    assert "storm" in warned[0] and "RAINFALL_RUNOFF_MODEL" in warned[0] and "Horton" not in warned[0]
+    assert "3.0" not in warned[0] and "12.5" not in warned[0]
+
+
+def test_the_unused_input_warning_names_identifiers_only_and_never_a_value():
+    from trid3nt_server.errors import INPUT_NOT_USED, unused_input_warning
+
+    text = unused_input_warning(slot="storm", option="RAINFALL_RUNOFF_MODEL")
+    assert text.startswith(f"{INPUT_NOT_USED}: ") and "storm" in text and "RAINFALL_RUNOFF_MODEL" in text
+    assert text.endswith(".") and "\n" not in text

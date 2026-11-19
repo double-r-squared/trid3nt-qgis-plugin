@@ -9,6 +9,8 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
+from trid3nt_server.errors import unused_input_warning
+from trid3nt_server.inputs.run_notes import journal_note
 from trid3nt_server.inputs.rain import Rain
 from trid3nt_server.inputs.series import align
 from trid3nt_server.inputs.temporal import RATE, STATE, Series
@@ -677,7 +679,7 @@ def storm_rain(series: Any, record: Rain | None) -> Rain | None:
     return Rain.every(_STORM_INTERVAL_S, series)
 
 
-# The engine fixes this model's rain to the constant keyword: no routine of it reads a hyetograph.
+# The engine fixes this model's rain to the constant keyword: no routine of it reads a hyetograph, so a handed storm is warned unused.
 _HORTON_MODEL = 2
 
 
@@ -703,11 +705,8 @@ def _storm(value: Mapping[str, Any], *, run: Mapping[str, Any] | None = None
                           float(value["hours"])})}, {})
     model = (run or {}).get("RAINFALL_RUNOFF_MODEL")
     if model is not None and int(model) == _HORTON_MODEL:
-        raise SlotRefused(
-            f"RAINFALL-RUNOFF MODEL {_HORTON_MODEL} (Horton) cannot take this measured storm ({len(rain.series.values)} "
-            f"intervals of {rain.interval_s:g} s): runoff_horton.f fixes its rain to the constant RAIN_MMPD keyword, so "
-            "the storm would be dropped and a constant rate rained instead. Use model 1 (SCS curve number) or 3 "
-            "(Green-Ampt), which read the hyetograph, or state a design rate under model 2.")
+        journal_note(unused_input_warning(slot="storm", option="RAINFALL_RUNOFF_MODEL"))
+        return _storm({**value, "series": None, "record": None}, run=run)
     # A block is written by the instant it CLOSES at; one closed before the run opens is not this run's rain, and one open across the run's zero gives the share that falls after it.
     blocks = [(opens + rain.interval_s,
                max(0.0, depth) * min(1.0, (opens + rain.interval_s) / rain.interval_s))

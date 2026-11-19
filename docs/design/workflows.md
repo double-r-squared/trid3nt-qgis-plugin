@@ -625,7 +625,7 @@ It is the soil's value at the cell under the node, and a node the soil states no
 SUCTION, SATURATED WATER CONTENT and INITIAL WATER CONTENT are single keywords the routine reads once over
 the domain, and the module declares them `ASKED` of the soil row (`T2D.ASKED`): unstated, the person states
 them. Before the sheet stage the launch runs `review.py::ask_unstated`: user-gated, a card offers SUCTION and
-SATURATED WATER CONTENT the soil's value, labelled "derived from the soil" (the mean over the mesh, each node
+SATURATED WATER CONTENT the soil's value, labelled "derived from soil" (the mean over the mesh, each node
 weighted by a third of the area of every triangle it holds, of the wetting-front suction - cm read as m - and
 of the EFFECTIVE porosity, since Eq. 1's available porosity is effective porosity minus the initial content),
 and asks INITIAL WATER CONTENT with no offer (nothing measures antecedent moisture). An answer equal to an offer
@@ -639,10 +639,13 @@ A measured storm compiles the routine OF THE DECK'S MODEL with the block-hyetogr
 engine's v9.0.0 source with RAINDEF=3 and no other change). Roughness is Manning n off the same
 land-cover table `telemac_rain_on_grid` reads.
 
-RAINFALL-RUNOFF MODEL 2 (Horton) cannot take a measured storm: `runoff_horton.f` fixes its rain definition to the
-constant RAIN_MMPD keyword and no routine of it reads a hyetograph. A deck stating model 2 beside a measured
-series or matched record refuses naming the model and the storm; model 2 with only a design rate is the constant
-branch and runs.
+RAINFALL-RUNOFF MODEL 2 (Horton) reads only the constant RAIN_MMPD keyword (`runoff_horton.f` fixes its rain
+definition; no routine of it reads a hyetograph). A deck stating model 2 beside a measured series or matched record
+runs on the constant rate and journals the generic `INPUT_NOT_USED` warning (`trid3nt_server/errors.py`,
+`unused_input_warning`): code, "the storm input was handed and is not used, because the option stated under
+RAINFALL_RUNOFF_MODEL does not read it", and what to do. A warning names only the slot and the keyword identifier,
+never a source's or a person's value, and is a run note opening with its code. The ask card's badge and the AUTO
+note read "derived from <source slot>" off the module's ASKED declaration.
 
 ## MODFLOW - a sheet over the accepted mesh
 
