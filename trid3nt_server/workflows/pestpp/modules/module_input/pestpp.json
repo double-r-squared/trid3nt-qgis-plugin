@@ -96,6 +96,74 @@
       "default": true
     },
     {
+      "keyword": "derinc",
+      "identifier": "DERINC",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "INCTYP is a character variable which can assume the values \u201crelative\u201d, \u201cabsolute\u201d or \u201crel_to_max\u201d. If it is \u201crelative\u201d, the increment used for forward-difference calculation of derivatives with respect to any parameter belonging to the group is calculated as a fraction of the current value of that parameter; that fraction is provided as the real variable DERINC. However, if INCTYP is \u201cabsolute\u201d the parameter increment for parameters belonging to the group is fixed, being again provided as the variable DERINC. Alternatively, if INCTYP is \u201crel_to_max\u201d, the increment for any group member is calculated as a fraction of the group member with highest absolute value, that fraction again being DERINC. Thus, for example, if INCTYP is \u201crelative\u201d and DERINC is 0.01 (a suitable value in many cases), the parameter increment for each group member is calculated as 0.01 times the current value of that parameter; this applies in all iterations of the inversion or optimization process. However, if INCTYP is \u201cabsolute\u201d and DERINC is 0.01, the parameter increment is the same for all members of the group over all iterations, this being 0.01. If INCTYP is \u201crel_to_max\u201d and DERINC is again 0.01, the parameter increment for all group members is the same for any one iteration, this being 0.01 times the absolute value of the group member of highest current magnitude; however, the increment may vary from iteration to iteration. If a group contains members which are fixed and/or tied, it is important to note that the values of these parameters are taken into account when calculating parameter increments using the \u201crel_to_max\u201d option. For the \u201crelative\u201d and \u201crel_to_max\u201d options, a DERINC value of between 0.01 and 0.02 is often appropriate. However, no suggestion for an appropriate DERINC value can be provided for the \u201cabsolute\u201d increment option; the most appropriate increment will depend on parameter magnitudes and types.",
+      "rubrique": [
+        "parameter groups"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.8.2 Parameter Group Variables",
+      "default": 0.01
+    },
+    {
+      "keyword": "derinclb",
+      "identifier": "DERINCLB",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "If a parameter increment is calculated as \u201crelative\u201d or \u201crel_to_max\u201d, it is possible that it may become too low if the parameter\u2019s value becomes very small or, in the case of the \u201crel_to_max\u201d option, if the magnitude of the largest parameter in the group becomes very small. A parameter increment becomes \u201ctoo low\u201d if it does not allow reliable derivatives to be calculated with respect to that parameter because of round-off errors incurred in the subtraction of nearly equal model outputs. To circumvent this possibility, an absolute lower bound can be placed on parameter increments; this lower bound is the same for all group members, and is provided as the value of the DERINCLB control variable. Thus, if a parameter value is currently 1000.0 and it belongs to a group for which INCTYP is \u201crelative\u201d, DERINC is 0.01, and DERINCLB is 15.0, the parameter increment will be 15.0 instead of 10.0 calculated on the basis of DERINC alone. If you do not wish to place a lower bound on parameter increments in this fashion, you should provide DERINCLB with a value of 0.0. Note that if INCTYP is \u201cabsolute\u201d, DERINCLB is ignored.",
+      "rubrique": [
+        "parameter groups"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.8.2 Parameter Group Variables",
+      "default": 0.0
+    },
+    {
+      "keyword": "derincmul",
+      "identifier": "DERINCMUL",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "If derivatives are calculated using one of the three-point methods, the parameter increment is added to the current parameter value prior to a model run, and then subtracted prior to another model run. In some cases it may be desirable to increase the value of the increment when calculating derivatives using a three-point method. The real variable DERINCMUL allows you to do this. If three-point derivatives calculation is employed, the value of DERINC is multiplied by DERINCMUL; this applies whether DERINC holds the increment factor, as it does for the \u201crelative\u201d or \u201crel_to_max\u201d increment types, or holds the parameter increment itself, as it does for the \u201cabsolute\u201d increment type. A DERINCMUL value of between 1.0 and 2.0 is usually satisfactory.",
+      "rubrique": [
+        "parameter groups"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.8.2 Parameter Group Variables",
+      "default": 2.0
+    },
+    {
+      "keyword": "dermthd",
+      "identifier": "DERMTHD",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "As is described in section 3.3 of this manual, the three-point method of derivatives calculation implemented by programs of the PEST++ suite has three variants. If FORCEN for a particular parameter group is set to \u201calways_3\u201d or \u201cswitch\u201d, the program must be informed of which alternative to employ. This is accomplished through the character variable DERMTHD, which must be supplied as \u201cparabolic\u201d, \u201cbest_fit\u201d or \u201coutside_pts\u201d. If FORCEN is set to \u201calways_2\u201d for a particular group, you must still provide one of these three legal values for DERMTHD; however, for such a parameter group, the value of DERMTHD has no bearing on derivatives calculation for its member parameters. On most occasions, FORCEN should be set to \u201cswitch\u201d while DERMTHD should be set to \u201cparabolic\u201d.",
+      "rubrique": [
+        "parameter groups"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.8.2 Parameter Group Variables",
+      "choices": [
+        "parabolic",
+        "best_fit",
+        "outside_pts"
+      ]
+    },
+    {
       "keyword": "enforce_tied_bounds",
       "identifier": "ENFORCE_TIED_BOUNDS",
       "type": "LOGICAL",
@@ -131,6 +199,59 @@
       "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
       "default": 20,
       "manual_default": 6
+    },
+    {
+      "keyword": "facorig",
+      "identifier": "FACORIG",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "minimum fraction of original parameter value in evaluating relative change (between zero and one).",
+      "rubrique": [
+        "control data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.6 Control Data Section",
+      "default": 0.001
+    },
+    {
+      "keyword": "facparmax",
+      "identifier": "FACPARMAX",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "parameter factor change limit (greater than one).",
+      "rubrique": [
+        "control data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.6 Control Data Section",
+      "default": 1.1
+    },
+    {
+      "keyword": "forcen",
+      "identifier": "FORCEN",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "The character variable FORCEN (an abbreviation of \u201c for ward/ cen tral\u201d) determines whether derivatives for group members are calculated using forward differences, or using one of the variants of the central difference method. If FORCEN for a particular group is \u201calways_2\u201d, derivatives for all parameters belonging to that group will always be calculated using the forward difference method; filling of the columns of the Jacobian matrix corresponding to members of the group will require as many model runs as there are adjustable parameters in the group. If FORCEN is provided as \u201calways_3\u201d, the filling of these same columns will require twice as many model runs as there are parameters within the group. However, the derivatives will be calculated with greater numerical precision. If FORCEN is set to \u201cswitch\u201d, derivatives calculation for all adjustable group members begins using the forward difference method. However, it switches to the central difference method for the remainder of the inversion process on the iteration after which the relative objective function reduction between successive iterations is less than PHIREDSWH. A value for PHIREDSWH is supplied in the \u201ccontrol data\u201d section of the PEST control file. Experience has shown that in most instances, the most appropriate value for FORCEN is \u201cswitch\u201d. This allows speed to take precedence over accuracy in the early stages of an inversion or optimization process when accuracy is not critical to objective function improvement, and accuracy to take precedence over speed later in the process when achievement of an objective function improvement requires that derivatives be calculated with as much precision as possible.",
+      "rubrique": [
+        "parameter groups"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.8.2 Parameter Group Variables",
+      "default": "switch",
+      "choices": [
+        "switch",
+        "always_2",
+        "always_3"
+      ]
     },
     {
       "keyword": "forecasts",
@@ -1158,6 +1279,27 @@
       "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables"
     },
     {
+      "keyword": "inctyp",
+      "identifier": "INCTYP",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "INCTYP is a character variable which can assume the values \u201crelative\u201d, \u201cabsolute\u201d or \u201crel_to_max\u201d. If it is \u201crelative\u201d, the increment used for forward-difference calculation of derivatives with respect to any parameter belonging to the group is calculated as a fraction of the current value of that parameter; that fraction is provided as the real variable DERINC. However, if INCTYP is \u201cabsolute\u201d the parameter increment for parameters belonging to the group is fixed, being again provided as the variable DERINC. Alternatively, if INCTYP is \u201crel_to_max\u201d, the increment for any group member is calculated as a fraction of the group member with highest absolute value, that fraction again being DERINC. Thus, for example, if INCTYP is \u201crelative\u201d and DERINC is 0.01 (a suitable value in many cases), the parameter increment for each group member is calculated as 0.01 times the current value of that parameter; this applies in all iterations of the inversion or optimization process. However, if INCTYP is \u201cabsolute\u201d and DERINC is 0.01, the parameter increment is the same for all members of the group over all iterations, this being 0.01. If INCTYP is \u201crel_to_max\u201d and DERINC is again 0.01, the parameter increment for all group members is the same for any one iteration, this being 0.01 times the absolute value of the group member of highest current magnitude; however, the increment may vary from iteration to iteration. If a group contains members which are fixed and/or tied, it is important to note that the values of these parameters are taken into account when calculating parameter increments using the \u201crel_to_max\u201d option. For the \u201crelative\u201d and \u201crel_to_max\u201d options, a DERINC value of between 0.01 and 0.02 is often appropriate. However, no suggestion for an appropriate DERINC value can be provided for the \u201cabsolute\u201d increment option; the most appropriate increment will depend on parameter magnitudes and types.",
+      "rubrique": [
+        "parameter groups"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.8.2 Parameter Group Variables",
+      "default": "relative",
+      "choices": [
+        "relative",
+        "absolute",
+        "rel_to_max"
+      ]
+    },
+    {
       "keyword": "iteration_summary",
       "identifier": "ITERATION_SUMMARY",
       "type": "LOGICAL",
@@ -1593,7 +1735,7 @@
       "shape": "",
       "size": 1,
       "unbounded": false,
-      "help": "NOPTMAX, an integer variable, sets the maximum number of iterations that an inversion or optimization process is allowed to run. However, values of 0, -1 and -2 trigger behaviour that is dependent on the PEST++ program that reads the PEST control file.",
+      "help": "NOPTMAX, an integer variable, sets the maximum number of iterations that an inversion or optimization process is allowed to run. However, values of 0, -1 and -2 trigger behaviour that is dependent on the PEST++ program that reads the PEST control file. number of optimization iterations (-2, -1, 0, or any number greater than zero).",
       "rubrique": [
         "control data"
       ],
@@ -1603,13 +1745,60 @@
       "default": 0
     },
     {
+      "keyword": "noptswitch",
+      "identifier": "NOPTSWITCH",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "iteration before which PEST will not switch to central derivatives computation (one or greater).",
+      "rubrique": [
+        "control data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.6 Control Data Section"
+    },
+    {
+      "keyword": "nphinored",
+      "identifier": "NPHINORED",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "number of iterations since last drop in objective function to trigger termination (greater than zero).",
+      "rubrique": [
+        "control data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.6 Control Data Section",
+      "default": 3
+    },
+    {
       "keyword": "nphistp",
       "identifier": "NPHISTP",
       "type": "INTEGER",
       "shape": "",
       "size": 1,
       "unbounded": false,
-      "help": "PHIREDSTP is a real variable whereas NPHISTP is an integer variable. If, in the course of a PESTPP-GLM inversion process, there have been NPHISTP optimization iterations for which (\u03a6 i - \u03a6 min )/\u03a6 i \u2264 PHIREDSTP (\u03a6 i being the objective function value at the end of the i th optimization iteration and \u03a6 min being the lowest objective function achieved to date), PESTPP-GLM considers that the inversion process is at an end. Alternatively, if PESTPP-GLM has failed to lower the objective function over NPHINORED successive iterations, it ceases execution. PESTPP-IES supplies these same termination criteria to ensemble-mean objective functions.",
+      "help": "PHIREDSTP is a real variable whereas NPHISTP is an integer variable. If, in the course of a PESTPP-GLM inversion process, there have been NPHISTP optimization iterations for which (\u03a6 i - \u03a6 min )/\u03a6 i \u2264 PHIREDSTP (\u03a6 i being the objective function value at the end of the i th optimization iteration and \u03a6 min being the lowest objective function achieved to date), PESTPP-GLM considers that the inversion process is at an end. Alternatively, if PESTPP-GLM has failed to lower the objective function over NPHINORED successive iterations, it ceases execution. PESTPP-IES supplies these same termination criteria to ensemble-mean objective functions. number of successive iterations over which PHIREDSTP applies (greater than zero).",
+      "rubrique": [
+        "control data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.6 Control Data Section",
+      "default": 3
+    },
+    {
+      "keyword": "nrelpar",
+      "identifier": "NRELPAR",
+      "type": "INTEGER",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "number of successive iterations over which RELPARSTP applies (greater than zero).",
       "rubrique": [
         "control data"
       ],
@@ -2062,6 +2251,25 @@
       "default": 4.0
     },
     {
+      "keyword": "parchglim",
+      "identifier": "PARCHGLIM",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "This character variable is used to designate whether an adjustable parameter is relative-limited, factor-limited or absolute-limited; see section 3.2.5 of this manual, and the discussion of the RELPARMAX and FACPARMAX control variables. PARCHGLIM must be provided with a value of \u201crelative\u201d or \u201cfactor\u201d. The former designates that alterations to a parameter\u2019s value are factor-limited whereas the latter designates that alterations to its value are relative-limited. The following aspects of change limit specifications should be noted. - The only members of the PEST++ suite which imposes limits on parameter changes in this way are PESTPP-GLM and (optionally) PESTPP-IES (through the ies_enforce_chglim option). - If a parameter is tied or fixed, its change limit is ignored. - Parameters that are log-transformed cannot be assigned a relative change limit; they can only be assigned a factor change limit. - At the end of each iteration of the inversion process, PESTPP-GLM lists the maximum factor and relative change undergone by any parameter.",
+      "rubrique": [
+        "parameter data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.9.2 First Part",
+      "choices": [
+        "relative",
+        "factor"
+      ]
+    },
+    {
       "keyword": "parcov",
       "identifier": "PARCOV",
       "type": "STRING",
@@ -2079,13 +2287,32 @@
       "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables; 8.4 Summary of Control Variables; 9.4 Summary of Control Variables"
     },
     {
+      "keyword": "partrans",
+      "identifier": "PARTRANS",
+      "type": "STRING",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "PARTRANS is a character variable which must assume one of four values, these being \u201cnone\u201d, \u201clog\u201d, \u201cfixed\u201d or \u201ctied\u201d. If you wish that a parameter be log-transformed throughout an inversion or uncertainty analysis process, the value \u201clog\u201d must be provided. (Note that PESTPP-OPT does not allow log transformation of decision variables.) Logarithmic transformation of some parameters may have a profound effect on the success of these processes. If a parameter is log-transformed, programs of the PEST++ suite adjust the log of the parameter rather than the parameter itself. For those programs which calculate derivatives, the column of the Jacobian matrix pertaining to that parameter actually contains derivatives with respect to the log of the parameter. However, when you supply the parameter\u2019s initial value (PARVAL1), and its upper and lower bounds (PARUBND and PARLBND), these must pertain to the parameter itself; likewise, at the end of the inversion or uncertainty analysis process, a PEST++ program provides the value of the parameter value itself rather than the log of its value. Experience has shown repeatedly that log transformation of at least some parameters can make the difference between a successful inversion process and an unsuccessful one. This is because, in many cases, the relationship between model outputs and parameters is more linear if certain parameters are log-transformed. It also follows from the fact that, implied in log-transformation is normalization of parameters with respect to their innate variability. An inversion process is thereby able to access, to some extent at least, the benefits which follow from Kahunen-Lo\u00e8ve transformation of parameters; see Doherty (2015). However, caution must be exercised when designating parameters as log-transformed. A parameter which can become zero or negative in the course of an inversion process must not be log-transformed; hence if a parameter\u2019s lower bound is zero or less, programs of the PEST++ suite will disallow logarithmic transformation of that parameter. (Note, however, that by using an appropriate SCALE and OFFSET, you can ensure that parameters never become negative. Thus, if you are estimating the value for a parameter whose domain, as far as the model is concerned, is the interval [\u20119.99, 10], you can shift its effective domain to [0.01, 20] by designating a SCALE of 1.0 and an OFFSET of -10.0. Similarly, if a parameter\u2019s domain is entirely negative, you can make its effective domain entirely positive by supplying a SCALE of -1.0 and an OFFSET of 0.0.) If a parameter is fixed, it takes no part in an inversion, uncertainty analysis or optimization process. This is implemented by endowing PARTRANS for that parameter with a value of \u201cfixed\u201d. If a parameter is linked to another parameter, this is signified by a PARTRANS value of \u201ctied\u201d. In the latter case the parameter plays only a limited role in the inversion or optimization process. However, the parameter to which the tied parameter is linked (this \u201cparent\u201d parameter must be neither fixed nor tied itself) takes an active part in this process; the tied parameter simply \u201cpiggy-backs\u201d on the parent parameter, the value of the tied parameter maintaining at all times the same ratio to the parent parameter as the ratio of their initial values. The parent parameter of each tied parameter must be provided in the second part of the \u201cparameter data\u201d section of the PEST control file. If a parameter is neither fixed nor tied, and is not log-transformed, the parameter transformation variable PARTRANS must be supplied as \u201cnone\u201d. If a particular inversion, uncertainty analysis or optimization problem would benefit from a more complex parameter transformation type than logarithmic, and/or if more complex relationships between parameters than ratio maintenance are required, these can be accomplished through use of the parameter pre-processor PAR2PAR supplied with the PEST suite; see part II of the PEST manual for details. It can also be accommodated using \u201csecondary parameter\u201d functionality available through PEST_HP; see documentation of PEST_HP for details.",
+      "rubrique": [
+        "parameter data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.9.2 First Part",
+      "choices": [
+        "none",
+        "log"
+      ]
+    },
+    {
       "keyword": "phiredstp",
       "identifier": "PHIREDSTP",
       "type": "REAL",
       "shape": "",
       "size": 1,
       "unbounded": false,
-      "help": "PHIREDSTP is a real variable whereas NPHISTP is an integer variable. If, in the course of a PESTPP-GLM inversion process, there have been NPHISTP optimization iterations for which (\u03a6 i - \u03a6 min )/\u03a6 i \u2264 PHIREDSTP (\u03a6 i being the objective function value at the end of the i th optimization iteration and \u03a6 min being the lowest objective function achieved to date), PESTPP-GLM considers that the inversion process is at an end. Alternatively, if PESTPP-GLM has failed to lower the objective function over NPHINORED successive iterations, it ceases execution. PESTPP-IES supplies these same termination criteria to ensemble-mean objective functions.",
+      "help": "PHIREDSTP is a real variable whereas NPHISTP is an integer variable. If, in the course of a PESTPP-GLM inversion process, there have been NPHISTP optimization iterations for which (\u03a6 i - \u03a6 min )/\u03a6 i \u2264 PHIREDSTP (\u03a6 i being the objective function value at the end of the i th optimization iteration and \u03a6 min being the lowest objective function achieved to date), PESTPP-GLM considers that the inversion process is at an end. Alternatively, if PESTPP-GLM has failed to lower the objective function over NPHINORED successive iterations, it ceases execution. PESTPP-IES supplies these same termination criteria to ensemble-mean objective functions. relative objective function reduction triggering termination (greater than zero).",
       "rubrique": [
         "control data"
       ],
@@ -2093,6 +2320,22 @@
       "mandatory": false,
       "source": "PEST++ 5.2.27 users manual: 4.6 Control Data Section",
       "default": 0.01
+    },
+    {
+      "keyword": "phiredswh",
+      "identifier": "PHIREDSWH",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "sets objective function change for introduction of central derivatives (between zero and one).",
+      "rubrique": [
+        "control data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.6 Control Data Section",
+      "default": 0.1
     },
     {
       "keyword": "rand_seed",
@@ -2111,6 +2354,38 @@
       "mandatory": false,
       "source": "PEST++ 5.2.27 users manual: 6.4.3 PEST++ Control Variables; 7.2.3 Control Variables; 7.3.2 Control Variables; 9.4 Summary of Control Variables",
       "default": 358183147
+    },
+    {
+      "keyword": "relparmax",
+      "identifier": "RELPARMAX",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "parameter relative change limit (greater than zero).",
+      "rubrique": [
+        "control data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.6 Control Data Section",
+      "default": 1.0
+    },
+    {
+      "keyword": "relparstp",
+      "identifier": "RELPARSTP",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "maximum relative parameter change triggering termination (greater than zero).",
+      "rubrique": [
+        "control data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.6 Control Data Section",
+      "default": 0.01
     },
     {
       "keyword": "save_binary",
@@ -2143,6 +2418,21 @@
       "mandatory": false,
       "source": "PEST++ 5.2.27 users manual: 9.4 Summary of Control Variables",
       "default": false
+    },
+    {
+      "keyword": "splitswh",
+      "identifier": "SPLITSWH",
+      "type": "REAL",
+      "shape": "",
+      "size": 1,
+      "unbounded": false,
+      "help": "the factor by which the objective function rises to invoke split slope derivatives analysis until end of run (zero or greater).",
+      "rubrique": [
+        "control data"
+      ],
+      "is_file": false,
+      "mandatory": false,
+      "source": "PEST++ 5.2.27 users manual: 4.6 Control Data Section"
     },
     {
       "keyword": "sqp_alpha_mults",

@@ -76,8 +76,8 @@ def test_every_default_is_the_value_the_binary_prints_for_it_unstated():
 
 def test_no_row_is_a_name_the_binary_does_not_read():
     unread = _extractor().unread((_RECORDS / "names.rec").read_text())
-    assert unread == {"da_hostart_cycle", "glm_norm_form", "ies_mda_decl_fac", "mou_crossover_prob",
-                      "mou_mutation_prob", "mou_risk_obj", "opt_external_dec_var_groups", "opt_iter_toll"}
+    assert {"da_hostart_cycle", "glm_norm_form", "ies_mda_decl_fac", "mou_crossover_prob", "mou_mutation_prob",
+            "mou_risk_obj", "opt_external_dec_var_groups", "opt_iter_toll"} <= unread
     assert not unread & {row["keyword"] for row in _rows()}
 
 
@@ -119,3 +119,84 @@ def test_an_unknown_name_refuses_in_one_line(tmp_path):
     assert str(refused.value) == "pestpp has no keyword 'ies_num_realz'."
     with pytest.raises(PestppError, match="pestpp has no option 'ies_num_realz'"):
         _study(tmp_path, ies_num_realz=2)
+
+
+_CONTROL = {"relparmax", "facparmax", "facorig", "phiredswh", "noptswitch", "splitswh", "noptmax", "phiredstp",
+            "nphistp", "nphinored", "relparstp", "nrelpar"}
+_GROUP = {"inctyp", "derinc", "derinclb", "forcen", "derincmul", "dermthd"}
+
+
+def _section(name: str) -> dict[str, dict]:
+    return {row["keyword"]: row for row in _rows() if row["rubrique"] == [name]}
+
+
+def test_the_control_data_variables_the_binary_reads_are_rows_with_the_default_it_prints():
+    tool = _extractor()
+    rows = _section("control data")
+    assert set(rows) == _CONTROL
+    printed = tool.controlled((_RECORDS / "control.rec").read_text())
+    assert set(printed) <= set(rows)
+    for name, said in printed.items():
+        assert tool._same(rows[name]["default"], tool._typed(rows[name]["type"], said)), name
+    assert [rows[name].get("default") for name in ("noptswitch", "splitswh")] == [None, None]
+    assert not _CONTROL & tool.unread((_RECORDS / "names.rec").read_text())
+
+
+def test_the_step_limits_default_to_the_values_the_binary_prints_not_ten():
+    entry = describe_keywords(module="pestpp", keyword="facparmax")["entry"]
+    assert (entry["engine_default"], entry["rubrique"]) == (1.1, ["control data"])
+    assert describe_keywords(module="pestpp", keyword="relparmax")["entry"]["engine_default"] == 1.0
+    assert describe_keywords(module="pestpp", keyword="phiredswh")["entry"]["engine_default"] == 0.1
+    assert accept(PESTPP, "facparmax", 3.0)[:2] == ("FACPARMAX", 3.0)
+
+
+def test_the_group_and_parameter_variables_the_binary_echoes_are_rows():
+    tool = _extractor()
+    groups, columns = _section("parameter groups"), _section("parameter data")
+    assert set(groups) == _GROUP and set(columns) == {"partrans", "parchglim"}
+    default = tool.grouped((_RECORDS / "control.rec").read_text())
+    for name, said in default.items():
+        assert tool._same(groups[name]["default"], tool._typed(groups[name]["type"], said)), name
+    assert [name for name in _GROUP if "default" not in groups[name]] == ["dermthd"]
+    assert not any("default" in row for row in columns.values())
+    stated = tool.grouped((_RECORDS / "groups.rec").read_text())
+    assert stated == {"inctyp": "absolute", "derinc": "0.05", "derinclb": "0.3", "forcen": "always_3",
+                      "derincmul": "1.5"}
+    assert (_RECORDS / "groups_grp.csv").read_text().splitlines()[0] == "pargpnme," + ",".join(
+        ("inctyp", "derinc", "derinclb", "forcen", "derincmul", "dermthd"))
+    assert "p1           none                  RELATIVE" in (_RECORDS / "groups.rec").read_text()
+
+
+def _tables(tmp_path: Path, **stated) -> tuple[str, list[str], list[str]]:
+    text = _study(tmp_path, **stated)
+    read = lambda name: (tmp_path / name).read_text().splitlines()
+    groups = read("study_groups.csv") if (tmp_path / "study_groups.csv").exists() else []
+    return text, groups, read("study_parameters.csv")
+
+
+def test_a_group_variable_stated_by_name_writes_the_group_table_with_the_dictionary_default_beside_it(tmp_path):
+    text, groups, parameters = _tables(tmp_path, derinc=0.05, FORCEN="always_3")
+    assert groups == ["pargpnme,inctyp,derinc,derinclb,forcen,derincmul,dermthd",
+                      "k,relative,0.05,0.0,always_3,2.0,parabolic"]
+    assert "* parameter groups external\nstudy_groups.csv\n* parameter data external" in text
+    assert "derinc" not in text.split("* parameter groups external")[0]
+    assert parameters[1].startswith("k,log,factor,")
+
+
+def test_an_unstated_group_variable_leaves_the_binary_to_its_own_group(tmp_path):
+    text, groups, _ = _tables(tmp_path, facparmax=3.0)
+    assert groups == [] and "parameter groups" not in text
+    assert "facparmax 3.0" in text.split("* control data keyword\n", 1)[1].splitlines()
+
+
+def test_a_parameter_column_stated_by_name_replaces_it_for_every_parameter(tmp_path):
+    _, _, parameters = _tables(tmp_path, partrans="none", parchglim="relative")
+    assert parameters[1].startswith("k,none,relative,")
+    with pytest.raises(SlotRefused, match="partrans"):
+        accept(PESTPP, "partrans", "fixed")
+
+
+def test_a_log_parameter_stated_a_relative_change_limit_refuses(tmp_path):
+    with pytest.raises(PestppError, match="log-transformed") as refused:
+        _study(tmp_path, parchglim="relative")
+    assert refused.value.error_code == "PESTPP_OPTION_CONFLICT"

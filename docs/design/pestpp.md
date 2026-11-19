@@ -41,12 +41,14 @@ posterior from the observations' weights (`pestpp.post.cov`, `pestpp.par.usum.cs
 
 ## The dictionary
 
-`modules/module_input/pestpp.json` holds every option of the release's tools the 5.2.27 binary reads - 170 -
+`modules/module_input/pestpp.json` holds every option of the release's tools the 5.2.27 binary reads - 187 -
 extracted by `scripts/extract_pestpp_dictionary.py` from the users manual at the release tag (its control-variable
-tables, run-management paragraphs and the control-data variables whose type it states), read against the
-binary's own parse-only records (`tests/fixtures/pestpp/defaults`): a manual name the binary does not read is no
-row (eight are not: `da_hostart_cycle`, `glm_norm_form`, `ies_mda_decl_fac`, `mou_crossover_prob`,
-`mou_mutation_prob`, `mou_risk_obj`, `opt_external_dec_var_groups`, `opt_iter_toll`), and a row's default is the
+tables, run-management paragraphs, the appendix's table of control-data variables, and the parameter-group
+variables and parameter columns of sections 4.8.2 and 4.9.2), read against the
+binary's own parse-only records (`tests/fixtures/pestpp/defaults`): a manual name the binary does not read, or
+reads and ignores (its forgiving parse warns `unused`), is no row (eight are not read at all: `da_hostart_cycle`,
+`glm_norm_form`, `ies_mda_decl_fac`, `mou_crossover_prob`, `mou_mutation_prob`, `mou_risk_obj`,
+`opt_external_dec_var_groups`, `opt_iter_toll`), and a row's default is the
 value the binary takes unstated, the manual's beside it where the two differ (ten do, `ies_subset_size` -10
 against 4 among them). `describe_keywords(module="pestpp")` reads it; a run states any option by name,
 `keywords={"ies_num_reals": 20}`, held to its row's type and choices at fill. Five options are LOCKED, each
@@ -55,9 +57,24 @@ refusing naming why (`modules/module.py`): `save_binary` and its other name `ies
 `sweep_output_csv_file` (everything the manager writes is uploaded by the `pestpp` stem). An unstated `noptmax`
 is the binary's 0 - the ensemble evaluated, nothing calibrated - so a calibration refuses one.
 
+The control-data variables the binary reads are rows (`relparmax`, `facparmax`, `facorig`, `phiredswh`,
+`noptswitch`, `splitswh`, `noptmax`, `phiredstp`, `nphistp`, `nphinored`, `relparstp`, `nrelpar`), rubrique `control
+data`, each default the value the binary's record prints (`facparmax` 1.1, `relparmax` 1.0, so a factor-limited
+parameter moves about that factor an iteration, x1.11 in the recorded glm study, unless the run states more); the other control-data variables
+of the manual's table (the lambda, Jacobian and save variables) it reads and ignores. `noptswitch` and `splitswh`
+are read and echoed nowhere, so they carry no default. Beside them, the parameter-group variables (`inctyp`,
+`derinc`, `derinclb`, `forcen`, `derincmul`, `dermthd`; rubrique `parameter groups`, defaults off the record's group
+table, `dermthd` none) and the per-parameter columns `partrans` (`none` or `log`) and `parchglim` (`relative` or
+`factor`; rubrique `parameter data`), which the binary requires and so has no default for.
+
 `authoring/control.py` writes the control file in PEST++'s keyword format: `* control data keyword` stating only
 what the study and the run state (every other variable is PEST++'s own default), and the parameter, observation,
-template and instruction tables as CSVs beside it.
+template and instruction tables as CSVs beside it. A group variable stated by name writes the group table for
+the study's groups, its other columns the dictionary's defaults (the table requires every column; `dermthd`, which
+the binary prints no default for, is written `parabolic`, the manual's usual value); unstated, no table is
+written and PEST++ makes its own groups. A stated `partrans` or `parchglim` replaces the pieces' own (log, factor)
+for every parameter; a log-transformed parameter stated `relative` refuses (`PESTPP_OPTION_CONFLICT`), the manual's
+rule. A stated value is one for every group or parameter of the study.
 
 ## `calibrate`
 

@@ -11,10 +11,10 @@ version: 5.2.27
 binary compiled on Jun 29 2026 at 14:20:02
 using control file: "pestpp.pst"
 in directory: "/data"
-on host: "005a8b44f5af"
+on host: "bf70d6256568"
 on a(n) linux operating system
 with release configuration
-started at 11/12/26 00:54:10
+started at 11/19/26 18:55:07
 
 control file parsing warning: unrecognized '* control data keyword' key-value pair on line: 
     'da_hostart_cycle 1'
@@ -40,7 +40,13 @@ control file parsing warning: unrecognized '* control data keyword' key-value pa
 control file parsing warning: unrecognized '* control data keyword' key-value pair on line: 
     'opt_iter_toll 0.001'
 
-...reading external file 'par.csv'
+control file parsing warning: unrecognized '* control data keyword' key-value pair on line: 
+    'absparmax 1.0'
+
+WARNING: unused 'control data keyword' option,value:BOUNDSCALE,1WARNING: unused 'control data keyword' option,value:DERFORGIVE,1WARNING: unused 'control data keyword' option,value:DOAUI,1control file parsing warning: unrecognized '* control data keyword' key-value pair on line: 
+    'dosenreuse 1'
+
+WARNING: unused 'control data keyword' option,value:DPOINT,1WARNING: unused 'control data keyword' option,value:IBOUNDSTICK,1WARNING: unused 'control data keyword' option,value:ICOR,1WARNING: unused 'control data keyword' option,value:ICOV,1WARNING: unused 'control data keyword' option,value:IEIG,1WARNING: unused 'control data keyword' option,value:IRES,1WARNING: unused 'control data keyword' option,value:JACFILE,1WARNING: unused 'control data keyword' option,value:JACUPDATE,1WARNING: unused 'control data keyword' option,value:JCOSAVE,1WARNING: unused 'control data keyword' option,value:JCOSAVEITN,1WARNING: unused 'control data keyword' option,value:LAMFORGIVE,1WARNING: unused 'control data keyword' option,value:LASTRUN,1WARNING: unused 'control data keyword' option,value:MAXCOMPDIM,1WARNING: unused 'control data keyword' option,value:MESSFILE,1WARNING: unused 'control data keyword' option,value:NINSFLE,1WARNING: unused 'control data keyword' option,value:NOBS,1WARNING: unused 'control data keyword' option,value:NOBSGP,1WARNING: unused 'control data keyword' option,value:NPAR,1WARNING: unused 'control data keyword' option,value:NPARGP,1WARNING: unused 'control data keyword' option,value:NPRIOR,1WARNING: unused 'control data keyword' option,value:NTPLFLE,1WARNING: unused 'control data keyword' option,value:NUMLAM,1WARNING: unused 'control data keyword' option,value:OBSREREF,1WARNING: unused 'control data keyword' option,value:PARSAVEITN,1WARNING: unused 'control data keyword' option,value:PARSAVERUN,1WARNING: unused 'control data keyword' option,value:PHIABANDON,1WARNING: unused 'control data keyword' option,value:PHIRATSUF,1.0WARNING: unused 'control data keyword' option,value:PHIREDLAM,1.0WARNING: unused 'control data keyword' option,value:PHISTOPTHRESH,1.0WARNING: unused 'control data keyword' option,value:PRECIS,1WARNING: unused 'control data keyword' option,value:REISAVEITN,1WARNING: unused 'control data keyword' option,value:RLAMBDA1,1.0WARNING: unused 'control data keyword' option,value:RLAMFAC,1.0WARNING: unused 'control data keyword' option,value:RSTFLE,1WARNING: unused 'control data keyword' option,value:UPVECBEND,1WARNING: unused 'control data keyword' option,value:VERBOSEREC,1...reading external file 'par.csv'
 ...header line: PARNME,PARTRANS,PARCHGLIM,PARVAL1,PARLBND,PARUBND,PARGP,SCALE,OFFSET,DERCOM
 ...read 2 lines from external file
 ...reading external file 'obs.csv'
@@ -53,7 +59,7 @@ control file parsing warning: unrecognized '* control data keyword' key-value pa
 ...header line: PEST_FILE,MODEL_FILE
 ...read 2 lines from external file
 control file parsing warning:  the following control data keyword lines were not accepted:
-da_hostart_cycle 1,glm_norm_form diag,ies_mda_decl_fac 0.5,mou_crossover_prob 0.75,mou_mutation_prob -999,mou_risk_obj false,opt_external_dec_var_groups x,opt_iter_toll 0.001,
+da_hostart_cycle 1,glm_norm_form diag,ies_mda_decl_fac 0.5,mou_crossover_prob 0.75,mou_mutation_prob -999,mou_risk_obj false,opt_external_dec_var_groups x,opt_iter_toll 0.001,absparmax 1.0,dosenreuse 1,
 forgive_unknown_args is 'true', continuing
 
 

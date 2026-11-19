@@ -47,8 +47,31 @@ _TABLES = {"s10-2-3": "pestpp-glm", "s11-2-3": "pestpp-sen", "s11-3-2": "pestpp-
 _RUN_MANAGEMENT = "s9-3-5"
 #: The control-data section, whose variables the keyword control file states by name.
 _CONTROL_DATA = "s8-6-1"
-#: Control-data variables the study's authoring writes itself: counts of what the control file lists.
-_COUNTS = frozenset({"numcom"})
+#: The appendix table of every control-data variable of a PEST control file, typed; the variables the binary
+#: reads are the rows of it that its forgiving parse neither warns it does not read nor warns it ignores.
+_CONTROL_TABLE = ("Table A1.1 Variables in the", "Table A1.2")
+#: Control-data variables the study's authoring writes itself: the mode and the count of what the control file lists.
+_AUTHORED = frozenset({"numcom", "pestmode"})
+#: The variables a study states by name beyond the control-data section: each parameter group's (section 4.8.2,
+#: written to the group table) and the per-parameter columns the study's pieces fix otherwise (4.9.2, written
+#: to the parameter table). The manual states their kind in prose; the binary's record of a study stating each
+#: echoes it (``groups.rec``). PARTRANS is held to log and none: fixed and tied have no meaning stated for every
+#: parameter at once (a tied parameter names its parent).
+_COLUMNS = {
+    "s8-8-2": ("parameter groups", {"inctyp": "text", "derinc": "real", "derinclb": "real", "forcen": "text",
+                                    "derincmul": "real", "dermthd": "text"}),
+    "s8-9-2": ("parameter data", {"partrans": "text", "parchglim": "text"}),
+}
+_CHOICES = {
+    "ies_subset_how": ["first", "last", "random", "phi_based"],
+    "inctyp": ["relative", "absolute", "rel_to_max"],
+    "forcen": ["switch", "always_2", "always_3"],
+    "dermthd": ["parabolic", "best_fit", "outside_pts"],
+    "partrans": ["none", "log"],
+    "parchglim": ["relative", "factor"],
+}
+#: The group-information table's columns after the group name, in the order the binary's record prints them.
+_GROUP_COLUMNS = ("inctyp", "derinc", "derinclb", "forcen", "derincmul")
 
 _TYPES = {
     "boolean": "LOGICAL", "bool": "LOGICAL",
@@ -140,8 +163,23 @@ def table_rows(text: str) -> dict[str, dict]:
     paragraphs = [_plain(p) for p in re.split(r"\n\s*\n", text[start:end])]
     for paragraph in paragraphs:
         for named, kind in re.findall(r"\b([A-Z][A-Z0-9]{3,})(?:, an?| is an?) (integer|real) variable", paragraph):
-            if named.lower() not in _COUNTS:
+            if named.lower() not in _AUTHORED:
                 _entry(rows, named, None, kind, paragraph, "control data", "4.6 Control Data Section")
+    first, last = (text.index(mark) for mark in _CONTROL_TABLE)
+    for row in re.finditer(r"^\| ([A-Z][A-Z0-9_]*)(?:\([^)]*\))? *\| *([^|]*?) *\| *([^|]*?) *\| *([^|]*?) *\|$",
+                           text[first:last], re.M):
+        if row.group(1).lower() not in _AUTHORED:
+            _entry(rows, row.group(1), None, row.group(2), f"{row.group(4)} ({row.group(3)}).", "control data",
+                   "4.6 Control Data Section")
+    for anchor, (section, columns) in _COLUMNS.items():
+        begin = next(s for s, a, _t in sections if a == anchor)
+        end = next(s for s, _a, _t in sections if s > begin)
+        for para in re.finditer(r"^\*\*([A-Z]+)\*\*\n(.*?)(?=^\*\*[A-Z]|^#|\Z)", text[begin:end], re.M | re.S):
+            # DERINC has no paragraph of its own: INCTYP's describes both.
+            for name in (para.group(1), "DERINC" if para.group(1) == "INCTYP" else ""):
+                if name.lower() in columns:
+                    _entry(rows, name, None, columns[name.lower()], para.group(2), section,
+                           _section_at(sections, begin)[1])
     return rows
 
 
@@ -205,6 +243,16 @@ def controlled(record: str) -> dict[str, str]:
     return {m.group(1): m.group(2) for m in re.finditer(r"^\s+([a-z]+) = (\S+)\s*$", block, re.M)}
 
 
+def grouped(record: str) -> dict[str, str]:
+    """The group variables the record prints for its first parameter group -> their values, lower case."""
+    block = record.split("Parameter group information", 1)[1].split("Parameter information", 1)[0]
+    lines = [line.split() for line in block.splitlines() if line.strip()]
+    first = lines[1]
+    if len(first) != len(_GROUP_COLUMNS) + 1:
+        raise SystemExit(f"the group table's first row is {first}, not a name and {len(_GROUP_COLUMNS)} values")
+    return {name: value.lower() for name, value in zip(_GROUP_COLUMNS, first[1:])}
+
+
 def stated_back(study: str) -> dict[str, str]:
     """Each option the every-name study states -> the value it states: the binary read every one of them."""
     body = study.split("* control data keyword", 1)[1].split("*", 1)[0]
@@ -212,9 +260,11 @@ def stated_back(study: str) -> dict[str, str]:
 
 
 def unread(record: str) -> set[str]:
-    """The names a forgiving parse warns it does not read."""
+    """The names a forgiving parse warns it does not read, or reads and ignores (``unused``)."""
     return {m.group(1).lower() for m in re.finditer(
-        r"unrecognized '\* control data keyword' key-value pair on line: \n\s+'([A-Za-z0-9_]+)\b", record)}
+        r"unrecognized '\* control data keyword' key-value pair on line: \n\s+'([A-Za-z0-9_]+)\b", record)
+    } | {m.group(1).lower() for m in re.finditer(
+        r"unused 'control data keyword' option,value:([A-Za-z0-9_]+),", record)}
 
 
 def build(text: str, defaults: str, control: str, accepted: str, study: str) -> tuple[list[dict], dict[str, Any]]:
@@ -224,7 +274,7 @@ def build(text: str, defaults: str, control: str, accepted: str, study: str) -> 
     read it back; a value the binary prints but refuses when stated keeps the manual's."""
     rows, skipped, back = table_rows(text), unread(accepted), stated_back(study)
     said = {**{name: value for name, value in printed(defaults).items()
-               if back.get(name, "").strip(",") == value.strip(",")}, **controlled(control)}
+               if back.get(name, "").strip(",") == value.strip(",")}, **controlled(control), **grouped(control)}
     out, report = [], {"not_read_by_the_binary": sorted(skipped), "default_unreadable": [],
                        "binary_differs_from_manual": []}
     for name, row in sorted(rows.items(), key=lambda item: item[0]):
@@ -260,8 +310,8 @@ def build(text: str, defaults: str, control: str, accepted: str, study: str) -> 
                     {"name": name, "binary": own, "manual": stated})
         elif stated is not None:
             entry["default"] = stated
-        if "ies_subset_how" == name:
-            entry["choices"] = ["first", "last", "random", "phi_based"]
+        if name in _CHOICES:
+            entry["choices"] = _CHOICES[name]
         out.append(entry)
     return out, report
 
