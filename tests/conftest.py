@@ -20,14 +20,15 @@ from trid3nt_server import tools as agent_tools
 
 
 @pytest.fixture(autouse=True)
-def user_settings(monkeypatch, tmp_path):
-    """The user settings file of every test is its own: ``user_settings(NAME=value)`` writes it, so a run on this box never reads the developer's."""
+def user_settings(monkeypatch, tmp_path_factory):
+    """The user settings file of every test is its own: ``user_settings(NAME=value)`` writes it, so a run on this box never reads the developer's.
+
+    The config home moves by its environment variable, which a spawned mesh child inherits; a patched reader would not cross."""
     import json
 
-    from trid3nt_server.settings import reader
-
-    path = tmp_path / "user_settings.json"
-    monkeypatch.setattr(reader, "user_file", lambda: path)
+    home = tmp_path_factory.mktemp("trid3nt_home")
+    monkeypatch.setenv("TRID3NT_HOME", str(home))
+    path = home / "settings.json"
 
     def write(**values):
         path.write_text(json.dumps(values))

@@ -135,6 +135,9 @@ class MeshRecipe:
         bind_ops(get_mesher(self.mesher), self.ops)
         bind_build(get_mesher(self.mesher), self.build)
 
+    def __reduce__(self) -> tuple:
+        return MeshRecipe, (self.mesher, self.kind, self.extent, self.resolution_m, dict(self.build), self.ops)
+
     def appending(self, op: MeshOp) -> "MeshRecipe":
         """The recipe with one more entry at the end."""
         return replace(self, ops=self.ops + (op,))

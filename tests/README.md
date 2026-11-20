@@ -33,6 +33,7 @@ rest and make up the sixth slice.
 |---|---|
 | `conftest.py` | The fixtures that cross subsystems, and the two autouse resets. |
 | `door_client.py` | One request driven through the HTTP doors over a real socket, on an ephemeral port. |
+| `mesh_builds.py` | The builds the mesh-child tests hand `_in_child`, at module level: a spawned child imports its build by name. |
 | `seated.py` | A whole declared sheet seated off a supplied mapping, row by row through the fill's own `_answer`. |
 
 A directory carries a `conftest.py` only when a fixture lands in it: the root

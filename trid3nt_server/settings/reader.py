@@ -187,7 +187,8 @@ def clear_session_run() -> None:
         _SESSION.pop(session, None)
 
 
-def _run_stated() -> dict[str, Any]:
+def run_stated() -> dict[str, Any]:
+    """What the run in progress states: its session's bound statements, the run's own over them."""
     session = _session_id()
     return {**(_SESSION.get(session, {}) if session else {}), **(_RUN.get() or {})}
 
@@ -196,7 +197,7 @@ def resolve(name: str) -> tuple[Any, str]:
     """``(value, level)`` of one setting; the level is ``run``, ``user`` or ``default``. Not journaled."""
     slot = entry(name)
     ident = slot.identifier
-    stated = _run_stated()
+    stated = run_stated()
     if ident in stated:
         return typed(slot, stated[ident]), "run"
     held = user_values()

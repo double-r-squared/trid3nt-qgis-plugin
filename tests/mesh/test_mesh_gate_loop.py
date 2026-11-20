@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 
+import mesh_builds
 import pytest
 
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
@@ -606,7 +607,7 @@ async def test_over_the_solve_budget_gated_asks_before_any_build(tmp_path, monke
     fake = _FakeEmitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: fake)
     session = _over(tmp_path)
-    session.solve_estimate = lambda nodes, edge: float(nodes)
+    session.solve_estimate = mesh_builds.a_second_per_node
     driver = asyncio.create_task(_drive([("cancel", None)]))
 
     with pytest.raises(MeshToolError) as excinfo:
@@ -625,7 +626,7 @@ async def test_over_the_solve_budget_proceed_builds_as_stated(tmp_path, monkeypa
     fake = _FakeEmitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: fake)
     session = _over(tmp_path)
-    session.solve_estimate = lambda nodes, edge: float(nodes)
+    session.solve_estimate = mesh_builds.a_second_per_node
     driver = asyncio.create_task(_drive([("proceed", None), ("proceed", None)]))
 
     await mesh_gate.gate_mesh_build(session, tool_name="telemac_dye_release")
@@ -640,7 +641,7 @@ async def test_over_the_solve_budget_auto_refuses(tmp_path, monkeypatch, user_se
     fake = _FakeEmitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: fake)
     session = _over(tmp_path)
-    session.solve_estimate = lambda nodes, edge: float(nodes)
+    session.solve_estimate = mesh_builds.a_second_per_node
 
     with pytest.raises(MeshToolError) as excinfo:
         await mesh_gate.gate_mesh_build(session, tool_name="telemac_dye_release")

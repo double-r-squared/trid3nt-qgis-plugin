@@ -15,6 +15,7 @@ import math
 import multiprocessing
 import os
 import signal
+import sys
 import threading
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -344,12 +345,14 @@ def _build(mesher: Mesher, recipe: MeshRecipe) -> Mesh:
 
 
 def _in_child(fn: Any, recipe: MeshRecipe) -> Mesh:
-    """Run ``fn(recipe)`` in a forked child and return its mesh, or raise what it raised.
+    """Run ``fn(recipe)`` in a spawned child and return its mesh, or raise what it raised.
 
-    The child leads its own process group, so ending it ends every solver or mesher program it started."""
-    context = multiprocessing.get_context("fork")
+    Spawned, never forked: a fork of the threaded daemon copies every lock another thread holds at that
+    instant (a log file's buffer lock among them) and the child waits on it forever. The child leads its
+    own process group, so ending it ends every solver or mesher program it started."""
+    context = multiprocessing.get_context("spawn")
     receive, send = context.Pipe(duplex=False)
-    child = context.Process(target=_child, args=(send, fn, recipe), daemon=True)
+    child = context.Process(target=_child, args=(send, fn, recipe, _context()), daemon=True)
     child.start()
     send.close()
     stop = _STOP.get()
@@ -393,14 +396,58 @@ def _end(child: Any) -> None:
     child.join()
 
 
-def _child(send: Any, fn: Any, recipe: MeshRecipe) -> None:
-    """The child's whole life: build, then send the mesh, the run notes and the settings read, or the error."""
+def _context() -> dict[str, Any]:
+    """What a build reads off the thread that runs it: every bound context variable whose value can cross,
+    the run's stated settings, and the bound session's keys. A live handle (an emitter, a stop flag) stays;
+    a mesh input that cannot cross refuses, since the build would read it unset."""
+    from trid3nt_server.model.credentials import resolver
+    from trid3nt_server.settings import run_stated
+
+    unset = object()
+    bound = []
+    for name, module in list(sys.modules.items()):
+        if module is None or not name.startswith("trid3nt"):
+            continue
+        for attr, var in list(vars(module).items()):
+            if isinstance(var, contextvars.ContextVar):
+                value = var.get(unset)
+                if value is unset or module is sys.modules[__name__]:
+                    continue
+                if _picklable(value):
+                    bound.append((name, attr, value))
+                elif name.startswith("trid3nt_server.tools.mesh"):
+                    raise MeshToolError(
+                        "MESH_BUILD_INPUT_UNCROSSABLE",
+                        f"the mesh input {attr} cannot be handed to the build process, which would "
+                        "read it unset; state it as a module-level function or a plain value.")
+    session = resolver.bound_session()
+    keys = {name: resolver.stored_value(name) for name in resolver.session_provider_ids(session)}
+    return {"bound": bound, "settings": run_stated(), "session": session, "keys": keys}
+
+
+def _enter(carried: Mapping[str, Any]) -> None:
+    import importlib
+
+    from trid3nt_server.model.credentials import resolver
+    from trid3nt_server.settings import bind_run
+
+    for name, attr, value in carried["bound"]:
+        getattr(importlib.import_module(name), attr).set(value)
+    bind_run(carried["settings"])
+    for name, value in carried["keys"].items():
+        resolver.set_session_credential(carried["session"], name, value)
+
+
+def _child(send: Any, fn: Any, recipe: MeshRecipe, carried: Mapping[str, Any]) -> None:
+    """The child's whole life: take the run's context, build, then send the mesh, the run notes and the
+    settings read, or the error."""
     from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
     from trid3nt_server.workflows.runtime import journal
 
     os.setpgrp()
-    notes_token, reads_token = bind_notes(), journal.bind_settings()
     try:
+        _enter(carried)
+        notes_token, reads_token = bind_notes(), journal.bind_settings()
         _limit_to_cores(int(setting("LOCAL_CORES")))
         mesh = fn(recipe)
         state = {f.name: getattr(mesh, f.name) for f in dataclasses.fields(mesh)}

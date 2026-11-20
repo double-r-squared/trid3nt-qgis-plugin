@@ -24,6 +24,7 @@ __all__ = [
     "bind_session",
     "credential_value",
     "unbind_session",
+    "bound_session",
     "stored_value",
     "credential_for_tool",
     "keyed_credentials",
@@ -50,6 +51,10 @@ def bind_session(session_id: str) -> contextvars.Token:
 
 def unbind_session(token: contextvars.Token) -> None:
     _ACTIVE_SESSION.reset(token)
+
+
+def bound_session() -> str:
+    return _ACTIVE_SESSION.get()
 
 
 def stored_value(name: str, env_var: str | None = None) -> str | None:

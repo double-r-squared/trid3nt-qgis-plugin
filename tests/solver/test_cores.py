@@ -164,16 +164,15 @@ def test_geoclaw_bouss_takes_container_cores_over_its_threads(monkeypatch):
 
 
 def test_local_cores_bounds_the_mesh_child(tmp_path):
+    import mesh_builds
+
     from trid3nt_server.tools.mesh.meshers import MeshToolError
     from trid3nt_server.tools.mesh.session import _in_child
-
-    def _report(recipe):
-        raise MeshToolError("SEEN", f"{len(os.sched_getaffinity(0))} {os.environ['OMP_NUM_THREADS']}")
 
     token = settings.bind_run({"LOCAL_CORES": 1})
     try:
         with pytest.raises(MeshToolError) as seen:
-            _in_child(_report, None)
+            _in_child(mesh_builds.reports_cores, None)
     finally:
         settings.reset_run(token)
     assert str(seen.value).endswith("1 1")

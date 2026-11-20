@@ -206,6 +206,7 @@ def _drive(run: LiveRun) -> RunEvidence:
     import contextlib
 
     from dev.testing import live_run as L
+    from dev.testing import ws_client
 
     ws = _FakeWS([])
 
@@ -215,6 +216,7 @@ def _drive(run: LiveRun) -> RunEvidence:
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(L, "assert_daemon_runs_head", lambda *_a, **_kw: None)
+        mp.setattr(ws_client, "auto_now", lambda: (run.auto, "user"))
         mp.setattr(L, "handshake", _noop)
         mp.setattr(L, "create_case", _case)
         mp.setattr(L, "_pump", _noop)

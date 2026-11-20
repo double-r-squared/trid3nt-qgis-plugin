@@ -108,6 +108,9 @@ class MeshOp:
         object.__setattr__(self, "fn", str(self.fn))
         object.__setattr__(self, "kwargs", MappingProxyType(dict(self.kwargs)))
 
+    def __reduce__(self) -> tuple:
+        return MeshOp, (self.fn, dict(self.kwargs))
+
     def __repr__(self) -> str:
         args = ", ".join(f"{k}={v!r}" for k, v in self.kwargs.items())
         return f"mesh_op({self.fn!r}{', ' + args if args else ''})"

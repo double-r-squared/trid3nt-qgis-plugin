@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import mesh_builds
 import pytest
 
 from trid3nt_server import settings
@@ -119,7 +120,7 @@ def test_raising_the_setting_makes_the_derived_edge_finer(tmp_path):
 
 
 def _solve_built(session, *, budget, limit=10_000_000):
-    session.solve_estimate = lambda nodes, edge: float(nodes)
+    session.solve_estimate = mesh_builds.a_second_per_node
     token = settings.bind_run({"MESH_MAX_NODES": limit, "SOLVE_BUDGET_S": budget})
     try:
         return session.mesh
