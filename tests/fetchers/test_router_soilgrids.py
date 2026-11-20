@@ -44,7 +44,8 @@ def test_spec_identity(spec):
     pw = spec.ingest["projected_window"]
     assert pw["target_res_deg"] == 0.0025
     assert pw["scale_by_param"]["map"] == {
-        "clay": 10.0, "sand": 10.0, "silt": 10.0, "soc": 10.0, "bdod": 100.0, "phh2o": 10.0}
+        "bdod": 100.0, "cec": 10.0, "cfvo": 10.0, "clay": 10.0, "nitrogen": 100.0, "ocd": 10.0,
+        "ocs": 10.0, "phh2o": 10.0, "sand": 10.0, "silt": 10.0, "soc": 10.0}
 
 
 def test_metadata_flags_twin_identical(spec):
@@ -114,11 +115,12 @@ def test_url_template_fills_property_depth(spec):
     try:
         with pytest.raises(Exception):
             raster_cog._resolve_multi_url_members(
-                spec, {"bbox": list(_BBOX), "soil_property": "phh2o", "depth": "5-15cm"})
+                spec, {"bbox": list(_BBOX), "soil_property": "phh2o", "depth": "5-15cm",
+                      "statistic": "Q0.95"})
     finally:
         tp.get_bytes = orig
     assert captured["url"] == (
-        "https://files.isric.org/soilgrids/latest/data/phh2o/phh2o_5-15cm_mean.vrt")
+        "https://files.isric.org/soilgrids/latest/data/phh2o/phh2o_5-15cm_Q0.95.vrt")
 
 
 

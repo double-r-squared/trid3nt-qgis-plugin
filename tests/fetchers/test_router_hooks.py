@@ -144,18 +144,23 @@ _EQ_BODY = json.dumps({"type": "FeatureCollection", "metadata": {"count": 1}, "f
 ]}).encode()
 
 
-def test_eq_body_walk_and_column_map():
-    """The declared body walks features, builds the 2D point off the coordinate paths,
-    and the column map projects the raw feature - id at the top, depth off the Z."""
+_EQ_PROPERTIES = ["mag", "magType", "place", "time", "tsunami", "felt", "sig", "net", "status", "type", "url",
+                  "id", "depth_km", "time_utc", "updated_utc"]
+
+
+def test_eq_body_walk_keeps_the_feature_properties_and_produces_what_sits_outside_them():
+    """The declared body walks features, builds the 2D point off the coordinate paths, keeps the
+    feature's properties whole and produces the id at the top, the depth off the Z and the instants."""
     spec = _spec("fetch_usgs_earthquakes")
     feats = http_json._features(spec, {}, [_EQ_BODY])
     assert feats[0]["geometry"]["coordinates"] == [-121.0, 38.0]
     props = vector_fgb.apply_ingest_transforms(feats, spec, {})[0]["properties"]
     assert props["id"] == "nc1" and props["depth_km"] == 5.2 and props["mag"] == 4.1
-    assert props["time"] == "2020-09-13T12:26:40Z" and props["updated"] is None
-    assert props["mag_type"] == "mw" and props["net"] == "nc"
+    assert props["time"] == 1600000000000 and props["time_utc"] == "2020-09-13T12:26:40Z"
+    assert props["updated_utc"] is None and "updated" not in props
+    assert props["magType"] == "mw" and props["net"] == "nc"
     g = _fgb_records(feats, spec)
-    assert list(g.columns)[:-1] == list(spec.ingest["column_map"])
+    assert set(_EQ_PROPERTIES) <= set(g.columns)
 
 
 def test_eq_declared_empty_and_row_cap():
@@ -346,7 +351,7 @@ def test_nws_bad_status_enum_input_invalid():
     assert ei.value.error_code == "NWS_EVENT_INPUT_INVALID"
 
 
-def test_nws_declared_walk_projects_props_and_drops_null_geometry():
+def test_nws_declared_walk_keeps_props_and_drops_null_geometry():
     spec = _spec("fetch_nws_event")
     body = json.dumps({"type": "FeatureCollection", "features": [
         {"geometry": {"type": "Polygon", "coordinates": [[[-81.0, 26.0], [-80.0, 26.0], [-80.0, 27.0], [-81.0, 26.0]]]},
@@ -356,9 +361,9 @@ def test_nws_declared_walk_projects_props_and_drops_null_geometry():
     ]}).encode()
     g = _fgb_records(http_json._features(spec, {}, [body]), spec)
     assert len(g) == 1 and g.iloc[0]["event"] == "Flood Warning"
-    # the column map IS the schema, and a nested prop lands as a scalar string.
-    assert list(g.columns)[:-1] == list(spec.ingest["column_map"])
-    assert isinstance(g.iloc[0]["id"], str)
+    # every property is kept, and a nested one lands under its dotted name.
+    assert {"event", "severity", "id", "geocode.UGC"} <= set(g.columns)
+    assert isinstance(g.iloc[0]["id"], str) and g.iloc[0]["geocode.UGC"] == '["FLZ048"]'
 
 
 def test_nws_declared_walk_empty_and_bad_body():
@@ -392,7 +397,7 @@ def test_nsi_build_request_oversized_bbox_input_invalid():
     assert ei.value.error_code == "USACE_NSI_INPUT_INVALID"
 
 
-def test_nsi_declared_walk_projects_and_states_the_exposure_cols():
+def test_nsi_declared_walk_keeps_every_field():
     spec = _spec("fetch_usace_nsi")
     body = json.dumps({"type": "FeatureCollection", "features": [
         {"geometry": {"type": "Point", "coordinates": [-81.87, 26.63]},
@@ -401,9 +406,9 @@ def test_nsi_declared_walk_projects_and_states_the_exposure_cols():
     ]}).encode()
     g = _fgb_records(http_json._features(spec, {}, [body]), spec)
     assert len(g) == 1
-    assert list(g.columns)[:-1] == list(spec.ingest["column_map"])
-    assert g.iloc[0]["component_type"] == "RES1"
-    assert g.iloc[0]["replacement_value"] == 250000.0 and g.iloc[0]["fd_id"] == 7
+    assert set(g.columns) == {"fd_id", "occtype", "val_struct", "st_damcat", "geometry"}
+    assert g.iloc[0]["occtype"] == "RES1"
+    assert g.iloc[0]["val_struct"] == 250000.0 and g.iloc[0]["fd_id"] == 7
 
 
 def test_nsi_message_body_and_empty():
@@ -433,4 +438,4 @@ def test_nsi_post_transport_executor_end_to_end(monkeypatch):
         gdf = gpd.read_file(pth)
     finally:
         os.unlink(pth)
-    assert len(gdf) == 1 and gdf.iloc[0]["component_type"] == "RES1"
+    assert len(gdf) == 1 and gdf.iloc[0]["occtype"] == "RES1"

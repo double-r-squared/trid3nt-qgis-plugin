@@ -32,6 +32,7 @@ _FLOWLINE_COLUMNS = ["nhdplusid", "gnis_name", "ftype", "fcode", "hydroseq",
                      "slope", "lengthkm", "minelevsmo", "maxelevsmo"]
 
 
+
 @pytest.fixture(scope="module")
 def specs():
     return compose_specs_from_tree()
@@ -44,27 +45,25 @@ def _query(spec) -> dict[str, str]:
     return {k: v[0] for k, v in parse_qs(urlsplit(url).query).items()}
 
 
-def test_waterbodies_ask_only_lakes_and_reservoirs_with_their_identity(specs):
+def test_waterbodies_ask_only_lakes_and_reservoirs_with_every_field(specs):
     q = _query(specs["fetch_nhd_hr_waterbodies"])
     assert q["where"] == "ftype IN (390, 436)"
-    assert q["outFields"].split(",") == _WATERBODY_COLUMNS
-    assert "elevation" not in q["outFields"]
+    assert q["outFields"] == "*"
     assert q["geometry"] == "-93.75,41.45,-93.45,41.7"
     assert "MapServer/9/query" in specs["fetch_nhd_hr_waterbodies"].endpoints["data"].url
 
 
-def test_river_areas_ask_only_the_river_and_canal_water_with_their_identity(specs):
+def test_river_areas_ask_only_the_river_and_canal_water_with_every_field(specs):
     q = _query(specs["fetch_nhd_hr_river_areas"])
     assert q["where"] == "ftype IN (460, 537)"
-    assert q["outFields"].split(",") == _RIVER_AREA_COLUMNS
-    assert "elevation" not in q["outFields"]
+    assert q["outFields"] == "*"
     assert "MapServer/8/query" in specs["fetch_nhd_hr_river_areas"].endpoints["data"].url
 
 
 def test_flowlines_ask_the_whole_network_with_topology(specs):
     q = _query(specs["fetch_nhdplus_hr_flowline_network"])
     assert q["where"] == "1=1"
-    assert q["outFields"].split(",") == _FLOWLINE_COLUMNS
+    assert q["outFields"] == "*"
     assert "MapServer/3/query" in \
         specs["fetch_nhdplus_hr_flowline_network"].endpoints["data"].url
 

@@ -16,7 +16,7 @@ supports_global_query: false
 
 endpoints:
   data:
-    url_template: "https://files.isric.org/soilgrids/latest/data/{soil_property}/{soil_property}_{depth}_mean.vrt"
+    url_template: "https://files.isric.org/soilgrids/latest/data/{soil_property}/{soil_property}_{depth}_{statistic}.vrt"
 auth:
   mode: none
   user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
@@ -27,7 +27,7 @@ params:
     type: enum
     default: clay
     lowercase: true
-    values: [clay, sand, silt, soc, bdod, phh2o]
+    values: [bdod, cec, cfvo, clay, nitrogen, ocd, ocs, phh2o, sand, silt, soc]
     aliases:
       ph: phh2o
       soil_ph: phh2o
@@ -37,11 +37,16 @@ params:
       clay_content: clay
       sand_content: sand
       silt_content: silt
+      coarse_fragments: cfvo
+      cation_exchange_capacity: cec
+      organic_carbon_density: ocd
+      organic_carbon_stock: ocs
+      total_nitrogen: nitrogen
   depth:
     type: enum
     default: "0-5cm"
     lowercase: true
-    values: ["0-5cm", "5-15cm", "15-30cm", "30-60cm", "60-100cm", "100-200cm"]
+    values: ["0-5cm", "5-15cm", "15-30cm", "30-60cm", "60-100cm", "100-200cm", "0-30cm"]
     aliases:
       "0-5": "0-5cm"
       "0-5 cm": "0-5cm"
@@ -55,6 +60,17 @@ params:
       "60-100 cm": "60-100cm"
       "100-200": "100-200cm"
       "100-200 cm": "100-200cm"
+      "0-30": "0-30cm"
+      "0-30 cm": "0-30cm"
+  statistic:
+    type: enum
+    default: mean
+    values: [mean, Q0.05, Q0.5, Q0.95, uncertainty]
+    aliases:
+      median: Q0.5
+      q0.05: Q0.05
+      q0.5: Q0.5
+      q0.95: Q0.95
 gates:
   max_bbox_deg2: 0.5
 
@@ -72,13 +88,19 @@ ingest:
     max_window_pixels: 400000000
     scale_by_param:
       param: soil_property
-      map: {clay: 10.0, sand: 10.0, silt: 10.0, soc: 10.0, bdod: 100.0, phh2o: 10.0}
+      map: {bdod: 100.0, cec: 10.0, cfvo: 10.0, clay: 10.0, nitrogen: 100.0, ocd: 10.0, ocs: 10.0, phh2o: 10.0, sand: 10.0, silt: 10.0, soc: 10.0}
+      override:
+        param: statistic
+        map: {uncertainty: 10.0}
 
 normalize:
   crs: "EPSG:4326"
   units_by_param:
     param: soil_property
-    map: {clay: percent, sand: percent, silt: percent, soc: "g/kg", bdod: "kg/dm3", phh2o: pH}
+    map: {bdod: "kg/dm3", cec: "cmol(c)/kg", cfvo: "cm3/100cm3", clay: percent, nitrogen: "g/kg", ocd: "kg/m3", ocs: "kg/m2", phh2o: pH, sand: percent, silt: percent, soc: "g/kg"}
+    override:
+      param: statistic
+      map: {uncertainty: ratio}
 
 output:
   layer_type: raster
@@ -115,13 +137,14 @@ coverage:
       organic_carbon: soc
 
 caveats:
+  - "the properties, depth intervals, statistics and conversion factors are those ISRIC publishes: the WebDAV listing of files.isric.org/soilgrids/latest/data (bdod, cec, cfvo, clay, nitrogen, ocd, ocs, phh2o, sand, silt, soc; mean, Q0.05, Q0.5, Q0.95, uncertainty) and the SoilGrids FAQ table of mapped units and conversion factors (docs.isric.org/globaldata/soilgrids/SoilGrids_faqs_01.html); the water-content layers that table lists (wv0010, wv003, wv1500) are not in the listing; ocs is served for 0-30cm only; the uncertainty layer is (Q0.95-Q0.05)/Q0.50 multiplied by 10"
   - "ISRIC SoilGrids 2.0 global 250 m ML soil-property prediction; an all-NoData window (ocean / off the soil land surface) -> SOILGRIDS_EMPTY (never a fabricated layer)"
   - "AOI-scoped (<= 0.5 deg^2); a 250 m ML prediction, NOT a surveyed NRCS map unit -- for US work use fetch_statsgo_soils"
 
 # corpus lifted from sibling corpus.yaml.
 
 docstring: |-
-  ISRIC SoilGrids 2.0 global soil-property raster (clay/sand/silt/soc/bdod/pH).
+  ISRIC SoilGrids 2.0 global soil-property raster (every property the service serves: clay, sand, silt, soc, bdod, pH, CEC, coarse fragments, nitrogen, carbon density and stock).
 
   **What it does:** Fetches the ISRIC SoilGrids 2.0 global ~250 m prediction of
   a soil property at a standard depth for the requested bbox. Opens the global
@@ -139,11 +162,21 @@ docstring: |-
   - ``"soc"`` -- soil organic carbon, g/kg.
   - ``"bdod"`` -- bulk density of the fine earth fraction, kg/dm3.
   - ``"phh2o"`` -- pH measured in water.
+  - ``"cec"`` -- cation exchange capacity at pH 7, cmol(c)/kg.
+  - ``"cfvo"`` -- coarse fragments, volumetric, cm3/100cm3.
+  - ``"nitrogen"`` -- total nitrogen, g/kg.
+  - ``"ocd"`` -- organic carbon density, kg/m3.
+  - ``"ocs"`` -- organic carbon stock, kg/m2, published for ``"0-30cm"`` only.
+
+  **Statistics (``statistic``):** ``"mean"`` (default), the median ``"Q0.5"``,
+  the 90 percent prediction interval's ``"Q0.05"`` and ``"Q0.95"``, and
+  ``"uncertainty"`` -- the ratio (Q0.95 - Q0.05) / Q0.5, unitless.
 
   **Depths (``depth``):** GlobalSoilMap standard intervals
   ``"0-5cm"``, ``"5-15cm"``, ``"15-30cm"``, ``"30-60cm"``, ``"60-100cm"``,
   ``"100-200cm"`` (default ``"0-5cm"`` -- the surface layer that drives
-  infiltration and ag rooting).
+  infiltration and ag rooting); ``ocs`` exists only at ``"0-30cm"`` and no
+  other property does.
 
   **When to use:**
   - Soil texture / organic carbon / pH / bulk density -- agriculture,
@@ -162,14 +195,18 @@ docstring: |-
   - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
     Required (``supports_global_query=False`` -- each global mosaic is ~5 GB).
     AOI-scoped (<= 0.5 deg^2).
-  - ``soil_property`` (str, default ``"clay"``): one of clay/sand/silt/soc/
-    bdod/phh2o (synonyms like ``"ph"``, ``"organic_carbon"``,
-    ``"bulk_density"`` are accepted).
-  - ``depth`` (str, default ``"0-5cm"``): one of the six standard depths.
+  - ``soil_property`` (str, default ``"clay"``): one of bdod/cec/cfvo/clay/
+    nitrogen/ocd/ocs/phh2o/sand/silt/soc (synonyms like ``"ph"``,
+    ``"organic_carbon"``, ``"bulk_density"`` are accepted).
+  - ``depth`` (str, default ``"0-5cm"``): one of the six standard depths, or
+    ``"0-30cm"`` for ``ocs``.
+  - ``statistic`` (str, default ``"mean"``): mean, Q0.05, Q0.5, Q0.95 or
+    uncertainty.
 
   **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="input"``)
   pointing at a single-band float32 COG in the ``static-30d`` / ``soilgrids``
-  cache prefix. ``units`` is the physical unit (percent / g/kg / kg/dm3 / pH),
+  cache prefix. ``units`` is the physical unit (percent / g/kg / kg/dm3 / pH /
+  cmol(c)/kg / cm3/100cm3 / kg/m3 / kg/m2; ``ratio`` for an uncertainty),
   NoData ``-9999``, ~250 m, EPSG:4326.
 
   **Data source:** ISRIC SoilGrids 2.0 (CC-BY 4.0, no API key) --

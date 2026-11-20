@@ -25,10 +25,6 @@ _HEADER = (
     "latitude,longitude,brightness,scan,track,acq_date,acq_time,"
     "satellite,instrument,confidence,version,bright_t31,frp,daynight"
 )
-_RETAINED = [
-    "brightness", "scan", "track", "acq_date", "acq_time", "satellite",
-    "instrument", "confidence", "version", "bright_t31", "frp", "daynight",
-]
 
 
 def _synth_csv(n: int = 5, lat0: float = 37.5, lon0: float = -120.5) -> bytes:
@@ -131,10 +127,8 @@ def test_the_declared_csv_walk_makes_points_of_the_retained_schema(spec):
 def test_empty_header_only_is_zero_feature_fgb(spec):
     feats = http_json._features(spec, {}, [(_HEADER + "\n").encode()])
     assert feats == []
-    # the column map is the schema -> the honest-empty FGB carries every column.
     gdf = _read(features_to_fgb_bytes(feats, spec, {}))
-    assert len(gdf) == 0
-    assert sorted(c for c in gdf.columns if c != "geometry") == sorted(_RETAINED)
+    assert len(gdf) == 0 and gdf.crs.to_epsg() == 4326
 
 
 def test_geography_correctness_california(spec):

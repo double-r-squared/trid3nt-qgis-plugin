@@ -339,7 +339,7 @@ def build_record(
         "package_id": str(params.get("package_id")),
         "entity": params.get("_entity_name"),
         "date_col": date_col,
-        "value_columns": present_values,
+        "numeric_columns": present_values,
         "units": {c: units.get(c) for c in present_values},
         "n_rows": len(times),
         "first_ts": times[0],

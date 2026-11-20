@@ -31,8 +31,6 @@ ingest:
     driver: ESRIJSON
     page_size: 2000
     empty_is_typed_error: true
-  query_template:
-    out_fields: "nhdplusid,permanent_identifier,ftype,fcode,gnis_name,areasqkm,reachcode"
   # FType 390 is LakePond and 436 is Reservoir in the service's own type table;
   # the other NHDWaterbody types (playa, ice mass, swamp or marsh, estuary) are
   # not standing fresh water.

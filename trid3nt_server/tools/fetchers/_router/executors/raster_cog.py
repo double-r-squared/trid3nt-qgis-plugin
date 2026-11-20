@@ -23,6 +23,7 @@ from ..errors import (
     router_not_available_error,
     router_upstream_error,
 )
+from ..params import by_param
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.executors.raster_cog"
@@ -509,10 +510,8 @@ def _projected_vrt_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> 
             f"bbox={bbox} produced no valid pixels (all-nodata window -- over open "
             f"water or off the soil land surface)", spec.empty_error_suffix)
 
-    scale_div = 1.0
     sbp = pw.get("scale_by_param")
-    if sbp:
-        scale_div = float((sbp.get("map") or {})[params.get(sbp.get("param"))])
+    scale_div = float(by_param(sbp, params)) if sbp else 1.0
     out = np.full((dst_h, dst_w), np.nan, dtype="float32")
     out[valid] = reproj[valid].astype("float32") / scale_div
     return out, dst_transform, "EPSG:4326"

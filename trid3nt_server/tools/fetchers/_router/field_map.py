@@ -1,7 +1,7 @@
 """The declarative field map: what a build/parse hook pair states in Python.
 
-A row states its request template, body decode, paging style and keyed detail join under
-``ingest``; the executors read them wherever no hook is named."""
+A row states its request template, body decode and paging style under ``ingest``; the executors read
+them wherever no hook is named. A row's record is what its service returned, untouched."""
 
 from __future__ import annotations
 
@@ -24,8 +24,6 @@ __all__ = [
     "declared_features",
     "declared_empty_error",
     "declared_status_error",
-    "enrich_plans",
-    "enrich_merge",
     "page_injection",
     "rows_in_body",
 ]
@@ -197,7 +195,7 @@ def _refuse_declared(spec: SourceSpec, body: dict[str, Any], text: str) -> None:
 
 
 def _csv_rows(spec: SourceSpec, body: dict[str, Any], text: str) -> list[dict[str, str]]:
-    """A comma-separated body as its header's rows; values stay text for the column map; an unreadable geometry header is refused."""
+    """A comma-separated body as its header's rows, every value the text the service sent; an unreadable geometry header is refused."""
     reader = csv.DictReader(io.StringIO(text))
     names = list(reader.fieldnames or [])
     geometry = body.get("geometry") or {}
@@ -285,10 +283,30 @@ def _check_row_cap(spec: SourceSpec, body: dict[str, Any], obj: Any, n_rows: int
     )
 
 
+def _epoch_ms_iso(value: Any) -> str | None:
+    """Epoch milliseconds as an ISO 8601 UTC instant (a date alone would drop the time of day); None where it is no instant."""
+    try:
+        ms = float(value)
+        return _dt.datetime.fromtimestamp(ms / 1000.0, tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
+def _produced(body: dict[str, Any], row: Any) -> dict[str, Any]:
+    """What ``ingest.body.produced`` makes of a row: each name from a path of the row, ``epoch_ms`` reading it as an instant."""
+    made: dict[str, Any] = {}
+    for name, rule in (body.get("produced") or {}).items():
+        if "epoch_ms" in rule:
+            made[str(name)] = _epoch_ms_iso(read_path(row, rule["epoch_ms"]))
+        else:
+            made[str(name)] = read_path(row, rule["from"])
+    return made
+
+
 def declared_features(
     spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
 ) -> list[dict[str, Any]]:
-    """The features stated by ``ingest.body``, handing the RAW row to the column map; ``ingest.empty`` makes a zero-row answer the typed empty."""
+    """The features stated by ``ingest.body``: a GeoJSON feature's own properties, a row as it came, beside what ``produced`` makes; ``ingest.empty`` makes a zero-row answer the typed empty."""
     body = (spec.ingest or {}).get("body") or {}
     features: list[dict[str, Any]] = []
     for raw in bodies:
@@ -300,10 +318,12 @@ def declared_features(
         rows = list(rows) if isinstance(rows, list) else []
         _check_row_cap(spec, body, obj, len(rows))
         for row in rows:
+            record = row.get("properties") if body.get("format") == "geojson" and isinstance(row, dict) else row
             features.append({
                 "type": "Feature",
                 "geometry": _geometry(body, row),
-                "properties": row if isinstance(row, dict) else {},
+                "properties": record if isinstance(record, dict) else {},
+                "produced": _produced(body, row),
             })
     if not features:
         empty = declared_empty_error(spec, "the source returned zero records in scope")
@@ -351,108 +371,3 @@ def page_injection(pagination: dict[str, Any], page: int, cursor: Any) -> dict[s
     if style == "cursor":
         return {"cursor": cursor, "page_size": size}
     return {str(pagination.get("page_param", "page")): page, "page_size": size}
-
-
-def enrich_plans(
-    spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]]
-) -> list[tuple[str, RequestPlan]]:
-    """One detail request per DISTINCT value of ``ingest.enrich.key_column``, in first-seen order; the key is a mapped output column."""
-    enrich = (spec.ingest or {}).get("enrich") or {}
-    key_column = str(enrich.get("key_column"))
-    request = enrich.get("request") or {}
-    keys: list[str] = []
-    for feat in features:
-        value = (feat.get("properties") or {}).get(key_column)
-        if value is not None and str(value) != "" and str(value) not in keys:
-            keys.append(str(value))
-    headers = {"User-Agent": spec.auth.user_agent}
-    plans: list[tuple[str, RequestPlan]] = []
-    for key in keys:
-        fmt = {**params, "key": key}
-        endpoint = spec.endpoints.get(str(request.get("endpoint", "detail")))
-        url = _render(endpoint.url_template or endpoint.url or "", fmt) if endpoint else None
-        plans.append((key, RequestPlan(
-            url=url or "",
-            params=_render_block(request.get("params") or {}, fmt),
-            headers=headers,
-        )))
-    return plans
-
-
-def _detail_rows(spec: SourceSpec, enrich: dict[str, Any], results: dict[str, Any]) -> dict[str, Any]:
-    body = enrich.get("body") or {}
-    detail_key = str((enrich.get("join") or {}).get("detail_key"))
-    index: dict[str, Any] = {}
-    for result in results.values():
-        raw = getattr(result, "body", None)
-        if not raw:
-            continue
-        obj = _decode(spec, body, raw)
-        if isinstance(obj, dict) and obj.get("error"):
-            raise router_upstream_error(
-                spec.error_code_prefix, f"detail endpoint returned an error: {obj['error']}")
-        path = body.get("rows_path")
-        rows = read_path(obj, path) if path else obj
-        for row in rows if isinstance(rows, list) else []:
-            key = read_path(row, detail_key)
-            if key is not None:
-                index[str(key)] = row
-    return index
-
-
-def enrich_merge(
-    spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]],
-    results: dict[str, Any],
-) -> list[dict[str, Any]]:
-    """Left-join fetched detail onto each feature by ``feature_key`` -> ``detail_key``; ``take`` lifts columns, ``geometry`` its shape."""
-    # Keys are spelled detail_key / feature_key, not on / onto: YAML reads a bare ``on`` as true.
-    enrich = (spec.ingest or {}).get("enrich") or {}
-    join = enrich.get("join") or {}
-    feature_key = str(join.get("feature_key"))
-    take = join.get("take") or {}
-    lift_geometry = bool(join.get("geometry"))
-    drop_unmatched = bool(join.get("drop_unmatched"))
-    index = _detail_rows(spec, enrich, results)
-    clip = _clip_shape(spec, params) if enrich.get("clip_to_bbox") else None
-
-    out: list[dict[str, Any]] = []
-    for feat in features:
-        props = dict(feat.get("properties") or {})
-        detail = index.get(str(props.get(feature_key)))
-        if detail is None:
-            if drop_unmatched:
-                continue
-            out.append({"type": "Feature", "geometry": feat.get("geometry"), "properties": props})
-            continue
-        geometry = read_path(detail, "geometry") if lift_geometry else feat.get("geometry")
-        if clip is not None and not _intersects(spec, geometry, clip):
-            continue
-        for out_col, source_field in take.items():
-            props[str(out_col)] = read_path(detail, str(source_field))
-        out.append({"type": "Feature", "geometry": geometry, "properties": props})
-
-    if not out:
-        empty = declared_empty_error(spec, "no record joined a detail shape in scope")
-        if empty is not None:
-            raise empty
-    return out
-
-
-def _clip_shape(spec: SourceSpec, params: dict[str, Any]) -> Any:
-    bbox = params.get("bbox")
-    if not bbox:
-        return None
-    try:
-        from shapely.geometry import box
-    except ImportError as exc:  # pragma: no cover
-        raise router_upstream_error(spec.error_code_prefix, f"shapely unavailable for the clip: {exc}")
-    return box(*(float(v) for v in bbox))
-
-
-def _intersects(spec: SourceSpec, geometry: Any, clip: Any) -> bool:
-    from shapely.geometry import shape
-
-    try:
-        return bool(shape(geometry).intersects(clip))
-    except (AttributeError, KeyError, TypeError, ValueError):
-        return False

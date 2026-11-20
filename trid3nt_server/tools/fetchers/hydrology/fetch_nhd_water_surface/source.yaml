@@ -24,7 +24,7 @@ endpoints:
       inSR: "4326"
       outSR: "4326"
       spatialRel: "esriSpatialRelIntersects"
-      outFields: "ftype"
+      outFields: "*"
       returnGeometry: "true"
       maxAllowableOffset: "0.00005"
       resultRecordCount: "200"
@@ -46,9 +46,6 @@ ingest:
     geometry:
       kind: geojson
       path: geometry
-  column_map:
-    ftype:
-      from: properties.ftype
   # Layer 8 is a polygon layer and the where clause already keeps only the water,
   # so every row it answers with is a feature this row publishes. A row the service
   # returned and the file does not carry would be a silent loss, so there is no
@@ -146,8 +143,10 @@ docstring: |-
           range ``[0.1, 50]``.
 
   Returns:
-      ``LayerURI`` for a FlatGeobuf in EPSG:4326 whose rows carry ``ftype``
-      (460 StreamRiver, 537 CanalDitch). ``layer_type="vector"``,
+      ``LayerURI`` for a FlatGeobuf in EPSG:4326 whose rows carry every
+      NHDArea field under NHD's own name, among them ``ftype`` (460
+      StreamRiver, 537 CanalDitch), ``fcode``, ``permanent_identifier``,
+      ``nhdplusid``, ``gnis_name`` and ``areasqkm``. ``layer_type="vector"``,
       ``role="primary"``.
 
   Rendering: a VECTOR layer renders INLINE on the map automatically.

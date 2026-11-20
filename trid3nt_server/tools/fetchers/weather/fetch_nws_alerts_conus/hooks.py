@@ -1,9 +1,8 @@
 """nws_alerts_conus hooks: active alerts with zone-polygon enrichment.
 
 The main fetch is a single active-alerts GET, decoded, event-type filtered, stashing
-each alert's zone references; the declared column_map projects the raw NWS properties
-down to the preserved set. An alert carrying NULL inline geometry is then ENRICHED with
-the union of its resolved zone polygons, so it draws on the map."""
+each alert's zone references; every NWS property is kept. An alert carrying NULL inline
+geometry is then ENRICHED with the union of its resolved zone polygons, so it draws on the map."""
 
 # The zone fetches are best-effort, deduped and capped. An alert whose zones cannot be
 # resolved KEEPS its row with null geometry: never fabricated, never silently dropped.
@@ -136,9 +135,7 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
         props = feat.get("properties") or {}
         if allowed and not _matches_event_types(props, allowed):
             continue
-        # The declared column_map projects the raw NWS properties down to the 18
-        # preserved fields; affectedZones / geocode ride along for the zone stash below
-        # and fall away at the projection.
+        # affectedZones and geocode stay in the record; the zone stash below reads them too.
         out.append({
             "type": "Feature",
             "geometry": feat.get("geometry"),

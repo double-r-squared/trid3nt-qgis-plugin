@@ -55,9 +55,6 @@ ingest:
   # A named region is the provider's subset; unnamed, the bbox window is the ask.
   where_clauses:
     - {template: "NAME='{name}'", require: [name]}
-  column_map:
-    GEOID: {from: GEOID}
-    NAME:  {from: NAME}
 
 normalize:
   crs: "EPSG:4326"
@@ -122,7 +119,9 @@ docstring: |-
 
   **Returns:**
   ``LayerURI(layer_type="vector", role="context")`` over a FlatGeobuf carrying
-  ``GEOID`` and ``NAME`` per polygon.
+  every field TIGERweb returns for the level under its name, among them
+  ``GEOID``, ``NAME``, ``BASENAME``, ``STATE``, ``AREALAND``, ``AREAWATER``,
+  ``INTPTLAT`` and ``INTPTLON`` per polygon.
 
   **Error types:**
   - ``ADMIN_BOUNDARYError``: bad level, bbox or name (retryable=False).

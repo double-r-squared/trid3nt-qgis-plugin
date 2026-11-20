@@ -1,6 +1,6 @@
 # USGS FDSN event GeoJSON, a single GET, stated entirely as a field map: the request
-# template with its relative window, the GeoJSON row walk, the column projection and
-# the FDSN response cap.
+# template with its relative window, the GeoJSON row walk with the four fields the feature
+# states outside its properties, and the FDSN response cap.
 schema_version: v1
 name: fetch_usgs_earthquakes
 source_class: usgs_earthquakes
@@ -64,21 +64,11 @@ ingest:
     row_cap: 20000
     row_cap_path: metadata.count
     row_cap_hint: Narrow the bbox, shorten the window, or raise min_magnitude.
-  column_map:
-    id: {from: id, kind: str}
-    mag: {from: properties.mag, kind: float}
-    depth_km: {from: geometry.coordinates.2, kind: float}
-    mag_type: {from: properties.magType, kind: str}
-    place: {from: properties.place, kind: str}
-    time: {from: properties.time, kind: epoch_ms_iso}
-    updated: {from: properties.updated, kind: epoch_ms_iso}
-    url: {from: properties.url, kind: str}
-    event_type: {from: properties.type, kind: str}
-    status: {from: properties.status, kind: str}
-    tsunami: {from: properties.tsunami, kind: int, default: 0}
-    felt: {from: properties.felt, kind: int}
-    sig: {from: properties.sig, kind: int}
-    net: {from: properties.net, kind: str}
+    produced:
+      id: {from: id}
+      depth_km: {from: geometry.coordinates.2}
+      time_utc: {epoch_ms: properties.time}
+      updated_utc: {epoch_ms: properties.updated}
   geometry_filter:
     geom_types: [Point]
     require_finite: true

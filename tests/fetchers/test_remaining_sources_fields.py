@@ -412,7 +412,7 @@ def test_an_lter_entity_keeps_every_column_in_the_window():
                       "2020-01-01\tA\t1.5\tok\tfirst", "2020-01-02\tA\t2.5\tok\t", "2020-01-03\tB\tNA\tbad\tlast"])
     record = lter.build_record(spec, {"package_id": "knb-lter-cwt.3037.19", "_delimiter": "\t", "_skip": 1,
                                       "_units": json.dumps({"Discharge": "m3/s"}), "_entity_name": "q"}, [text.encode()])
-    assert record["value_columns"] == ["Discharge"] and record["series"]["Discharge"] == [1.5, 2.5, None]
+    assert record["numeric_columns"] == ["Discharge"] and record["series"]["Discharge"] == [1.5, 2.5, None]
     assert record["series"]["Site"] == ["A", "A", "B"] and record["series"]["Discharge_flag"] == ["ok", "ok", "bad"]
     assert record["series"]["Note"] == ["first", None, "last"]
     assert "Date" not in record["series"] and record["times"] == ["2020-01-01", "2020-01-02", "2020-01-03"]

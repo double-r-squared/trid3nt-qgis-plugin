@@ -199,7 +199,7 @@ def test_route_returns_discharge_series(monkeypatch):
     assert isinstance(result, dict)
     assert result["entity"] == "3037_BC9"
     assert result["date_col"] == "Date"
-    assert "Discharge" in result["value_columns"]
+    assert "Discharge" in result["numeric_columns"]
     assert result["units"]["Discharge"] == "cubicMetersPerSecond"
     assert result["n_rows"] == 3  # the Jan row is outside the window
     assert result["summary"]["Discharge"]["peak"] == pytest.approx(8.60)
@@ -214,7 +214,7 @@ def test_route_value_cols_override(monkeypatch):
     result = router.route(
         LTER_SPEC, {"package_id": "knb-lter-cwt.3037.19", "value_cols": ["Water_Level"]}
     )
-    assert result["value_columns"] == ["Water_Level"]
+    assert result["numeric_columns"] == ["Water_Level"]
     assert result["summary"]["Water_Level"]["peak"] == pytest.approx(0.55)
 
 

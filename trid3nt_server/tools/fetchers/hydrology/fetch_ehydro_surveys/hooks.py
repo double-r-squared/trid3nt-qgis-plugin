@@ -42,12 +42,6 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["validate", "read"]
 
-#: The index fields the rows are built from.
-_OUT_FIELDS = (
-    "surveyjobidpk", "sdsfeaturename", "surveytype", "usacedistrictcode",
-    "surveydateend", "sourcedatalocation",
-)
-
 #: One page of the index, and the most pages walked. The index is read WHOLE
 #: over the bbox, because which surveys cover the reach is not answerable from
 #: its newest page: a channel's southern half can be covered only by a pass five
@@ -129,7 +123,7 @@ def _index(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:
         "outSR": "4326",
         "spatialRel": "esriSpatialRelIntersects",
         "where": "1=1",
-        "outFields": ",".join(_OUT_FIELDS),
+        "outFields": "*",
         "returnGeometry": "true",
         "orderByFields": "surveydateend DESC",
         "resultRecordCount": str(_INDEX_PAGE),

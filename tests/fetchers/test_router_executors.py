@@ -469,7 +469,7 @@ def test_mosaic_hard_ceiling_redirects_with_typed_error():
 
 
 
-# phase-2 wave-2 ArcGIS-family additions: WHERE builder / column_map /
+# phase-2 wave-2 ArcGIS-family additions: WHERE builder /
 # endpoint chain / int_range + date_compact params.
 
 
@@ -505,38 +505,6 @@ def test_build_where_int_range_template():
         ingest={"where_clauses": [{"template": "YEAR >= {year_range[0]} AND YEAR <= {year_range[1]}", "require": ["year_range"]}]},
     )
     assert vector_fgb.build_where(spec, {"year_range": [2018, 2021]}) == "YEAR >= 2018 AND YEAR <= 2021"
-
-
-def test_column_map_rename_and_null_sentinel():
-    spec = _wave2_spec(ingest={"column_map": {
-        "fips": {"from": "FIPS"},
-        "score": {"from": "RPL", "kind": "float", "null_below": -999.0},
-    }})
-    feats = [
-        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]},
-         "properties": {"FIPS": "48201", "RPL": 0.82, "DROP_ME": 1}},
-        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 1]},
-         "properties": {"FIPS": "48202", "RPL": -999.0}},
-    ]
-    out = vector_fgb.apply_column_map(feats, spec)
-    assert set(out[0]["properties"]) == {"fips", "score"}       # projected + renamed
-    assert out[0]["properties"]["score"] == 0.82
-    assert out[1]["properties"]["score"] is None                # -999 sentinel -> null
-
-
-def test_column_map_lookup():
-    spec = _wave2_spec(ingest={"column_map": {
-        "dm": {"from": "dm", "kind": "int"},
-        "label": {"from": "dm", "kind": "lookup",
-                  "table": {0: "D0", 2: "D2 Severe"}, "default_template": "D{key}"},
-    }})
-    feats = [
-        {"type": "Feature", "geometry": None, "properties": {"dm": 2}},
-        {"type": "Feature", "geometry": None, "properties": {"dm": 7}},     # miss -> template
-    ]
-    out = vector_fgb.apply_column_map(feats, spec)
-    assert out[0]["properties"] == {"dm": 2, "label": "D2 Severe"}
-    assert out[1]["properties"] == {"dm": 7, "label": "D7"}
 
 
 def test_resolve_endpoints_select_and_endpoint_fallback():

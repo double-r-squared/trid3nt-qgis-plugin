@@ -6,7 +6,6 @@ header-only FGB carrying the declared schema, never a fabricated error."""
 
 from __future__ import annotations
 
-import datetime as _dt
 import json
 import logging
 import math
@@ -17,7 +16,6 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_upstream_error
-from ..field_map import read_path
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.executors.vector_fgb"
@@ -26,7 +24,6 @@ logger = logging.getLogger(
 __all__ = [
     "features_to_fgb_bytes",
     "apply_ingest_transforms",
-    "apply_column_map",
     "build_where",
     "flatten_record",
     "resolve_endpoints",
@@ -57,107 +54,6 @@ def build_where(spec: SourceSpec, params: dict[str, Any]) -> str:
     return " AND ".join(parts) if parts else "1=1"
 
 
-# ``ingest.column_map`` projects raw properties to output columns (rule fields: ``from`` -- a
-# literal key wins over a dotted path --, ``kind``, ``null_below``, ``table``, ``default``,
-# ``default_template``); when present the executor emits EXACTLY the mapped columns.
-
-
-#: Absent source field, distinct from a present null (which stays null).
-_MISSING = object()
-
-
-def _read_field(src_props: dict[str, Any], key: Any) -> Any:
-    if key is None:
-        return _MISSING
-    if key in src_props:
-        return src_props[key]
-    if "." in str(key):
-        walked = read_path(src_props, key)
-        if walked is not None:
-            return walked
-    return _MISSING
-
-
-def _resolve_column(rule: dict[str, Any], src_props: dict[str, Any]) -> Any:
-    kind = rule.get("kind", "passthrough")
-    found = _read_field(src_props, rule.get("from"))
-    raw = rule.get("default") if found is _MISSING else found
-
-    if kind == "lookup":
-        table = rule.get("table") or {}
-        if found is _MISSING or found is None:
-            return rule.get("default")
-        key = found
-        # YAML int-keyed tables load as int keys; coerce so a float/str code still resolves.
-        if table and all(isinstance(k, int) for k in table):
-            try:
-                key = int(key)
-            except (TypeError, ValueError):
-                return rule.get("default")
-        if key in table:
-            return table[key]
-        if "default_template" in rule:
-            return str(rule["default_template"]).format(key=key)
-        return rule.get("default")
-    if kind == "str":
-        if raw is None:
-            return None
-        return str(raw).strip() or None
-    if kind == "epoch_ms_iso":
-        # Epoch milliseconds become an ISO-8601 UTC instant; a date alone would drop the time of day.
-        try:
-            ms = float(raw)
-        except (TypeError, ValueError):
-            return None
-        if not math.isfinite(ms):
-            return None
-        try:
-            return _dt.datetime.fromtimestamp(
-                ms / 1000.0, tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        except (OverflowError, OSError, ValueError):
-            return None
-    if kind in ("int", "float"):
-        try:
-            f = float(raw)
-        except (TypeError, ValueError):
-            return None
-        if not math.isfinite(f):
-            return None
-        null_below = rule.get("null_below")
-        if null_below is not None and f <= null_below:
-            return None
-        if kind == "int":
-            try:
-                return int(raw)
-            except (TypeError, ValueError):
-                return None
-        return f
-    return raw
-
-
-def _resolve_column_map(spec: SourceSpec) -> dict[str, Any] | None:
-    """The source's declared column_map, or ``None``."""
-    return (spec.ingest or {}).get("column_map")
-
-
-def apply_column_map(features: list[dict[str, Any]], spec: SourceSpec) -> list[dict[str, Any]]:
-    cmap = _resolve_column_map(spec)
-    if not cmap:
-        return features
-    return [
-        {
-            "type": "Feature",
-            "geometry": feat.get("geometry"),
-            "properties": {
-                str(out_col): _resolve_column(dict(rule), dict(feat.get("properties") or {}))
-                for out_col, rule in cmap.items()
-            },
-        }
-        for feat in features
-        if isinstance(feat, dict)
-    ]
-
-
 def _passes_geometry_filter(geom: Any, gf: dict[str, Any]) -> bool:
     """Point/finite-geometry filter: ``geom_types`` allowlist; ``require_finite`` drops a missing or non-finite leading (x, y)."""
     if geom is None:
@@ -183,8 +79,7 @@ def apply_ingest_transforms(
     spec: SourceSpec,
     params: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """The column map, then ``geometry_filter``; every record flattened, with what its hook produced beside it."""
-    features = apply_column_map(features, spec)
+    """``geometry_filter``, then every record flattened, with what the fetch produced beside it."""
     gf = (spec.ingest or {}).get("geometry_filter")
     out: list[dict[str, Any]] = []
     for feat in features:
@@ -226,13 +121,8 @@ def _with_produced(record: dict[str, Any], produced: dict[str, Any], spec: Sourc
 
 
 def _out_columns(spec: SourceSpec, features: list[dict[str, Any]]) -> list[str]:
-    ingest = spec.ingest or {}
-    cmap = _resolve_column_map(spec)
-    declared = ingest.get("properties")
-    if cmap:
-        # column_map is authoritative: the empty header still carries every mapped column.
-        cols = [str(c) for c in cmap]
-    elif declared:
+    declared = (spec.ingest or {}).get("properties")
+    if declared:
         cols = [str(c) for c in declared]
     else:
         cols = []

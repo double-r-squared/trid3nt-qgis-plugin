@@ -29,33 +29,6 @@ ingest:
     geometry:
       kind: geojson
       path: geometry
-  column_map:
-    fd_id: {from: properties.fd_id}
-    occtype: {from: properties.occtype}
-    st_damcat: {from: properties.st_damcat}
-    bldgtype: {from: properties.bldgtype}
-    found_type: {from: properties.found_type}
-    found_ht: {from: properties.found_ht}
-    num_story: {from: properties.num_story}
-    sqft: {from: properties.sqft}
-    med_yr_blt: {from: properties.med_yr_blt}
-    val_struct: {from: properties.val_struct}
-    val_cont: {from: properties.val_cont}
-    val_vehic: {from: properties.val_vehic}
-    firmzone: {from: properties.firmzone}
-    cbfips: {from: properties.cbfips}
-    ground_elv: {from: properties.ground_elv}
-    ground_elv_m: {from: properties.ground_elv_m}
-    pop2amu65: {from: properties.pop2amu65}
-    pop2amo65: {from: properties.pop2amo65}
-    pop2pmu65: {from: properties.pop2pmu65}
-    pop2pmo65: {from: properties.pop2pmo65}
-    students: {from: properties.students}
-    source: {from: properties.source}
-    # occtype IS the HAZUS occupancy class and val_struct the canonical
-    # per-structure USD value, so the exposure consumer reads them under its own names.
-    component_type: {from: properties.occtype, kind: str}
-    replacement_value: {from: properties.val_struct, kind: float}
   geometry_filter:
     geom_types: [Point]
     require_finite: true
@@ -150,14 +123,13 @@ docstring: |-
       A ``LayerURI`` pointing at a FlatGeobuf of NSI Point features (one
       per structure) at
       ``s3://trid3nt-cache/cache/static-30d/usace_nsi/<key>.fgb``.
-      ``layer_type="vector"``, ``role="primary"``, ``units=None`` Each feature carries:
+      ``layer_type="vector"``, ``role="primary"``, ``units=None`` Each feature carries every field the NSI returns under
+      the NSI's own name, among them:
 
       - ``fd_id`` (int) -- NSI persistent feature ID.
       - ``occtype`` (str) -- HAZUS occupancy class (``RES1``, ``RES3A``,
         ``COM1``, ``IND1``, ``EDU1``, ...). Downstream exposure analysis
         reads this.
-      - ``component_type`` (str) -- duplicate of ``occtype`` under a
-        standard exposure-analysis column name.
       - ``st_damcat`` (str) -- Structure damage category (RES, COM, IND).
       - ``bldgtype`` (str) -- Construction type (W=wood, S=steel, C=concrete,
         M=masonry).
@@ -168,14 +140,12 @@ docstring: |-
       - ``sqft`` (float) -- Building square footage.
       - ``med_yr_blt`` (int) -- Median year built (Census block).
       - ``val_struct`` (float) -- Structure replacement value (USD).
-      - ``replacement_value`` (float) -- duplicate of ``val_struct`` under
-        a standard exposure-analysis column name.
       - ``val_cont`` (float) -- Content replacement value (USD).
       - ``val_vehic`` (float) -- Vehicle replacement value (USD).
       - ``firmzone`` (str|None) -- FEMA FIRM flood zone (``AE``, ``X``,
         ``VE``, or None).
       - ``cbfips`` (str) -- Census block FIPS code.
-      - ``ground_elv`` / ``ground_elv_m`` (float) -- Ground elevation
+      - ``ground_elv`` / ``grnd_elv_m`` (float) -- Ground elevation
         (ft / m).
       - ``pop2amu65`` / ``pop2amo65`` / ``pop2pmu65`` / ``pop2pmo65``
         (int) -- Population AM/PM, under/over 65.
@@ -183,9 +153,8 @@ docstring: |-
       - ``source`` (str) -- NSI source tier (E=Estimated, P=Parcel, ...).
 
   Cross-tool dependencies:
-      - Every NSI feature already carries ``component_type`` and
-        ``replacement_value`` (added by this tool) for real HAZUS
-        occupancy + structure values rather than a class-default
+      - Every NSI feature carries ``occtype`` and ``val_struct`` for real
+        HAZUS occupancy + structure values rather than a class-default
         fallback. This is the **preferred** structure-exposure substrate --
         prefer NSI where the row reaches and fall back to
         ``fetch_buildings`` elsewhere.

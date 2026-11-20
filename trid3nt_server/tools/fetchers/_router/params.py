@@ -17,7 +17,7 @@ from trid3nt_contracts.source_spec import SourceSpec
 from .._fetch_common import _validate_bbox, round_bbox_to_resolution
 from .errors import router_input_error, router_not_available_error
 
-__all__ = ["annotation_for", "params_model", "validated"]
+__all__ = ["annotation_for", "by_param", "params_model", "validated"]
 
 #: id(row) -> the model built for it, beside the row so the id stays live.
 _MODELS: dict[int, tuple[SourceSpec, type[BaseModel]]] = {}
@@ -34,6 +34,13 @@ _ANNOTATIONS: dict[str, Any] = {
     "int": int,
     "float": float,
 }
+
+
+def by_param(block: dict[str, Any], params: dict[str, Any]) -> Any:
+    """A ``{param, map}`` block read at the request's value; an ``override`` block (another param's own map) wins where it names the request's value."""
+    over = block.get("override") or {}
+    stated = (over.get("map") or {}).get(params.get(over.get("param")))
+    return stated if stated is not None else (block.get("map") or {}).get(params.get(block.get("param")))
 
 
 def annotation_for(pspec: Any) -> Any:

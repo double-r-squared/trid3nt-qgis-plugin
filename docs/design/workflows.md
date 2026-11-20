@@ -403,7 +403,13 @@ adds only what it produces. The vector writer (`_router/executors/vector_fgb.py`
 `apply_ingest_transforms`) flattens each record - a nested object to dotted names,
 a list to JSON text - and writes the hook's `produced` dict beside it; a produced
 name the record already carries refuses `<PREFIX>_FIELD_COLLISION`, the source's
-field keeping its name. A column-mapped source still projects its map. A series
+field keeping its name. A source whose request and body are declared in its
+`source.yaml` (no hook) keeps the service's record the same way: a GeoJSON
+feature's own properties, a CSV row as sent, an ArcGIS record whole, and
+`ingest.body.produced` names the few values the feature states outside its
+properties (USGS's `id`, `depth_km`, the origin and update instants as ISO text); a
+request asks the service for every field (`outFields=*`) wherever the service
+allows. A series
 gathered per station (NWIS, CO-OPS, Great Lakes, USBR RISE, NDBC, NWS forecast, GTSM)
 is JSON text of the source's own reading objects, every key kept; a gap the source
 writes as a sentinel is null in the reading. The record-and-table sources follow the

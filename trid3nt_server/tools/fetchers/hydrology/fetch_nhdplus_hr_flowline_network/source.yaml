@@ -30,8 +30,6 @@ ingest:
     driver: ESRIJSON
     page_size: 2000
     empty_is_typed_error: true
-  query_template:
-    out_fields: "nhdplusid,gnis_name,ftype,fcode,hydroseq,dnhydroseq,levelpathi,fromnode,tonode,wbarea_permanent_identifier,streamorde,streamcalc,totdasqkm,slope,lengthkm,minelevsmo,maxelevsmo"
 
 normalize:
   crs: "EPSG:4326"
@@ -52,7 +50,7 @@ cache:
   ttl_class: static-30d
 payload_estimate:
   model: per_feature
-  kb_per_feature: 3.0
+  kb_per_feature: 3.5
   features_per_sq_deg: 4000.0
   floor_mb: 0.05
   ceil_mb: 50.0

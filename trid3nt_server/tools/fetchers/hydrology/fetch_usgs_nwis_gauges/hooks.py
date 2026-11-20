@@ -236,7 +236,7 @@ def _readings_by_site(iv_df: Any, parameter_cd: str, mode: str,
             named = _column_of(sub, code)
             if named is None:
                 continue
-            value_column, series_column, cd_column = _COLUMNS[code]
+            value_name, series_name, cd_name = _COLUMNS[code]
             kept = sub[sub[named].notna() & (sub[named] > -999990.0)]
             if kept.empty:
                 continue
@@ -244,17 +244,17 @@ def _readings_by_site(iv_df: Any, parameter_cd: str, mode: str,
             rows = [(idx, float(v), "" if cd is None or cd != cd else str(cd).strip())
                     for (idx, v), cd in zip(kept[named].items(), marks)]
             if mode == "instantaneous":
-                idx, rec[value_column], cd = max(rows, key=lambda row: row[0])
-                rec[cd_column] = cd or None
+                idx, rec[value_name], cd = max(rows, key=lambda row: row[0])
+                rec[cd_name] = cd or None
                 dt_str = idx.strftime("%Y-%m-%dT%H:%M:%S%z") if hasattr(idx, "strftime") else str(idx)
                 if not rec["reading_dt"]:
                     rec["reading_dt"] = dt_str
             else:
                 pairs = sorted((idx.strftime("%Y-%m-%dT%H:%M:%S%z") if hasattr(idx, "strftime") else str(idx), v, cd)
                                for idx, v, cd in rows)
-                rec[series_column] = json.dumps([{"datetime": t, "value": v, "cd": cd} for t, v, cd in pairs])
-                rec[value_column] = pairs[-1][1]
-                rec[cd_column] = pairs[-1][2] or None
+                rec[series_name] = json.dumps([{"datetime": t, "value": v, "cd": cd} for t, v, cd in pairs])
+                rec[value_name] = pairs[-1][1]
+                rec[cd_name] = pairs[-1][2] or None
                 if code == _PARAM_DISCHARGE:
                     vals = [v for _t, v, _cd in pairs]
                     rec["n_timesteps"] = len(vals)

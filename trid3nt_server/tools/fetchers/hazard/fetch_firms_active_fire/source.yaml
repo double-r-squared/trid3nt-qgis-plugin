@@ -1,6 +1,6 @@
 # NASA FIRMS active-fire / thermal-anomaly detections, keyed. build_request resolves the
 # MAP_KEY into the URL PATH, asking for the key before the network when none is stored; the
-# field map states the CSV walk, the column projection and the two body markers FIRMS
+# field map states the CSV walk and the two body markers FIRMS
 # spells a bad or exhausted key with, which it sends under a 200 as often as a 4xx.
 schema_version: v1
 name: fetch_firms_active_fire
@@ -57,21 +57,6 @@ ingest:
     - contains: exceeded your transaction
       code: RATE_LIMITED
       message: FIRMS reports rate-limit exhaustion for the MAP_KEY; the 10-minute transaction window has to clear.
-  # A VIIRS source names its brightness bands bright_ti4/ti5, so a MODIS-only column
-  # reads null there rather than being absent from the layer.
-  column_map:
-    brightness: {from: brightness}
-    scan: {from: scan}
-    track: {from: track}
-    acq_date: {from: acq_date}
-    acq_time: {from: acq_time}
-    satellite: {from: satellite}
-    instrument: {from: instrument}
-    confidence: {from: confidence}
-    version: {from: version}
-    bright_t31: {from: bright_t31}
-    frp: {from: frp}
-    daynight: {from: daynight}
   geometry_filter:
     geom_types: [Point]
     require_finite: true
@@ -110,8 +95,8 @@ caveats:
   (the person's MAP_KEY, carried IN the URL path). No key
   -> KEY_REQUIRED before the network; a rejected / rate-limited key -> KEY_REJECTED
   from the 200-with-error-body check; empty window -> an honest 0-feature FGB.
-  VIIRS names its brightness bands bright_ti4/ti5 (not brightness/bright_t31), so those columns
-  read null for a VIIRS source.
+  Every column the answer carries is kept as sent (VIIRS names its brightness bands bright_ti4 and
+  bright_ti5, MODIS brightness and bright_t31); every value is the text the service sent.
 docstring: |-
   Fetch NASA FIRMS satellite active-fire detections for a bbox and recent day window.
 

@@ -51,7 +51,7 @@ from .errors import (
 )
 from .executors import qgis_provider, raster_cog, station_timeseries
 from .key_answer import key_error_from
-from .params import validated
+from .params import by_param, validated
 from .spec import record_shape
 from .transforms import tiled_mosaic
 
@@ -218,8 +218,7 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
         return vector_ogr.execute
     # next_page / enrich_plan hooks route to chained_resolution; resolve_build alone does not
     # (pre_resolve runs it in route()).
-    if (spec.hooks is not None and (spec.hooks.next_page or spec.hooks.enrich_plan)) \
-            or (spec.ingest or {}).get("enrich"):
+    if spec.hooks is not None and (spec.hooks.next_page or spec.hooks.enrich_plan):
         from .executors import chained_resolution
         return chained_resolution.execute
     if (spec.hooks is not None and spec.hooks.build_request) \
@@ -314,7 +313,7 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
     # units_by_param maps a param value to units; an absent value yields units=None.
     ubp = spec.normalize.units_by_param
     if ubp:
-        units = (ubp.get("map") or {}).get(params.get(ubp.get("param")))
+        units = by_param(ubp, params)
     # role_by_param maps a param value to the LayerURI role; an absent value falls back to the static role.
     role = spec.output.role
     rbp = spec.output.role_by_param

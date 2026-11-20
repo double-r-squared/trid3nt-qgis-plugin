@@ -23,12 +23,6 @@ from ..._router.hooks import RequestPlan, register_hook
 
 logger = logging.getLogger(__name__)
 
-_OUT_FIELDS = (
-    "IncidentName", "FireDiscoveryDateTime", "InitialLatitude", "InitialLongitude",
-    "IncidentSize", "PercentContained", "POOState", "POOCounty", "IrwinID",
-    "UniqueFireIdentifier",
-)
-
 #: NIFC asks automated clients to identify themselves.
 _USER_AGENT = (
     "trid3nt/0.1 (Hazard Modeling Agent; "
@@ -84,7 +78,7 @@ def _build_wfigs_query(incident_name: str, state_norm: str | None) -> dict[str, 
         where = f"({where}) AND POOState = '{state_norm}'"
     return {
         "where": where,
-        "outFields": ",".join(_OUT_FIELDS),
+        "outFields": "*",
         "outSR": "4326",
         "returnGeometry": "true",
         "f": "json",

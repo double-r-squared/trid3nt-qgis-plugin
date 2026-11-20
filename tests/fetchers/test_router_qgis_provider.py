@@ -73,7 +73,6 @@ def _materialise_spec() -> SourceSpec:
                 "uri": "crs='EPSG:4326' url='{url}'",
                 "mode": "materialise",
             },
-            "column_map": {"dm": {"from": "dm", "kind": "int", "default": 0}},
         },
         "normalize": {"crs": "EPSG:4326", "units": "dm_class"},
         "output": {

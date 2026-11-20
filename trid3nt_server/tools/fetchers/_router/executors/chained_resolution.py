@@ -11,7 +11,6 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from .. import field_map
 from ..errors import RouterError, router_input_error
 from ..hooks import resolve_hook
 from .http_json import _features, _get, _plans, fetch_bodies
@@ -119,14 +118,10 @@ def fetch_detail_set(
 
 
 def _enrich(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    if spec.hooks is not None and spec.hooks.enrich_plan:
-        plan_for = resolve_hook(spec.hooks.enrich_plan)
-        merge = resolve_hook(spec.hooks.enrich_merge)  # type: ignore[arg-type]
-    else:
-        plan_for, merge = field_map.enrich_plans, field_map.enrich_merge
+    plan_for = resolve_hook(spec.hooks.enrich_plan)
+    merge = resolve_hook(spec.hooks.enrich_merge)  # type: ignore[arg-type]
     ref_plans = list(plan_for(spec, params, features))
-    enrich_block = (spec.ingest or {}).get("enrich") or _chained_block(spec)
-    cap = int(enrich_block.get("max_detail_fetches", _DEFAULT_MAX_DETAIL_FETCHES))
+    cap = int(_chained_block(spec).get("max_detail_fetches", _DEFAULT_MAX_DETAIL_FETCHES))
     results = fetch_detail_set(spec, ref_plans, cap) if ref_plans else {}
     return merge(spec, params, features, results)
 
@@ -136,6 +131,6 @@ def _enrich(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, A
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     bodies = _fetch_main(spec, params)
     features = _features(spec, params, bodies)
-    if (spec.hooks and spec.hooks.enrich_plan) or (spec.ingest or {}).get("enrich"):
+    if spec.hooks and spec.hooks.enrich_plan:
         features = _enrich(spec, params, features)
     return features_to_fgb_bytes(features, spec, params)

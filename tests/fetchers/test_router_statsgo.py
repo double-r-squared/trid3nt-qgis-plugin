@@ -137,6 +137,6 @@ def test_statsgo_library_error_maps_to_upstream(monkeypatch):
 def test_statsgo_units_and_style_by_field():
     kf = router.build_layer_uri(STATSGO_SPEC, _vp(bbox=list(_KANSAS), field="KFFACT"), "s3://c/k.tif")
     assert kf.layer_type == "raster" and kf.role == "input"
-    assert kf.units is None and kf.style["kind"] == "continuous"
+    assert kf.units == "inches per hour" and kf.style["kind"] == "continuous"
     th = router.build_layer_uri(STATSGO_SPEC, _vp(bbox=list(_KANSAS), field="THICK"), "s3://c/t.tif")
-    assert th.units == "centimeters" and th.style["kind"] == "continuous"
+    assert th.units == "inches" and th.style["kind"] == "continuous"

@@ -62,3 +62,18 @@ Recorded 2026-11-18, verbatim, from the public services:
 - EDI's PASTA and portal answer no public request from this host, so no LTER entity is recorded: its test states the
   documented delimited shape by hand and says so. NHC's CurrentStorms.json held no active storm on the recording day,
   so the active-storm record is stated by hand in its test.
+- `usgs_earthquakes_nc_excerpt.json` - four events of the USGS FDSN GeoJSON answer for a box off Cape Mendocino
+  (2024-12-05, magnitude 3 and up), every property the service sends, recorded 2026-11-20.
+- `nws_alerts_fl_excerpt.json` - two polygon alerts and one zone-only alert of the api.weather.gov active-alerts answer
+  for Florida, every property, recorded 2026-11-20.
+- `nsi_structures_omaha_excerpt.json` - four structures of the National Structure Inventory answer for a block in
+  Omaha, every field, recorded 2026-11-20.
+- `nhd_area_hr_all_fields.json`, `nhd_flowline_hr_all_fields.json`, `nhd_waterbody_hr_all_fields.json` - NHDPlus HR
+  NHDArea, NetworkNHDFlowline and NHDWaterbody features asked with `outFields=*` (geometry simplified by
+  `maxAllowableOffset`), recorded 2026-11-20.
+- `nwi_wetlands_omaha_esrijson.json` - two features of the USFWS wetlands map service as ESRI JSON with `outFields=*`,
+  recorded 2026-11-20 (the service names its fields ATTRIBUTE, WETLAND_TYPE, QAQC_CODE, ACRES, GlobalID).
+- `tigerweb_county_all_fields.json`, `tigerweb_state_all_fields.json` - one TIGERweb county and one state feature with
+  `outFields=*` (geometry simplified), recorded 2026-11-20.
+- FIRMS answers nothing without a MAP_KEY, so no FIRMS answer is recorded: its test states the documented VIIRS header by
+  hand and says so.

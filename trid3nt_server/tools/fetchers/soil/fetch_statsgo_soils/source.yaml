@@ -36,7 +36,8 @@ normalize:
   units_by_param:
     param: field
     map:
-      THICK: centimeters
+      KFFACT: inches per hour
+      THICK: inches
 output:
   layer_type: raster
   ext: tif
@@ -61,6 +62,7 @@ coverage:
       series: false
     resolution_m: 1000.0
 caveats:
+- KFFACT and THICK are the two fields the USGS ScienceBase STATSGO COG collection (item 675083c6d34ea60e894354ad) publishes, in the units it states (inches per hour, inches); the source archive holds more fields but no other is reformatted as a COG
 - USGS STATSGO soils (KFFACT erodibility / THICK thickness) 30 m COG via pfdf.data.usgs.statsgo (library-delegate;
   the library owns discovery + the socket). An open-water bbox inside the covered extent returns a typed
   empty error, never an empty raster.
@@ -71,7 +73,7 @@ docstring: |-
       Pulls the requested STATSGO field from the USGS ScienceBase COG
       collection through the ``pfdf.data.usgs.statsgo.read`` Python
       wrapper. KFFACT is the soil K-factor (erodibility / hydrologic-
-      soil-group proxy); THICK is the soil thickness in centimeters.
+      soil-group proxy); THICK is the soil thickness in inches.
       Output is a 30-meter Cloud-Optimized GeoTIFF clipped to the
       requested bbox and rewritten through the shared cache.
 
@@ -107,18 +109,17 @@ docstring: |-
           uses ``estimate_payload_mb`` to flag big requests.
           Example for Fort Myers watershed: ``(-82.0, 26.4, -81.7, 26.7)``.
       field: One of:
-          - ``"KFFACT"`` (default): soil K-factor, USDA RUSLE erodibility
-            (dimensionless, ~0.02 - 0.7). Proxy for hydrologic soil group
-            A-D (low K = sandy/well-drained, high K = silty/runoff-prone).
-          - ``"THICK"``: total soil-profile thickness in centimeters
-            (~25 - 200 cm typical).
+          - ``"KFFACT"`` (default): soil KF-factor, which the ScienceBase release
+            defines as the saturated hydraulic conductivity of the fine
+            (<2 mm) soil fraction, in inches per hour.
+          - ``"THICK"``: total soil-profile thickness in inches.
 
   Returns:
       ``LayerURI`` pointing at a single-band COG in the cache bucket
       ``s3://trid3nt-cache/cache/static-30d/statsgo_soils/<key>.tif``.
       ``layer_type="raster"``, ``role="input"``,
   or ``"statsgo_thick"``,
-      ``units="centimeters"`` for THICK and ``None`` for KFFACT.
+      ``units="inches"`` for THICK and ``"inches per hour"`` for KFFACT.
       Downstream tools consume the COG as a catchment-aggregation input
       against a watershed polygon from ``fetch_administrative_boundaries`` /
       ``fetch_nhdplus_nldi_navigate`` basin.

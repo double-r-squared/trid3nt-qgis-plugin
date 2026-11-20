@@ -142,13 +142,11 @@ def _read_local(spec, path, params=None, monkeypatch=None):
     return vector_ogr.fetch_from_endpoint(spec, spec.endpoints["data"], params or {})
 
 
-def test_the_driver_read_projects_the_declared_column_map(tmp_path, monkeypatch):
+def test_the_driver_read_keeps_every_field_the_layer_carries(tmp_path, monkeypatch):
     path = _esrijson_file(tmp_path, [("alpha", 4.0, -82.6, 27.8),
                                      ("bravo", 9.0, -82.5, 27.9)])
     spec = _spec({
         "access": "ogr", "ogr": {"driver": "ESRIJSON"},
-        "column_map": {"name": {"from": "Layer.NAME"},
-                       "size": {"from": "Layer.SIZE", "kind": "float"}},
     })
     feats = _read_local(spec, path, monkeypatch=monkeypatch)
     assert len(feats) == 2
@@ -156,9 +154,9 @@ def test_the_driver_read_projects_the_declared_column_map(tmp_path, monkeypatch)
     out = tmp_path / "out.fgb"
     out.write_bytes(data)
     df = pyogrio.read_dataframe(str(out))
-    assert list(df.columns) == ["name", "size", "geometry"]
-    assert sorted(df["name"]) == ["alpha", "bravo"]
-    assert sorted(df["size"]) == [4.0, 9.0]
+    assert {"Layer.NAME", "Layer.SIZE"} <= set(df.columns) and "geometry" in df.columns
+    assert sorted(df["Layer.NAME"]) == ["alpha", "bravo"]
+    assert sorted(df["Layer.SIZE"]) == [4.0, 9.0]
 
 
 def test_max_records_caps_the_read_in_server_order(tmp_path, monkeypatch):

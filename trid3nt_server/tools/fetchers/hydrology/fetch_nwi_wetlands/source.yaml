@@ -32,10 +32,6 @@ ingest:
       Referer: https://www.fws.gov/program/national-wetlands-inventory
   # Layer 0 is a join, so every column arrives table-prefixed; these three are the
   # published row of this row.
-  column_map:
-    attribute:    {from: "NWI_Wetland_Codes.ATTRIBUTE"}
-    wetland_type: {from: "Wetlands.WETLAND_TYPE"}
-    acres:        {from: "Wetlands.ACRES"}
 normalize:
   crs: EPSG:4326
 output:
@@ -88,12 +84,13 @@ docstring: |-
 
   Returns:
       ``LayerURI`` (``layer_type="vector"``, ``role="context"``, ``units=None``)
-      pointing at a FlatGeobuf with per-polygon columns:
-          attribute     (str) -- NWI code (e.g. "L1UBHx", "PFO1A")
-          wetland_type  (str) -- Cowardin type (e.g. "Lake", "Freshwater
+      pointing at a FlatGeobuf with every field the map service returns, under its name:
+          ATTRIBUTE     (str) -- NWI code (e.g. "L1UBHx", "PFO1A")
+          WETLAND_TYPE  (str) -- Cowardin type (e.g. "Lake", "Freshwater
                                   Forested/Shrub Wetland", "Estuarine and
                                   Marine Wetland")
-          acres         (float) -- polygon area in acres (from the source)
+          ACRES         (float) -- polygon area in acres (from the source)
+          and QAQC_CODE, GlobalID, OBJECTID, Shape_Length, Shape_Area.
       An empty bbox over open ocean / an unmapped area returns a valid
       0-feature FlatGeobuf (NOT an error). An upstream failure raises
       ``NWIWetlandsUpstreamError(retryable=True)``; a non-empty layer is never

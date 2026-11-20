@@ -115,7 +115,7 @@ docstring: |-
     window filter on the date column.
 
   **Returns:** a JSON dict with ``package_id``, ``entity``, ``date_col``,
-  ``value_columns``, ``units`` (per column), ``n_rows``, ``first_ts`` / ``last_ts``,
+  ``numeric_columns``, ``units`` (per column), ``n_rows``, ``first_ts`` / ``last_ts``,
   ``window``, ``times`` (raw timestamps), ``series`` (per-column value lists;
   ``null`` for unparseable cells), and ``summary`` (per-column ``peak`` / ``min`` /
   ``mean`` + units). Cached ``static-30d``.
