@@ -18,23 +18,24 @@ enforced opinion becomes a law in AGENTS.md. Laws and conventions already writte
 8. The system is for earth-science simulation first. A simulation (an engine run) is its own realm: an interface that takes a prescribed list of inputs and fills it. Operations (interpolation, compositing, delineation) exist to refine those inputs and are kept separate from simulations.
 9. An engine may use an operation, but the operation lives a level up, generic and reusable. The engine offers the choice of algorithm rather than owning one.
 10. Direction, not yet built: operations live in a domain-specific SDK, so a modeller reaches for them there instead of hunting through libraries or adding one-off tools.
+11. Each engine is built whole around its own library and inputs first. Coupling to another engine comes only after both are finished, and never shapes either one.
 
 ## Inputs and data
-11. Precedence for any value: stated by the user, then fetched from a cited source, then derived from fetched data, then a refusal. A derived value is offered, not applied: a reviewing user is asked with it shown; AUTO takes it and says so on the run.
-12. Engine-native wins: its developers know the engine better than we do, and its defaults are what its users already expect.
-13. What a gauge provides is never stated by hand.
-14. A fetch keeps every field its source returns; code reads named fields the source's field map declares.
-15. A measurement is empirical: a sensor's reading or an objective algorithm's retrieval. A model's output is an expected value under its assumptions.
+12. Precedence for any value: stated by the user, then fetched from a cited source, then derived from fetched data, then a refusal. A derived value is offered, not applied: a reviewing user is asked with it shown; AUTO takes it and says so on the run.
+13. Engine-native wins: its developers know the engine better than we do, and its defaults are what its users already expect.
+14. What a gauge provides is never stated by hand.
+15. A fetch keeps every field its source returns; code reads named fields the source's field map declares.
+16. A measurement is empirical: a sensor's reading or an objective algorithm's retrieval. A model's output is an expected value under its assumptions.
 
 ## Responsibility between steps
-16. Each step owns its own inputs. The mesh, bed and boundaries are built and checked before a run; a later step, calibration included, takes them as given rather than compensating for them.
-17. A step's tool owns its usual surface. Calibration uses everything PEST++ supports; if PEST++ can calibrate something like the mesh, that door stays open.
-18. A calibration target never feeds a boundary.
+17. Each step owns its own inputs. The mesh, bed and boundaries are built and checked before a run; a later step, calibration included, takes them as given rather than compensating for them.
+18. A step's tool owns its usual surface. Calibration uses everything PEST++ supports; if PEST++ can calibrate something like the mesh, that door stays open.
+19. A calibration target never feeds a boundary.
 
 ## Calibration (scope: PEST++ studies)
-19. Sigma is the source's cited accuracy. Records without one still run, with a warning, in their own group; widening after the fit sets their weight.
-20. An uncertain input becomes a parameter whose starting uncertainty is its stated accuracy, not a widened sigma.
+20. Sigma is the source's cited accuracy. Records without one still run, with a warning, in their own group; widening after the fit sets their weight.
+21. An uncertain input becomes a parameter whose starting uncertainty is its stated accuracy, not a widened sigma.
 
 ## Compute and testing
-21. Compute budgets are settings that apply to every solver; engine-specific limits stay engine-native. A PEST++ study is bounded by PEST++'s own settings.
-22. A test that does not exercise the LLM is declarative: every input stated, data handed as real fetch chains.
+22. Compute budgets are settings that apply to every solver; engine-specific limits stay engine-native. A PEST++ study is bounded by PEST++'s own settings.
+23. A test that does not exercise the LLM is declarative: every input stated, data handed as real fetch chains.
