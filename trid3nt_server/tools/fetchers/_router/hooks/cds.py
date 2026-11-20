@@ -8,9 +8,8 @@ declared wall-clock timeout, plus a pure pre-cache validate hook per source."""
 
 from __future__ import annotations
 
-import csv
 import datetime as _dt
-import io
+import json
 import logging
 import math
 import os
@@ -479,8 +478,7 @@ def _gtsm_records_to_features(records: list[dict[str, Any]], output: str) -> lis
 
     features: list[dict[str, Any]] = []
     for rec in records:
-        buf = io.StringIO()
-        writer = csv.writer(buf)
+        readings: list[dict[str, Any]] = []
         finite_values: list[float] = []
         for ts, val in zip(rec["times"], rec["values"], strict=False):
             if val is None:
@@ -491,7 +489,7 @@ def _gtsm_records_to_features(records: list[dict[str, Any]], output: str) -> lis
                 continue
             if not math.isfinite(v):
                 continue
-            writer.writerow([ts, f"{v:.6f}"])
+            readings.append({"time": ts, "value": v})
             finite_values.append(v)
         if not finite_values:
             continue
@@ -510,7 +508,7 @@ def _gtsm_records_to_features(records: list[dict[str, Any]], output: str) -> lis
                 "wl_max_m": float(np.nanmax(finite_values)),
                 "wl_mean_m": float(np.nanmean(finite_values)),
                 "output": output,
-                "time_series_csv": buf.getvalue(),
+                "series": json.dumps(readings),
             },
         })
     return features

@@ -207,7 +207,8 @@ def test_delegate_clips_and_stamps_quantity(monkeypatch):
     ids = {f["properties"]["hwm_id"] for f in feats}
     assert ids == {1, 2}
     for f in feats:
-        assert f["properties"]["quantity"] == "water_surface_elevation"
+        assert f["produced"]["quantity"] == "water_surface_elevation"
+        assert f["properties"]["hwmQualityName"]
         assert f["geometry"]["type"] == "Point"
 
 

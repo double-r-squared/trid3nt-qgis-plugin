@@ -1,5 +1,5 @@
 # NOAA CO-OPS tide stations: a station-catalog discover, a per-station datagetter loop,
-# and an inline time_series_csv per station in the emitted FGB.
+# and an inline series (JSON of the source's readings) per station in the emitted FGB.
 schema_version: v1
 
 name: fetch_noaa_coops_tides
@@ -54,8 +54,6 @@ ingest:
     rows_key: [data, predictions]   # first present wins
     time_key: t
     value_key: v
-    time_normalize: iso8601z        # "YYYY-MM-DD HH:MM" -> "YYYY-MM-DDTHH:MMZ"
-    time_series_csv: true           # inline CSV attribute (coastal boundary forcing)
     scalars: [wl_min_m, wl_max_m, wl_mean_m, n_timesteps, time_start, time_end]
 
 # --- normalization stamps -------------------------------------------------
@@ -77,16 +75,18 @@ output:
 # --- cache + payload gate -------------------------------------------------
 cache:
   ttl_class: dynamic-1h
-payload_estimate:              # ~2 KB/station/day + 0.5 KB/station overhead; ~2 stations/deg^2
+payload_estimate:              # ~18 KB/station/day of 6-min JSON readings + 2 KB catalog record; ~2 stations/deg^2
   model: per_station
-  kb_per_station_per_day: 2.0
-  overhead_kb: 0.5
+  kb_per_station_per_day: 18.0
+  overhead_kb: 2.0
   stations_per_sq_deg: 2.0
   floor_mb: 0.01
 
 fields:
-  value: {field: water_level, unit: m}
-  series: {field: time_series_csv, unit: m}
+  site: {field: id}
+  site_name: {field: name}
+  datum: {field: datum}
+  series: {field: series, time_key: t, value_key: v, unit: m}
 # --- honesty: caveats + fallback -----------------------------------------
 coverage:
 -   data_class: water level series
@@ -119,6 +119,11 @@ coverage:
     datum: MLLW
     ask:
       product: water_level
+    fields:
+      accuracy:
+        constant: 0.02
+        unit: m
+        cite: "CO-OPS Environmental Measurement Systems Sensor Specifications and Measurement Algorithms, Section 1 (NWLON, PORTS and Short Term Water Level Sensors, updated 12/2025): every primary water level sensor (air acoustic, bubbler, microwave radar) states an estimated accuracy of +/- 0.02 m relative to datum for an individual 6-minute measurement; the per-reading s is the standard deviation of the 1-s samples, not an accuracy."
 -   data_class: water level series
     kind: predicted
     reach_km: 25
@@ -182,8 +187,7 @@ coverage:
     # none is asked of the API.
     datum: null
     fields:
-      value: {field: water_temperature, unit: degC}
-      series: {field: time_series_csv, unit: degC}
+      series: {field: series, time_key: t, value_key: v, unit: degC}
     ask:
       product: water_temperature
     vocabulary:
@@ -208,7 +212,7 @@ docstring: |-
   API for all instrumented tide stations within a bbox, using the
   ``products/water_level`` or ``products/predictions`` endpoint. Returns a
   FlatGeobuf with one Point feature per station, carrying the full hourly
-  time series inline as a ``time_series_csv`` attribute suitable for a
+  time series inline as a ``series`` attribute suitable for a
   hydraulic model's coastal boundary forcing. Tier-1 free, no API key.
 
   **When to use:**
@@ -264,12 +268,12 @@ docstring: |-
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
       ``s3://trid3nt-cache/cache/dynamic-1h/noaa_coops_tides/<key>.fgb``
       Each feature is a Point at the station location (EPSG:4326) with
-      attributes: ``station_id`` (7-digit CO-OPS ID), ``station_name``,
-      ``lon``, ``lat``, ``product``, ``datum`` (always "MLLW"),
+      attributes: the station catalog's whole record under its own names (``id`` the 7-digit
+      CO-OPS ID, ``name``, ``lat``, ``lng``, ``state``, ...), then ``product``, ``datum`` (always "MLLW"),
       ``time_start`` / ``time_end`` (ISO-8601 UTC), ``n_timesteps`` (int),
       ``wl_min_m`` / ``wl_max_m`` / ``wl_mean_m`` (float, meters),
-      ``time_series_csv`` (comma-separated "iso,value_m" rows for
-      hydraulic model boundary input). ``layer_type="vector"``, ``role="primary"``,
+      ``series`` (JSON of the API's own readings ``{t, v, s, f, q}``: time,
+      value in metres, 1-s sample deviation, flags, quality; hydraulic model boundary input). ``layer_type="vector"``, ``role="primary"``,
       ``units="m (MLLW)"``.
   **Error types:**
       - ``COOPSTidesInputError``: bad bbox / product / dates (retryable=False).

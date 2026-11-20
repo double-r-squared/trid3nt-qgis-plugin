@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime as dt
 import gzip
+import json
 
 import pytest
 
@@ -113,11 +114,15 @@ def test_the_row_states_a_measured_sea_state_over_a_station_network(row):
 def test_every_member_the_row_maps_is_published_in_a_stated_unit(row):
     stated = {name: (m.field, m.unit) for name, m in row.fields.items()}
     assert stated["value"] == ("wave_height_m", "m")
-    assert stated["series"] == ("wave_height_series_csv", "m")
-    assert stated["height"] == ("wave_height_series_csv", "m")
-    assert stated["period"] == ("peak_period_series_csv", "s")
+    assert stated["series"] == ("series", "m")
+    assert stated["height"] == ("series", "m")
+    assert stated["period"] == ("series", "s")
     # degT is the compass bearing the waves come FROM, not a heading of travel.
-    assert stated["from_direction"] == ("wave_direction_series_csv", "degT")
+    assert stated["from_direction"] == ("series", "degT")
+    # Each quantity is the key of the stdmet reading that carries it, the instant the key `time`.
+    assert {(n, m.time_key, m.value_key) for n, m in row.fields.items() if m.time_key} == {
+        ("series", "time", "WVHT"), ("height", "time", "WVHT"), ("period", "time", "DPD"),
+        ("from_direction", "time", "MWD")}
 
 
 def test_the_buoy_answers_for_the_peak_direction_it_measures_and_no_mean_one(row):
@@ -200,7 +205,7 @@ def test_the_realtime_table_becomes_one_point_with_its_window_inline(spec):
         spec, {**_AT_44097, "start_date": "2026-09-20", "end_date": "2026-09-20"},
         [_REALTIME_BODY])
     assert len(features) == 1
-    props = features[0]["properties"]
+    props = features[0]["produced"]
     assert features[0]["geometry"]["coordinates"] == [-71.123, 40.966]
     assert props["wave_height_m"] == 0.8
     assert props["peak_period_s"] == 4.0
@@ -208,8 +213,12 @@ def test_the_realtime_table_becomes_one_point_with_its_window_inline(spec):
     assert props["n_timesteps"] == 6
     assert props["time_start"] == "2026-09-20T10:00Z"
     assert props["time_end"] == "2026-09-20T12:30Z"
-    assert props["wave_height_series_csv"].splitlines()[:2] == [
-        "iso,wave_height_m", "2026-09-20T10:00Z,0.6"]
+    readings = json.loads(props["series"])
+    # A reading is the stdmet row under NDBC's own column names, a missing wave value null, the rest as written.
+    assert readings[0] == {"time": "2026-09-20T10:00Z", "YY": "2026", "MM": "09", "DD": "20", "hh": "10", "mm": "00",
+                           "WDIR": "MM", "WSPD": "MM", "GST": "MM", "WVHT": 0.6, "DPD": 8.0, "APD": "3.5",
+                           "MWD": 131.0, "PRES": "MM", "ATMP": "17.0", "WTMP": "20.9", "DEWP": "MM", "VIS": "MM",
+                           "PTDY": "MM", "TIDE": "MM"}
 
 
 def test_the_window_is_read_off_the_rows_own_stamps(spec):
@@ -218,7 +227,7 @@ def test_the_window_is_read_off_the_rows_own_stamps(spec):
     features = nb.parse_response(
         spec, {**_AT_44097, "start_date": "2024-01-14", "end_date": "2024-01-14"},
         [gzip.compress(_ARCHIVE_BODY)])
-    props = features[0]["properties"]
+    props = features[0]["produced"]
     assert props["n_timesteps"] == 3
     assert props["wave_height_m"] == 3.34
     assert props["time_end"] == "2024-01-14T11:26Z"
@@ -230,10 +239,10 @@ def test_the_archives_own_missing_values_are_gaps_and_never_readings(spec):
     features = nb.parse_response(
         spec, {**_AT_44097, "start_date": "1976-01-01", "end_date": "1976-01-01"},
         [_OLD_ARCHIVE_BODY])
-    props = features[0]["properties"]
+    props = features[0]["produced"]
     assert props["wave_height_m"] == 3.1
     assert props["peak_period_s"] is None
-    assert props["peak_period_series_csv"] == "iso,peak_period_s"
+    assert {r["DPD"] for r in json.loads(props["series"])} == {None}
     # The oldest tables state a two-digit year, an hour and no minute.
     assert props["time_start"] == "1976-01-01T00:00Z"
 
@@ -267,7 +276,7 @@ def test_the_rows_floor_is_the_first_measured_wave_and_not_a_files_existence(
     assert excinfo.value.error_code == "NDBC_BUOYS_NO_RECORD"
     props = nb.parse_response(
         spec, {**_AT_46001, "start_date": "1974-12-03", "end_date": "1974-12-03"},
-        [_FIRST_WAVE_BODY])[0]["properties"]
+        [_FIRST_WAVE_BODY])[0]["produced"]
     assert props["time_start"] == _FIRST_WAVE
     assert props["wave_height_m"] == 1.5
     assert row.window.earliest == _FIRST_WAVE[:10]
@@ -289,3 +298,21 @@ async def test_a_1973_window_at_46001_lists_no_buoy(monkeypatch):
     assert all(row["source"] != "fetch_ndbc_buoys" for row in found["results"])
     assert "fetch_ndbc_buoys" in found["sentence"]
     assert "reports from 1974-12-03" in found["sentence"]
+
+
+def test_the_wave_slot_reads_the_recorded_table_through_the_row_and_the_height_accuracy_is_cited(spec, row):
+    from trid3nt_server.inputs.wave import wave
+
+    feature = nb.parse_response(spec, {**_AT_44097, "start_date": "2026-09-20", "end_date": "2026-09-20",
+                                       "_station": {"id": "44097", "name": "Block Island, RI  (154)",
+                                                    "owner": "SCRIPPS", "type": "buoy", "met": "y"}},
+                                [_REALTIME_BODY])[0]
+    layer = {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "geometry": feature["geometry"], "properties": {**feature["properties"], **feature["produced"]}}]}
+    found = wave(layer, fields=row.fields, at="2026-09-20T11:00:00Z")
+    assert (found.height_m, found.peak_period_s, found.from_direction_deg) == (0.7, 7.0, 122.0)
+    assert found.site_id == "44097" and found.site_name == "Block Island, RI  (154)"
+    from trid3nt_server.inputs.fields import Measured, records
+
+    rec = records(layer, row.fields, source="fetch_ndbc_buoys")[0]
+    assert rec.accuracy == Measured(0.2, "m")

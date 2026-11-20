@@ -42,24 +42,6 @@ hooks:
   build_request: usbr_hydromet.build_request
   parse_response: usbr_hydromet.parse_response
 
-ingest:
-  properties:
-    - station_id
-    - station_name
-    - region
-    - parameter_name
-    - vertical_datum
-    - horizontal_datum
-    - timezone
-    - forebay_elevation_ft
-    - forebay_elevation_min_ft
-    - forebay_elevation_max_ft
-    - forebay_elevation_mean_ft
-    - n_timesteps
-    - time_start
-    - time_end
-    - time_series_csv
-
 normalize:
   crs: "EPSG:4326"
   units: ft
@@ -85,8 +67,11 @@ payload_estimate:
   floor_mb: 0.03
 
 fields:
+  site: {field: _id}
+  site_name: {field: locationName}
+  datum: {field: verticalDatum._id}
   value: {field: forebay_elevation_ft, unit: ft}
-  series: {field: time_series_csv, unit: ft}
+  series: {field: series, time_key: dateTime, value_key: result, unit: ft}
 coverage:
 -   data_class: water level series
     kind: measured
@@ -119,7 +104,7 @@ docstring: |-
       location's own catalog (catalog-record -> catalog-item) to find its
       Lake/Reservoir Elevation series, and fetches the daily forebay elevation
       over the requested window. One Point feature at the station comes back,
-      carrying the window's values inline as ``time_series_csv`` and the
+      carrying the window's readings inline as ``series`` (JSON of RISE's own result attributes) and the
       station's own vertical datum (NGVD29 or NAVD88, read from the station's
       metadata, never assumed).
 
@@ -148,12 +133,13 @@ docstring: |-
 
   Returns:
       ``LayerURI`` for a FlatGeobuf in EPSG:4326 carrying one Point feature:
-      ``station_id``, ``station_name``, ``region``, ``parameter_name``,
-      ``vertical_datum``, ``horizontal_datum``, ``timezone``,
+      the RISE location record under its own names (``_id``, ``locationName``,
+      ``verticalDatum._id``, ``horizontalDatum._id``, ``timezone``, ...), the
+      elevation catalog item's record as ``item.<field>``,
       ``forebay_elevation_ft`` (the window's latest value),
       ``forebay_elevation_min_ft`` / ``_max_ft`` / ``_mean_ft``, ``n_timesteps``,
-      ``time_start`` / ``time_end`` (ISO-8601 UTC), and ``time_series_csv``
-      ("iso,value_ft" rows). ``layer_type="vector"``, ``units="ft"``.
+      ``time_start`` / ``time_end`` (ISO-8601 UTC), and ``series``
+      (JSON of the result attributes: ``dateTime``, ``result`` in ft, ``status``, ``sourceCode``, ...). ``layer_type="vector"``, ``units="ft"``.
 
   Rendering: a VECTOR layer renders INLINE on the map automatically.
 

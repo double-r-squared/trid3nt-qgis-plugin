@@ -82,6 +82,7 @@ payload_estimate:
   kb_per_feature: 0.1
   floor_mb: 0.01
 fields:
+  site: {field: feature_id}
   value: {field: streamflow_cms, unit: m3/s}
   time: {field: valid_time}
 coverage:

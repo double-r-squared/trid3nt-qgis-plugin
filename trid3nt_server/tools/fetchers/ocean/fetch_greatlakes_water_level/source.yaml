@@ -41,8 +41,6 @@ ingest:
     rows_key: [data]
     time_key: t
     value_key: v
-    time_normalize: iso8601z
-    time_series_csv: true
     scalars: [wl_min_m, wl_max_m, wl_mean_m, n_timesteps, time_start, time_end]
 normalize:
   crs: "EPSG:4326"
@@ -60,13 +58,19 @@ cache:
   ttl_class: dynamic-1h
 payload_estimate:
   model: per_station
-  kb_per_station_per_day: 8.0
-  overhead_kb: 0.5
+  kb_per_station_per_day: 18.0
+  overhead_kb: 2.0
   stations_per_sq_deg: 2.0
   floor_mb: 0.01
 fields:
-  value: {field: water_level, unit: m}
-  series: {field: time_series_csv, unit: m}
+  site: {field: id}
+  site_name: {field: name}
+  datum: {field: datum}
+  series: {field: series, time_key: t, value_key: v, unit: m}
+  accuracy:
+    constant: 0.02
+    unit: m
+    cite: "CO-OPS Environmental Measurement Systems Sensor Specifications and Measurement Algorithms, Section 1, Great Lakes rows (updated 12/2025): the primary sensors state +/- 0.006 m (shaft angle encoder, radar in a sump) or +/- 0.02 m (radar outside a sump) relative to datum, so +/- 0.02 m bounds each; the backup pressure sensor states +/- 0.05 m. The station sensor behind a reading is not on the reading. The per-reading s is the 1-s sample standard deviation, not an accuracy."
 coverage:
 -   data_class: water level series
     kind: measured
@@ -108,7 +112,7 @@ docstring: |-
       for every Great Lakes gauge in a bbox, on each lake's own LOW WATER DATUM
       (LWD) - the same zero the NCEI Great Lakes bathymetric grids are charted
       on. One Point feature per station carrying the full record inline as
-      ``time_series_csv``, plus min / max / mean.
+      ``series`` (JSON of the API's own readings), plus min / max / mean.
 
   **When to use:**
       - The lake's SURFACE ELEVATION for a model that stands on lake-datum
@@ -131,10 +135,11 @@ docstring: |-
 
   **Returns:**
       A ``LayerURI`` pointing at the cached FlatGeobuf. One Point per station
-      with ``station_id``, ``station_name``, ``lon`` / ``lat``, ``datum``
+      carrying the station catalog's whole record under its own names (``id``,
+      ``name``, ``lat``, ``lng``, ``state``, ...), then ``datum``
       (``"LWD"``), ``time_start`` / ``time_end``, ``n_timesteps``,
-      ``wl_min_m`` / ``wl_max_m`` / ``wl_mean_m`` and ``time_series_csv``
-      (``"iso,value_m"`` rows). ``layer_type="vector"``, ``units="m (LWD)"``.
+      ``wl_min_m`` / ``wl_max_m`` / ``wl_mean_m`` and ``series`` (JSON of the
+      readings ``{t, v, s, f, q}``: time, metres, 1-s sample deviation, flags, quality). ``layer_type="vector"``, ``units="m (LWD)"``.
 
   **Errors:**
       - ``GREATLAKES_WATER_LEVEL_INPUT_INVALID``: bad bbox or dates (retryable=False).

@@ -84,7 +84,8 @@ def _measured(source: Any, fields: Mapping[str, Member], name: str, unit: str,
             code,
             f"{label} has to report {measures}, and its source maps no {name!r} "
             f"(it maps {', '.join(sorted(fields)) or 'nothing'}). Name a source that measures it.")
-    found = observation(source, fields={"series": member}, to_units=unit,
+    who = {k: v for k, v in fields.items() if k in ("site", "site_name", "time")}
+    found = observation(source, fields={**who, "series": member}, to_units=unit,
                         label=label, code=code, **asked)
     if found is None:
         raise ObservationError(

@@ -36,23 +36,6 @@ hooks:
   enrich_plan: usgs_groundwater_levels.enrich_plan
   enrich_merge: usgs_groundwater_levels.enrich_merge
 
-ingest:
-  properties:
-    - site_no
-    - site_name
-    - parameter_code
-    - parameter_label
-    - quantity
-    - water_level
-    - unit
-    - vertical_datum
-    - datetime
-    - approval_status
-    - aquifer_code
-    - well_depth_ft
-    - reading_count
-    - period_end
-
 normalize:
   crs: "EPSG:4326"
   units: "ft (water level)"
@@ -72,12 +55,28 @@ cache:
 payload_estimate:
   model: per_feature
   features_per_sq_deg: 1.0
-  kb_per_feature: 0.18
+  kb_per_feature: 1.6
   floor_mb: 0.001
 
 fields:
-  value: {field: water_level, unit: {field: unit}}
+  site: {field: site_no}
+  site_name: {field: location.monitoring_location_name}
+  value: {field: water_level, unit: {field: unit_of_measure}}
   time: {field: datetime}
+  datum: {field: vertical_datum}
+  quantity:
+    field: parameter_code
+    table: {"72019": water_table_depth, "72150": groundwater_head, "62610": groundwater_head, "62611": groundwater_head}
+    cite: "USGS Water Data OGC API parameter-codes collection: 72019 Depth to water level, feet below land surface; 72150 Groundwater level above local mean sea level, feet; 62610 above NGVD 1929; 62611 above NAVD 1988. 61055 is not in that collection, so it has no row."
+  depth: {field: location.well_constructed_depth, unit: ft}
+  accuracy:
+    field: observing_procedure
+    table:
+      "GW level, steel tape": {absolute: 0.01, unit: ft}
+      "GW level, calib steel tape": {absolute: 0.01, unit: ft}
+      "GW level, electric tape": {absolute: 0.01, unit: ft}
+      "GW level, calib electric tape": {absolute: 0.01, unit: ft}
+    cite: "Cunningham and Schalk 2011, USGS TM 1-A1 (Groundwater Technical Procedures): GWPD 1 p.5, a graduated steel tape is commonly accurate to 0.01 foot; GWPD 4 p.33, a modern graduated electric tape commonly is accurate to +/- 0.01 foot. A calibrated tape is the same tape. The other procedures (airline, pressure gage or transducer, manometer, logs, estimated) state no number there."
 coverage:
 - data_class: groundwater level
   kind: measured
@@ -160,19 +159,20 @@ docstring: |-
       - Geometry: Point at each well's coordinates, EPSG:4326.
       - ``bbox`` is set to the wells' extent so the client camera auto-zooms
         (the layer renders via the inline-GeoJSON vector path).
-      - Properties per reading: ``site_no`` (NWIS site number),
-        ``site_name`` (human well name; "" when no metadata match),
-        ``parameter_code`` (72019 / 72150 / 62610 / 62611 / 61055),
-        ``parameter_label`` (human label for the measured quantity),
-        ``quantity`` (``water_table_depth`` below land surface,
-        ``groundwater_head`` on ``vertical_datum``, or
-        ``depth_below_measuring_point``),
-        ``water_level`` (the latest value, ft; null if not parseable),
-        ``unit`` (e.g. "ft"), ``vertical_datum`` (e.g. "NAVD88", "NGVD29",
-        or "Local Assumed Datum" / "" for depth-below-surface readings),
-        ``datetime`` (ISO-8601 timestamp of the reading), ``approval_status``,
-        ``aquifer_code`` (national aquifer code; "" if unknown),
-        ``well_depth_ft`` (constructed well depth, ft; null if unknown).
+      - Properties per reading: the whole field measurement under the
+        service's own names (``parameter_code`` 72019 / 72150 / 62610 /
+        62611 / 61055, ``value`` as text, ``unit_of_measure``,
+        ``vertical_datum`` ("NAVD88", "NGVD29", or "Local Assumed Datum"),
+        ``time``, ``observing_procedure`` (the method: steel tape, electric
+        tape, airline, logs, ...), ``qualifier``, ``approval_status``, ...),
+        ``site_no`` (NWIS site number), ``water_level`` (the value parsed,
+        null if not parseable) and ``datetime`` (the reading's ISO-8601
+        timestamp), then the well's whole monitoring-locations record as
+        ``location.<field>`` (``location.monitoring_location_name``,
+        ``location.well_constructed_depth`` in ft, ``location.national_aquifer_code``,
+        ``location.altitude``, ``location.altitude_accuracy``, ...), absent where
+        the join found none. A depth-to-water reading (72019) is ft below land
+        surface; the others are elevations on ``vertical_datum``.
 
   Fallback behaviour (data-source fallback norm -- primary -> honest typed
   error): the latest-field-measurements collection is the primary (observed

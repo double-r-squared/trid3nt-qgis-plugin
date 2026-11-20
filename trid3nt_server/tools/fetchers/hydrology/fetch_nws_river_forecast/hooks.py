@@ -1,10 +1,10 @@
 """nws_river_forecast hooks: the selector, the one-gauge body, and the detail families.
 
-The request template, the row walk, the geometry and the column projection are declared
+The request template, the row walk and the geometry are declared
 in source.yaml. Three steps are not a plain row walk and stay here: the bbox-or-lid
 selector, the detail endpoint answering with ONE gauge where the list endpoint answers
 with many, and the two conditional detail families whose merge reduces a forecast crest
-and packs the series. A detail failure keeps its gauge with null detail."""
+and packs the series beside the whole gauge record. A detail failure keeps its gauge with null detail."""
 
 from __future__ import annotations
 
@@ -146,31 +146,20 @@ def _parse_stageflow(body: bytes | None) -> dict[str, Any]:
     if not isinstance(obj, dict):
         return empty
 
-    def _series(key: str) -> list[tuple[str, float | None, float | None]]:
+    def _series(key: str) -> list[dict[str, Any]]:
+        """The block's own readings, the sentinel NWPS writes for a gap read as null."""
         block = obj.get(key) or {}
-        pts: list[tuple[str, float | None, float | None]] = []
-        for p in block.get("data") or []:
-            if not isinstance(p, dict):
-                continue
-            t = str(p.get("validTime") or "").strip()
-            if not t:
-                continue
-            pts.append((t, _coerce_float(p.get("primary")), _coerce_float(p.get("secondary"))))
-        return pts
+        return [{**p, "primary": _coerce_float(p.get("primary")), "secondary": _coerce_float(p.get("secondary"))}
+                for p in block.get("data") or [] if isinstance(p, dict) and str(p.get("validTime") or "").strip()]
 
     observed = _series("observed")
     forecast = _series("forecast")
     crest_stage: float | None = None
     crest_time: str | None = None
-    for t, stage, _flow in forecast:
-        if stage is not None and (crest_stage is None or stage > crest_stage):
-            crest_stage, crest_time = stage, t
+    for p in forecast:
+        if p["primary"] is not None and (crest_stage is None or p["primary"] > crest_stage):
+            crest_stage, crest_time = p["primary"], str(p["validTime"]).strip()
     return {"observed": observed, "forecast": forecast, "fcst_crest_stage_ft": crest_stage, "fcst_crest_time": crest_time}
-
-
-def _series_lines(points: list[tuple[str, float | None, float | None]], index: int) -> str:
-    """One quantity of a series as ``stamp,value`` lines, the points that report it only."""
-    return "".join(f"{p[0]},{p[index]:.6f}\n" for p in points if p[index] is not None)
 
 
 def _gauge_zero(detail: dict[str, Any]) -> tuple[float | None, str | None]:
@@ -185,16 +174,24 @@ def _gauge_zero(detail: dict[str, Any]) -> tuple[float | None, str | None]:
     return (zero, name) if zero is not None and name else (None, None)
 
 
+#: What the read produces from each gauge row: the status numbers with NWPS's gap sentinel read as null.
+_STATUS = {"obs_stage_ft": "status.observed.primary", "obs_flow_kcfs": "status.observed.secondary",
+           "fcst_stage_ft": "status.forecast.primary", "fcst_flow_kcfs": "status.forecast.secondary"}
+
+
 @_hooks.register_hook("nws_river_forecast.enrich_merge")
 def enrich_merge(
     spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]], results: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    """Fold both families onto the RAW row the column map still has to read: the
-    threshold block lands at the path a gauge_id body already carries it under, so one
-    declared rule serves both modes; the crest, the gauge zero and the four series packs land under
-    their own output names. Every gauge survives a failed detail."""
+    """Fold both families onto each gauge: the threshold block lands at the path a gauge_id body already
+    carries it under, and what the read produced (the status numbers, the crest, the gauge zero and its frame, the
+    two series as JSON of NWPS's readings) rides beside the raw record. Every gauge survives a failed detail."""
     for feat in features:
         props = feat.get("properties") or {}
+        produced = feat.setdefault("produced", {})
+        produced.update({name: _coerce_float(_field_map.read_path(props, path)) for name, path in _STATUS.items()})
+        produced.update(gauge_datum_ft=None, vertical_datum=None, fcst_crest_stage_ft=None, fcst_crest_time=None,
+                        obs_series=None, fcst_series=None)
         lid = props.get("lid")
         if not lid:
             continue
@@ -207,15 +204,12 @@ def enrich_merge(
             if isinstance(detail, dict) and detail.get("flood"):
                 props["flood"] = detail["flood"]
         zero_detail = _decoded(_body(results.get(f"zero:{lid}"))) or props
-        props["gauge_datum_ft"], props["vertical_datum"] = _gauge_zero(zero_detail)
+        produced["gauge_datum_ft"], produced["vertical_datum"] = _gauge_zero(zero_detail)
         ser_key = f"ser:{lid}"
         if ser_key in results:
             series = _parse_stageflow(_body(results[ser_key]))
-            props["fcst_crest_stage_ft"] = series["fcst_crest_stage_ft"]
-            props["fcst_crest_time"] = series["fcst_crest_time"]
-            observed = series["observed"][-_MAX_OBS_SERIES_POINTS:]
-            props["obs_stage_series"] = _series_lines(observed, 1)
-            props["obs_flow_series"] = _series_lines(observed, 2)
-            props["fcst_stage_series"] = _series_lines(series["forecast"], 1)
-            props["fcst_flow_series"] = _series_lines(series["forecast"], 2)
+            produced["fcst_crest_stage_ft"] = series["fcst_crest_stage_ft"]
+            produced["fcst_crest_time"] = series["fcst_crest_time"]
+            produced["obs_series"] = json.dumps(series["observed"][-_MAX_OBS_SERIES_POINTS:])
+            produced["fcst_series"] = json.dumps(series["forecast"])
     return features

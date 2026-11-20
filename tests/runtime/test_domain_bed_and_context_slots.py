@@ -480,7 +480,8 @@ def _level_told(fill, tmp_path, datums, monkeypatch, *, record_datum=None):
     told = asyncio.run(fill._on_the_run_s_frame(
         env, _elevation_slot(LEVEL), value,
         {"near": (-122.67, 45.52),
-         "fields": {"value": Member(field="value", unit=UnitField(field="unit"))}}))
+         "fields": {"value": Member(field="value", unit=UnitField(field="unit")),
+                    "site": Member(field="site_id"), "datum": Member(field="vertical_datum")}}))
     return told, asked
 
 

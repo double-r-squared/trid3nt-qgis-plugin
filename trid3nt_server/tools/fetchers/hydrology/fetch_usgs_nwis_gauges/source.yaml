@@ -35,14 +35,8 @@ ingest:
     library: dataretrieval
     # get_iv + the expanded get_info both run inside one call.
     timeout_s: 60.0
-  # Both calls run and the delegate hook joins them: the readings carry the
-  # gauge's own zero, which only the expanded Site record publishes.
-  # Per-mode FGB column schema, pinned by the derived _mode.
-  properties_by_param:
-    param: _mode
-    map:
-      instantaneous: [site_no, site_name, discharge_cfs, gage_height_ft, water_temp_c, reading_dt, gauge_datum_ft, vertical_datum]
-      hydrograph: [site_no, site_name, discharge_cfs, gage_height_ft, water_temp_c, reading_dt, time_series_csv, stage_series_csv, temp_series_csv, time_start, time_end, n_timesteps, discharge_min_cfs, discharge_max_cfs, discharge_mean_cfs, gauge_datum_ft, vertical_datum]
+  # Both calls run and the delegate hook joins them: a feature is the expanded
+  # Site record, which alone publishes the gauge's own zero, with the readings beside it.
 
 hooks:
   pre_resolve: usgs_nwis.resolve
@@ -74,9 +68,13 @@ cache:
 payload_estimate:
   model: per_feature
   features_per_sq_deg: 10.0
-  kb_per_feature: 0.15
+  kb_per_feature: 1.5
   floor_mb: 0.001
 
+fields:
+  site: {field: site_no}
+  site_name: {field: station_nm}
+  datum: {field: alt_datum_cd}
 coverage:
 - data_class: discharge series
   kind: measured
@@ -100,7 +98,7 @@ coverage:
   datum: null
   fields:
     value: {field: discharge_cfs, unit: ft3/s}
-    series: {field: time_series_csv, unit: ft3/s}
+    series: {field: discharge_series, time_key: datetime, value_key: value, unit: ft3/s}
 - data_class: water level series
   kind: measured
   reach_km: 25
@@ -123,8 +121,14 @@ coverage:
   datum: null
   fields:
     value: {field: gage_height_ft, unit: ft}
-    series: {field: stage_series_csv, unit: ft}
-    above: {field: gauge_datum_ft, unit: ft}
+    series: {field: stage_series, time_key: datetime, value_key: value, unit: ft}
+    above: {field: alt_va, unit: ft}
+    above_accuracy: {field: alt_acy_va, unit: ft}
+    accuracy:
+      absolute: 0.01
+      relative: 0.002
+      unit: ft
+      cite: "Sauer and Turnipseed 2010, USGS TM 3-A7 (Stage Measurement at Gaging Stations), Stage-Accuracy Requirements p.3: 0.01 ft or 0.2 percent of the effective stage, whichever is greater, for the complete streamgaging station. The effective stage is the height above the orifice or intake, which NWIS does not publish; the gage height stands for it."
 - data_class: water quality sample
   kind: measured
   reach_km: 25
@@ -148,7 +152,7 @@ coverage:
   datum: null
   fields:
     value: {field: water_temp_c, unit: degC}
-    series: {field: temp_series_csv, unit: degC}
+    series: {field: temp_series, time_key: datetime, value_key: value, unit: degC}
   # THE MEASUREMENT this row is asked for, in NWIS's own parameter-code
   # vocabulary: the slot names the variable its run publishes and this table is
   # where that name becomes the code the service answers to. A variable with no
@@ -162,7 +166,8 @@ caveats:
   - "OBSERVED gauge network; for MODELED reach flow use fetch_noaa_nwm_streamflow"
   - "primary IV real-time -> Site-service location fallback -> honest NWIS_GAUGES_NO_STATIONS (never an empty-success layer)"
   - "parameter names the measurement read: 00060 discharge, 00065 gage height, 00010 water temperature (deg C); any other code refuses pre-network"
-  - "a gage height is a height ABOVE the gauge's own zero, not an elevation: ``gauge_datum_ft`` is that zero's elevation and ``vertical_datum`` the frame it is counted from, both off the site record, and a consumer that wants a water-surface elevation adds them"
+  - "a gage height is a height ABOVE the gauge's own zero, not an elevation: ``alt_va`` is that zero's elevation (ft, with its accuracy ``alt_acy_va``) and ``alt_datum_cd`` the frame it is counted from, both off the site record, and a consumer that wants a water-surface elevation adds them"
+  - "a feature is the Site record under NWIS's own field names; the readings are ``discharge_cfs`` / ``gage_height_ft`` / ``water_temp_c`` (latest) with their qualifier codes ``discharge_cd`` / ``gage_height_cd`` / ``water_temp_cd`` (P provisional, A approved, e estimated), and a window's series is JSON of ``{datetime, value, cd}`` readings in ``discharge_series`` / ``stage_series`` / ``temp_series``"
 
 # corpus lifted from sibling corpus.yaml.
 
@@ -181,8 +186,8 @@ docstring: |-
         LATEST instantaneous discharge / gage height (the map-overlay mode).
       - HYDROGRAPH WINDOW (an explicit ``start_date`` + ``end_date``, or a
         relative ``period`` like ``"P7D"``): one Point per station carrying
-        the FULL discharge time series as an inline ``time_series_csv``
-        attribute (``"iso,value"`` rows, ft^3/s) -- the same shape
+        the FULL discharge time series as an inline ``discharge_series``
+        attribute (JSON ``{datetime, value, cd}`` readings, ft^3/s) -- the same shape
         ``fetch_noaa_coops_tides`` emits. This is the REAL river DISCHARGE
         HYDROGRAPH a compound-flood hydraulic model needs as its fluvial driver
         (instead of a flat constant synthesised from a single value).
@@ -229,7 +234,7 @@ docstring: |-
   Temporal selector (controls instantaneous vs hydrograph mode):
       start_date / end_date: Optional ISO ``YYYY-MM-DD`` window bounds. Pass
           BOTH to request the full per-station DISCHARGE HYDROGRAPH over the
-          window (one Point per station carrying a ``time_series_csv``). The
+          window (one Point per station carrying a ``discharge_series``). The
           window is capped at 120 days. Example: ``start_date="2018-10-08"``,
           ``end_date="2018-10-14"`` for the Hurricane Michael week.
       period: Optional relative ISO-8601 duration (e.g. ``"P7D"`` = last 7
@@ -242,10 +247,10 @@ docstring: |-
   Measurement selector:
       parameter: Optional NWIS parameter code, or a comma-separated list of
           them, naming WHICH measurement to read at the gauges: ``"00060"``
-          discharge into ``discharge_cfs`` / ``time_series_csv``, ``"00065"``
-          gage height into ``gage_height_ft`` / ``stage_series_csv``,
+          discharge into ``discharge_cfs`` / ``discharge_series``, ``"00065"``
+          gage height into ``gage_height_ft`` / ``stage_series``,
           ``"00010"`` WATER TEMPERATURE (deg C) into ``water_temp_c`` /
-          ``temp_series_csv``. Omitted, the discharge-and-stage pair is read.
+          ``temp_series``. Omitted, the discharge-and-stage pair is read.
           A code this tool reads into no column raises ``NwisInputError``.
 
   Returns:
@@ -255,11 +260,17 @@ docstring: |-
       - Geometry: Point at each gauge station's coordinates, EPSG:4326.
       - ``bbox`` is set to the stations' extent so the client camera
         auto-zooms (the layer renders via the inline-GeoJSON vector path).
-      - Properties per station: ``site_no`` (NWIS site number), ``site_name``,
+      - Properties per station: the whole NWIS Site record under its own
+        field names (``site_no``, ``station_nm``, ``alt_va`` the gauge zero's
+        elevation in ft, ``alt_acy_va`` its accuracy in ft, ``alt_datum_cd``
+        its datum, ``drain_area_va``, ``huc_cd``, ...), then
         ``discharge_cfs`` (latest 00060 reading, ft^3/s; null if not
         reported), ``gage_height_ft`` (latest 00065 reading, ft; null if not
-        reported), ``reading_dt`` (ISO-8601 timestamp of the latest reading;
-        null when only locations are available via the Site-service fallback).
+        reported), ``water_temp_c``, each reading's qualifier code
+        (``discharge_cd``, ``gage_height_cd``, ``water_temp_cd``: P
+        provisional, A approved, e estimated), ``reading_dt`` (ISO-8601
+        timestamp of the latest reading; null when only locations are
+        available via the Site-service fallback).
 
   Fallback behaviour (data-source fallback norm -- primary -> fallback -> honest
   typed error): the Instantaneous Values service is the primary (observed

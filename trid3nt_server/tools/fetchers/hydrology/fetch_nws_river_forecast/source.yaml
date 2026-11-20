@@ -72,41 +72,6 @@ ingest:
   geometry_filter:
     geom_types: [Point]
     require_finite: true
-  column_map:
-    lid: {from: lid, kind: str}
-    usgs_id: {from: usgsId, kind: str}
-    name: {from: name, kind: str}
-    rfc: {from: rfc.abbreviation, kind: str}
-    wfo: {from: wfo.abbreviation, kind: str}
-    state: {from: state.abbreviation, kind: str}
-    flood_category:
-      from: status.observed.floodCategory
-      kind: lookup
-      table: {no_flooding: no_flood}
-      default_template: '{key}'
-    fcst_flood_category:
-      from: status.forecast.floodCategory
-      kind: lookup
-      table: {no_flooding: no_flood}
-      default_template: '{key}'
-    obs_valid_time: {from: status.observed.validTime, kind: str}
-    fcst_valid_time: {from: status.forecast.validTime, kind: str}
-    fcst_crest_time: {from: fcst_crest_time, kind: str}
-    obs_stage_series: {from: obs_stage_series, kind: str}
-    obs_flow_series: {from: obs_flow_series, kind: str}
-    fcst_stage_series: {from: fcst_stage_series, kind: str}
-    fcst_flow_series: {from: fcst_flow_series, kind: str}
-    gauge_datum_ft: {from: gauge_datum_ft, kind: float}
-    vertical_datum: {from: vertical_datum, kind: str}
-    obs_stage_ft: {from: status.observed.primary, kind: float, null_below: -999.0}
-    obs_flow_kcfs: {from: status.observed.secondary, kind: float, null_below: -999.0}
-    fcst_stage_ft: {from: status.forecast.primary, kind: float, null_below: -999.0}
-    fcst_flow_kcfs: {from: status.forecast.secondary, kind: float, null_below: -999.0}
-    action_stage_ft: {from: flood.categories.action.stage, kind: float, null_below: -999.0}
-    minor_stage_ft: {from: flood.categories.minor.stage, kind: float, null_below: -999.0}
-    moderate_stage_ft: {from: flood.categories.moderate.stage, kind: float, null_below: -999.0}
-    major_stage_ft: {from: flood.categories.major.stage, kind: float, null_below: -999.0}
-    fcst_crest_stage_ft: {from: fcst_crest_stage_ft, kind: float, null_below: -999.0}
   empty:
     code: NO_GAUGES
     message: >-
@@ -130,10 +95,13 @@ cache:
 payload_estimate:
   model: per_feature
   features_per_sq_deg: 15.0
-  kb_per_feature: 0.4096
+  kb_per_feature: 1.0
   floor_mb: 0.001
 fields:
-  time: {field: fcst_valid_time}
+  site: {field: lid}
+  site_name: {field: name}
+  datum: {field: vertical_datum}
+  time: {field: status.forecast.validTime}
 coverage:
 - data_class: water level series
   kind: predicted
@@ -156,7 +124,7 @@ coverage:
   datum: null
   fields:
     value: {field: fcst_stage_ft, unit: ft}
-    series: {field: fcst_stage_series, unit: ft}
+    series: {field: fcst_series, time_key: validTime, value_key: primary, unit: ft}
     above: {field: gauge_datum_ft, unit: ft}
 - data_class: discharge series
   kind: predicted
@@ -179,7 +147,7 @@ coverage:
   datum: null
   fields:
     value: {field: fcst_flow_kcfs, unit: kcfs}
-    series: {field: fcst_flow_series, unit: kcfs}
+    series: {field: fcst_series, time_key: validTime, value_key: secondary, unit: kcfs}
 
 caveats:
 - "a stage is a height above the gauge's own zero: ``gauge_datum_ft`` is that zero's elevation and ``vertical_datum`` the frame it is counted from (NGVD29 or NAVD88), both off the gauge's NWPS detail record and stated only when the record lists one frame; the NWPS API schema gives the value no unit, and the NWPS Product and Users Guide v2.1 (weather.gov/media/owp/operations/nwps_user_guide.pdf, p.8) gives absolute elevation on NAVD 88 or NGVD 29 in feet, which is the unit stated here"
@@ -191,23 +159,21 @@ docstring: "Fetch NWS river-forecast gauges + flood categories as a Point FlatGe
   \ NWS / National Water Prediction Service (AHPS/NWPS) river\nforecast points inside ``bbox`` and returns\
   \ one Point feature per gauge,\neach carrying:\n\n  - the OBSERVED river stage (``obs_stage_ft``) and\
   \ flow (``obs_flow_kcfs``),\n  - the FORECAST river stage (``fcst_stage_ft``) and flow (``fcst_flow_kcfs``),\n\
-  \  - the NWS **flood category** for both observed (``flood_category``) and\n    forecast (``fcst_flood_category``):\
-  \ one of ``no_flood`` / ``action`` /\n    ``minor`` / ``moderate`` / ``major`` (or an operational state\
-  \ such as\n    ``not_defined`` / ``out_of_service`` when the gauge has no category),\n  - the gauge\
-  \ identity (``lid``, ``usgs_id``, ``name``, ``rfc``, ``wfo``,\n    ``state``) and the observed/forecast\
-  \ valid times.\n\nThis is the flood-warning surface: USGS NWIS (``fetch_usgs_nwis_gauges``) is\nthe\
+  \  - the whole NWPS gauge record under its own names (nested names dotted: ``lid``,\n    ``usgsId``, ``name``, ``status.observed.floodCategory``,\
+  \ ``status.forecast.floodCategory``\n    (``no_flooding`` / ``action`` / ``minor`` / ``moderate`` / ``major`` or an\
+  \ operational state),\n    ``rfc.abbreviation``, ``wfo.abbreviation``, ``state.abbreviation``, the valid times).\n\nThis is the flood-warning surface: USGS NWIS (``fetch_usgs_nwis_gauges``) is\nthe\
   \ raw instrument record and NWM (``fetch_noaa_nwm_streamflow``) is modeled\nreach flow; this tool is\
   \ the NWS forecast + flood-category source.\n\nArgs:\n    bbox: ``(west, south, east, north)`` in EPSG:4326.\
   \ REQUIRED unless\n        ``gauge_id`` is given.\n    include_thresholds: when True, fetch each gauge's\
-  \ flood-category\n        threshold stages (``action_stage_ft`` / ``minor_stage_ft`` /\n        ``moderate_stage_ft``\
-  \ / ``major_stage_ft``, ft) via a per-gauge\n        detail call (bounded to the first ~60 gauges).\
+  \ flood-category\n        threshold stages (``flood.categories.action.stage`` /\n        ``minor`` / ``moderate``\
+  \ / ``major``, ft) via a per-gauge\n        detail call (bounded to the first ~60 gauges).\
   \ OFF by default to\n        keep the tool a single HTTP request. Always ON in ``gauge_id``\n      \
   \  mode (the detail body carries the thresholds for free).\n    gauge_id: Optional NWS location id (lid,\
   \ e.g. ``\"CIDI4\"`` - NOT a\n        USGS site number) selecting a SINGLE gauge via the NWPS detail\n\
   \        endpoint; ``bbox`` is then optional/ignored. Use a bbox query\n        first to discover lids.\n\
   \    include_series: when True, fetch each gauge's ``/stageflow`` observed\n        + forecast time\
   \ series (bounded to the first ~12 gauges) and add:\n        ``fcst_crest_stage_ft`` / ``fcst_crest_time``\
-  \ (the forecast CREST\n        - the max forecast stage and when it occurs) plus\n        ``obs_stage_series`` / ``obs_flow_series`` (most-recent ~96 observed\n        points) and ``fcst_stage_series`` / ``fcst_flow_series`` (full forecast)\n        as ``stamp,value`` lines, one quantity each, plus the gauge zero\n        ``gauge_datum_ft`` (ft) and its frame ``vertical_datum``. OFF by default.\n\nReturns:\n    A vector ``LayerURI`` (FlatGeobuf, Point,\
+  \ (the forecast CREST\n        - the max forecast stage and when it occurs) plus\n        ``obs_series`` (most-recent ~96 observed points) and ``fcst_series`` (full forecast),\n        JSON of NWPS's own readings (``validTime``, ``primary`` stage ft, ``secondary`` flow kcfs), plus the gauge zero\n        ``gauge_datum_ft`` (ft) and its frame ``vertical_datum``. OFF by default.\n\nReturns:\n    A vector ``LayerURI`` (FlatGeobuf, Point,\
   \ EPSG:4326).\n\nRaises:\n    NwsRiverForecastInputError: bbox and gauge_id both missing / malformed.\n\
   \    NwsRiverForecastBboxTooLargeError: bbox implausibly large.\n    NwsRiverForecastNoGaugesError:\
   \ zero forecast gauges in the bbox, or\n        an unknown gauge_id.\n    NwsRiverForecastUpstreamError:\

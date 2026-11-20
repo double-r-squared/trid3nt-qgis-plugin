@@ -31,20 +31,12 @@ hooks:
   build_request: usgs_model_head_targets.build_request
   parse_response: usgs_model_head_targets.parse_response
 
-ingest:
-  properties:
-    - site_id
-    - target
-    - database
-    - value
-    - unit
-    - quantity
-    - vertical_datum
-    - datetime
-    - model_layer
-    - weight
-    - group
-    - period
+fields:
+  site: {field: site_id}
+  datum: {field: vertical_datum}
+  quantity: {field: quantity}
+  value: {field: value, unit: {field: unit}}
+  time: {field: datetime}
 
 normalize:
   crs: "EPSG:4326"
@@ -80,9 +72,11 @@ docstring: |-
   **What it does:** Reads the 120 water-level ELEVATION calibration targets of the Des Moines River
   alluvial aquifer MODFLOW 6 model (Davis and Bristow 2024, doi 10.5066/P13ZDDVY; SIR 2024-5059) out
   of its data release: per target the well (``site_id``), the target name, the database it came from
-  (GeoSam, wetland or USGS), the value in metres above NAVD 88, the reading date, the model layer it
-  was matched in, its published weight and group, and the stress period it belongs to
-  (``steady`` before 1980, ``transient`` after).
+  (GeoSam, wetland or USGS), the value in metres above NAVD 88, the reading date, the whole row of the
+  table the target was written from under its own names (``layer`` the model layer it was matched
+  in, ``obsval``, ``wl_m``, ``bore_id``, ...), the control file's row as ``control.obsnme`` /
+  ``control.obsval`` / ``control.weight`` (the authors' balancing weight, not an accuracy) /
+  ``control.obgnme``, and the stress period it belongs to (``steady`` before 1980, ``transient`` after).
 
   **When to use:**
   - Holding a groundwater model of the Des Moines alluvium to the published model's own targets.

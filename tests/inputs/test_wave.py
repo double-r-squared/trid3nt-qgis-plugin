@@ -20,7 +20,8 @@ from trid3nt_server.inputs.slots import WAVE
 #: The sea-state source's field map: each quantity is the window it reports it over, in its own unit.
 _FIELDS = {"height": Member(field="wave_height_series_csv", unit="m"),
            "period": Member(field="peak_period_series_csv", unit="s"),
-           "from_direction": Member(field="wave_direction_series_csv", unit="degT")}
+           "from_direction": Member(field="wave_direction_series_csv", unit="degT"),
+           "site": Member(field="station_id"), "site_name": Member(field="station_name")}
 
 _WINDOW = ("2026-02-10T00:00:00Z", "2026-02-10T01:00:00Z",
            "2026-02-10T02:00:00Z")

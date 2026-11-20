@@ -97,4 +97,7 @@ def test_a_gauge_known_by_its_lid_names_the_site():
     props = layer["features"][0]["properties"]
     del props["site_id"]
     props["lid"] = "PRTO3"
-    assert observation(layer, near=[-122.669, 45.518]).site_id == "PRTO3"
+    from trid3nt_contracts.coverage import Member, UnitField
+
+    named = {"value": Member(field="value", unit=UnitField(field="unit")), "site": Member(field="lid")}
+    assert observation(layer, near=[-122.669, 45.518], fields=named).site_id == "PRTO3"

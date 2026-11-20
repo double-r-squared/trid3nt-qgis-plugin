@@ -73,17 +73,6 @@ hooks:
 ingest:
   delegate:
     library: dataretrieval
-  properties:
-  - site_id
-  - site_name
-  - site_type
-  - characteristic
-  - value
-  - unit
-  - result_date
-  - fraction
-  - depth
-  - depth_unit
 normalize:
   crs: EPSG:4326
   units_from_param: characteristic
@@ -100,11 +89,14 @@ cache:
 payload_estimate:
   model: per_feature
   features_per_sq_deg: 200.0
-  kb_per_feature: 0.2
+  kb_per_feature: 2.5
   floor_mb: 0.001
 fields:
-  value: {field: value, unit: {field: unit}}
-  time: {field: result_date}
+  site: {field: MonitoringLocationIdentifier}
+  site_name: {field: MonitoringLocationName}
+  value: {field: value, unit: {field: result.ResultMeasure/MeasureUnitCode}}
+  time: {field: result.ActivityStartDate}
+  depth: {field: depth, unit: {field: depth_unit}}
 coverage:
 - data_class: water quality sample
   kind: measured
@@ -204,12 +196,14 @@ docstring: |-
       - Geometry: Point at each monitoring location, EPSG:4326.
       - ``bbox`` is set to the sites' extent so the client camera auto-zooms
         (the layer renders via the inline-GeoJSON vector path).
-      - Properties per site: ``site_id`` (MonitoringLocationIdentifier),
-        ``site_name``, ``site_type``, ``characteristic`` (canonical WQP name),
-        ``value`` (latest numeric result; null if no numeric sample),
-        ``unit`` (result units, e.g. ``"mg/l as N"``), ``result_date``
-        (ISO sample date of the latest result; "" if none), ``fraction``
-        (sample fraction, e.g. ``"Dissolved"``/``"Total"``), ``depth`` and
+      - Properties per site: the Station record under the portal's own names
+        (``MonitoringLocationIdentifier``, ``MonitoringLocationName``,
+        ``MonitoringLocationTypeName``, ``WellDepthMeasure/MeasureValue``, ...),
+        ``value`` (latest numeric result; null if no numeric sample), the latest
+        result's whole row as ``result.<field>`` (``result.CharacteristicName``,
+        ``result.ResultMeasure/MeasureUnitCode`` e.g. ``"mg/l as N"``,
+        ``result.ActivityStartDate``, ``result.ResultSampleFractionText``,
+        ``result.DataQuality/PrecisionValue``, ...), ``depth`` and
         ``depth_unit`` (a well's published depth below the land surface, else its
         hole depth; null where the site publishes neither).
 

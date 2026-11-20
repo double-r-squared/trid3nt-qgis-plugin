@@ -163,11 +163,11 @@ def test_the_elevation_item_is_found_over_the_record_and_item_walk(spec, monkeyp
     monkeypatch.setattr(
         uh, "get_bytes",
         lambda client, url, headers=None: (_CATALOG_BODIES[url], "application/vnd.api+json", url))
-    item_id, name, unit = uh._find_elevation_item(
+    item = uh._find_elevation_item(
         spec, "https://data.usbr.gov",
         ["/rise/api/catalog-record/4557", "/rise/api/catalog-record/8430"],
         "Henry Hagg Lake and Scoggins Dam (SCO)")
-    assert (item_id, name, unit) == ("132998", "Lake/Reservoir Elevation", "ft")
+    assert (item["_id"], item["parameterName"], item["parameterUnit"]) == (132998, "Lake/Reservoir Elevation", "ft")
 
 
 def test_a_location_with_no_elevation_item_refuses_by_name(spec, monkeypatch):
@@ -222,25 +222,26 @@ def test_build_request_asks_the_resolved_item_over_the_window(spec):
     assert plans[0].params["dateTime[before]"] == "2024-06-05T23:59:59"
 
 
-def test_parse_response_builds_one_point_feature_with_the_window_inline(spec):
-    params = {
-        "_lon": -123.19965, "_lat": 45.4724, "_station_id": "3651",
-        "_station_name": "Henry Hagg Lake and Scoggins Dam (SCO)",
-        "_region": "Pacific Northwest", "_vertical_datum": "NGVD29",
-        "_horizontal_datum": "WGS84", "_timezone": "PT",
-        "_parameter_name": "Lake/Reservoir Elevation", "start_date": "2024-06-01",
-        "end_date": "2024-06-05",
-    }
+def test_parse_response_builds_one_point_feature_with_the_window_inline(spec, monkeypatch):
+    monkeypatch.setattr(uh, "get_client", lambda: object())
+    monkeypatch.setattr(
+        uh, "get_bytes",
+        lambda client, url, headers=None: (_CATALOG_BODIES[url], "application/vnd.api+json", url))
+    params = {**uh.resolve_parse(spec, {"station": "SCO"}, [_LOCATION_BODY]),
+              "start_date": "2024-06-01", "end_date": "2024-06-05"}
     features = uh.parse_response(spec, params, [_RESULT_BODY])
     assert len(features) == 1
-    props = features[0]["properties"]
+    record, made = features[0]["properties"], features[0]["produced"]
     assert features[0]["geometry"]["coordinates"] == [-123.19965, 45.4724]
-    assert props["vertical_datum"] == "NGVD29"
-    assert props["forebay_elevation_ft"] == 303.36
-    assert props["forebay_elevation_min_ft"] == 303.34
-    assert props["n_timesteps"] == 2
-    assert props["time_start"] == "2024-06-03T19:00:00+00:00"
-    assert "303.36" in props["time_series_csv"]
+    # the location record is kept whole under RISE's own names, the item's beside it under item.
+    assert record["locationName"] == "Henry Hagg Lake and Scoggins Dam (SCO)"
+    assert record["verticalDatum"]["_id"] == "NGVD29"
+    assert made["item._id"] == 132998 and made["item.parameterUnit"] == "ft"
+    assert made["forebay_elevation_ft"] == 303.36
+    assert made["forebay_elevation_min_ft"] == 303.34
+    assert made["n_timesteps"] == 2
+    assert made["time_start"] == "2024-06-03T19:00:00+00:00"
+    assert [r["result"] for r in json.loads(made["series"])] == [303.34, 303.36]
 
 
 def test_a_truncated_page_refuses_rather_than_silently_short(spec):
@@ -262,3 +263,24 @@ def test_an_empty_window_refuses_as_empty(spec):
 def test_the_source_is_found_through_its_class(class_routes_to_the_match):
     """A covered fetcher carries no corpus: its class is the door."""
     class_routes_to_the_match("water level series", "fetch_usbr_hydromet")
+
+
+def test_the_elevation_reads_through_the_row_with_the_zero_each_station_states_and_no_accuracy(spec, monkeypatch):
+    from trid3nt_server.inputs.observation import ObservationError, observation
+
+    monkeypatch.setattr(uh, "get_client", lambda: object())
+    monkeypatch.setattr(
+        uh, "get_bytes",
+        lambda client, url, headers=None: (_CATALOG_BODIES[url], "application/vnd.api+json", url))
+    params = {**uh.resolve_parse(spec, {"station": "SCO"}, [_LOCATION_BODY]),
+              "start_date": "2024-06-01", "end_date": "2024-06-05"}
+    feature = uh.parse_response(spec, params, [_RESULT_BODY])[0]
+    layer = {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "geometry": feature["geometry"], "properties": {**feature["properties"], **feature["produced"]}}]}
+    row = spec.coverage[0]
+    found = observation(layer, fields=row.fields, producer="fetch_usbr_hydromet", at="2024-06-04T20:00:00Z")
+    assert found.value == 303.36 and found.units == "ft" and found.datum == "NGVD29"
+    assert found.site_name == "Henry Hagg Lake and Scoggins Dam (SCO)"
+    with pytest.raises(ObservationError) as unmapped:
+        observation(layer, fields=row.fields, producer="fetch_usbr_hydromet", accuracy=True)
+    assert unmapped.value.error_code == "FIELD_UNMAPPED"

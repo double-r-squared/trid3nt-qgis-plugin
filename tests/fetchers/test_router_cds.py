@@ -233,7 +233,7 @@ def test_gtsm_read_happy_path_features(monkeypatch, gtsm_spec, tmp_path):
     assert len(feats) == 2  # the two in-bbox stations
     props = feats[0]["properties"]
     assert set(props) >= {"gauge_id", "lon", "lat", "time_start", "time_end", "n_timesteps",
-                          "wl_min_m", "wl_max_m", "wl_mean_m", "output", "time_series_csv"}
+                          "wl_min_m", "wl_max_m", "wl_mean_m", "output", "series"}
     assert feats[0]["geometry"]["type"] == "Point"
 
 

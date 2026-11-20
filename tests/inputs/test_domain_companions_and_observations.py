@@ -14,7 +14,8 @@ import pytest
 from trid3nt_contracts.coverage import UnitField, Member
 
 #: A sample layer's map: the reading under ``value`` in the unit its ``unit`` field states, dated by ``result_date``.
-_DATED = {"value": Member(field="value", unit=UnitField(field="unit")), "time": Member(field="result_date")}
+_DATED = {"value": Member(field="value", unit=UnitField(field="unit")), "time": Member(field="result_date"),
+          "site": Member(field="site_id")}
 
 from trid3nt_server.inputs.boundary import OPEN_TYPES, RATING, RUN_TYPES, boundary_runs
 from trid3nt_server.inputs.boundary import roles_from_runs

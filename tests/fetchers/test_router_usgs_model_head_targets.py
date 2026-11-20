@@ -33,37 +33,45 @@ def test_the_row_is_served():
     assert _SPEC is not None
 
 
+def _flat(feature):
+    """A target as the writer lays it out: the table's row beside what the read produced."""
+    return {**feature["properties"], **feature["produced"]}
+
+
 def test_every_elevation_target_of_the_control_file_is_one_point_on_navd88():
     targets = _parse(bbox=_GRID)
     assert len(targets) == 120
-    props = [t["properties"] for t in targets]
-    assert {p["group"] for p in props} == {"wl_alt_obs"}
+    props = [_flat(t) for t in targets]
+    assert {p["control.obgnme"] for p in props} == {"wl_alt_obs"}
     assert {(p["unit"], p["quantity"], p["vertical_datum"]) for p in props} == {("m", "groundwater_head", "NAVD88")}
     assert {p["database"] for p in props} == {"geosam", "wetland", "USGS"}
     first = next(p for p in props if p["target"] == "wl_geosam_00182_19390601")
-    assert (first["site_id"], first["value"], first["datetime"], first["model_layer"]) == (
-        "w_00001", 257.33, "1939-06-01", 6)
-    assert first["weight"] == pytest.approx(0.022158312249902102)
+    assert (first["site_id"], first["value"], first["datetime"], first["layer"]) == (
+        "w_00001", 257.33, "1939-06-01", "6")
+    assert float(first["control.weight"]) == pytest.approx(0.022158312249902102)
+    # the source table's own columns are kept under their own names
+    assert {"bore_id", "well_id", "wl_m", "wl_elev_m", "xcoord", "ycoord", "layer_bot"} <= set(first)
 
 
 def test_a_reading_before_1980_is_the_steady_periods_and_only_those_are_asked_for():
     steady = _parse(bbox=_GRID, period="steady")
     assert len(steady) == 42
-    assert all(t["properties"]["datetime"] < "1980-01-01" for t in steady)
+    assert all(t["produced"]["datetime"] < "1980-01-01" for t in steady)
     transient = _parse(bbox=_GRID, period="transient")
     assert len(steady) + len(transient) == 120
 
 
 def test_the_control_files_value_stands_where_its_source_table_differs():
     # DMWW_gw_wl_obs.csv states 245.26 for this target; the control file PEST read states 292.26.
-    held = next(t for t in _parse(bbox=_GRID) if t["properties"]["target"] == "wl_geosam_32152_19881024")
-    assert held["properties"]["value"] == 292.26
+    held = next(t for t in _parse(bbox=_GRID) if t["produced"]["target"] == "wl_geosam_32152_19881024")
+    assert held["produced"]["value"] == 292.26
+    assert float(held["properties"]["obsval"]) == 245.26
 
 
 def test_the_box_keeps_only_its_own_targets():
     box = [-93.63, 41.64, -93.61, 41.65]
     held = _parse(bbox=box, period="steady")
-    assert {t["properties"]["site_id"] for t in held} == {"w_00044", "w_00045", "w_00046", "w_00047", "w_00048", "w_00049"}
+    assert {t["produced"]["site_id"] for t in held} == {"w_00044", "w_00045", "w_00046", "w_00047", "w_00048", "w_00049"}
     for t in held:
         lon, lat = t["geometry"]["coordinates"]
         assert box[0] <= lon <= box[2] and box[1] <= lat <= box[3]

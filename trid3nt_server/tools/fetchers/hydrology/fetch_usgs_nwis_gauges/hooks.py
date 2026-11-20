@@ -1,13 +1,13 @@
 """USGS NWIS stream-gauge hooks: the mode switch, then the dataretrieval read.
 
-``pre_resolve`` derives a ``_mode`` param pre-cache-key, so the declarative surface can
-pin a per-mode column schema and units; ``read`` calls ``dataretrieval.nwis`` (IV then
-the expanded Site record) and joins them, so every reading carries the gauge's own
-zero. IV empty degrades to station locations from the Site call; both empty is the
-source's honest no-stations refusal."""
+``pre_resolve`` derives a ``_mode`` param pre-cache-key; ``read`` calls ``dataretrieval.nwis`` (IV then
+the expanded Site record) and joins them: a feature is the site record under NWIS's own field names, and
+what the read produced (the latest reading and its qualifier, the window's rows) rides beside it. IV empty
+degrades to station locations from the Site call; both empty is the source's honest no-stations refusal."""
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from typing import Any
@@ -24,13 +24,13 @@ _PARAM_GAGE_HEIGHT = "00065"
 _PARAM_TEMPERATURE = "00010"
 _PARAMETER_CD = f"{_PARAM_DISCHARGE},{_PARAM_GAGE_HEIGHT}"
 
-#: The value and window columns each NWIS parameter code is read into. A code
+#: The value, window and qualifier columns each NWIS parameter code is read into. A code
 #: with no columns here is a measurement this source publishes nowhere, so the
 #: ask refuses it rather than fetching a series that lands in no column.
-_COLUMNS: dict[str, tuple[str, str]] = {
-    _PARAM_DISCHARGE: ("discharge_cfs", "time_series_csv"),
-    _PARAM_GAGE_HEIGHT: ("gage_height_ft", "stage_series_csv"),
-    _PARAM_TEMPERATURE: ("water_temp_c", "temp_series_csv"),
+_COLUMNS: dict[str, tuple[str, str, str]] = {
+    _PARAM_DISCHARGE: ("discharge_cfs", "discharge_series", "discharge_cd"),
+    _PARAM_GAGE_HEIGHT: ("gage_height_ft", "stage_series", "gage_height_cd"),
+    _PARAM_TEMPERATURE: ("water_temp_c", "temp_series", "water_temp_cd"),
 }
 _MAX_BBOX_SQ_DEG = 24.5
 _MAX_WINDOW_DAYS = 120
@@ -164,15 +164,16 @@ def _number(raw: Any) -> float | None:
     return value if math.isfinite(value) else None
 
 
-def _text(raw: Any) -> str | None:
-    """A site field as text, or None. NaN reads as the string "nan" unless caught."""
+def _stated(raw: Any) -> Any:
+    """A site field as the record states it: NaN, the frame's hole, and a numpy scalar read as None and a plain value."""
     if raw is None or (isinstance(raw, float) and not math.isfinite(raw)):
         return None
-    return str(raw).strip() or None
+    return raw.item() if hasattr(raw, "item") else raw
 
 
-def _feature(lon: float, lat: float, props: dict[str, Any]) -> dict[str, Any]:
-    return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props}
+def _feature(lon: float, lat: float, record: dict[str, Any], produced: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]},
+            "properties": record, "produced": produced}
 
 
 def _column_of(sub: Any, code: str) -> str | None:
@@ -200,9 +201,9 @@ def _utc_days(window: Any) -> tuple[Any, Any, dict[str, str]]:
 
 def _readings_by_site(iv_df: Any, parameter_cd: str, mode: str,
                       cut: tuple[Any, Any] | None = None) -> dict[str, dict[str, Any]]:
-    """Group ``get_iv``'s long DataFrame (one row per timestep) by ``site_no`` into
-    one record per site, latest-value columns for ``instantaneous`` and full inline
-    series + rollups for ``hydrograph``; ``cut`` keeps the readings in [lo, hi) UTC."""
+    """Group ``get_iv``'s long DataFrame (one row per timestep) by ``site_no`` into what each site's
+    reading produced: latest value and qualifier columns for ``instantaneous``, full inline
+    series (JSON of ``datetime``, ``value``, ``cd`` readings) + rollups for ``hydrograph``; ``cut`` keeps the readings in [lo, hi) UTC."""
     by_site: dict[str, dict[str, Any]] = {}
     if iv_df is None or len(iv_df) == 0 or "site_no" not in iv_df.columns:
         return by_site
@@ -218,13 +219,13 @@ def _readings_by_site(iv_df: Any, parameter_cd: str, mode: str,
     for site_no, sub in iv_df.groupby("site_no"):
         site_no = str(site_no)
         rec = by_site.setdefault(site_no, {
-            "site_no": site_no, "discharge_cfs": None, "gage_height_ft": None,
-            "water_temp_c": None, "reading_dt": None,
+            "discharge_cfs": None, "gage_height_ft": None, "water_temp_c": None, "reading_dt": None,
+            "discharge_cd": None, "gage_height_cd": None, "water_temp_cd": None,
         })
         if mode == "hydrograph":
-            rec.setdefault("time_series_csv", "")
-            rec.setdefault("stage_series_csv", "")
-            rec.setdefault("temp_series_csv", "")
+            rec.setdefault("discharge_series", "[]")
+            rec.setdefault("stage_series", "[]")
+            rec.setdefault("temp_series", "[]")
             rec.setdefault("time_start", None)
             rec.setdefault("time_end", None)
             rec.setdefault("n_timesteps", 0)
@@ -235,24 +236,27 @@ def _readings_by_site(iv_df: Any, parameter_cd: str, mode: str,
             named = _column_of(sub, code)
             if named is None:
                 continue
-            value_column, series_column = _COLUMNS[code]
-            col = sub[named].dropna()
-            col = col[col > -999990.0]
-            if col.empty:
+            value_column, series_column, cd_column = _COLUMNS[code]
+            kept = sub[sub[named].notna() & (sub[named] > -999990.0)]
+            if kept.empty:
                 continue
+            marks = kept[f"{named}_cd"].tolist() if f"{named}_cd" in kept.columns else [None] * len(kept)
+            rows = [(idx, float(v), "" if cd is None or cd != cd else str(cd).strip())
+                    for (idx, v), cd in zip(kept[named].items(), marks)]
             if mode == "instantaneous":
-                idx = col.index.max()
-                rec[value_column] = float(col.loc[idx])
+                idx, rec[value_column], cd = max(rows, key=lambda row: row[0])
+                rec[cd_column] = cd or None
                 dt_str = idx.strftime("%Y-%m-%dT%H:%M:%S%z") if hasattr(idx, "strftime") else str(idx)
                 if not rec["reading_dt"]:
                     rec["reading_dt"] = dt_str
             else:
-                pairs = sorted((idx.strftime("%Y-%m-%dT%H:%M:%S%z") if hasattr(idx, "strftime") else str(idx), float(v))
-                                for idx, v in col.items())
-                rec[series_column] = "\n".join(f"{t},{v:.6f}" for t, v in pairs) + "\n"
+                pairs = sorted((idx.strftime("%Y-%m-%dT%H:%M:%S%z") if hasattr(idx, "strftime") else str(idx), v, cd)
+                               for idx, v, cd in rows)
+                rec[series_column] = json.dumps([{"datetime": t, "value": v, "cd": cd} for t, v, cd in pairs])
                 rec[value_column] = pairs[-1][1]
+                rec[cd_column] = pairs[-1][2] or None
                 if code == _PARAM_DISCHARGE:
-                    vals = [v for _t, v in pairs]
+                    vals = [v for _t, v, _cd in pairs]
                     rec["n_timesteps"] = len(vals)
                     rec["time_start"] = pairs[0][0]
                     rec["time_end"] = pairs[-1][0]
@@ -268,7 +272,7 @@ def _readings_by_site(iv_df: Any, parameter_cd: str, mode: str,
 @register_hook("usgs_nwis.read")
 def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[dict[str, Any]]:
     """Fetch through ``dataretrieval.nwis`` (IV, then the expanded Site record) and
-    join on ``site_no``: the readings carry each site's own zero. An empty IV
+    join on ``site_no``: the site record carries each site's own zero. An empty IV
     degrades to the station locations; both empty is the honest no-stations
     refusal."""
     import dataretrieval.nwis as nwis
@@ -299,7 +303,7 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
 
     readings = _readings_by_site(iv_df, parameter_cd, mode, cut)
 
-    sites: dict[str, dict[str, Any]] = {}
+    sites: dict[str, tuple[float, float, dict[str, Any]]] = {}
     if site_df is not None and len(site_df):
         for rd in site_df.to_dict(orient="records"):
             site_no = str(rd.get("site_no") or "").strip()
@@ -312,41 +316,25 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
                 continue
             if not (math.isfinite(lat) and math.isfinite(lon)):
                 continue
-            sites[site_no] = {
-                "site_name": _text(rd.get("station_nm")) or "",
-                "lon": lon, "lat": lat,
-                "gauge_datum_ft": _number(rd.get("alt_va")),
-                "vertical_datum": _text(rd.get("alt_datum_cd")),
-            }
+            # dataretrieval adds a ``geometry`` of its own from the two decimal coordinates the record keeps.
+            sites[site_no] = (lon, lat, {str(k): _stated(v) for k, v in rd.items() if k != "geometry"})
 
+    columns = _READING_COLUMNS[mode]
     if not readings:
         if not sites:
             raise router_empty_error(
                 sc, "no active gauges in scope from the readings service or the "
                     "site service", spec.empty_error_suffix)
         # Fallback: station LOCATIONS only, every reading column null.
-        cols = _COLUMNS_BY_MODE[mode]
-        feats = []
-        for site_no, loc in sites.items():
-            props = {c: None for c in cols}
-            props["site_no"] = site_no
-            props["site_name"] = loc["site_name"]
-            props["gauge_datum_ft"] = loc["gauge_datum_ft"]
-            props["vertical_datum"] = loc["vertical_datum"]
-            feats.append(_feature(loc["lon"], loc["lat"], props))
-        return feats
+        return [_feature(lon, lat, record, dict.fromkeys(columns))
+                for lon, lat, record in sites.values()]
 
-    cols = _COLUMNS_BY_MODE[mode]
     feats = []
     for site_no, rec in readings.items():
         loc = sites.get(site_no)
         if loc is None:
             continue  # a reading with no site location has nowhere to be a Point
-        rec["site_name"] = loc["site_name"]
-        rec["gauge_datum_ft"] = loc["gauge_datum_ft"]
-        rec["vertical_datum"] = loc["vertical_datum"]
-        props = {c: rec.get(c) for c in cols}
-        feats.append(_feature(loc["lon"], loc["lat"], props))
+        feats.append(_feature(loc[0], loc[1], loc[2], {c: rec.get(c) for c in columns}))
     if not feats:
         raise router_empty_error(
             sc, "no active gauges in scope from the readings service or the "
@@ -354,15 +342,16 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
     return feats
 
 
-_COLUMNS_BY_MODE: dict[str, tuple[str, ...]] = {
+#: What a reading produces beside the site record, per mode.
+_READING_COLUMNS: dict[str, tuple[str, ...]] = {
     "instantaneous": (
-        "site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c",
-        "reading_dt", "gauge_datum_ft", "vertical_datum",
+        "discharge_cfs", "gage_height_ft", "water_temp_c", "discharge_cd", "gage_height_cd",
+        "water_temp_cd", "reading_dt",
     ),
     "hydrograph": (
-        "site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c",
-        "reading_dt", "time_series_csv", "stage_series_csv", "temp_series_csv",
+        "discharge_cfs", "gage_height_ft", "water_temp_c", "discharge_cd", "gage_height_cd",
+        "water_temp_cd", "reading_dt", "discharge_series", "stage_series", "temp_series",
         "time_start", "time_end", "n_timesteps", "discharge_min_cfs",
-        "discharge_max_cfs", "discharge_mean_cfs", "gauge_datum_ft", "vertical_datum",
+        "discharge_max_cfs", "discharge_mean_cfs",
     ),
 }

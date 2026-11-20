@@ -44,8 +44,8 @@ def test_a_moment_reads_the_dated_measurements_reaching_back_the_observation_win
     assert plan.params["datetime"] == "2022-04-01T00:00:00Z/2022-05-03T23:59:59Z"
     readings = _parse(start_date="2022-05-01", end_date="2022-05-03")
     assert len(readings) == 18
-    assert {r["properties"]["datetime"][:10] for r in readings} == {"2022-04-25", "2022-05-02"}
-    assert all(r["properties"].get("reading_count") is None for r in readings)
+    assert {r["produced"]["datetime"][:10] for r in readings} == {"2022-04-25", "2022-05-02"}
+    assert all("reading_count" not in r["produced"] for r in readings)
 
 
 def test_a_span_averages_each_wells_readings_of_one_parameter_over_it():
@@ -56,10 +56,11 @@ def test_a_span_averages_each_wells_readings_of_one_parameter_over_it():
     raw = [f["properties"] for f in json.loads(_BODY)["features"]
            if f["properties"]["monitoring_location_id"] == "USGS-414035093391801"
            and f["properties"]["parameter_code"] == "62611"]
-    one = next(f["properties"] for f in averaged
-               if f["properties"]["site_no"] == "414035093391801" and f["properties"]["parameter_code"] == "62611")
-    assert one["water_level"] == pytest.approx(sum(float(r["value"]) for r in raw) / len(raw))
-    assert (one["reading_count"], one["datetime"], one["period_end"]) == (2, "2022-04-01", "2022-06-30")
+    one = next(f for f in averaged if f["produced"]["site_no"] == "414035093391801"
+               and f["properties"]["parameter_code"] == "62611")
+    assert one["produced"]["water_level"] == pytest.approx(sum(float(r["value"]) for r in raw) / len(raw))
+    assert (one["produced"]["reading_count"], one["produced"]["datetime"], one["produced"]["period_end"]) == (
+        2, "2022-04-01", "2022-06-30")
 
 
 def test_a_window_with_one_end_or_backwards_refuses():

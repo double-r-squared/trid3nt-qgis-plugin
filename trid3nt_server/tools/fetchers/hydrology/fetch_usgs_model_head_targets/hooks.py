@@ -1,5 +1,7 @@
 """usgs_model_head_targets hooks: the published water-level targets of a model archive, as points.
 
+A point is the target's row of the table it was written from, whole, with the control file's row as ``control.<field>``.
+
 ``build_request`` refuses a box outside the model grid and GETs the ancillary archive whole; ``parse_response``
 joins the control file's observation table to the tables its targets were written from, keeps the box, and
 refuses an empty answer typed."""
@@ -81,10 +83,8 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
     try:
         with zipfile.ZipFile(io.BytesIO(bodies[0] if bodies else b"")) as zf:
             targets = {row["obsnme"]: row for row in _rows(zf, _OBS_DATA) if row["obgnme"] == _GROUP}
-            sited = [(row["obsnme"], row["bore_id"], row["xcoord"], row["ycoord"], row["layer"], row["wl_date"])
-                     for row in _rows(zf, _WELLS)]
-            sited += [(row["obsnam"], row["bore_id"], row["xcoord"], row["ycoord"], row["layer"], row["EOM_date"])
-                      for row in _rows(zf, _NWIS)]
+            sited = [(row["obsnme"], row["wl_date"], row) for row in _rows(zf, _WELLS)]
+            sited += [(row["obsnam"], row["EOM_date"], row) for row in _rows(zf, _NWIS)]
     except (zipfile.BadZipFile, KeyError, UnicodeDecodeError, csv.Error) as exc:
         raise router_upstream_error(sc, f"the archive does not hold the target tables it publishes: {exc}")
     placed = [row for row in sited if row[0] in targets]
@@ -93,10 +93,10 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
         raise router_upstream_error(sc, f"{len(missing)} targets of the control file are sited in neither table "
                                         f"it was written from: {sorted(missing)[:5]}")
     lons, lats = transform(ARCHIVES[_ARCHIVE]["crs"], "EPSG:4326",
-                           [float(row[2]) for row in placed], [float(row[3]) for row in placed])
+                           [float(row[2]["xcoord"]) for row in placed], [float(row[2]["ycoord"]) for row in placed])
     west, south, east, north = (float(v) for v in params["bbox"])
     feats: list[dict[str, Any]] = []
-    for (name, bore, _x, _y, layer, stamp), lon, lat in zip(placed, lons, lats):
+    for (name, stamp, row), lon, lat in zip(placed, lons, lats):
         when = _iso(stamp)
         period = "steady" if when < _TRANSIENT_FROM else "transient"
         if not (west <= lon <= east and south <= lat <= north) or (asked and period != asked):
@@ -105,11 +105,12 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
         feats.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [lon, lat]},
-            "properties": {
-                "site_id": bore, "target": name, "database": name.split("_")[1],
+            "properties": dict(row),
+            "produced": {
+                "site_id": row["bore_id"], "target": name, "database": name.split("_")[1],
                 "value": float(target["obsval"]), "unit": "m", "quantity": "groundwater_head",
-                "vertical_datum": ARCHIVES[_ARCHIVE]["datum"], "datetime": when, "model_layer": int(layer),
-                "weight": float(target["weight"]), "group": target["obgnme"], "period": period,
+                "vertical_datum": ARCHIVES[_ARCHIVE]["datum"], "datetime": when, "period": period,
+                **{f"control.{k}": v for k, v in target.items()},
             },
         })
     if not feats:

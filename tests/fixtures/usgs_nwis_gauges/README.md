@@ -26,3 +26,8 @@ written with pandas `to_csv` and nothing edited:
   41.1354, -95.8805, 41.1394], start_date="2026-11-08", end_date="2026-11-09", parameter="00065")` wrote to the cache,
   copied byte for byte: one site, 06610670 Missouri River at Hwy 370 at Bellevue, Nebr., its 15-min stage series
   (16.66 ft at 2026-11-09T00:15Z) and its zero 936.34 ft NAVD88.
+
+The four `.fgb` layers above were written by the gauge fetch before it kept the whole Site record; on 2026-11-20 three
+columns of each were renamed to the names NWIS publishes them under (`site_name` -> `station_nm`, `gauge_datum_ft` ->
+`alt_va`, `vertical_datum` -> `alt_datum_cd`) and nothing else was edited, so the other 41 Site fields and the
+qualifier columns the fetch now adds are absent from them. On 2026-11-20 the three series columns (`time_series_csv`, `stage_series_csv`, `temp_series_csv`) were rewritten as the fetch now writes them (`discharge_series`, `stage_series`, `temp_series`: JSON of `{datetime, value, cd}` readings) from their own rows, each `cd` empty because those fetches kept no qualifier.

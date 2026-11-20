@@ -145,9 +145,9 @@ def _pick_location(spec: SourceSpec, station: str, candidates: list[dict[str, An
 
 
 def _find_elevation_item(spec: SourceSpec, host: str, catalog_record_paths: list[str],
-                          location_name: str) -> tuple[str, str, str]:
-    """This location's Lake/Reservoir Elevation catalog item: its id, parameter
-    name and unit, off the location's own catalog-record -> catalog-item walk."""
+                          location_name: str) -> dict[str, Any]:
+    """This location's Lake/Reservoir Elevation catalog item: its whole attribute record,
+    off the location's own catalog-record -> catalog-item walk."""
     sc = spec.error_code_prefix
     fetched_items = 0
     for record_path in catalog_record_paths[:_MAX_CATALOG_RECORDS]:
@@ -163,8 +163,7 @@ def _find_elevation_item(spec: SourceSpec, host: str, catalog_record_paths: list
             item = _get_json(spec, f"{host}{item_path}", f"catalog-item {item_path}")
             attrs = (item.get("data") or {}).get("attributes") or {}
             if str(attrs.get("parameterName") or "").strip().lower() == _ELEVATION_PARAMETER:
-                return (str(attrs.get("_id")), str(attrs.get("parameterName") or ""),
-                        str(attrs.get("parameterUnit") or ""))
+                return attrs
     raise router_empty_error(
         sc,
         f"RISE location {location_name!r} carries no Lake/Reservoir Elevation "
@@ -221,8 +220,13 @@ def resolve_parse(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes])
     if not record_paths:
         raise router_empty_error(sc, f"RISE location {name!r} carries no catalog records",
                                   spec.empty_error_suffix)
-    item_id, parameter_name, parameter_unit = _find_elevation_item(spec, host, record_paths, name)
+    item = _find_elevation_item(spec, host, record_paths, name)
+    item_id = str(item.get("_id"))
+    parameter_name = str(item.get("parameterName") or "")
+    parameter_unit = str(item.get("parameterUnit") or "")
     return {
+        "_location": attrs,
+        "_item": item,
         "_item_id": item_id,
         "_station_id": str(attrs.get("_id") or ""),
         "_station_name": name,
@@ -254,7 +258,7 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]
 
 @register_hook("usbr_hydromet.parse_response")
 def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> list[dict[str, Any]]:
-    """One Point feature at the station, its window's readings inline as CSV."""
+    """One Point feature at the station: its RISE location record whole, the elevation item's under ``item.``, and the window's readings inline as JSON."""
     sc = spec.error_code_prefix
     try:
         parsed = json.loads(bodies[0].decode("utf-8"))
@@ -270,6 +274,7 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
             spec.input_error_suffix,
         )
     points: list[tuple[str, float]] = []
+    readings: list[dict[str, Any]] = []
     for row in rows:
         a = row.get("attributes") or {}
         t, v = a.get("dateTime"), a.get("result")
@@ -279,7 +284,9 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
             points.append((str(t), float(v)))
         except (TypeError, ValueError):
             continue
+        readings.append(a)
     points.sort(key=lambda p: p[0])
+    readings.sort(key=lambda a: str(a["dateTime"]))
     if not points:
         raise router_empty_error(
             sc,
@@ -288,18 +295,12 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
             spec.empty_error_suffix,
         )
     values = [v for _t, v in points]
-    csv_body = "\n".join(["iso,value_ft"] + [f"{t},{v}" for t, v in points])
     feature = {
         "type": "Feature",
         "geometry": {"type": "Point", "coordinates": [params["_lon"], params["_lat"]]},
-        "properties": {
-            "station_id": params.get("_station_id", ""),
-            "station_name": params.get("_station_name", ""),
-            "region": params.get("_region", ""),
-            "parameter_name": params.get("_parameter_name", ""),
-            "vertical_datum": params.get("_vertical_datum", ""),
-            "horizontal_datum": params.get("_horizontal_datum", ""),
-            "timezone": params.get("_timezone", ""),
+        "properties": dict(params.get("_location") or {}),
+        "produced": {
+            **{f"item.{k}": v for k, v in (params.get("_item") or {}).items()},
             "forebay_elevation_ft": round(points[-1][1], 3),
             "forebay_elevation_min_ft": round(min(values), 3),
             "forebay_elevation_max_ft": round(max(values), 3),
@@ -307,7 +308,7 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
             "n_timesteps": len(points),
             "time_start": points[0][0],
             "time_end": points[-1][0],
-            "time_series_csv": csv_body,
+            "series": json.dumps(readings),
         },
     }
     return [feature]

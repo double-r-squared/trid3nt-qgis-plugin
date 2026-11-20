@@ -44,6 +44,17 @@ _SITES = {site: _NLDI / f"nwis_{site}_dm_0km.fgb" for site in (
     "02395996", "02395980", "02394820")}
 
 
+@pytest.fixture(autouse=True)
+def _fixtures_are_the_layers_their_fetchers_wrote(monkeypatch):
+    """A recorded layer is the product of the fetcher whose folder holds it, so it reads by that source's map."""
+    from trid3nt_server.render import uri_registry
+
+    made = {"usgs_nwis_gauges": "fetch_usgs_nwis_gauges", "nws_river_forecast": "fetch_nws_river_forecast",
+            "noaa_nwm_streamflow": "fetch_noaa_nwm_streamflow"}
+    monkeypatch.setattr(uri_registry, "producer_of_handle", raising=False,
+                        value=lambda handle: made.get(Path(str(handle)).parent.name))
+
+
 def _around(*points, pad=0.01):
     return mapping(box(*[min(p[0] for p in points) - pad, min(p[1] for p in points) - pad,
                          max(p[0] for p in points) + pad, max(p[1] for p in points) + pad]))
@@ -127,8 +138,8 @@ def test_off_a_river_run_no_gauge_is_tested(asked):
 
 
 def test_a_site_named_off_the_water_is_left_out_of_the_ranking():
-    flow = {"value": Member(field="discharge_cfs", unit="ft3/s"),
-            "series": Member(field="time_series_csv", unit="ft3/s")}
+    flow = {"value": Member(field="discharge_cfs", unit="ft3/s"), "site": Member(field="site_no"),
+            "series": Member(field="discharge_series", time_key="datetime", value_key="value", unit="ft3/s")}
     found = observation(str(_GAUGES), near=_ETOWAH_RELEASE, fields=flow, at="2026-09-21T23:00:00Z",
                         off={"02395000": "is not this reach's"})
     assert found.site_id != "02395000"
@@ -321,10 +332,6 @@ def test_a_handed_gauge_layer_is_read_as_its_fetch_row_states_it(monkeypatch):
     """The Hwy 370 stage layer handed to the level slot is read the way the matched one is: the gage
     height off its stage series at the run's moment, above the zero the site states (936.34 ft NAVD88) - 16.66 ft at
     2026-11-09T00:15Z is 953.00 ft, 290.474 m NAVD88. Handed in, it is the run's own choice: no reach test is put to it."""
-    from trid3nt_server.render import uri_registry
-
-    monkeypatch.setattr(uri_registry, "producer_of_handle", raising=False, value=(
-        lambda handle: "fetch_usgs_nwis_gauges" if handle == str(_HWY_370) else None))
     monkeypatch.setattr(fill, "_validate_supplied", lambda *_a: None)
     env, token = _env(mapping(box(*_MISSOURI_DOMAIN_BOX)), release=_MISSOURI_RELEASE, reach_km=7.0,
                       at="2026-11-09T00:15:00Z")

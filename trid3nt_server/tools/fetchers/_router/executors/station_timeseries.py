@@ -6,9 +6,7 @@ failure never aborts the bbox; every station empty raises the typed ``*_EMPTY``.
 
 from __future__ import annotations
 
-import csv
 import datetime as _dt
-import io
 import json
 import logging
 from typing import Any
@@ -32,13 +30,6 @@ __all__ = [
 ]
 
 
-def _normalize_time(t: Any, mode: str | None) -> Any:
-    """Normalize a timestamp per ``time_normalize``; ``iso8601z`` rewrites only a value carrying a space."""
-    if mode == "iso8601z" and isinstance(t, str) and " " in t:
-        return t.replace(" ", "T") + "Z"
-    return t
-
-
 def _as_date(v: Any) -> Any:
     """Coerce a ``YYYY-MM-DD`` string to a ``date`` so a ``{start:%Y%m%d}`` template can strftime."""
     if isinstance(v, _dt.date):
@@ -48,21 +39,14 @@ def _as_date(v: Any) -> Any:
     except (TypeError, ValueError):
         return v
 
-#: The point-FGB column schema; ``time_series_csv`` carries the inline per-station series.
-_COLUMNS = [
-    "station_id", "station_name", "lon", "lat", "product", "datum",
-    "time_start", "time_end", "n_timesteps",
-    "wl_min_m", "wl_max_m", "wl_mean_m", "time_series_csv",
-]
-
-
 def _points_to_fgb(records: list[dict[str, Any]], rows: list[dict[str, Any]],
                    spec: SourceSpec) -> bytes:
-    """One Point feature per station, its row as the properties."""
+    """One Point feature per station: the catalog's own record where it kept one, else the row, with the row's rest produced."""
     return features_to_fgb_bytes(
         [{"type": "Feature",
           "geometry": {"type": "Point", "coordinates": [rec["lon"], rec["lat"]]},
-          "properties": row} for rec, row in zip(records, rows)],
+          **({"properties": rec["record"], "produced": row} if "record" in rec else {"properties": row})}
+         for rec, row in zip(records, rows)],
         spec,
     )
 
@@ -89,43 +73,36 @@ def stations_to_point_fgb(
     *,
     product: str = "water_level",
 ) -> bytes:
-    """Serialize ``{station_id, station_name, lon, lat, rows}`` records to point-FGB bytes; an
-    all-empty set raises ``*_EMPTY``, never a header-only FGB."""
+    """Serialize ``{station_id, station_name, lon, lat, rows, record}`` records to point-FGB bytes: the catalog's
+    record kept whole, the window's readings as JSON of the source's own reading objects; an all-empty set raises
+    ``*_EMPTY``, never a header-only FGB."""
     import numpy as np
 
+    per = (spec.ingest or {}).get("per_station") or {}
+    time_key, value_key = per.get("time_key", "t"), per.get("value_key", "v")
+
     datum = spec.normalize.datum or "MLLW"
-    time_norm = ((spec.ingest or {}).get("per_station") or {}).get("time_normalize")
     rows_out: list[dict[str, Any]] = []
+    kept: list[dict[str, Any]] = []
     for rec in records:
         series = rec.get("rows") or []
         if not series:
             continue
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-        values: list[float] = []
-        norm_ts: list[Any] = []
-        for entry in series:
-            t = _normalize_time(entry["t"], time_norm)
-            v = entry["v"]
-            writer.writerow([t, f"{v:.6f}"])
-            values.append(v)
-            norm_ts.append(t)
-        ts_csv = buf.getvalue()
+        values = [float(r[value_key]) for r in series if _number(r.get(value_key)) is not None]
+        stamps = [str(r[time_key]) for r in series]
         rows_out.append({
-            "station_id": rec["station_id"],
-            "station_name": rec.get("station_name"),
-            "lon": rec["lon"],
-            "lat": rec["lat"],
             "product": product,
             "datum": datum,
-            "time_start": norm_ts[0],
-            "time_end": norm_ts[-1],
+            "time_start": stamps[0],
+            "time_end": stamps[-1],
             "n_timesteps": len(values),
-            "wl_min_m": float(np.nanmin(values)),
-            "wl_max_m": float(np.nanmax(values)),
-            "wl_mean_m": float(np.nanmean(values)),
-            "time_series_csv": ts_csv,
+            "wl_min_m": float(np.nanmin(values)) if values else None,
+            "wl_max_m": float(np.nanmax(values)) if values else None,
+            "wl_mean_m": float(np.nanmean(values)) if values else None,
+            "series": json.dumps(series),
         })
+        kept.append(rec)
+    records = kept
 
     if not rows_out:
         raise router_empty_error(
@@ -134,7 +111,14 @@ def stations_to_point_fgb(
             spec.empty_error_suffix,
         )
 
-    return _points_to_fgb(rows_out, rows_out, spec)
+    return _points_to_fgb(records, rows_out, spec)
+
+
+def _number(raw: Any) -> float | None:
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
 
 
 def _guard_not_staged(spec: SourceSpec, url: str) -> None:
@@ -171,7 +155,7 @@ def _discover_stations(spec: SourceSpec, bbox: tuple[float, float, float, float]
             continue
         if west <= lon <= east and south <= lat <= north:
             out.append({"station_id": str(s.get(id_key)), "station_name": s.get(name_key),
-                        "lon": lon, "lat": lat})
+                        "lon": lon, "lat": lat, "record": s})
     max_stations = spec.gates.max_stations or 50
     return out[:max_stations]
 
@@ -206,14 +190,7 @@ def _fetch_station_series(spec: SourceSpec, station: dict[str, Any], params: dic
     if not raw:
         return []
     time_key = per.get("time_key", "t")
-    value_key = per.get("value_key", "v")
-    out: list[dict[str, Any]] = []
-    for r in raw:
-        try:
-            out.append({"t": r[time_key], "v": float(r[value_key])})
-        except (KeyError, TypeError, ValueError):
-            continue
-    return out
+    return [r for r in raw if isinstance(r, dict) and r.get(time_key) is not None]
 
 
 def fetch_station_records(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:

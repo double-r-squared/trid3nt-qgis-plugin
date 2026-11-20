@@ -338,7 +338,8 @@ def _station_record(sid, lon, lat, values):
         "station_name": f"Station {sid}",
         "lon": lon,
         "lat": lat,
-        "rows": [{"t": f"2026-07-0{i+1}", "v": v} for i, v in enumerate(values)],
+        "record": {"id": sid, "name": f"Station {sid}", "lat": lat, "lng": lon, "state": "FL"},
+        "rows": [{"t": f"2026-07-0{i+1}", "v": str(v), "f": "0,0,0,0"} for i, v in enumerate(values)],
     }
 
 
@@ -351,15 +352,16 @@ def test_stations_to_point_fgb_scalars_and_csv():
     gdf = gpd.read_file(io.BytesIO(data))
     assert len(gdf) == 1
     row = gdf.iloc[0]
-    assert row["station_id"] == "8725520"
+    assert row["id"] == "8725520" and row["state"] == "FL"
     assert row["n_timesteps"] == 3
     assert float(row["wl_min_m"]) == pytest.approx(0.1, abs=1e-6)
     assert float(row["wl_max_m"]) == pytest.approx(0.5, abs=1e-6)
     assert float(row["wl_mean_m"]) == pytest.approx(0.3, abs=1e-6)
-    # inline time_series_csv carries iso,value rows
-    csv_text = row["time_series_csv"]
-    assert "2026-07-01,0.100000" in csv_text
-    assert csv_text.strip().count("\n") == 2  # 3 rows
+    # the series is JSON of the source's own reading objects, every key kept
+    import json
+
+    readings = json.loads(row["series"])
+    assert readings[0] == {"t": "2026-07-01", "v": "0.1", "f": "0,0,0,0"} and len(readings) == 3
 
 
 def test_stations_all_empty_raises_typed_empty():
@@ -378,7 +380,7 @@ def test_fetch_station_records_via_monkeypatch(monkeypatch):
     )
     monkeypatch.setattr(
         station_timeseries, "_fetch_station_series",
-        lambda s, st, p: [{"t": "2026-07-01", "v": 1.0}, {"t": "2026-07-02", "v": 2.0}],
+        lambda s, st, p: [{"t": "2026-07-01", "v": "1.0"}, {"t": "2026-07-02", "v": "2.0"}],
     )
     recs = station_timeseries.fetch_station_records(spec, {"bbox": [-81, 25, -79, 27]})
     assert len(recs) == 1 and len(recs[0]["rows"]) == 2
@@ -831,7 +833,7 @@ def test_a_wqp_well_carries_its_published_depth_through_to_the_layer(monkeypatch
 
     from pathlib import Path
 
-    from trid3nt_server.tools.fetchers._router.executors.vector_fgb import _out_columns
+    from trid3nt_server.tools.fetchers._router.executors.vector_fgb import _out_columns, apply_ingest_transforms
     from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
     from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality import hooks
 
@@ -852,6 +854,7 @@ def test_a_wqp_well_carries_its_published_depth_through_to_the_layer(monkeypatch
     spec = load_spec_from_path(Path(hooks.__file__).with_name("source.yaml"))
     found = hooks.features(spec, {"bbox": [-70.6, 41.6, -70.5, 41.7],
                                   "characteristic": "Boron"}, timeout_s=5.0)
-    depths = [(f["properties"]["depth"], f["properties"]["depth_unit"]) for f in found]
+    depths = [(f["produced"]["depth"], f["produced"]["depth_unit"]) for f in found]
     assert depths == [(75.0, "ft"), (90.0, "ft"), (None, "")]
-    assert {"depth", "depth_unit"} <= set(_out_columns(spec, found))
+    assert {"depth", "depth_unit"} <= set(_out_columns(spec, apply_ingest_transforms(found, spec)))
+    assert found[0]["properties"]["WellDepthMeasure/MeasureValue"] == "75.0"

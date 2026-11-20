@@ -9,6 +9,7 @@ a climatology, so what is read is said on the run journal.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 import math
 from dataclasses import dataclass
@@ -29,7 +30,7 @@ from .series import align
 
 from trid3nt_contracts.coverage import UnitField, Member
 
-from .fields import FieldError, Record
+from .fields import FieldError, Record, produced_by
 
 from .geometry import read_geometry_doc, source_uri
 from .vertical_datum import DatumError, datum_of, onto_frame
@@ -41,24 +42,23 @@ logger = logging.getLogger("trid3nt_server.inputs.observation")
 
 _CODE = "OBSERVATION_INVALID"
 
-#: What a source calls the thing that reported; the journal note needs it to find the number again.
-_SITE_FIELDS = ("site_id", "station_id", "feature_id", "lid", "site_no")
-
 #: How far AHEAD of the asked moment a record may be read when it sampled nothing before
 #: it: one of the record's OWN cadences, so a daily record's same-day reading is that
 #: day's value and a six-minute gauge reaches six minutes on. A record with one
 #: readable stamp states no spacing, so a day is the coarsest cadence.
 _LONE_CADENCE = dt.timedelta(days=1)
 
-#: What a ROW calls the zero its elevation is counted from; a portal federating
-#: programs publishes several, so the layer's own datum is read only where rows state none.
-_DATUM_FIELD = "vertical_datum"
-
 #: How a record no source states a field map for is read: the layer a user hands over names its reading
-#: ``value`` and its window ``time_series_csv``, each in the unit its ``unit`` field states.
+#: ``value`` and its window ``time_series_csv``, each in the unit its ``unit`` field states, and what reported,
+#: what the value is and what it is counted from under ``site_id``, ``site_name``, ``quantity`` and ``vertical_datum``.
 _UNSOURCED: Mapping[str, Member] = {
     "value": Member(field="value", unit=UnitField(field="unit")),
     "series": Member(field="time_series_csv", unit=UnitField(field="unit")),
+    "site": Member(field="site_id"),
+    "site_name": Member(field="site_name"),
+    "quantity": Member(field="quantity"),
+    "datum": Member(field="vertical_datum"),
+    "depth": Member(field="depth", unit=UnitField(field="depth_unit")),
 }
 
 
@@ -149,12 +149,22 @@ def _features(source: Any) -> list[dict[str, Any]]:
     return [doc] if doc.get("properties") is not None else []
 
 
-def _samples(csv_text: str) -> list[tuple[str, float]]:
-    """Every readable ``stamp,value`` row of a station's series, in file order.
-
-    A header and an empty value fail the float read and are skipped."""
+def _samples(text: str, member: Member | None = None) -> list[tuple[str, float]]:
+    """Every readable reading of a station's window, in file order: the source's own reading objects where its
+    member names their keys, else ``stamp,value`` rows (a header and an empty value fail the float read and are skipped)."""
     rows: list[tuple[str, float]] = []
-    for line in str(csv_text or "").splitlines():
+    if member is not None and member.time_key:
+        try:
+            readings = json.loads(str(text or "[]"))
+        except ValueError:
+            return rows
+        for reading in readings if isinstance(readings, list) else ():
+            try:
+                rows.append((str(reading[member.time_key]), float(reading[member.value_key])))
+            except (KeyError, TypeError, ValueError):
+                continue
+        return rows
+    for line in str(text or "").splitlines():
         stamp, _sep, value = line.strip().partition(",")
         try:
             rows.append((stamp, float(value)))
@@ -206,7 +216,7 @@ def _reading(rec: Record, at: Any = None) -> tuple[str | None, float, dt.timedel
     stamped by the source's ``time`` member, and undated where it maps none."""
     window = rec.stated("series")
     if window:
-        rows = _samples(str(window))
+        rows = _samples(str(window), rec.fields["series"])
         found = _pick(rows, at)
         if found is not None:
             return (found[0], found[1], _cadence(rows))
@@ -292,7 +302,7 @@ def observation(source: Any, *, near: Any = None, fields: Mapping[str, Member] |
             "another moment, and a sample outside the window this run is about "
             "is not this run's water. State the value on the call, or ask about "
             "a moment a sample was taken near." + undated)
-    candidates = _on_the_water(within, off or {}, label, measures)
+    candidates = _on_the_water(within, off or {}, label, measures, fields, producer)
     if not candidates:
         raise ObservationError(
             code,
@@ -320,17 +330,17 @@ def observation(source: Any, *, near: Any = None, fields: Mapping[str, Member] |
 
 
 def _on_the_water(candidates: list[Any], off: Mapping[str | None, str], label: str,
-                  measures: str) -> list[Any]:
+                  measures: str, fields: Mapping[str, Member], producer: str) -> list[Any]:
     """The candidates standing on this run's water; every one off it refuses, naming each site and why."""
     if not off:
         return candidates
-    kept = [row for row in candidates if _text(row[1].get("properties") or {}, *_SITE_FIELDS) not in off]
-    left = [row[1].get("properties") or {} for row in candidates if row not in kept]
+    recs = {id(row): _record(row[1].get("properties") or {}, fields, producer, label) for row in candidates}
+    kept = [row for row in candidates if recs[id(row)].site not in off]
+    left = [recs[id(row)] for row in candidates if row not in kept]
     if not left:
         return kept
-    said = "; ".join(f"{_text(props, 'site_name', 'station_name') or 'an unnamed site'} "
-                     f"({_text(props, *_SITE_FIELDS) or 'no site id'}) {off[_text(props, *_SITE_FIELDS)]}"
-                     for props in left)
+    said = "; ".join(f"{_stated_as(rec, 'site_name') or 'an unnamed site'} "
+                     f"({rec.site or 'no site id'}) {off[rec.site]}" for rec in left)
     if candidates and not kept:
         raise ObservationError(
             "OBSERVATION_OFF_THE_REACH",
@@ -345,18 +355,48 @@ def _on_the_water(candidates: list[Any], off: Mapping[str | None, str], label: s
 def sites(source: Any) -> list[tuple[str | None, str | None, float | None, float | None, str | None, int | None]]:
     """Each site a record reports at: its id, its name, where it stands in lon/lat, its USGS site number
     where the record is NWIS's own (``site_no``) and the NHDPlus COMID where the record's id IS one
-    (a National Water Model reach, ``feature_id``); ``None`` for what a record does not state."""
-    return [(_text(props, *_SITE_FIELDS), _text(props, "site_name", "station_name"), *_site(feature),
-             usgs.strip() if usgs and usgs.strip().isdigit() else None,
-             int(reach) if reach and reach.strip().isdigit() else None)
-            for feature in _features(source)
-            for props in (feature.get("properties") or {},)
-            for usgs, reach in ((_text(props, "site_no"), _text(props, "feature_id")),)]
+    (a National Water Model reach, ``feature_id``); ``None`` for what a record does not state.
+
+    A record reads its id and name by the map of the source that produced it."""
+    producer, fields = produced_by(source) or ("", _UNSOURCED)
+    rows = []
+    for feature in _features(source):
+        props = feature.get("properties") or {}
+        rec = _record(props, fields, producer, "the record")
+        usgs, reach = _text(props, "site_no"), _text(props, "feature_id")
+        rows.append((rec.site, _stated_as(rec, "site_name"), *_site(feature),
+                     usgs.strip() if usgs and usgs.strip().isdigit() else None,
+                     int(reach) if reach and reach.strip().isdigit() else None))
+    return rows
 
 
 def _record(props: Mapping[str, Any], fields: Mapping[str, Member], producer: str,
             label: str) -> Record:
-    return Record(props, fields, source=producer or label, site=_text(props, *_SITE_FIELDS))
+    rec = Record(props, fields, source=producer or label)
+    rec.site = _stated_as(rec, "site")
+    return rec
+
+
+def _stated_as(rec: Record, member: str) -> str | None:
+    """A member's text off the record, ``None`` where the source maps none or the record leaves it empty."""
+    if not rec.maps(member):
+        return None
+    try:
+        found = rec.read(member)
+    except FieldError as exc:
+        if exc.error_code == "FIELD_EMPTY":
+            return None
+        raise ObservationError(exc.error_code, str(exc)) from exc
+    return str(found).strip() or None
+
+
+def _depth(rec: Record) -> tuple[float | None, str | None]:
+    """How far below the land surface the record's measuring interval ends, and the unit it is counted in."""
+    stated, unit = rec.stated("depth"), rec.unit("depth")
+    try:
+        return (float(stated) if stated is not None else None), unit
+    except (TypeError, ValueError):
+        return None, unit
 
 
 def _found(source: Any, feature: Mapping[str, Any], sampled: str | None, raw: float,
@@ -369,28 +409,24 @@ def _found(source: Any, feature: Mapping[str, Any], sampled: str | None, raw: fl
     zero = _gauge_zero(rec, units, label, measures)
     value = (convert(raw + zero, units, to_units) if to_units is not None
              else float(raw) + zero)
-    datum, shift, datum_note = _onto_datum(source, props, to_datum, offset, label)
+    datum, shift, datum_note = _onto_datum(source, rec, to_datum, offset, label)
     reported = props.get("distance_km")
     lon, lat = _site(feature)
     asked = _moment(at)
-    depth = props.get("depth")
-    try:
-        depth = float(depth) if depth is not None else None
-    except (TypeError, ValueError):
-        depth = None
+    depth, depth_units = _depth(rec)
     return Observation(
         value=float(value) + shift,
-        lon=lon, lat=lat, quantity=_text(props, "quantity"),
+        lon=lon, lat=lat, quantity=_stated_as(rec, "quantity"),
         units=str(to_units) if to_units is not None else (
             str(units) if units is not None else None),
-        site_id=_text(props, *_SITE_FIELDS),
-        site_name=_text(props, "site_name", "station_name"),
+        site_id=rec.site,
+        site_name=_stated_as(rec, "site_name"),
         sampled=sampled,
         distance_km=float(reported) if reported is not None else (
             distance_km if distance_km != float("inf") else None),
         datum=datum, datum_note=datum_note,
         asked=None if asked is None else asked.isoformat(),
-        depth=depth, depth_units=_text(props, "depth_unit"),
+        depth=depth, depth_units=depth_units,
         accuracy=_accuracy(rec, to_units) if accuracy else None,
         series=_series(rec, rec.unit("series") or units,
                        to_units, shift + convert(zero, units, to_units)
@@ -412,7 +448,7 @@ def _series(rec: Record, units: Any,
 
     It rides the SAME shift as the value; ``None`` for a single reading. A record with
     no unit refuses: 2000 ft3/s read as 2000 m3/s is a different river."""
-    rows = _samples(str(rec.stated("series") or ""))
+    rows = _samples(str(rec.stated("series") or ""), rec.fields.get("series"))
     if len(rows) < 2:
         return None
     if to_units is not None and not units:
@@ -495,15 +531,15 @@ def _covers_the_run(rows: list[tuple[str, float]], at: Any,
         "window loosened, which takes the record as a stand-in and says so.")
 
 
-def _onto_datum(source: Any, props: Mapping[str, Any], to_datum: Any,
+def _onto_datum(source: Any, rec: Record, to_datum: Any,
                 offset: Any, label: str) -> tuple[str | None, float, str]:
     """This reading on the datum the slot reads, and what the shift cost.
 
     A slot naming no datum is not asking for an elevation: nothing is checked or shifted, and the reading's own zero is kept."""
     if to_datum is None:
-        return (_text(props, _DATUM_FIELD), 0.0, "")
-    on = {"vertical_datum": props.get(_DATUM_FIELD) or datum_of(source),
-          "name": _text(props, *_SITE_FIELDS) or label}
+        return (_stated_as(rec, "datum"), 0.0, "")
+    on = {"vertical_datum": _stated_as(rec, "datum") or datum_of(source),
+          "name": rec.site or label}
     try:
         aligned = onto_frame(on, to_datum, offset=offset,
                              code_prefix="OBSERVATION_")

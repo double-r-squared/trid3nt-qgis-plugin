@@ -398,7 +398,10 @@ adds only what it produces. The vector writer (`_router/executors/vector_fgb.py`
 `apply_ingest_transforms`) flattens each record - a nested object to dotted names,
 a list to JSON text - and writes the hook's `produced` dict beside it; a produced
 name the record already carries refuses `<PREFIX>_FIELD_COLLISION`, the source's
-field keeping its name. A column-mapped source still projects its map.
+field keeping its name. A column-mapped source still projects its map. A series
+gathered per station (NWIS, CO-OPS, Great Lakes, USBR RISE, NDBC, NWS forecast, GTSM)
+is JSON text of the source's own reading objects, every key kept; a gap the source
+writes as a sentinel is null in the reading.
 
 Code reads a record by MEMBERS, never by a literal field name. A source states its
 `fields:` in its `source.yaml` (`Member`, `contracts/trid3nt_contracts/coverage.py`):
@@ -408,8 +411,10 @@ each member is the record's own `field` (a dotted name reads a nested one), a
 value read); every form but a plain field carries the `cite` it was read from, and
 every numeric member states its `unit`, literal or `{field: ...}` off the record.
 The vocabulary is closed (`MEMBERS`): `value`, `series`, `time`, `above`,
-`above_accuracy`, `accuracy`, and the sea state's `height`, `period`,
-`from_direction`, each naming the window it is reported over. A coverage row
+`above_accuracy`, `accuracy`, what reported (`site`, `site_name`), what the value is
+(`quantity`) and is counted from (`datum`), a well's `depth`, and the sea state's
+`height`, `period`, `from_direction`, each naming the window it is reported over. A
+window member holding JSON names the reading's keys (`time_key`, `value_key`). A coverage row
 restates only the members that differ for its class and, once loaded, carries its
 source's map with its own over it.
 
@@ -421,9 +426,11 @@ field empty on the record `FIELD_EMPTY`, a code the table holds no row for
 `FIELD_UNTABLED` - each naming the source, the member and the record's site. The
 fill hands a record slot the matched row's map and its source (`fields=`,
 `producer=`); observation, rain and wave read their members through it, and
-observation reads `accuracy` only where its slot asks. A layer no registered
-source produced reads by its ingestion's stated convention (observation: `value`
-and `time_series_csv` in the record's `unit`; rain: `times` and `precip_mm`); the
+observation reads `accuracy` only where its slot asks. A source maps no member it does not report: an unmapped `site` is no site, never a
+guessed field. A layer no registered source produced reads by its ingestion's stated
+convention (observation: `value` and `time_series_csv` in the record's `unit`, and
+`site_id`, `site_name`, `quantity`, `vertical_datum`, `depth`; rain: `times` and
+`precip_mm`); the
 bed reads a fetched layer's `value` member through `produced_by`, the producer the
 uri registry recorded.
 

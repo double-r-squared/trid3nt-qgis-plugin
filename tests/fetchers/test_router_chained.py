@@ -194,7 +194,7 @@ def test_river_threshold_enrichment_joins_stages():
                {"gauges/ABCI1": detail,  # detail (more specific) checked first
                 "v1/gauges": {"gauges": [_gauge("ABCI1")]}})
     row = gdf.iloc[0]
-    assert row["action_stage_ft"] == 5.0 and row["major_stage_ft"] == 12.0
+    assert row["flood.categories.action.stage"] == 5.0 and row["flood.categories.major.stage"] == 12.0
 
 
 def _datums(*entries):
@@ -212,9 +212,11 @@ def test_river_series_are_stamp_value_lines_per_quantity_with_the_gauge_zero():
                {"stageflow": _STAGEFLOW, "gauges/ABCI1": {**_datums(("NGVD29", 1.55))},
                 "v1/gauges": {"gauges": [_gauge("ABCI1")]}})
     row = gdf.iloc[0]
-    assert row["fcst_stage_series"].splitlines() == ["2026-11-09T20:00:00Z,3.000000", "2026-11-09T21:00:00Z,3.500000"]
-    assert row["fcst_flow_series"].splitlines() == ["2026-11-09T20:00:00Z,1.500000"]
-    assert row["obs_stage_series"].splitlines() == ["2026-11-09T19:00:00Z,2.500000"]
+    # NWPS's own readings, its -999 gap sentinel read as null; the stage and the flow are two keys of one reading.
+    assert json.loads(row["fcst_series"]) == [
+        {"validTime": "2026-11-09T20:00:00Z", "primary": 3.0, "secondary": 1.5},
+        {"validTime": "2026-11-09T21:00:00Z", "primary": 3.5, "secondary": None}]
+    assert json.loads(row["obs_series"]) == [{"validTime": "2026-11-09T19:00:00Z", "primary": 2.5, "secondary": None}]
     assert row["gauge_datum_ft"] == 1.55 and row["vertical_datum"] == "NGVD29"
 
 
@@ -234,7 +236,7 @@ def test_river_gauge_id_detail_mode():
     gdf = _run("fetch_nws_river_forecast", {"gauge_id": "CIDI4"},
                {"nwps/v1/gauges/CIDI4": detail})
     assert len(gdf) == 1
-    assert gdf.iloc[0]["lid"] == "CIDI4" and gdf.iloc[0]["action_stage_ft"] == 2.5
+    assert gdf.iloc[0]["lid"] == "CIDI4" and gdf.iloc[0]["flood.categories.action.stage"] == 2.5
 
 
 
@@ -461,4 +463,4 @@ def _err_http(name, raw, url_map):
 
 def test_every_row_reads_its_moment_by_the_time_member_its_source_maps():
     rows = _spec("fetch_nws_river_forecast").coverage
-    assert {row.fields["time"].field for row in rows} == {"fcst_valid_time"}
+    assert {row.fields["time"].field for row in rows} == {"status.forecast.validTime"}

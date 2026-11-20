@@ -119,7 +119,7 @@ def _query_params(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
 def delegate(
     spec: SourceSpec, params: dict[str, Any], *, timeout_s: float
 ) -> list[dict[str, Any]]:
-    """Fetch the filtered marks, clip to the bbox, stamp the WSE quantity per mark."""
+    """Fetch the filtered marks, clip to the bbox: each mark is the STN record whole, with the WSE quantity stamped beside it."""
     from pygeohydro import STNFloodEventData
 
     sc = spec.error_code_prefix
@@ -145,30 +145,10 @@ def delegate(
             {
                 "type": "Feature",
                 "geometry": {"type": "Point", "coordinates": [lon, lat]},
-                "properties": {
-                    "hwm_id": r.get("hwm_id"),
-                    "site_no": str(r.get("site_no") or ""),
-                    # QUANTITY STAMP: elev_ft is a WATER-SURFACE ELEVATION (above
-                    # the stated vertical_datum), NOT a depth above ground.
-                    "quantity": "water_surface_elevation",
-                    "elev_ft": _f(r.get("elev_ft")),
-                    "height_above_gnd": _f(r.get("height_above_gnd")),
-                    "vertical_datum": str(r.get("verticalDatumName") or "") or None,
-                    "horizontal_datum": str(r.get("horizontalDatumName") or "") or None,
-                    "quality": str(r.get("hwmQualityName") or "") or None,
-                    "quality_id": r.get("hwm_quality_id"),
-                    "hwm_type": str(r.get("hwmTypeName") or "") or None,
-                    "hwm_type_id": r.get("hwm_type_id"),
-                    "hwm_environment": str(r.get("hwm_environment") or "") or None,
-                    "event": str(r.get("eventName") or "") or None,
-                    "event_id": r.get("event_id"),
-                    "state": str(r.get("stateName") or "") or None,
-                    "county": str(r.get("countyName") or "") or None,
-                    "waterbody": str(r.get("waterbody") or "") or None,
-                    "survey_date": str(r.get("survey_date") or "") or None,
-                    "stillwater": _f(r.get("stillwater")),
-                    "hwm_label": str(r.get("hwm_label") or "") or None,
-                },
+                "properties": dict(r),
+                # QUANTITY STAMP: elev_ft is a WATER-SURFACE ELEVATION (above the stated
+                # vertical datum), NOT a depth above ground.
+                "produced": {"quantity": "water_surface_elevation"},
             }
         )
 
@@ -208,9 +188,9 @@ def _records_from_fgb(data: bytes) -> list[dict[str, Any]]:
     for _, row in gdf.iterrows():
         recs.append(
             {
-                "quality": row.get("quality"),
-                "hwm_type": row.get("hwm_type"),
-                "vertical_datum": row.get("vertical_datum"),
+                "quality": row.get("hwmQualityName"),
+                "hwm_type": row.get("hwmTypeName"),
+                "vertical_datum": row.get("verticalDatumName"),
             }
         )
     return recs

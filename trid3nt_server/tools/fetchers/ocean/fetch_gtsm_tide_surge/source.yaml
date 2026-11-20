@@ -1,6 +1,6 @@
 # Deltares GTSM global tide and surge, a library_delegate vector: cdsapi owns the socket.
 # CDS retrieve -> ZIP -> NetCDF -> bbox subset -> one Point per gauge carrying an inline
-# time_series_csv; the delegate returns GeoJSON features for the FGB writer.
+# series (JSON of time, value readings); the delegate returns GeoJSON features for the FGB writer.
 schema_version: v1
 
 name: fetch_gtsm_tide_surge
@@ -58,8 +58,8 @@ payload_estimate:
   floor_mb: 0.01
 
 fields:
-  value: {field: water_level, unit: m}
-  series: {field: time_series_csv, unit: m}
+  site: {field: gauge_id}
+  series: {field: series, time_key: time, value_key: value, unit: m}
 coverage:
 - data_class: water level series
   kind: modelled
@@ -95,7 +95,7 @@ docstring: |-
   CDS-returned ZIP archive containing monthly NetCDF files, subsets to the
   requested bbox and date range, and serialises one Point feature per gauge
   to a FlatGeobuf with the per-station time series embedded inline as a
-  ``time_series_csv`` attribute. Requires a free Copernicus CDS API key.
+  ``series`` attribute (JSON of time, value readings). Requires a free Copernicus CDS API key.
 
   **When to use:**
 
@@ -135,7 +135,7 @@ docstring: |-
   FlatGeobuf, Point geometry (EPSG:4326), one feature per GTSM gauge.
   Feature attributes: ``gauge_id``, ``lon``, ``lat``, ``time_start``,
   ``time_end``, ``n_timesteps``, ``wl_min_m`` / ``wl_max_m`` / ``wl_mean_m``
-  (m), ``output``, ``time_series_csv`` (``"iso,value"`` CSV lines).
+  (m), ``output``, ``series`` (JSON of ``{time, value}`` readings).
   ``layer_type="vector"``, ``role="primary"``, ``units="m"``.
 
   Raises: ``GTSMMissingKeyError`` (no key), ``GTSMAuthError`` (bad key),

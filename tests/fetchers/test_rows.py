@@ -116,12 +116,12 @@ def test_the_gauge_network_states_each_member_on_its_own_row():
     rows = {row.data_class: row for row in load_spec_from_path(
         _ROOT / "hydrology/fetch_usgs_nwis_gauges/source.yaml").coverage}
     flow = rows["discharge series"].fields
-    assert (flow["series"].field, flow["series"].unit) == ("time_series_csv", "ft3/s")
+    assert (flow["series"].field, flow["series"].unit) == ("discharge_series", "ft3/s")
     stage = rows["water level series"].fields
-    assert (stage["series"].field, stage["series"].unit) == ("stage_series_csv", "ft")
+    assert (stage["series"].field, stage["series"].unit) == ("stage_series", "ft")
     # a gage height is a height above the gauge's OWN zero, and the row maps the
     # field carrying that zero's elevation.
-    assert (stage["above"].field, stage["above"].unit) == ("gauge_datum_ft", "ft")
+    assert (stage["above"].field, stage["above"].unit) == ("alt_va", "ft")
 
 
 def test_a_lake_row_covers_its_lake_and_not_the_open_coast():

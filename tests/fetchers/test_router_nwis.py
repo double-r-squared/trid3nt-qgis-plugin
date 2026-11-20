@@ -9,6 +9,7 @@ Plus the spatial-selector and temporal-window edge matrix."""
 from __future__ import annotations
 
 import datetime as dt
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -75,6 +76,11 @@ def _read(spec, calls, **params):
     return nwis_hooks.read(spec, {"_mode": "instantaneous", **params}, timeout_s=5.0)
 
 
+def _flat(feature):
+    """A feature as the writer lays it out: the site record with what the read produced beside it."""
+    return {**feature["properties"], **feature["produced"]}
+
+
 def test_nwis_registered_and_spec_served(spec):
     from trid3nt_server.tools import TOOL_REGISTRY
 
@@ -96,15 +102,16 @@ def test_the_read_carries_the_gauge_s_own_zero(spec, nwis_calls):
     ])
     feats = _read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1])
     assert len(feats) == 2
-    assert set(feats[0]["properties"]) == {
-        "site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c",
-        "reading_dt", "gauge_datum_ft", "vertical_datum"}
-    by = {f["properties"]["site_no"]: f["properties"] for f in feats}
+    assert set(feats[0]["properties"]) == set(_SITE_FRAME.columns)
+    assert set(feats[0]["produced"]) == {
+        "discharge_cfs", "gage_height_ft", "water_temp_c", "discharge_cd", "gage_height_cd", "water_temp_cd",
+        "reading_dt"}
+    by = {f["properties"]["site_no"]: _flat(f) for f in feats}
     assert by["01646500"]["discharge_cfs"] == 1200.0 and by["01646500"]["gage_height_ft"] == 3.4
-    assert by["01646500"]["gauge_datum_ft"] == 37.20
-    assert by["01646500"]["vertical_datum"] == "NAVD88"
+    assert by["01646500"]["alt_va"] == 37.20
+    assert by["01646500"]["alt_datum_cd"] == "NAVD88"
     # a site that publishes no zero states none rather than a guessed one
-    assert by["01638500"]["gauge_datum_ft"] is None
+    assert by["01638500"]["alt_va"] is None
 
 
 def test_the_window_read_publishes_the_stage_series_beside_the_discharge(spec, nwis_calls):
@@ -114,16 +121,15 @@ def test_the_window_read_publishes_the_stage_series_beside_the_discharge(spec, n
         ("01646500", 2, {"00060": 1200.0, "00065": 3.9}),
     ])
     feats = _read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1], _mode="hydrograph")
-    p = feats[0]["properties"]
-    assert set(p) == {"site_no", "site_name", "discharge_cfs", "gage_height_ft", "water_temp_c",
-                      "reading_dt", "time_series_csv", "stage_series_csv", "temp_series_csv",
-                      "time_start", "time_end", "n_timesteps", "discharge_min_cfs",
-                      "discharge_max_cfs", "discharge_mean_cfs",
-                      "gauge_datum_ft", "vertical_datum"}
+    p = _flat(feats[0])
+    assert set(feats[0]["produced"]) == {
+        "discharge_cfs", "gage_height_ft", "water_temp_c", "discharge_cd", "gage_height_cd", "water_temp_cd",
+        "reading_dt", "discharge_series", "stage_series", "temp_series", "time_start", "time_end",
+        "n_timesteps", "discharge_min_cfs", "discharge_max_cfs", "discharge_mean_cfs"}
     assert p["n_timesteps"] == 3 and p["discharge_min_cfs"] == 1000.0 and p["discharge_max_cfs"] == 1200.0
-    assert p["time_series_csv"].startswith("2024-01-01T00:00:00+0000,1000.000000")
-    assert p["stage_series_csv"].startswith("2024-01-01T00:00:00+0000,3.100000")
-    assert p["gauge_datum_ft"] == 37.20 and p["vertical_datum"] == "NAVD88"
+    assert json.loads(p["discharge_series"])[0] == {"datetime": "2024-01-01T00:00:00+0000", "value": 1000.0, "cd": ""}
+    assert json.loads(p["stage_series"])[0] == {"datetime": "2024-01-01T00:00:00+0000", "value": 3.1, "cd": ""}
+    assert p["alt_va"] == 37.20 and p["alt_datum_cd"] == "NAVD88"
 
 
 def test_the_temperature_code_is_read_into_its_own_column(spec, nwis_calls):
@@ -131,8 +137,7 @@ def test_the_temperature_code_is_read_into_its_own_column(spec, nwis_calls):
     and the reading lands in the column that row names rather than in the
     discharge one it is not measured in."""
     nwis_calls["iv_df"] = _iv_frame([("01646500", 3, {"00010": 18.4})])
-    p = _read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1],
-              parameter="00010")[0]["properties"]
+    p = _flat(_read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1], parameter="00010")[0])
     assert p["water_temp_c"] == 18.4
     assert p["discharge_cfs"] is None and p["gage_height_ft"] is None
     assert p["reading_dt"] == "2024-01-01T03:00:00+0000"
@@ -141,11 +146,10 @@ def test_the_temperature_code_is_read_into_its_own_column(spec, nwis_calls):
 def test_the_temperature_window_is_its_own_series_column(spec, nwis_calls):
     nwis_calls["iv_df"] = _iv_frame([
         ("01646500", 0, {"00010": 18.7}), ("01646500", 1, {"00010": 18.6})])
-    p = _read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1],
-              parameter="00010", _mode="hydrograph")[0]["properties"]
-    assert p["temp_series_csv"].startswith("2024-01-01T00:00:00+0000,18.700000")
+    p = _flat(_read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1], parameter="00010", _mode="hydrograph")[0])
+    assert json.loads(p["temp_series"])[0]["value"] == 18.7
     assert p["water_temp_c"] == 18.6
-    assert p["time_series_csv"] == "" and p["n_timesteps"] == 0
+    assert p["discharge_series"] == "[]" and p["n_timesteps"] == 0
 
 
 def test_a_parameter_this_source_reads_into_no_column_refuses(spec):
@@ -196,7 +200,7 @@ def test_the_window_reaches_the_library_as_the_form_it_was_asked_in(spec, nwis_c
 def test_empty_readings_degrade_to_the_station_locations(spec, nwis_calls):
     feats = _read(spec, nwis_calls, bbox=[-77.9, 38.9, -77.0, 39.1])
     assert {f["properties"]["site_no"] for f in feats} == {"01646500", "01638500"}
-    assert all(f["properties"]["discharge_cfs"] is None for f in feats)
+    assert all(f["produced"]["discharge_cfs"] is None for f in feats)
 
 
 def test_both_services_empty_raises_no_stations(spec, nwis_calls):
@@ -417,18 +421,19 @@ def _recorded():
 def test_a_site_described_stage_is_read_as_the_stage(spec, nwis_calls):
     nwis_calls["iv_df"], nwis_calls["site_df"] = _recorded()
     feats = _read(spec, nwis_calls, bbox=[-122.70, 45.49, -122.65, 45.55], _mode="hydrograph")
-    p = feats[0]["properties"]
-    assert p["site_no"] == "14211720" and p["vertical_datum"] == "NGVD29" and p["gauge_datum_ft"] == 1.55
-    assert p["stage_series_csv"].startswith("2026-11-10T08:00:00+0000,2.960000")
-    assert len(p["stage_series_csv"].splitlines()) == 288 and p["n_timesteps"] == 288
+    p = _flat(feats[0])
+    assert p["site_no"] == "14211720" and p["alt_datum_cd"] == "NGVD29" and p["alt_va"] == 1.55
+    stage = json.loads(p["stage_series"])
+    assert stage[0] == {"datetime": "2026-11-10T08:00:00+0000", "value": 2.96, "cd": "P"}
+    assert len(stage) == 288 and p["n_timesteps"] == 288
 
 
 def test_a_code_reported_under_two_descriptions_is_not_read(spec, nwis_calls):
     iv, site = _recorded()
     iv["00065_second gauge"] = iv["00065_morrison bridge"]
     nwis_calls["iv_df"], nwis_calls["site_df"] = iv, site
-    p = _read(spec, nwis_calls, bbox=[-122.70, 45.49, -122.65, 45.55], _mode="hydrograph")[0]["properties"]
-    assert p["stage_series_csv"] == "" and p["gage_height_ft"] is None
+    p = _flat(_read(spec, nwis_calls, bbox=[-122.70, 45.49, -122.65, 45.55], _mode="hydrograph")[0])
+    assert p["stage_series"] == "[]" and p["gage_height_ft"] is None
 
 
 def _recorded_omaha():
@@ -443,11 +448,11 @@ def test_a_date_pair_holds_the_utc_days_asked_though_nwis_reads_local_days(spec,
     nwis_calls["iv_df"], nwis_calls["site_df"] = _recorded_omaha()
     dates = hooks.HOOK_REGISTRY["usgs_nwis.resolve"](
         spec, {"bbox": [-95.94, 41.19, -95.90, 41.27], "start_date": "2026-11-09", "end_date": "2026-11-09"})
-    feats = {f["properties"]["site_no"]: f["properties"] for f in _read(spec, nwis_calls, **dates)}
+    feats = {f["properties"]["site_no"]: _flat(f) for f in _read(spec, nwis_calls, **dates)}
     assert nwis_calls["iv"]["start"] == "2026-11-08" and nwis_calls["iv"]["end"] == "2026-11-10"
     omaha, hwy92 = feats["06610000"], feats["06610490"]
     assert omaha["time_start"] == "2026-11-09T00:00:00+0000" and omaha["time_end"] == "2026-11-09T23:45:00+0000"
     assert omaha["n_timesteps"] == 96
-    assert "2026-11-09T00:15:00+0000,31400.000000" in omaha["time_series_csv"].splitlines()
-    assert "2026-11-09T00:15:00+0000,15.040000" in hwy92["stage_series_csv"].splitlines()
-    assert hwy92["gauge_datum_ft"] == 945.71 and hwy92["vertical_datum"] == "NAVD88"
+    assert {"datetime": "2026-11-09T00:15:00+0000", "value": 31400.0, "cd": "P"} in json.loads(omaha["discharge_series"])
+    assert {"datetime": "2026-11-09T00:15:00+0000", "value": 15.04, "cd": "P"} in json.loads(hwy92["stage_series"])
+    assert hwy92["alt_va"] == 945.71 and hwy92["alt_datum_cd"] == "NAVD88"

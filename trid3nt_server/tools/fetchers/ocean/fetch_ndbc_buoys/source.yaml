@@ -39,21 +39,6 @@ hooks:
   parse_response: ndbc_buoys.parse_response
   classify_status: ndbc_buoys.classify_status
 
-ingest:
-  properties:
-    - station_id
-    - station_name
-    - owner
-    - wave_height_m
-    - peak_period_s
-    - wave_direction_deg_true
-    - n_timesteps
-    - time_start
-    - time_end
-    - wave_height_series_csv
-    - peak_period_series_csv
-    - wave_direction_series_csv
-
 normalize:
   crs: "EPSG:4326"
   units: m
@@ -75,16 +60,22 @@ cache:
   ttl_class: dynamic-1h
 payload_estimate:
   model: per_station
-  kb_per_station_per_day: 4.0
+  kb_per_station_per_day: 11.0
   overhead_kb: 30.0
   floor_mb: 0.03
 
 fields:
+  site: {field: id}
+  site_name: {field: name}
   value: {field: wave_height_m, unit: m}
-  series: {field: wave_height_series_csv, unit: m}
-  height: {field: wave_height_series_csv, unit: m}
-  period: {field: peak_period_series_csv, unit: s}
-  from_direction: {field: wave_direction_series_csv, unit: degT}
+  series: {field: series, time_key: time, value_key: WVHT, unit: m}
+  height: {field: series, time_key: time, value_key: WVHT, unit: m}
+  period: {field: series, time_key: time, value_key: DPD, unit: s}
+  from_direction: {field: series, time_key: time, value_key: MWD, unit: degT}
+  accuracy:
+    constant: 0.2
+    unit: m
+    cite: "NDBC, What are the sensor reporting, sampling, and accuracy readings? (ndbc.noaa.gov/faq/rsa.shtml): wave height +/- 0.2 m (resolution 0.1 m) in the table of every payload it lists; wave period +/- 1 s and wave direction +/- 10 deg in the same tables."
 coverage:
 -   data_class: wave series
     kind: measured
@@ -159,11 +150,13 @@ docstring: |-
 
   Returns:
       ``LayerURI`` for a FlatGeobuf in EPSG:4326 with one Point feature:
-      ``station_id``, ``station_name``, ``owner``, ``wave_height_m``,
+      the buoy's activestations.xml record under NDBC's own names (``id``, ``name``,
+      ``owner``, ``elev``, ``pgm``, ...), ``wave_height_m``,
       ``peak_period_s``, ``wave_direction_deg_true`` (each the window's latest
       reading), ``n_timesteps``, ``time_start`` / ``time_end`` (ISO-8601 UTC),
-      and ``wave_height_series_csv`` / ``peak_period_series_csv`` /
-      ``wave_direction_series_csv``. ``layer_type="vector"``, ``units="m"``.
+      and ``series``: JSON of the window's stdmet rows under NDBC's column names
+      (WVHT, DPD, MWD, WSPD, PRES, WTMP, ...) with ``time`` the instant each spells,
+      a wave column NDBC left missing null. ``layer_type="vector"``, ``units="m"``.
 
   Rendering: a VECTOR layer renders INLINE on the map automatically.
 

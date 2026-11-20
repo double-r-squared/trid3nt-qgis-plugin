@@ -2,7 +2,8 @@
 
 ``build_request`` resolves the spatial selector -- state or bbox, exactly one, state winning -- and GETs
 the latest-measurements collection, or asked a window the field measurements dated inside it; a primary
-that misses raises a typed no-wells error. The enrich phase joins well metadata and NEVER drops a reading."""
+that misses raises a typed no-wells error. A feature is the measurement as the service published it; the
+enrich phase joins the well's whole monitoring-locations record under ``location.`` and NEVER drops a reading."""
 
 from __future__ import annotations
 
@@ -28,23 +29,6 @@ _LOCATIONS_URL = (
     "https://api.waterdata.usgs.gov/ogcapi/v0/collections/monitoring-locations/items"
 )
 _GW_PARAMETER_CODES = ("72019", "72150", "62610", "62611", "61055")
-_PCODE_LABEL = {
-    "72019": "depth to water (ft below land surface)",
-    "72150": "groundwater level (ft, NAVD88)",
-    "62610": "groundwater elevation (ft, NGVD29)",
-    "62611": "groundwater elevation (ft, NAVD88)",
-    "61055": "water level (ft below measuring point)",
-}
-# WHAT a reading's value IS, by its parameter code: a depth below the land surface
-# (positive down), the water's elevation on the reading's own vertical_datum, or a
-# depth below the well's measuring point, whose height above the land no reading states.
-_PCODE_QUANTITY = {
-    "72019": "water_table_depth",
-    "72150": "groundwater_head",
-    "62610": "groundwater_head",
-    "62611": "groundwater_head",
-    "61055": "depth_below_measuring_point",
-}
 _PAGE_LIMIT = 10000
 _USPS_TO_FIPS = {
     "AL": "01", "AK": "02", "AZ": "04", "AR": "05", "CA": "06", "CO": "08",
@@ -58,11 +42,6 @@ _USPS_TO_FIPS = {
     "WV": "54", "WI": "55", "WY": "56", "PR": "72", "VI": "78", "GU": "66",
     "AS": "60", "MP": "69",
 }
-_OUT_COLUMNS = (
-    "site_no", "site_name", "parameter_code", "parameter_label", "quantity",
-    "water_level", "unit", "vertical_datum", "datetime", "approval_status",
-    "aquifer_code", "well_depth_ft", "reading_count", "period_end",
-)
 
 
 def _resolve_selector(spec: SourceSpec, params: dict[str, Any]) -> tuple[str | None, list[float] | None]:
@@ -176,9 +155,8 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
         if lonlat is None:
             continue
         lon, lat = lonlat
-        props = feat.get("properties") or {}
+        props = dict(feat.get("properties") or {})
         mlid = str(props.get("monitoring_location_id") or "").strip()
-        site_no = mlid.split("-", 1)[1] if "-" in mlid else mlid
         raw_val = props.get("value")
         water_level: float | None = None
         if raw_val not in (None, ""):
@@ -188,20 +166,15 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
                     water_level = fv
             except (TypeError, ValueError):
                 water_level = None
-        pcode = str(props.get("parameter_code") or "").strip() or None
         feats.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [lon, lat]},
-            "properties": {
-                "monitoring_location_id": mlid, "site_no": site_no,
-                "parameter_code": pcode,
-                "parameter_label": _PCODE_LABEL.get(pcode or "", pcode or ""),
-                "quantity": _PCODE_QUANTITY.get(pcode or ""),
+            "properties": props,
+            "produced": {
+                "id": feat.get("id"),
+                "site_no": mlid.split("-", 1)[1] if "-" in mlid else mlid,
                 "water_level": water_level,
-                "unit": str(props.get("unit_of_measure") or "").strip() or None,
-                "vertical_datum": str(props.get("vertical_datum") or "").strip() or None,
                 "datetime": str(props.get("time") or "").strip() or None,
-                "approval_status": str(props.get("approval_status") or "").strip() or None,
             },
         })
     if not feats:
@@ -221,35 +194,33 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
 
 def _averaged(feats: list[dict[str, Any]], params: dict[str, Any]) -> list[dict[str, Any]]:
     """Each site's readings of one parameter over the asked span as ONE reading: their mean, stamped at the
-    span's opening, with how many readings it averages and when the span closes. An unparsed value averages nothing."""
+    span's opening, with how many readings it averages and when the span closes. An unparsed value averages
+    nothing; a field the readings do not all state alike is left empty, as no one reading speaks for the mean."""
     groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
     for feat in feats:
         props = feat["properties"]
-        if props["water_level"] is None:
+        if feat["produced"]["water_level"] is None:
             continue
-        key = (props["monitoring_location_id"], props["parameter_code"], props["unit"], props["vertical_datum"])
+        key = tuple(props.get(k) for k in ("monitoring_location_id", "parameter_code", "unit_of_measure",
+                                           "vertical_datum"))
         groups.setdefault(key, []).append(feat)
     out = []
     for rows in groups.values():
-        props = dict(rows[0]["properties"])
-        props.update(water_level=sum(r["properties"]["water_level"] for r in rows) / len(rows),
-                     datetime=str(params["start_date"])[:10], reading_count=len(rows),
-                     period_end=str(params["end_date"])[:10], approval_status=None
-                     if len({r["properties"]["approval_status"] for r in rows}) > 1 else props["approval_status"])
-        out.append({"type": "Feature", "geometry": rows[0]["geometry"], "properties": props})
+        record = {k: (v if all(r["properties"].get(k) == v for r in rows) else None)
+                  for k, v in rows[0]["properties"].items()}
+        out.append({"type": "Feature", "geometry": rows[0]["geometry"], "properties": record, "produced": {
+            "site_no": rows[0]["produced"]["site_no"],
+            "water_level": sum(r["produced"]["water_level"] for r in rows) / len(rows),
+            "datetime": str(params["start_date"])[:10], "reading_count": len(rows),
+            "period_end": str(params["end_date"])[:10]}})
     return out
 
 
 @_hooks.register_hook("usgs_groundwater_levels.enrich_plan")
 def enrich_plan(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]]) -> list[tuple[str, "_hooks.RequestPlan"]]:
-    """One best-effort monitoring-locations ref for the same scope (well name/aquifer/depth)."""
+    """One best-effort monitoring-locations ref for the same scope, every field of each well."""
     state_fips, bbox = _resolve_selector(spec, params)
-    q = _query(state_fips, bbox, [
-        ("site_type_code", "GW"),
-        ("properties",
-         "monitoring_location_number,monitoring_location_name,national_aquifer_code,"
-         "well_constructed_depth"),
-    ])
+    q = _query(state_fips, bbox, [("site_type_code", "GW")])
     ua = {"User-Agent": spec.auth.user_agent}
     return [("locations", _hooks.RequestPlan(url=_LOCATIONS_URL, params=dict(q), headers=ua))]
 
@@ -263,44 +234,19 @@ def _parse_locations(body: bytes | None) -> dict[str, dict[str, Any]]:
         return {}
     if not isinstance(obj, dict) or obj.get("type") != "FeatureCollection":
         return {}
-    lookup: dict[str, dict[str, Any]] = {}
-    for feat in obj.get("features") or []:
-        if not isinstance(feat, dict):
-            continue
-        mlid = str(feat.get("id") or "").strip()
-        if not mlid:
-            continue
-        props = feat.get("properties") or {}
-        depth = props.get("well_constructed_depth")
-        try:
-            depth_f: float | None = float(depth) if depth not in (None, "") else None
-            if depth_f is not None and not math.isfinite(depth_f):
-                depth_f = None
-        except (TypeError, ValueError):
-            depth_f = None
-        lookup[mlid] = {
-            "site_name": str(props.get("monitoring_location_name") or "").strip(),
-            "aquifer_code": str(props.get("national_aquifer_code") or "").strip() or None,
-            "well_depth_ft": depth_f,
-        }
-    return lookup
+    return {mlid: dict(feat.get("properties") or {}) for feat in obj.get("features") or []
+            if isinstance(feat, dict) and (mlid := str(feat.get("id") or "").strip())}
 
 
 @_hooks.register_hook("usgs_groundwater_levels.enrich_merge")
 def enrich_merge(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]], results: dict[str, Any]) -> list[dict[str, Any]]:
-    """Best-effort join of well name/aquifer/depth onto every reading (never drops a reading)."""
+    """Best-effort join of the well's monitoring-locations record, under ``location.``, onto every reading (never drops a reading)."""
     res = results.get("locations")
     body = getattr(res, "body", None) if res is not None else None
     locations = _parse_locations(body)
     out: list[dict[str, Any]] = []
     for feat in features:
-        props = dict(feat.get("properties") or {})
-        meta = locations.get(props.get("monitoring_location_id", "")) or {}
-        props["site_name"] = meta.get("site_name") or ""
-        props["aquifer_code"] = meta.get("aquifer_code")
-        props["well_depth_ft"] = meta.get("well_depth_ft")
-        out.append({
-            "type": "Feature", "geometry": feat.get("geometry"),
-            "properties": {c: props.get(c) for c in _OUT_COLUMNS},
-        })
+        meta = locations.get(str((feat.get("properties") or {}).get("monitoring_location_id") or "")) or {}
+        out.append({**feat, "produced": {**feat.get("produced", {}),
+                                         **{f"location.{k}": v for k, v in meta.items()}}})
     return out

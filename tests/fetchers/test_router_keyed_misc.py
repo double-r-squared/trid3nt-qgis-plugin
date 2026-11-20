@@ -94,18 +94,17 @@ def test_groundwater_selector_and_no_wells_and_join():
         {"geometry": {"type": "Point", "coordinates": [-98.5, 38.5]},
          "properties": {"monitoring_location_id": "USGS-380", "parameter_code": "72019", "value": "42.1", "unit_of_measure": "ft", "time": "2026-07-01"}}]}).encode()
     feats = _hook("usgs_groundwater_levels.parse_response")(spec, params, [meas])
-    assert feats[0]["properties"]["site_no"] == "380"
-    assert feats[0]["properties"]["parameter_label"] == "depth to water (ft below land surface)"
-    assert feats[0]["properties"]["quantity"] == "water_table_depth"
+    assert feats[0]["produced"]["site_no"] == "380" and feats[0]["produced"]["water_level"] == 42.1
+    assert feats[0]["properties"]["parameter_code"] == "72019" and feats[0]["properties"]["value"] == "42.1"
     empty = _err(_hook("usgs_groundwater_levels.parse_response"), spec, params, [json.dumps({"type": "FeatureCollection", "features": []}).encode()])
     assert empty.error_code == "USGS_GROUNDWATER_NO_WELLS" and empty.retryable is False
     loc = json.dumps({"type": "FeatureCollection", "features": [
         {"id": "USGS-380", "properties": {"monitoring_location_name": "Test Well", "national_aquifer_code": "N100", "well_constructed_depth": "55"}}]}).encode()
     merged = _hook("usgs_groundwater_levels.enrich_merge")(spec, params, feats, {"locations": _Res(loc)})
-    assert merged[0]["properties"]["site_name"] == "Test Well"
-    assert merged[0]["properties"]["aquifer_code"] == "N100"
-    assert merged[0]["properties"]["well_depth_ft"] == 55.0
-    # a failed/absent locations ref leaves names blank but NEVER drops the reading.
+    assert merged[0]["produced"]["location.monitoring_location_name"] == "Test Well"
+    assert merged[0]["produced"]["location.national_aquifer_code"] == "N100"
+    assert merged[0]["produced"]["location.well_constructed_depth"] == "55"
+    # a failed/absent locations ref leaves the well's own record out but NEVER drops the reading.
     kept = _hook("usgs_groundwater_levels.enrich_merge")(spec, params, feats, {})
-    assert len(kept) == 1 and kept[0]["properties"]["site_name"] == ""
-    assert kept[0]["properties"]["quantity"] == "water_table_depth"
+    assert len(kept) == 1 and not any(k.startswith("location.") for k in kept[0]["produced"])
+    assert kept[0]["properties"]["parameter_code"] == "72019"

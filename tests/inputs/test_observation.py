@@ -14,6 +14,8 @@ noon, a six-minute gauge reaches six minutes on and no further."""
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from trid3nt_server.inputs.observation import (
@@ -46,7 +48,9 @@ _UNIT = UnitField(field="unit")
 def _fields(value: str = "value", unit: object = _UNIT, *, series: str = "time_series_csv",
             above: str = "", time: str = "") -> dict:
     """A source's field map as a row states it: the value and its window in one unit, a zero, a moment."""
-    out = {"value": Member(field=value, unit=unit)}
+    out = {"value": Member(field=value, unit=unit), "site": Member(field="site_id"),
+           "site_name": Member(field="site_name"), "quantity": Member(field="quantity"),
+           "datum": Member(field="vertical_datum")}
     if series:
         out["series"] = Member(field=series, unit=unit)
     if above:
@@ -90,7 +94,7 @@ def test_an_unconvertible_pair_refuses_rather_than_passing_the_number() -> None:
 def test_a_station_series_is_read_at_its_last_sample() -> None:
     station = {"type": "Feature",
                "geometry": {"type": "Point", "coordinates": [-122.68, 45.51]},
-               "properties": {"station_id": "9014", "station_name": "Port Huron",
+               "properties": {"site_id": "9014", "site_name": "Port Huron",
                               "time_series_csv":
                                   "2026-09-05T00:00Z,175.10\n"
                                   "2026-09-05T01:00Z,175.14\nbad row\n"}}
@@ -351,10 +355,10 @@ def test_the_gauge_row_says_which_column_carries_a_temperature() -> None:
                if r.data_class == "water quality sample")
     gauge = {"type": "Feature",
              "geometry": {"type": "Point", "coordinates": [-122.67, 45.51]},
-             "properties": {"site_id": "14211720", "water_temp_c": 18.4,
+             "properties": {"site_no": "14211720", "water_temp_c": 18.4,
                             "discharge_cfs": None,
-                            "temp_series_csv": "2026-09-20T02:30Z,18.5\n"
-                                               "2026-09-20T03:30Z,18.4\n"}}
+                            "temp_series": json.dumps([{"datetime": "2026-09-20T02:30Z", "value": 18.5, "cd": "P"},
+                                                       {"datetime": "2026-09-20T03:30Z", "value": 18.4, "cd": "P"}])}}
     found = observation(_fc(gauge), fields=row.fields, to_units="degC",
                         at="2026-09-20T03:30:00Z")
     assert found.value == pytest.approx(18.4)
@@ -397,7 +401,7 @@ def test_a_reading_is_stamped_by_the_time_member_its_source_maps() -> None:
                if r.data_class == "water level series")
     gauge = {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-122.67, 45.51]},
              "properties": {"lid": "PRTO3", "fcst_stage_ft": 6.1, "gauge_datum_ft": 10.0,
-                            "fcst_valid_time": "2026-11-09T18:00:00Z"}}
+                            "status": {"forecast": {"validTime": "2026-11-09T18:00:00Z"}}}}
     found = observation(_fc(gauge), fields=row.fields, at="2026-11-09T19:40:00Z")
     assert found.value == pytest.approx(16.1)
     assert found.sampled == "2026-11-09T18:00:00Z"
@@ -441,8 +445,11 @@ def test_a_usgs_gauge_is_named_by_its_site_no() -> None:
 
     layer = (Path(__file__).resolve().parents[1] / "fixtures" / "usgs_nwis_gauges"
              / "etowah_bbox_2026-09-21.fgb")
-    found = observation(str(layer), near=[-84.978229605, 34.207328998],
-                        fields=_fields("gage_height_ft", "ft", series="stage_series_csv"),
-                        at="2026-09-21T23:00:00Z")
+    from trid3nt_server.tools.fetchers._router import registration
+
+    row = next(r for r in registration.get_spec("fetch_usgs_nwis_gauges").coverage
+               if r.data_class == "water level series")
+    found = observation(str(layer), near=[-84.978229605, 34.207328998], fields=row.fields,
+                        producer="fetch_usgs_nwis_gauges", at="2026-09-21T23:00:00Z")
     assert found.site_name == "ETOWAH RIVER NEAR KINGSTON,GA"
     assert found.site_id == "02395000"

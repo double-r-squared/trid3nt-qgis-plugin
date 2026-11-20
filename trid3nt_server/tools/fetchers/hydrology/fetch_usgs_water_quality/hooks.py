@@ -1,7 +1,8 @@
 """Water Quality Portal: monitoring stations, each with its latest numeric result.
 
 Station locations (``wqp.what_sites``) LEFT-joined with the latest numeric Result per
-site (``wqp.get_results``, resultPhysChem profile, latest by ActivityStartDate). Zero
+site (``wqp.get_results``, resultPhysChem profile, latest by ActivityStartDate). A feature is the station
+record whole, with the latest result's whole row beside it as ``result.<field>``. Zero
 stations is the typed empty, never an empty layer."""
 
 from __future__ import annotations
@@ -48,6 +49,12 @@ def _float_or_none(v: Any) -> float | None:
     return value if math.isfinite(value) else None
 
 
+def _record(rd: dict[str, Any]) -> dict[str, Any]:
+    """One portal row as the service published it: every field under its own name, the frame's hole as null."""
+    return {str(k): (None if v is None or (isinstance(v, float) and math.isnan(v)) else (v.item() if hasattr(v, "item") else v))
+            for k, v in rd.items()}
+
+
 def _latest_results_by_site(res_df: Any) -> dict[str, dict[str, Any]]:
     """Latest NUMERIC result per MonitoringLocationIdentifier: a non-numeric
     ResultMeasureValue is skipped, and a row wins only when its ActivityStartDate is
@@ -82,6 +89,7 @@ def _latest_results_by_site(res_df: Any) -> dict[str, dict[str, Any]]:
             "date": date,
             "fraction": _str_or_none(rd.get("ResultSampleFractionText")) or "",
             "characteristic": _str_or_none(rd.get("CharacteristicName")) or "",
+            "record": _record(rd),
         }
     return latest
 
@@ -165,13 +173,11 @@ def features(spec: SourceSpec, params: dict[str, Any], *,
                 well_depth = _float_or_none(rd.get("WellHoleDepthMeasure/MeasureValue"))
                 well_unit = _str_or_none(rd.get("WellHoleDepthMeasure/MeasureUnitCode"))
             stations[site_id] = {
-                "site_id": site_id,
-                "site_name": _str_or_none(rd.get("MonitoringLocationName")) or "",
-                "site_type": _str_or_none(rd.get("MonitoringLocationTypeName")) or "",
                 "lon": lon,
                 "lat": lat,
                 "depth": well_depth,
                 "depth_unit": well_unit or "",
+                "record": _record(rd),
             }
 
     # 2. Honest typed error if no sites -- never an empty success layer.
@@ -198,23 +204,18 @@ def features(spec: SourceSpec, params: dict[str, Any], *,
         feats.append(
             {"type": "Feature",
              "geometry": {"type": "Point", "coordinates": [loc["lon"], loc["lat"]]},
-             "properties": {
-                    "site_id": site_id,
-                    "site_name": loc["site_name"],
-                    "site_type": loc["site_type"],
-                    "characteristic": res.get("characteristic") or "",
-                    "value": res.get("value"),
-                    "unit": res.get("unit") or "",
-                    "result_date": res.get("date") or "",
-                    "fraction": res.get("fraction") or "",
-                    "depth": loc.get("depth"),
-                    "depth_unit": loc.get("depth_unit") or "",
+             "properties": loc["record"],
+             "produced": {
+                 "value": res.get("value"),
+                 "depth": loc.get("depth"),
+                 "depth_unit": loc.get("depth_unit") or "",
+                 **{f"result.{k}": v for k, v in (res.get("record") or {}).items()},
              }}
         )
     logger.info(
         "wqp: %d site(s); %d carry a latest %s value",
         len(feats),
-        sum(1 for f in feats if f["properties"]["value"] is not None),
+        sum(1 for f in feats if f["produced"]["value"] is not None),
         characteristic,
     )
     return feats

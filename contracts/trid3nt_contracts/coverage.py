@@ -226,13 +226,14 @@ def _in_ring(ring: list[tuple[float, float]], lon: float, lat: float) -> bool:
 #: The names code reads a fetched record by. A source maps each it publishes onto its own field or a cited
 #: number; a member it does not map is one it does not report, and a read of it refuses.
 MEMBERS = ("value", "series", "time", "above", "above_accuracy", "accuracy",
-           "height", "period", "from_direction")
+           "height", "period", "from_direction", "site", "site_name", "quantity", "depth", "datum")
 
 MemberName = Literal["value", "series", "time", "above", "above_accuracy", "accuracy",
-                     "height", "period", "from_direction"]
+                     "height", "period", "from_direction", "site", "site_name", "quantity", "depth",
+                     "datum"]
 
 #: Members holding a number (a series holds numbers), so each states the unit it is counted in.
-NUMERIC_MEMBERS = frozenset(MEMBERS) - {"time"}
+NUMERIC_MEMBERS = frozenset(MEMBERS) - {"time", "site", "site_name", "quantity", "datum"}
 
 #: Members naming a record's window - the source's own text of stamped readings, a sea-state quantity's included.
 SERIES_MEMBERS = frozenset({"series", "height", "period", "from_direction"})
@@ -266,6 +267,10 @@ class Member(ContractModel):
     relative: float | None = Field(default=None, ge=0.0)
     #: The unit the number is counted in: stated here, or a field of the record.
     unit: str | UnitField = ""
+    #: A window member whose field holds JSON text of the source's own reading objects names the keys of
+    #: each reading that carry its instant and its number.
+    time_key: str = ""
+    value_key: str = ""
     cite: str = Field(default="", max_length=600)
 
     @property
@@ -294,12 +299,18 @@ class Member(ContractModel):
             raise ValueError("a plain field carries no cite: the source itself is its origin")
         if ruled and not (isinstance(self.unit, str) and self.unit):
             raise ValueError("a rule states its own unit, never a record's field")
+        if bool(self.time_key) != bool(self.value_key):
+            raise ValueError("a window of reading objects names both keys: the instant's and the number's")
+        if self.time_key and not self.field:
+            raise ValueError("reading keys belong to a field holding the window")
         return self
 
 
 def validate_fields(fields: dict[str, Member]) -> None:
     """A numeric member states its unit: on itself, a field of the record, or each table row's rule."""
     for name, member in fields.items():
+        if member.time_key and name not in SERIES_MEMBERS:
+            raise ValueError(f"fields.{name} names reading keys, which only a window member holds")
         if name not in NUMERIC_MEMBERS or member.unit:
             continue
         if member.table and all(isinstance(row, Rule) for row in member.table.values()):

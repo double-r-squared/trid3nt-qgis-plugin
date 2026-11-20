@@ -27,27 +27,20 @@ hooks:
   envelope: usgs_stn_hwm.envelope
 ingest:
   delegate: {library: pygeohydro, timeout_s: 120}
-  properties:
-  - hwm_id
-  - site_no
-  - quantity
-  - elev_ft
-  - height_above_gnd
-  - vertical_datum
-  - horizontal_datum
-  - quality
-  - quality_id
-  - hwm_type
-  - hwm_type_id
-  - hwm_environment
-  - event
-  - event_id
-  - state
-  - county
-  - waterbody
-  - survey_date
-  - stillwater
-  - hwm_label
+fields:
+  site: {field: hwm_id}
+  site_name: {field: hwm_label}
+  datum: {field: verticalDatumName}
+  quantity: {field: quantity}
+  value: {field: elev_ft, unit: ft}
+  accuracy:
+    field: hwmQualityName
+    table:
+      Excellent: {absolute: 0.05, unit: ft}
+      Good: {absolute: 0.10, unit: ft}
+      Fair: {absolute: 0.20, unit: ft}
+      Poor: {absolute: 0.40, unit: ft}
+    cite: "Koenig and others 2016, USGS TM 3-A24 (Identifying and Preserving High-Water Mark Data), Table 2 p.29: Excellent within +/-0.05 ft, Good +/-0.10 ft, Fair +/-0.20 ft, Poor +/-0.40 ft; Very poor (more than +/-0.40 ft) and Unknown/Historical state no number, so have no row. The hwmQualityName spellings are the manual's names; the STN service answers 403 from this host, so they are not verified against a live answer."
 normalize:
   crs: EPSG:4326
   units: ft (peak elevation; see vertical_datum)
@@ -66,7 +59,7 @@ cache:
 payload_estimate:
   model: per_feature
   features_per_sq_deg: 200.0
-  kb_per_feature: 0.25
+  kb_per_feature: 0.6
   floor_mb: 0.001
 caveats:
 - "model-callable, not matched: a peak mark is one instant's height and not a water level series, so it carries no coverage row"

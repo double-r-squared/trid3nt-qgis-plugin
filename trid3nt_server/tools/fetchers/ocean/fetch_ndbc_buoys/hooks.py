@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime as dt
 import gzip
+import json
 import logging
 import xml.etree.ElementTree as ET
 from typing import Any
@@ -47,9 +48,9 @@ _REALTIME_DAYS = 45
 #: pressure, the air and water temperature) are a meteorological record this
 #: source states no row for and does not carry.
 _PUBLISHED = (
-    ("WVHT", "wave_height_m", "wave_height_series_csv"),
-    ("DPD", "peak_period_s", "peak_period_series_csv"),
-    ("MWD", "wave_direction_deg_true", "wave_direction_series_csv"),
+    ("WVHT", "wave_height_m"),
+    ("DPD", "peak_period_s"),
+    ("MWD", "wave_direction_deg_true"),
 )
 
 #: The values NDBC writes where the instrument reported nothing. A 99, a 999 or
@@ -119,7 +120,8 @@ def resolve_parse(spec: SourceSpec, params: dict[str, Any],
             spec.input_error_suffix,
         )
     attrs = listed[match]
-    return {"_station_id": match,
+    return {"_station": attrs,
+            "_station_id": match,
             "_station_name": str(attrs.get("name") or match),
             "_owner": str(attrs.get("owner") or ""),
             "_lon": float(attrs["lon"]), "_lat": float(attrs["lat"])}
@@ -216,29 +218,28 @@ def _reading(token: str) -> float | None:
 @register_hook("ndbc_buoys.parse_response")
 def parse_response(spec: SourceSpec, params: dict[str, Any],
                    bodies: list[bytes]) -> list[dict[str, Any]]:
-    """One Point feature at the buoy, the window's sea state inline per column."""
+    """One Point feature at the buoy: its listing record whole, and the window's stdmet rows inline as JSON.
+
+    A reading is the row under NDBC's own column names plus ``time`` (the instant its date columns spell); a wave
+    column holding NDBC's missing value is null."""
     sc = spec.error_code_prefix
     opens = _day(spec, params["start_date"]).isoformat()
     closes = _day(spec, params["end_date"]).isoformat()
-    series: dict[str, list[tuple[str, float]]] = {
-        csv: [] for _column, _value, csv in _PUBLISHED}
+    readings: list[dict[str, Any]] = []
     for body in bodies:
         header, rows = _table(spec, body)
-        at = {name: i for i, name in enumerate(header)}
         for fields in rows:
             stamp = _stamp(header, fields)
             if stamp is None or not opens <= stamp[:10] <= closes:
                 continue
-            for column, _value, csv in _PUBLISHED:
-                index = at.get(column)
-                reading = (_reading(fields[index])
-                           if index is not None and index < len(fields) else None)
-                if reading is not None:
-                    series[csv].append((stamp, reading))
-    for rows_of in series.values():
-        rows_of.sort(key=lambda row: row[0])
-    height = series[_PUBLISHED[0][2]]
-    if not height:
+            reading: dict[str, Any] = {"time": stamp, **dict(zip(header, fields))}
+            for column, _value in _PUBLISHED:
+                if column in reading:
+                    reading[column] = _reading(reading[column])
+            readings.append(reading)
+    readings.sort(key=lambda row: row["time"])
+    heights = [r for r in readings if r.get("WVHT") is not None]
+    if not heights:
         raise router_empty_error(
             sc,
             f"buoy {params['_station_id']} reports no wave height between "
@@ -247,23 +248,19 @@ def parse_response(spec: SourceSpec, params: dict[str, Any],
             "state",
             spec.empty_error_suffix,
         )
-    properties: dict[str, Any] = {
-        "station_id": params["_station_id"],
-        "station_name": params.get("_station_name", ""),
-        "owner": params.get("_owner", ""),
-        "n_timesteps": len(height),
-        "time_start": height[0][0],
-        "time_end": height[-1][0],
+    produced: dict[str, Any] = {
+        "n_timesteps": len(heights),
+        "time_start": heights[0]["time"],
+        "time_end": heights[-1]["time"],
     }
-    for column, value, csv in _PUBLISHED:
-        rows_of = series[csv]
-        properties[value] = round(rows_of[-1][1], 3) if rows_of else None
-        properties[csv] = "\n".join(
-            [f"iso,{value}"] + [f"{stamp},{number}" for stamp, number in rows_of])
+    for column, value in _PUBLISHED:
+        last = next((r[column] for r in reversed(readings) if r.get(column) is not None), None)
+        produced[value] = round(last, 3) if last is not None else None
+    produced["series"] = json.dumps(readings)
     return [{"type": "Feature",
              "geometry": {"type": "Point",
                           "coordinates": [params["_lon"], params["_lat"]]},
-             "properties": properties}]
+             "properties": dict(params.get("_station") or {}), "produced": produced}]
 
 
 @register_hook("ndbc_buoys.classify_status")
