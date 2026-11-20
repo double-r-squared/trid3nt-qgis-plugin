@@ -72,13 +72,8 @@ hooks:
   delegate_validate: osm_features.validate
 ingest:
   delegate: {library: osmnx, timeout_s: 180}
-  properties_by_param:
-    param: feature
-    map:
-      roads: [osm_id, name, highway, lanes, maxspeed]
-      pois: [osm_id, osm_type, name, key, value, tags_json]
-      coastline: [osm_id, name, natural]
-      breakwaters: [osm_id, name, man_made]
+  properties:
+  - osm_id
 normalize:
   crs: EPSG:4326
 output:
@@ -129,19 +124,20 @@ docstring: |-
   on the map automatically.
 
   - ``feature="roads"``: ``highway``-tagged ways CLIPPED to the exact bbox, one
-    LineString per in-AOI road segment. Properties: ``osm_id``, ``name``,
-    ``highway``, ``lanes``, ``maxspeed``.
+    LineString per in-AOI road segment. Properties: every OSM tag the way
+    carries, under its OSM name (``highway``, ``name``, ``lanes``,
+    ``maxspeed``, ``surface``, ``tiger:*``, ...), and ``osm_id``.
   - ``feature="pois"``: any ``key=value``-tagged node/way/relation reduced to a
-    Point (way/relation at their bbox centre). Properties: ``osm_id``,
-    ``osm_type``, ``name``, ``key``, ``value``, ``tags_json`` (the full tag
-    dict). Zero matches raises a typed refusal, never an empty-success layer.
+    Point (way/relation at their bbox centre). Properties: every OSM tag the
+    element carries, under its OSM name, and ``osm_id``, ``osm_type``,
+    ``key``, ``value`` (the tag asked for). Zero matches raises a typed refusal, never an empty-success layer.
   - ``feature="coastline"``: ``natural=coastline`` ways returned WHOLE
     (unclipped) so the land-water edge's side is never cut away. Properties:
-    ``osm_id``, ``name``, ``natural``. An inland bbox is a valid 0-feature
+    every OSM tag the way carries, and ``osm_id``. An inland bbox is a valid 0-feature
     answer -- a lake shore is ``natural=water``, not a coastline.
   - ``feature="breakwaters"``: ``man_made=breakwater``/``groyne`` ways returned
     WHOLE (a barrier clipped at the AOI edge would open a gap it does not have).
-    Properties: ``osm_id``, ``name``, ``man_made``. ``man_made=pier`` is
+    Properties: every OSM tag the way carries, and ``osm_id``. ``man_made=pier`` is
     excluded by design -- a pier is the dock being sheltered, not a barrier.
 
   **When to use:**

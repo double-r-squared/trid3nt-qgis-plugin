@@ -63,25 +63,25 @@ def test_parse_response_reads_the_ext_table_into_a_point(spec):
     assert feats[0]["geometry"]["coordinates"] == [-73.782680, 40.390340]
     assert props["key"] == "ext_0097249"
     assert props["locnname"] == "OCNS9906:A:1005"
-    assert props["waterdepth_m"] == 38.0
-    assert props["gravel_pct"] == 1.0
-    assert props["sand_pct"] == 81.0
-    assert props["mud_pct"] == 18.0
-    assert props["clay_pct"] == 6.0
-    assert props["grainsize_phi"] == 3.60
-    assert props["sorting_phi"] == 1.8
+    assert props["waterdepth"] == 38
+    assert props["gravel"] == 1
+    assert props["sand"] == 81
+    assert props["mud"] == 18
+    assert props["clay"] == 6
+    assert props["grainsze"] == 3.60
+    assert props["sorting"] == 1.8
 
 
 def test_the_service_s_sentinels_are_nulled_not_read_as_minus_99(spec):
     feats = us.parse_response(spec, {}, [_zip()])
     props = feats[0]["properties"]
-    # facies/carbonate/etc are dropped from the emitted columns entirely; the
-    # sentinel proof is on an emitted column instead: grainsze/sorting are real
-    # here, so swap one for the sentinel string and prove it nulls.
+    # every column is kept: facies and carbonate state the sentinel in the row, and grainsze/sorting
+    # are real here, so swap them for the sentinel string and prove each nulls.
+    assert props["facies"] is None and props["carbonate"] is None
     sentinel_row = _ROW.replace("3.60,1.8", "-99.00,-99")
     feats2 = us.parse_response(spec, {}, [_zip([sentinel_row])])
-    assert feats2[0]["properties"]["grainsize_phi"] is None
-    assert feats2[0]["properties"]["sorting_phi"] is None
+    assert feats2[0]["properties"]["grainsze"] is None
+    assert feats2[0]["properties"]["sorting"] is None
 
 
 def test_a_dash_sentinel_nulls_a_text_column(spec):

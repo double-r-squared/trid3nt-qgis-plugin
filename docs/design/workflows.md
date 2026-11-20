@@ -406,7 +406,15 @@ name the record already carries refuses `<PREFIX>_FIELD_COLLISION`, the source's
 field keeping its name. A column-mapped source still projects its map. A series
 gathered per station (NWIS, CO-OPS, Great Lakes, USBR RISE, NDBC, NWS forecast, GTSM)
 is JSON text of the source's own reading objects, every key kept; a gap the source
-writes as a sentinel is null in the reading.
+writes as a sentinel is null in the reading. The record-and-table sources follow the
+same rule: OSM elements keep every tag they carry (`osmnx`'s node and member lists,
+which build the geometry, excepted), a source that joins two lists (HANS) keeps each
+record whole under its own prefix (`alert.`, `us_volcano.`), one whose mirrors
+spell the names in different case (NHD) keeps them in one (lower), and a
+declaration list with no geometry (OpenFEMA) is a table, its county aggregation an
+operation over it. Code that reads a source by a field of its own (the GeoClaw Storm
+reads IBTrACS's `ISO_TIME`, `USA_RMW`, `USA_ROCI`; the domain reads NHD's `ftype`) reads
+that field raw.
 
 Code reads a record by MEMBERS, never by a literal field name. A source states its
 `fields:` in its `source.yaml` (`Member`, `contracts/trid3nt_contracts/coverage.py`):

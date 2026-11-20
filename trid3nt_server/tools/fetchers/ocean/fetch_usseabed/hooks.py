@@ -4,7 +4,8 @@ The bbox packager's query is one JSON form field (``metadata``), not a query
 string, and its answer is a ZIP whose ``ext`` table carries the samples --
 neither is a step the declarative surface expresses, so both are here. The
 parse hook reads the ZIP's own lat/lon columns for geometry and nulls the
-service's own NODATA sentinels rather than reading -99 as a measurement."""
+service's own NODATA sentinels rather than reading -99 as a measurement; every other
+column is kept under the service's name."""
 
 from __future__ import annotations
 
@@ -27,22 +28,12 @@ PACKAGE_URL = "https://cmgds.marine.usgs.gov/usseabed/package.php"
 #: named ``us9_<source>.csv``.
 _MEMBER_SUFFIX = "us9_ext.csv"
 
-#: Raw-column -> emitted-column, the record's own values, renamed with the
-#: unit the row states.
-_COLUMN_MAP = {
-    "waterdepth": "waterdepth_m",
-    "gravel": "gravel_pct",
-    "sand": "sand_pct",
-    "mud": "mud_pct",
-    "clay": "clay_pct",
-    "grainsze": "grainsize_phi",
-    "sorting": "sorting_phi",
-}
-_PASSTHROUGH_COLUMNS = ("key", "locnname", "obsvndate")
-
 #: The service's own no-value sentinels, read as no value rather than as -99.
 _NODATA_NUM = {"-99", "-99.0", "-99.00"}
 _NODATA_STR = {"-", ""}
+
+#: The column the geometry is the WKB of; the position is the latitude and longitude columns.
+_GEOMETRY_COLUMN = "geom"
 
 
 def _metadata(bbox: list[float]) -> dict[str, Any]:
@@ -69,31 +60,26 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
     ]
 
 
-def _num(raw: str | None) -> float | None:
+def _cell(raw: str | None) -> str | None:
+    """A cell as the service wrote it, its no-value sentinels and blanks as ``None``."""
     if raw is None:
         return None
     raw = raw.strip()
-    if not raw or raw in _NODATA_NUM:
-        return None
+    return None if raw in _NODATA_NUM or raw in _NODATA_STR else raw
+
+
+def _number(text: str) -> float | None:
     try:
-        value = float(raw)
+        return float(text)
     except ValueError:
         return None
-    return None if value == -99.0 else value
-
-
-def _text(raw: str | None) -> str | None:
-    if raw is None:
-        return None
-    raw = raw.strip()
-    return None if raw in _NODATA_STR else raw
 
 
 @_hooks.register_hook("usseabed.parse_response")
 def parse_response(
     spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
 ) -> list[dict[str, Any]]:
-    """Read the package ZIP's ``ext`` table into Point features, sentinels nulled."""
+    """Read the package ZIP's ``ext`` table into Point features, every column kept, sentinels nulled."""
     sc = spec.error_code_prefix
     raw = bodies[0] if bodies else b""
     if not raw:
@@ -114,18 +100,24 @@ def parse_response(
     except UnicodeDecodeError as exc:
         raise router_upstream_error(sc, f"usSEABED {_MEMBER_SUFFIX} is not UTF-8: {exc}")
 
+    rows = [{k: _cell(v) for k, v in row.items() if k != _GEOMETRY_COLUMN} for row in csv.DictReader(io.StringIO(text))]
+    # A column is a number where every cell it holds is one.
+    for column in rows[0] if rows else ():
+        held = [row[column] for row in rows if row[column] is not None]
+        parsed = [_number(v) for v in held]
+        if held and None not in parsed:
+            whole = all(v.lstrip("+-").isdigit() for v in held)
+            for row in rows:
+                row[column] = None if row[column] is None else (int(row[column]) if whole else float(row[column]))
     out: list[dict[str, Any]] = []
-    for row in csv.DictReader(io.StringIO(text)):
-        lat, lon = _num(row.get("latitude")), _num(row.get("longitude"))
-        if lat is None or lon is None:
+    for row in rows:
+        lat, lon = row.get("latitude"), row.get("longitude")
+        if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
             continue
-        props: dict[str, Any] = {name: _text(row.get(name)) for name in _PASSTHROUGH_COLUMNS}
-        for raw_col, emitted_col in _COLUMN_MAP.items():
-            props[emitted_col] = _num(row.get(raw_col))
         out.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [lon, lat]},
-            "properties": props,
+            "properties": row,
         })
     if not out:
         raise router_empty_error(sc, "usSEABED package carries no ext samples "

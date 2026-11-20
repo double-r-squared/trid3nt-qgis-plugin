@@ -134,9 +134,6 @@ def read_fields(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -
     if ds is None:  # defensive: select_dataset already resolved it
         raise router_input_error(sc, f"unknown dataset {key!r}", spec.input_error_suffix)
 
-    crop_field = ds.get("crop_field")
-    columns = ["geometry"] + ([crop_field] if crop_field else [])
-
     import fsspec
 
     try:
@@ -165,7 +162,7 @@ def read_fields(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -
             qb = gpd.GeoSeries([box(*bbox)], crs="EPSG:4326").to_crs(file_crs)
             pushdown_bbox = tuple(float(v) for v in qb.total_bounds)
 
-        read_kwargs: dict[str, Any] = {"columns": columns}
+        read_kwargs: dict[str, Any] = {}
         if bool(ds.get("pushdown")) and covering:
             read_kwargs["bbox"] = pushdown_bbox
         try:
@@ -192,12 +189,9 @@ def read_fields(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -
         logger.warning("field_boundaries: %d fields exceeds cap %d; truncating", len(gdf), _MAX_FEATURES)
         gdf = gdf.iloc[:_MAX_FEATURES].copy()
 
-    if crop_field and crop_field in gdf.columns:
-        gdf = gdf.rename(columns={crop_field: "crop_name"})
-    elif "crop_name" not in gdf.columns:
-        gdf["crop_name"] = None
-    gdf = gdf[[c for c in ("geometry", "crop_name") if c in gdf.columns]]
-
     if len(gdf) == 0:
         return []
+    # A date-typed column is no JSON: it is kept as the ISO 8601 text of its instant.
+    for column in gdf.columns[gdf.dtypes.astype(str).str.startswith("datetime")]:
+        gdf[column] = gdf[column].map(lambda t: None if t is None or t != t else t.isoformat())
     return json.loads(gdf.to_json(drop_id=True))["features"]

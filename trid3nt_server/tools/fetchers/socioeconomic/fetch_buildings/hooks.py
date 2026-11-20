@@ -1,4 +1,4 @@
-"""buildings: OSM footprints, slim inline.
+"""buildings: OSM footprints, every tag the element carries.
 
 EVERY footprint intersecting the bbox is kept WHOLE: half a building is not a
 smaller building. A bbox with no mapped footprint is a typed empty: there is no
@@ -12,7 +12,7 @@ from trid3nt_contracts.source_spec import SourceSpec
 
 from ..._router.errors import router_empty_error
 from ..._router.hooks import register_hook
-from ..._router.hooks.osm import osm_id_of, overpass_features
+from ..._router.hooks.osm import osm_id_of, overpass_features, tags_of
 
 __all__ = ["features"]
 
@@ -36,8 +36,8 @@ def features(
         out.append({
             "type": "Feature",
             "geometry": mapping(geom),
-            "properties": {"osm_id": osm_id, "osm_type": el_type,
-                           "fid": f"{(el_type or '')[:1]}{osm_id}"},
+            "properties": tags_of(row),
+            "produced": {"osm_id": osm_id, "osm_type": el_type, "fid": f"{(el_type or '')[:1]}{osm_id}"},
         })
     if not out:
         raise router_empty_error(

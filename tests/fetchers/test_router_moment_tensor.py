@@ -31,14 +31,15 @@ def test_every_solution_is_returned_with_both_planes_the_moment_and_the_derived_
     mww = by_code["us_20005j32_mww"]
     assert mww["planes"] == [{"strike": 183.0, "dip": 75.0, "rake": 83.0}, {"strike": 26.0, "dip": 16.0, "rake": 113.0}]
     assert mww["scalar_moment_nm"] == 7.05e20 and mww["centroid"] == {"longitude": -79.97, "latitude": -0.25, "depth_km": 21.5}
-    assert (mww["source"], mww["magnitude"], mww["magnitude_type"]) == ("us", 7.8, "Mww")
+    assert mww["source"] == "us" and mww["properties"]["derived-magnitude-type"] == "Mww"
+    assert float(mww["properties"]["derived-magnitude"]) == 7.8
 
 
 def test_the_centroid_is_the_derived_origin_never_the_hypocentre():
     kam = _record("kamchatka_2025")["solutions"][0]
 
     assert kam["centroid"] == {"longitude": 159.5904, "latitude": 52.2496, "depth_km": 21.5}
-    assert kam["scalar_moment_nm"] == 2.22e22 and kam["duration_s"] == 225.0
+    assert kam["scalar_moment_nm"] == 2.22e22 and float(kam["properties"]["sourcetime-duration"]) == 225.0
 
 
 def test_a_product_without_a_derived_origin_carries_no_centroid_and_one_without_a_moment_refuses():

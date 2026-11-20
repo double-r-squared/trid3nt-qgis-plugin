@@ -13,7 +13,7 @@ from trid3nt_contracts.source_spec import SourceSpec
 
 from ..._router.errors import router_input_error
 from ..._router.hooks import register_hook
-from ..._router.hooks.osm import clip_to_bbox, osm_id_of, overpass_features
+from ..._router.hooks.osm import clip_to_bbox, osm_id_of, overpass_features, tags_of
 
 __all__ = ["delegate", "validate"]
 
@@ -104,15 +104,11 @@ def delegate(
     bbox = tuple(float(v) for v in params["bbox"])
     out: list[dict[str, Any]] = []
     for idx, row in gdf.iterrows():
-        props = {
-            "osm_id": osm_id_of(idx),
-            "name": row.get("name"),
-            "waterway": row.get("waterway"),
-        }
         for seg in clip_to_bbox(row.geometry, bbox):
             out.append({
                 "type": "Feature",
                 "geometry": {"type": "LineString", "coordinates": seg},
-                "properties": dict(props),
+                "properties": tags_of(row),
+                "produced": {"osm_id": osm_id_of(idx)},
             })
     return out

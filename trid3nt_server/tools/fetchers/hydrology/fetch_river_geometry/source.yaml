@@ -141,4 +141,5 @@ docstring: |-
   cache bucket (``s3://trid3nt-cache/cache/static-30d/river_geometry/<key>.fgb``).
   ``layer_type="vector"``, ``role="input"``. The FlatGeobuf renders inline on
   the map via the GeoJSON path (``add_loaded_layer``). Properties per feature:
-  ``osm_id`` (int), ``name`` (str | None), ``waterway`` (str).
+  every OSM tag the way carries under its OSM name (``waterway``, ``name``,
+  ``width``, ...) and ``osm_id`` (int).

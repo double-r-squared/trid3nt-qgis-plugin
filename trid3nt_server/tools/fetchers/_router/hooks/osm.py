@@ -20,7 +20,7 @@ from ..errors import router_upstream_error
 
 logger = logging.getLogger("trid3nt_server.tools.fetchers._router.hooks.osm")
 
-__all__ = ["overpass_features", "osm_id_of", "clip_to_bbox"]
+__all__ = ["overpass_features", "osm_id_of", "clip_to_bbox", "tags_of"]
 
 _settings_lock = threading.Lock()
 
@@ -110,6 +110,17 @@ def overpass_features(
 
 def osm_id_of(index_value: Any) -> int:
     return int(index_value[1] if isinstance(index_value, tuple) else index_value)
+
+
+#: Columns OSMnx adds that are not OSM tags: the geometry and the node and member lists it is built from.
+_NON_TAG_COLUMNS: frozenset[str] = frozenset({"geometry", "nodes", "ways", "element"})
+
+
+def tags_of(row: Any) -> dict[str, str]:
+    """The element's own tags under the names OSM publishes them, a tag it does not carry absent."""
+    import pandas as pd
+
+    return {str(k): str(v) for k, v in row.items() if k not in _NON_TAG_COLUMNS and not pd.isna(v)}
 
 
 def clip_to_bbox(geom: Any, bbox: tuple[float, float, float, float]) -> list[list[list[float]]]:

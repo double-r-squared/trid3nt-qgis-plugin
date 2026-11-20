@@ -76,10 +76,12 @@ docstring: |-
       event_id: the ComCat event id, such as ``us6000qw60``.
 
   Returns:
-      a JSON-compatible dict with ``event_id`` and ``solutions``, each with ``code``,
-      ``source``, ``magnitude``, ``magnitude_type``, ``scalar_moment_nm``, ``centroid``
-      (``longitude``, ``latitude``, ``depth_km``, or null), ``planes`` (two of ``strike``,
-      ``dip``, ``rake``), ``duration_s`` and ``updated_ms``.
+      a JSON-compatible dict with ``event_id`` and ``solutions``, each the ComCat
+      moment-tensor product whole under ComCat's names (``code``, ``source``, ``type``, ``status``,
+      ``updateTime``, ``preferredWeight``, ``properties`` - every ``derived-*``, ``nodal-plane-*``,
+      ``scalar-moment`` and ``sourcetime-*`` property as published - and ``contents``) and beside
+      them ``scalar_moment_nm``, ``centroid`` (``longitude``, ``latitude``, ``depth_km``, or null)
+      and ``planes`` (two of ``strike``, ``dip``, ``rake``).
 
   Cross-tool dependencies:
       - Composes WITH: the GeoClaw ``MomentTensorFault`` composite.

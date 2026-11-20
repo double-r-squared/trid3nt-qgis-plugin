@@ -184,7 +184,8 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]
 
 @register_hook("wfigs_incident.record")
 def record(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> dict[str, Any] | None:
-    """Best-feature discovery record over ONE feed; None to advance to the next endpoint."""
+    """Best-feature record over ONE feed, every attribute WFIGS returns under its own name beside the point,
+    the padded bbox and the discovery instant read off the epoch milliseconds; None to advance to the next endpoint."""
     sc = spec.error_code_prefix
     body = bodies[0] if bodies else b""
     try:
@@ -204,17 +205,10 @@ def record(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> dic
     lon, lat = point
     pad = float(params.get("bbox_pad_deg", _DEFAULT_BBOX_PAD_DEG))
     attrs = best.get("attributes") or {}
-    incident_name = str(params.get("incident_name") or "").strip()
     return {
-        "incident_name": attrs.get("IncidentName") or incident_name,
+        **attrs,
         "lat": lat,
         "lon": lon,
         "bbox": list(_bbox_from_point(lon, lat, pad)),
         "fire_discovery_datetime": _epoch_ms_to_iso(attrs.get("FireDiscoveryDateTime")),
-        "incident_size_acres": attrs.get("IncidentSize"),
-        "percent_contained": attrs.get("PercentContained"),
-        "poo_state": attrs.get("POOState"),
-        "poo_county": attrs.get("POOCounty"),
-        "irwin_id": attrs.get("IrwinID"),
-        "unique_fire_identifier": attrs.get("UniqueFireIdentifier"),
     }

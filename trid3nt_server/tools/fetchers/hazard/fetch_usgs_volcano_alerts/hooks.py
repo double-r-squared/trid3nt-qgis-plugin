@@ -3,7 +3,8 @@
 The irreducible step is the parse: the alert list and the geographic list are two
 whole lists inner-joined on vnum, then bbox-filtered and severity-ranked in process,
 because HANS has no server-side spatial query and publishes the place in a second
-list rather than as a detail keyed off the first."""
+list rather than as a detail keyed off the first. A volcano keeps both lists' records
+whole, the alert record under ``alert.`` and the geographic one under ``us_volcano.``."""
 
 from __future__ import annotations
 
@@ -48,74 +49,29 @@ def _decode(sc: str, raw: bytes, what: str) -> Any:
         raise router_upstream_error(sc, f"USGS HANS {what} response is not valid JSON: {exc}")
 
 
-def _parse_alert_list(sc: str, obj: Any) -> dict[str, dict[str, Any]]:
+def _by_vnum(sc: str, obj: Any, what: str) -> dict[str, dict[str, Any]]:
+    """One HANS list as its records, whole, keyed by volcano number."""
     if not isinstance(obj, list):
-        raise router_upstream_error(sc, f"USGS HANS monitored-volcano response is not a JSON list: type={type(obj).__name__}")
+        raise router_upstream_error(sc, f"USGS HANS {what} response is not a JSON list: type={type(obj).__name__}")
     out: dict[str, dict[str, Any]] = {}
     for el in obj:
         if not isinstance(el, dict):
             continue
-        vnum_raw = el.get("vnum")
-        if vnum_raw in (None, "", "None"):
-            continue
-        vnum = str(vnum_raw).strip()
-        if not vnum or vnum.lower() == "none":
-            continue
-        alert = el.get("alert_level")
-        color = el.get("color_code")
-        out[vnum] = {
-            "vnum": vnum,
-            "volcano_name": str(el.get("volcano_name") or "").strip() or None,
-            "alert_level": (str(alert).strip().upper() if alert else None),
-            "color_code": (str(color).strip().upper() if color else None),
-            "observatory": str(el.get("obs_abbr") or "").strip() or None,
-            "sent_utc": str(el.get("sent_utc") or "").strip() or None,
-            "notice_url": str(el.get("notice_url") or "").strip() or None,
-        }
+        vnum = str(el.get("vnum") or "").strip()
+        if vnum and vnum.lower() != "none":
+            out[vnum] = el
     return out
 
 
-def _parse_coord_list(sc: str, obj: Any) -> dict[str, dict[str, Any]]:
-    if not isinstance(obj, list):
-        raise router_upstream_error(sc, f"USGS HANS US-volcano response is not a JSON list: type={type(obj).__name__}")
-    out: dict[str, dict[str, Any]] = {}
-    for el in obj:
-        if not isinstance(el, dict):
-            continue
-        vnum_raw = el.get("vnum")
-        if vnum_raw in (None, "", "None"):
-            continue
-        vnum = str(vnum_raw).strip()
-        if not vnum or vnum.lower() == "none":
-            continue
-        try:
-            lat = float(el.get("latitude"))
-            lon = float(el.get("longitude"))
-        except (TypeError, ValueError):
-            continue
-        if not (math.isfinite(lat) and math.isfinite(lon)):
-            continue
-        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
-            continue
-        elev: float | None = None
-        try:
-            ev = el.get("elevation_meters")
-            if ev is not None:
-                fev = float(ev)
-                elev = fev if math.isfinite(fev) else None
-        except (TypeError, ValueError):
-            elev = None
-        out[vnum] = {
-            "vnum": vnum,
-            "volcano_name": str(el.get("volcano_name") or "").strip() or None,
-            "lat": lat,
-            "lon": lon,
-            "elevation_m": elev,
-            "region": str(el.get("region") or "").strip() or None,
-            "volcano_url": str(el.get("volcano_url") or "").strip() or None,
-            "nvews_threat": str(el.get("nvews_threat") or "").strip() or None,
-        }
-    return out
+def _position(record: dict[str, Any]) -> tuple[float, float] | None:
+    """The record's own ``(lon, lat)``, or ``None`` where it states none a map can hold."""
+    try:
+        lat, lon = float(record.get("latitude")), float(record.get("longitude"))
+    except (TypeError, ValueError):
+        return None
+    if not (math.isfinite(lat) and math.isfinite(lon) and -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return None
+    return lon, lat
 
 
 @_hooks.register_hook("usgs_volcano.parse_response")
@@ -124,8 +80,8 @@ def parse_response(
 ) -> list[dict[str, Any]]:
     """Inner-join alerts to coordinates on vnum, filter to bbox, sort by severity."""
     sc = spec.error_code_prefix
-    alerts = _parse_alert_list(sc, _decode(sc, bodies[0] if bodies else b"", "monitored-volcano"))
-    coords = _parse_coord_list(sc, _decode(sc, bodies[1] if len(bodies) > 1 else b"", "US-volcano"))
+    alerts = _by_vnum(sc, _decode(sc, bodies[0] if bodies else b"", "monitored-volcano"), "monitored-volcano")
+    coords = _by_vnum(sc, _decode(sc, bodies[1] if len(bodies) > 1 else b"", "US-volcano"), "US-volcano")
 
     if not alerts:
         raise router_empty_error(
@@ -136,29 +92,15 @@ def parse_response(
         )
 
     merged: list[dict[str, Any]] = []
-    for vnum, a in alerts.items():
-        c = coords.get(vnum)
-        if c is None:
+    for vnum, alert in alerts.items():
+        place = coords.get(vnum)
+        point = _position(place) if place is not None else None
+        if point is None:
             continue
-        merged.append(
-            {
-                "vnum": vnum,
-                "volcano_name": c.get("volcano_name") or a.get("volcano_name"),
-                "alert_level": a.get("alert_level"),
-                "color_code": a.get("color_code"),
-                "alert_rank": _alert_rank(a.get("alert_level")),
-                "color_rank": _color_rank(a.get("color_code")),
-                "elevation_m": c.get("elevation_m"),
-                "region": c.get("region"),
-                "observatory": a.get("observatory"),
-                "sent_utc": a.get("sent_utc"),
-                "notice_url": a.get("notice_url"),
-                "volcano_url": c.get("volcano_url"),
-                "nvews_threat": c.get("nvews_threat"),
-                "lat": c["lat"],
-                "lon": c["lon"],
-            }
-        )
+        merged.append({"alert": alert, "us_volcano": place, "point": point,
+                       "alert_rank": _alert_rank(alert.get("alert_level")),
+                       "color_rank": _color_rank(alert.get("color_code")),
+                       "name": str(place.get("volcano_name") or alert.get("volcano_name") or "").strip()})
     if not merged:
         raise router_empty_error(
             sc,
@@ -170,7 +112,7 @@ def parse_response(
     bbox = params.get("bbox")
     if bbox is not None:
         west, south, east, north = bbox
-        merged = [r for r in merged if west <= r["lon"] <= east and south <= r["lat"] <= north]
+        merged = [r for r in merged if west <= r["point"][0] <= east and south <= r["point"][1] <= north]
     if not merged:
         raise router_empty_error(
             sc,
@@ -180,11 +122,10 @@ def parse_response(
             spec.empty_error_suffix,
         )
 
-    merged.sort(key=lambda r: (-(r["color_rank"]), -(r["alert_rank"]), r["volcano_name"] or ""))
-    feats: list[dict[str, Any]] = []
-    for r in merged:
-        lon, lat = r.pop("lon"), r.pop("lat")
-        r["alert_rank"] = int(r.get("alert_rank", -1))
-        r["color_rank"] = int(r.get("color_rank", -1))
-        feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": r})
-    return feats
+    merged.sort(key=lambda r: (-r["color_rank"], -r["alert_rank"], r["name"]))
+    return [
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": list(r["point"])},
+         "properties": {"alert": r["alert"], "us_volcano": r["us_volcano"]},
+         "produced": {"alert_rank": r["alert_rank"], "color_rank": r["color_rank"]}}
+        for r in merged
+    ]

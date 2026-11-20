@@ -218,14 +218,14 @@ def test_route_returns_discovery_record(monkeypatch):
 
     result = router.route(WFIGS_SPEC, {"incident_name": "Iron", "state": "UT"})
     assert isinstance(result, dict)  # record shape: a dict, never a LayerURI
-    assert result["incident_name"] == "Iron"
+    assert result["IncidentName"] == "Iron"
     assert result["lat"] == pytest.approx(39.96976)
     assert result["lon"] == pytest.approx(-112.16481)
     assert result["fire_discovery_datetime"] == "2026-06-20T00:00:00Z"
-    assert result["incident_size_acres"] == 21935
-    assert result["poo_state"] == "US-UT"
-    assert result["irwin_id"] == "abc-123"
-    assert result["unique_fire_identifier"] == "2026-UTNFD-000123"
+    assert result["IncidentSize"] == 21935
+    assert result["POOState"] == "US-UT"
+    assert result["IrwinID"] == "abc-123"
+    assert result["UniqueFireIdentifier"] == "2026-UTNFD-000123"
     bbox = result["bbox"]
     assert bbox[0] < -112.16481 < bbox[2] and bbox[1] < 39.96976 < bbox[3]
 
@@ -243,8 +243,8 @@ def test_route_current_then_ytd_short_circuit(monkeypatch):
     monkeypatch.setattr(http_json, "_get_raw", fake)
     result = router.route(WFIGS_SPEC, {"incident_name": "Santa Rosa Island", "state": "CA"})
     assert calls == [_CURRENT, _YTD]  # Current first, then YearToDate
-    assert result["incident_name"] == "Santa Rosa Island"
-    assert result["incident_size_acres"] == 18379
+    assert result["IncidentName"] == "Santa Rosa Island"
+    assert result["IncidentSize"] == 18379
     assert result["lat"] == pytest.approx(33.958561)
 
 

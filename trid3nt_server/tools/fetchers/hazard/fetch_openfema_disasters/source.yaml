@@ -1,6 +1,6 @@
-# FEMA disaster declarations: declared offset paging over the attribute feed, then a
-# declared county-polygon enrich keyed by state FIPS. Two hooks remain - the selector
-# that assembles the OData filter, and the per-county aggregate.
+# FEMA disaster declarations: declared offset paging over the attribute feed; every
+# declaration is a row of the layer with no geometry. One hook assembles the OData filter
+# and one keeps each declaration whole; a county overlay is an operation over this table.
 schema_version: v1
 name: fetch_openfema_disasters
 source_class: openfema_disasters
@@ -8,11 +8,10 @@ shape: vector-fgb
 supports_global_query: false
 error_prefix: OPENFEMA
 input_error_suffix: INPUT_ERROR
+empty_error_suffix: NO_DECLARATIONS
 endpoints:
   data:
     url: https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries
-  counties:
-    url: https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/1/query
 auth:
   mode: none
   user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
@@ -48,45 +47,6 @@ ingest:
   body:
     format: json
     rows_path: DisasterDeclarationsSummaries
-  enrich:
-    key_column: state_fips
-    max_detail_fetches: 3000
-    request:
-      endpoint: counties
-      params:
-        where: STATE='{key}'
-        outFields: GEOID,NAME,STATE,COUNTY
-        returnGeometry: 'true'
-        outSR: '4326'
-        f: geojson
-    body:
-      format: json
-      rows_path: features
-    join:
-      detail_key: properties.GEOID
-      feature_key: county_fips
-      geometry: true
-      drop_unmatched: true
-      take:
-        county_name: properties.NAME
-    clip_to_bbox: true
-  empty:
-    code: NO_DECLARATIONS
-    message: No county-level FEMA disaster declarations could be joined to a county
-      polygon for the requested scope (no declarations join to a county, or none of
-      the affected counties fall inside the bbox). Try dropping the incident_type
-      filter, extending the year window, or widening the area.
-  properties:
-  - county_fips
-  - county_name
-  - state_fips
-  - n_declarations
-  - disaster_numbers
-  - incident_types
-  - declaration_types
-  - latest_declaration
-  - ia_program
-  - pa_program
 normalize:
   crs: EPSG:4326
   units: declaration count
@@ -97,41 +57,39 @@ output:
   style:
     kind: reference
     geometry: polygon
-  bbox_from_features:
-    pad: 0.1
+  emit_bbox: false
+  keep_null_geometry: true
 cache:
   ttl_class: semi-static-7d
 payload_estimate:
   model: per_feature
-  features_per_sq_deg: 4.0
-  kb_per_feature: 50.0
+  features_per_sq_deg: 30.0
+  kb_per_feature: 1.0
   floor_mb: 0.01
-  ceil_mb: 5.0
+  ceil_mb: 10.0
 caveats:
-- FEMA OpenFEMA DisasterDeclarationsSummaries aggregated to one record per affected county and joined
-  to Census TIGERweb county polygons; DR/EM/FM declarations 1953-present. Statewide (fipsCountyCode 000)
-  declarations are excluded from the county overlay. No county-level match -> OPENFEMA_NO_DECLARATIONS,
-  never an empty success layer. US states + territories only.
+- FEMA OpenFEMA DisasterDeclarationsSummaries, every declaration whole as a row with no geometry (one row per
+  declaration and designated area, state-wide rows with fipsCountyCode 000 included); DR/EM/FM declarations
+  1953-present. A county overlay is an operation over the table's fipsStateCode and fipsCountyCode. No declaration in
+  scope -> OPENFEMA_NO_DECLARATIONS, never an empty success layer. US states + territories only.
 - "model-callable, not matched: disaster-declaration records, not one of the seventeen matched data classes"
 docstring: |-
-  Fetch FEMA disaster declarations as a county-polygon FlatGeobuf overlay.
+  Fetch FEMA disaster declarations as a table of declarations, one row each.
 
   Retrieves real US federal disaster declarations (Major Disaster ``DR``,
-  Emergency ``EM``, Fire-Management ``FM``) from the FEMA OpenFEMA API,
-  aggregates them to ONE record per affected county, and joins each county to
-  its Census TIGERweb polygon. The result is a county overlay carrying the
-  declaration count, the distinct incident types, the disaster numbers, the
-  latest declaration date, and the Individual / Public Assistance flags -- the
-  canonical **historical hazard-declaration context** layer.
+  Emergency ``EM``, Fire-Management ``FM``) from the FEMA OpenFEMA API and
+  returns every declaration whole, one row per declaration and designated
+  area, under OpenFEMA's own field names. The rows carry no geometry: this is
+  the **historical hazard-declaration record**, not a map overlay.
 
   When to use:
-      - The user asks where disasters have been federally declared
+      - The user asks where or how often disasters have been federally declared
         ("which counties in Florida have had a disaster declared", "show me
         the FEMA hurricane declarations in Texas since 2017", "where have
         flood disasters been declared near here").
-      - You want the historical record of FEMA declarations as a map overlay
-        to frame a hazard study, or to count how many times a county has been
-        declared.
+      - You want the historical record of FEMA declarations to frame a hazard
+        study, or to count how many times a county has been declared (count
+        the rows of one ``fipsStateCode`` + ``fipsCountyCode``).
 
   When NOT to use:
       - LIVE / active hazards right now -- use the live feeds: NWS active
@@ -147,14 +105,14 @@ docstring: |-
 
   Spatial selector (pass EXACTLY ONE):
       state_code: Optional 2-letter USPS state/territory code (e.g. ``"FL"``,
-          ``"TX"``). PREFERRED for state-level asks -- one OpenFEMA query plus
-          one TIGERweb county fetch for that state, all counties joined.
+          ``"TX"``). PREFERRED for state-level asks -- one OpenFEMA query for
+          that state.
       bbox: Optional ``(west, south, east, north)`` in EPSG:4326. The tool
-          derives every state whose envelope intersects the bbox, queries
-          OpenFEMA per state, joins all counties, and CLIPS the overlay to the
-          counties whose polygon intersects the bbox (a metro bbox yields a
-          handful of counties). When both are given, ``state_code`` wins; when
-          neither, ``OpenFemaInputError`` is raised.
+          derives every state whose envelope intersects the bbox and queries
+          OpenFEMA per state; a declaration is a row of a state and county
+          code, so the bbox selects states and clips nothing. When both are
+          given, ``state_code`` wins; when neither, ``OpenFemaInputError`` is
+          raised.
 
   Optional filters:
       incident_type: Optional OpenFEMA incident type (e.g. ``"Hurricane"``,
@@ -169,24 +127,24 @@ docstring: |-
   Returns:
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket
       (``s3://.../cache/semi-static-7d/openfema_disasters/<key>.fgb``):
-      - ``layer_type="vector"``, ``role="primary"``
-      - Geometry: one county Polygon per affected county, EPSG:4326.
-      - ``bbox`` is the joined counties' extent so the camera auto-zooms.
-      - Properties per county: ``county_fips`` (5-digit), ``county_name``,
-        ``state_fips``, ``n_declarations``, ``disaster_numbers`` (comma-list),
-        ``incident_types`` (comma-list), ``declaration_types`` (DR/EM/FM
-        comma-list), ``latest_declaration`` (ISO-Z date), ``ia_program`` /
-        ``pa_program`` (Individual / Public Assistance ever declared).
+      - ``layer_type="vector"``, ``role="primary"``, rows with no geometry.
+      - Properties per declaration: every field OpenFEMA returns, under its
+        own name (``femaDeclarationString``, ``disasterNumber``, ``state``,
+        ``declarationType`` DR/EM/FM, ``declarationDate``, ``fyDeclared``,
+        ``incidentType``, ``declarationTitle``, ``ihProgramDeclared`` /
+        ``iaProgramDeclared`` / ``paProgramDeclared`` / ``hmProgramDeclared``,
+        ``incidentBeginDate``, ``incidentEndDate``, ``fipsStateCode``,
+        ``fipsCountyCode`` ("000" is state-wide), ``placeCode``,
+        ``designatedArea``, ``region``, ``lastRefresh``, ``id``, ...).
 
   Fallback behaviour (data-source fallback norm): OpenFEMA is the sole
-  declaration source. If no county-level declarations are found in scope, or
-  none join to a county polygon, ``OpenFemaNoDeclarationsError`` is raised -- never an empty success-shaped layer. Statewide / non-county-specific
-  declarations (``fipsCountyCode == "000"``) are excluded from the county
-  overlay and reported in the error message when nothing else joins.
+  declaration source. If no declaration is found in scope,
+  ``OpenFemaNoDeclarationsError`` is raised -- never an empty success-shaped
+  layer.
 
   Cache: ``ttl_class="semi-static-7d"``, ``source_class="openfema_disasters"``.
   Cache key is SHA-256 of the resolved selector (states + incident_type +
-  start_year + clip bbox), so identical-scope calls within the week reuse it.
+  start_year), so identical-scope calls within the week reuse it.
 
   Cross-tool dependencies:
       - Composes WITH: ``geocode_location``
@@ -195,15 +153,14 @@ docstring: |-
       - Distinct from: ``fetch_fema_nfhl_zones`` (NFHL flood zones -- a
         regulatory boundary, not a declaration record); the live-hazard feeds
         (NWS warnings, FIRMS / GOES fire, MRMS) -- declarations are historical.
-      - Upstream sources: FEMA OpenFEMA DisasterDeclarationsSummaries +
-        Census TIGERweb State_County county polygons.
+      - Upstream source: FEMA OpenFEMA DisasterDeclarationsSummaries.
 
   Errors:
       - ``OpenFemaInputError``: no selector / bad bbox / bad state code / bad
         incident type / bad year (retryable=False).
-      - ``OpenFemaUpstreamError``: OpenFEMA or TIGERweb network / HTTP 5xx /
-        bad body (retryable=True).
-      - ``OpenFemaNoDeclarationsError``: no county-level declarations in scope
+      - ``OpenFemaUpstreamError``: OpenFEMA network / HTTP 5xx / bad body
+        (retryable=True).
+      - ``OpenFemaNoDeclarationsError``: no declaration in scope
         (retryable=False).
 
 

@@ -1,8 +1,9 @@
 """ncei_tsunami hooks: NCEI Global Historical Tsunami DB as point features.
 
 The irreducible step is the hazard-service request -- mode-selected endpoint, validated
-year window, bbox params, page number -- and the per-mode decode, since ``events`` and
-``runups`` carry different fields. The paging loop is the router's."""
+year window, bbox params, page number. Each item is kept whole under NCEI's own names, ``events``
+and ``runups`` carrying different fields; the cause label read off the published cause code and the
+mode are what the hook produces. The paging loop is the router's."""
 
 from __future__ import annotations
 
@@ -102,22 +103,6 @@ def _f(value: Any) -> float | None:
     return fv if math.isfinite(fv) else None
 
 
-def _i(value: Any) -> int | None:
-    if value in (None, ""):
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _s(value: Any) -> str | None:
-    if value is None:
-        return None
-    s = str(value).strip()
-    return s or None
-
-
 def _cause_label(cause_code: Any) -> str:
     try:
         ci = int(cause_code)
@@ -175,44 +160,10 @@ def _records_from_items(items: list[Any], mode: str) -> list[dict[str, Any]]:
             continue
         if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
             continue
-        if mode == "events":
-            cause_code = _i(it.get("causeCode"))
-            deaths = _i(it.get("deathsTotal"))
-            if deaths is None:
-                deaths = _i(it.get("deaths"))
-            props = {
-                "id": _i(it.get("id")),
-                "year": _i(it.get("year")),
-                "cause_code": cause_code,
-                "cause": _cause_label(cause_code),
-                "location_name": _s(it.get("locationName")),
-                "country": _s(it.get("country")),
-                "eq_magnitude": _f(it.get("eqMagnitude")),
-                "max_water_height": _f(it.get("maxWaterHeight")),
-                "deaths": deaths,
-                "num_runups": _i(it.get("numRunups")),
-                "dist_from_source_km": None,
-                "observation_type": "event",
-                "source": "NCEI/WDS Global Historical Tsunami Database",
-            }
-        else:
-            cause_code = _i(it.get("sourceCauseCode"))
-            props = {
-                "id": _i(it.get("id")),
-                "year": _i(it.get("year")),
-                "cause_code": cause_code,
-                "cause": _cause_label(cause_code),
-                "location_name": _s(it.get("locationName")),
-                "country": _s(it.get("country")),
-                "eq_magnitude": _f(it.get("sourceEqMagnitude")),
-                "max_water_height": _f(it.get("runupHt")),
-                "deaths": _i(it.get("deaths")),
-                "num_runups": None,
-                "dist_from_source_km": _f(it.get("distFromSource")),
-                "observation_type": "runup",
-                "source": "NCEI/WDS Global Historical Tsunami Database",
-            }
+        cause = it.get("causeCode") if mode == "events" else it.get("sourceCauseCode")
+        produced = {"cause": _cause_label(cause), "observation_type": "event" if mode == "events" else "runup"}
         out.append(
-            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props}
+            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]},
+             "properties": dict(it), "produced": produced}
         )
     return out

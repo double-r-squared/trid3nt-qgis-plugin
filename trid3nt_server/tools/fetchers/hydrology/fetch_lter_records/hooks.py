@@ -1,7 +1,7 @@
 """fetch_lter_records hooks: LTER / EDI environmental data records.
 
 Given a package id and an optional entity selector, returns a parsed time-series dict
-for one delimited data entity. The resolve phase picks the entity and merges its URL,
+for one delimited data entity, every column of it in the window. The resolve phase picks the entity and merges its URL,
 delimiter, header rows and column units into params, so it is part of the cache key."""
 
 from __future__ import annotations
@@ -152,6 +152,13 @@ def _select_entity(
     )
 
 
+def _number(raw: str) -> float | None:
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
 def _pick_date_col(columns: list[str], override: str | None) -> str | None:
     """The date/time column: an explicit override, else the first name mentioning
     'date'/'time' (preferring a bare 'Date'), else the first column."""
@@ -276,18 +283,17 @@ def build_record(
             "INPUT_INVALID",
         )
     di = header.index(date_col)
-    vidx = {c: header.index(c) for c in present_values}
 
     start = params.get("start_date")
     end = params.get("end_date")
 
     times: list[str] = []
-    cols: dict[str, list[float | None]] = {c: [] for c in present_values}
+    cells: dict[str, list[str]] = {c: [] for c in header if c != date_col}
     for ln in data_lines:
-        cells = ln.split(delimiter)
-        if di >= len(cells):
+        row = ln.split(delimiter)
+        if di >= len(row):
             continue
-        ts = cells[di].strip()
+        ts = row[di].strip()
         if not ts:
             continue
         day = ts[:10]
@@ -296,12 +302,9 @@ def build_record(
         if end and day > str(end):
             continue
         times.append(ts)
-        for c, ci in vidx.items():
-            raw = cells[ci].strip() if ci < len(cells) else ""
-            try:
-                cols[c].append(float(raw))
-            except ValueError:
-                cols[c].append(None)
+        for c in cells:
+            ci = header.index(c)
+            cells[c].append(row[ci].strip() if ci < len(row) else "")
 
     if not times:
         raise router_empty_error(
@@ -311,9 +314,18 @@ def build_record(
             spec.empty_error_suffix,
         )
 
+    cols: dict[str, list[Any]] = {}
+    for c, held in cells.items():
+        numbers = [_number(v) for v in held]
+        # A value column is numeric by the entity's declaration; any other is a number where every cell it holds is one.
+        if c in present_values or all(n is not None for n, v in zip(numbers, held) if v):
+            cols[c] = numbers
+        else:
+            cols[c] = [v or None for v in held]
+
     summary: dict[str, Any] = {}
-    for c, vals in cols.items():
-        nums = [v for v in vals if v is not None]
+    for c in present_values:
+        nums = [v for v in cols[c] if v is not None]
         summary[c] = {
             "units": units.get(c),
             "n": len(nums),
@@ -334,6 +346,6 @@ def build_record(
         "last_ts": times[-1],
         "window": [start, end] if (start or end) else None,
         "times": times,
-        "series": {c: cols[c] for c in present_values},
+        "series": cols,
         "summary": summary,
     }

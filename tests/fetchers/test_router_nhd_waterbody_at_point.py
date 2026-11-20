@@ -78,7 +78,7 @@ def test_a_zero_distance_still_asks_for_a_box_with_area(spec):
 def test_a_seed_inside_a_body_takes_it_at_zero_distance(spec):
     rows = wb.parse_response(spec, _params(), [_body(_pond(*_SEED, 0.004, _WALDEN))])
     assert len(rows) == 1
-    properties = rows[0]["properties"]
+    properties = {**rows[0]["properties"], **rows[0]["produced"]}
     assert properties["part"] == "waterbody"
     assert properties["gnis_name"] == "Walden Pond"
     assert properties["gnis_id"] == "00611885"
@@ -96,7 +96,7 @@ def test_a_seed_on_land_takes_the_nearest_body_inside_the_allowance(spec):
     lon, lat = _SEED[0] - 0.01, _SEED[1]
     rows = wb.parse_response(spec, _params(seed_point=[lon, lat]),
                              [_body(_pond(*_SEED, 0.004, _WALDEN))])
-    distance = rows[0]["properties"]["seed_distance_km"]
+    distance = rows[0]["produced"]["seed_distance_km"]
     assert 0.0 < distance < 2.0
 
 
@@ -126,7 +126,7 @@ def test_an_inland_sea_refuses_by_name_with_the_area_it_found(spec):
 
 def test_a_body_under_the_ceiling_is_returned(spec):
     rows = wb.parse_response(spec, _params(), [_body(_pond(*_SEED, 0.1, _WALDEN))])
-    assert rows[0]["properties"]["part"] == "waterbody"
+    assert rows[0]["produced"]["part"] == "waterbody"
 
 
 def test_nothing_mapped_near_the_seed_refuses_by_name(spec):
@@ -141,7 +141,7 @@ def test_the_mirrors_upper_case_columns_read_the_same(spec):
              "FCODE": 39004, "REACHCODE": "01070006000000",
              "PERMANENT_IDENTIFIER": "abc123", "AREASQKM": 0.255}
     rows = wb.parse_response(spec, _params(), [_body(_pond(*_SEED, 0.004, upper))])
-    properties = rows[0]["properties"]
+    properties = {**rows[0]["properties"], **rows[0]["produced"]}
     assert properties["gnis_name"] == "Walden Pond"
     assert properties["permanent_identifier"] == "abc123"
     assert properties["areasqkm"] == 0.255

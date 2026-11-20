@@ -391,7 +391,7 @@ def _words(archive: Any) -> str:
 
 
 def _vouched_elevations(spec: SourceSpec, archive: Any, points: Any, survey_id: str
-                        ) -> tuple[list[tuple[float, float, float]], str] | None:
+                        ) -> tuple[list[tuple[float, float, float, dict[str, Any]]], str] | None:
     """The NAVD88 elevations the package itself vouches for, or ``None`` to read as stated.
 
     A depth below the water surface of the survey day is no elevation: a blank
@@ -434,7 +434,7 @@ def _vouched_elevations(spec: SourceSpec, archive: Any, points: Any, survey_id: 
 
 
 def _full_elevations(spec: SourceSpec, archive: Any, member: str, points: Any,
-                     survey_id: str) -> tuple[list[tuple[float, float, float]], str]:
+                     survey_id: str) -> tuple[list[tuple[float, float, float, dict[str, Any]]], str]:
     """The ``_FULL.XYZ`` rows in the package's CRS and unit, as depths below NAVD88 in metres."""
     from pyproj import Transformer
 
@@ -461,7 +461,8 @@ def _full_elevations(spec: SourceSpec, archive: Any, member: str, points: Any,
             "NO_STATED_DATUM")
     lon, lat = Transformer.from_crs(points.crs, 4326, always_xy=True).transform(
         [r[0] for r in rows], [r[1] for r in rows])
-    return [(float(a), float(b), round(-r[2] * scale, 4))
+    # The XYZ file names no field: a sounding read from it carries no record of its own.
+    return [(float(a), float(b), round(-r[2] * scale, 4), {})
             for a, b, r in zip(lon, lat, rows)], "NAVD88"
 
 
@@ -496,8 +497,7 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
         survey_id = str(properties.get("surveyjobidpk") or "")
         archive = _package(spec, str(properties.get("sourcedatalocation")), survey_id)
         try:
-            soundings, datum, uom, offset_m, offset_frame = _bed_of(
-                spec, archive, survey_id)
+            soundings, datum, offset_m, offset_frame = _bed_of(spec, archive, survey_id)
         except (RouterEmptyError, RouterInputError) as exc:
             # The package states no bed; the others over the extent still do.
             refused.append(exc)
@@ -509,23 +509,23 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
         common = {
             "survey_id": survey_id,
             "survey_date": date.isoformat() if date else None,
-            "district": properties.get("usacedistrictcode"),
-            "feature_name": properties.get("sdsfeaturename"),
-            "survey_type": properties.get("surveytype"),
             "vertical_datum": datum,
-            "source_uom": uom,
         }
         rows.append({
             "type": "Feature", "geometry": feature.get("geometry"),
-            "properties": {**common, "part": "survey", "depth_below_datum_m": None,
-                           "sounding_count": len(soundings)},
+            # The index spells its names in lower case, the package's SurveyPoint in camel case: one layer holds both, and a
+            # GeoPackage field name is case-insensitive, so the index record rides under a prefix.
+            "properties": {"survey": properties},
+            "produced": {**common, "part": "survey", "depth_below_datum_m": None,
+                         "sounding_count": len(soundings)},
         })
-        for lon, lat, depth_m in soundings:
+        for lon, lat, depth_m, record in soundings:
             rows.append({
                 "type": "Feature",
                 "geometry": {"type": "Point", "coordinates": [lon, lat]},
-                "properties": {**common, "part": "sounding", "sounding_count": None,
-                               "depth_below_datum_m": depth_m},
+                "properties": record,
+                "produced": {**common, "part": "sounding", "sounding_count": None,
+                             "depth_below_datum_m": depth_m},
             })
         logger.info("ehydro: survey %s (%s) -> %d sounding(s), datum %s, offset %s",
                     survey_id, common["survey_date"], len(soundings), datum,
@@ -536,27 +536,42 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
     _one_zero(spec, rows)
     offset_m, offset_frame = _one_shift(spec, shifts)
     for row in rows:
-        row["properties"].update(datum_offset_m=offset_m,
-                                 datum_offset_frame=offset_frame)
+        row["produced"].update(datum_offset_m=offset_m, datum_offset_frame=offset_frame)
     return rows
 
 
 def _bed_of(spec: SourceSpec, archive: Any, survey_id: str
-            ) -> tuple[list[tuple[float, float, float]], str, str, float | None, str]:
-    """One package's soundings, its zero, its unit and its published shift, or its refusal."""
+            ) -> tuple[list[tuple[float, float, float, dict[str, Any]]], str, float | None, str]:
+    """One package's soundings, each with its own record, its zero and its published shift, or its refusal."""
     points = _soundings(spec, archive, survey_id)
     vouched = _vouched_elevations(spec, archive, points, survey_id)
     if vouched is not None:
         soundings, datum = vouched
-        return soundings, datum, _stated_unit(points), None, ""
-    datum, uom, scale = _stated(spec, points, survey_id)
+        return soundings, datum, None, ""
+    datum, _uom, scale = _stated(spec, points, survey_id)
     offset_m, offset_frame = _published_offset(archive, survey_id)
     wgs = points.to_crs(4326) if points.crs is not None else points
-    soundings = [(float(g.x), float(g.y), round(float(d) * scale, 4))
-                 for d, g in zip(wgs[_DEPTH_FIELD], wgs.geometry)
+    records = wgs.drop(columns="geometry").to_dict("records")
+    soundings = [(float(g.x), float(g.y), round(float(d) * scale, 4), _record(record))
+                 for record, d, g in zip(records, wgs[_DEPTH_FIELD], wgs.geometry)
                  if g is not None and not g.is_empty and d is not None
                  and math.isfinite(float(d))]
-    return soundings, datum, uom, offset_m, offset_frame
+    return soundings, datum, offset_m, offset_frame
+
+
+def _record(record: dict[str, Any]) -> dict[str, Any]:
+    """One sounding's feature-class row as the package holds it: every field under its own name, a hole as null, an instant as ISO text."""
+    import pandas as pd
+
+    out: dict[str, Any] = {}
+    for key, value in record.items():
+        if pd.isna(value):
+            out[str(key)] = None
+        elif hasattr(value, "isoformat"):
+            out[str(key)] = value.isoformat()
+        else:
+            out[str(key)] = value.item() if hasattr(value, "item") else value
+    return out
 
 
 def _left_out(spec: SourceSpec, refused: list[RouterError], kept: list[dict[str, Any]]) -> None:
@@ -624,10 +639,10 @@ def _one_zero(spec: SourceSpec, rows: list[dict]) -> None:
 
     Depths below two zeros in one layer are measured from two different places,
     and anything gridded or merged across them is an elevation nowhere."""
-    zeros = sorted({row["properties"]["vertical_datum"] for row in rows})
+    zeros = sorted({row["produced"]["vertical_datum"] for row in rows})
     if len(zeros) > 1:
-        surveys = sorted({f"{row['properties']['survey_id']} "
-                          f"({row['properties']['vertical_datum']})" for row in rows})
+        surveys = sorted({f"{row['produced']['survey_id']} "
+                          f"({row['produced']['vertical_datum']})" for row in rows})
         raise router_empty_error(
             spec.error_code_prefix,
             f"the surveys over this extent count their depths from {zeros}: "

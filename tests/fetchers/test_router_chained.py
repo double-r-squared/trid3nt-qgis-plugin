@@ -255,58 +255,34 @@ def _fema_page(records):
     return {"DisasterDeclarationsSummaries": records}
 
 
-def _tiger(features):
-    return {"type": "FeatureCollection", "features": features}
+_RECORDED_RI = (__import__("pathlib").Path(__file__).parents[1] / "fixtures" / "fetcher_fields"
+                / "openfema_declarations_ri.json").read_bytes()
 
 
-def _county_poly(geoid, name, ring):
-    return {"type": "Feature", "properties": {"GEOID": geoid, "NAME": name, "STATE": geoid[:2],
-            "COUNTY": geoid[2:]}, "geometry": {"type": "Polygon", "coordinates": [ring]}}
+def test_openfema_every_declaration_is_a_row_with_every_field():
+    """The recorded Rhode Island answer: six rows in, six rows out, OpenFEMA's own fields, no geometry, no county aggregate."""
+    gdf = _run("fetch_openfema_disasters", {"state_code": "RI"}, {"fema.gov": _RECORDED_RI})
+    assert len(gdf) == 6 and gdf.geometry.isna().all()
+    assert {"femaDeclarationString", "designatedArea", "fipsCountyCode", "hash"} <= set(gdf.columns)
+    assert "county_fips" not in gdf.columns and "n_declarations" not in gdf.columns
 
 
-_RI_RING = [[-71.4, 41.6], [-71.3, 41.6], [-71.3, 41.7], [-71.4, 41.7], [-71.4, 41.6]]
-_RI2_RING = [[-71.6, 41.8], [-71.5, 41.8], [-71.5, 41.9], [-71.6, 41.9], [-71.6, 41.8]]
+def test_openfema_a_statewide_declaration_is_a_row_like_any_other():
+    fema = _fema_page([_decl("44", "000", 5000, "Drought"), _decl("44", "001", 4001, "Flood")])
+    gdf = _run("fetch_openfema_disasters", {"state_code": "RI"}, {"fema.gov": fema})
+    assert sorted(gdf["fipsCountyCode"]) == ["000", "001"]
 
 
-def test_openfema_aggregate_and_fips_join():
-    """Two declarations for one county aggregate; each county joins its TIGER polygon."""
-    fema = _fema_page([
-        _decl("44", "001", 4001, "Flood", date="2019-01-01T00:00:00.000Z"),
-        _decl("44", "001", 4002, "Hurricane", date="2021-05-01T00:00:00.000Z", pa=True),
-        _decl("44", "003", 4003, "Severe Storm"),
-    ])
-    tiger = _tiger([_county_poly("44001", "Bristol", _RI_RING),
-                    _county_poly("44003", "Kent", _RI2_RING)])
-    gdf = _run("fetch_openfema_disasters", {"state_code": "RI"},
-               {"fema.gov": fema, "tigerweb": tiger})
-    rows = {r["county_fips"]: r for _, r in gdf.iterrows()}
-    assert set(rows) == {"44001", "44003"}
-    assert rows["44001"]["n_declarations"] == 2
-    assert rows["44001"]["disaster_numbers"] == "4001,4002"
-    assert rows["44001"]["incident_types"] == "Flood,Hurricane"
-    assert rows["44001"]["latest_declaration"] == "2021-05-01T00:00:00.000Z"
-    assert bool(rows["44001"]["pa_program"]) is True
-    assert rows["44001"]["county_name"] == "Bristol"
-
-
-def test_openfema_statewide_excluded_and_no_declarations():
-    """fipsCountyCode 000 (statewide) rows never join; nothing left -> NO_DECLARATIONS."""
-    fema = _fema_page([_decl("44", "000", 5000, "Drought")])
-    exc = _err("fetch_openfema_disasters", {"state_code": "RI"},
-               {"fema.gov": fema, "tigerweb": _tiger([])})
+def test_openfema_no_declaration_in_scope_is_the_typed_empty():
+    exc = _err("fetch_openfema_disasters", {"state_code": "RI"}, {"fema.gov": _fema_page([])})
     assert exc.error_code == "OPENFEMA_NO_DECLARATIONS"
     assert exc.retryable is False
 
 
-def test_openfema_bbox_clip_drops_outside_county():
-    """A county whose polygon falls outside the bbox is dropped (selector clip path)."""
+def test_openfema_a_bbox_selects_the_states_and_clips_nothing():
     fema = _fema_page([_decl("44", "001", 4001, "Flood"), _decl("44", "003", 4003, "Fire")])
-    tiger = _tiger([_county_poly("44001", "Bristol", _RI_RING),
-                    _county_poly("44003", "Kent", _RI2_RING)])
-    # bbox covers only the 44001 ring (~ -71.4..-71.3), not 44003 (~ -71.6..-71.5).
-    gdf = _run("fetch_openfema_disasters", {"bbox": [-71.45, 41.55, -71.28, 41.72]},
-               {"fema.gov": fema, "tigerweb": tiger})
-    assert set(gdf["county_fips"]) == {"44001"}
+    gdf = _run("fetch_openfema_disasters", {"bbox": [-71.45, 41.55, -71.28, 41.72]}, {"fema.gov": fema})
+    assert set(gdf["fipsCountyCode"]) == {"001", "003"}
 
 
 def test_openfema_build_request_pages_at_the_declared_offset():

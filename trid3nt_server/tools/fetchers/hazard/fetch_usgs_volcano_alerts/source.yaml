@@ -30,19 +30,8 @@ ingest:
   request:
     endpoint: [monitored, us_volcanoes]
   properties:
-  - vnum
-  - volcano_name
-  - alert_level
-  - color_code
   - alert_rank
   - color_rank
-  - elevation_m
-  - region
-  - observatory
-  - sent_utc
-  - notice_url
-  - volcano_url
-  - nvews_threat
 normalize:
   crs: EPSG:4326
   units: alert level
@@ -117,26 +106,20 @@ docstring: |-
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket. Geometry:
       Point at each summit, EPSG:4326. ``layer_type="vector"``,
       ``role="primary"`` (the client colors
-        the marker by ``color_code`` / ``alert_level``), ``units="alert level"``.
+        the marker by ``alert.color_code`` / ``alert.alert_level``), ``units="alert level"``.
       ``bbox`` is set to the volcanoes' extent so the camera auto-zooms.
-      Properties per volcano:
-          - ``vnum`` (Smithsonian GVP volcano number, e.g. ``"332010"``),
-          - ``volcano_name`` (e.g. "Kilauea"),
-          - ``alert_level`` ("NORMAL" | "ADVISORY" | "WATCH" | "WARNING";
-            null if unassigned),
-          - ``color_code`` ("GREEN" | "YELLOW" | "ORANGE" | "RED"; null if
-            unassigned),
-          - ``alert_rank`` (0=NORMAL .. 3=WARNING; -1 if unknown -- for styling),
-          - ``color_rank`` (0=GREEN .. 3=RED; -1 if unknown -- for styling),
-          - ``elevation_m`` (summit elevation, meters; null if absent),
-          - ``region`` (e.g. "Alaska - Aleutians", "Hawaii", "Cascade Range"),
-          - ``observatory`` (responsible observatory abbreviation:
-            "avo" | "cvo" | "hvo" | "yvo" | "vdap"),
-          - ``sent_utc`` (timestamp of the current notice, UTC),
-          - ``notice_url`` (the HANS notice page),
-          - ``volcano_url`` (the observatory volcano-info page),
-          - ``nvews_threat`` (National Volcano Early Warning System threat
-            class, e.g. "Very High Threat", "Moderate Threat").
+      Properties per volcano: both HANS records, whole, under HANS's own
+      names - the alert record as ``alert.<field>`` (``alert.vnum``,
+      ``alert.alert_level`` "NORMAL" | "ADVISORY" | "WATCH" | "WARNING",
+      ``alert.color_code`` "GREEN" | "YELLOW" | "ORANGE" | "RED",
+      ``alert.sent_utc``, ``alert.obs_abbr``, ``alert.notice_url``,
+      ``alert.notice_data``, ...) and the geographic record as
+      ``us_volcano.<field>`` (``us_volcano.volcano_name``,
+      ``us_volcano.region``, ``us_volcano.elevation_meters``,
+      ``us_volcano.nvews_threat`` threat class, ``us_volcano.volcano_url``,
+      ``us_volcano.icao_coordinates``, ...) - and beside them ``alert_rank``
+      (0=NORMAL .. 3=WARNING; -1 if unknown -- for styling) and ``color_rank``
+      (0=GREEN .. 3=RED; -1 if unknown -- for styling).
 
   Honest-empty path (data-source fallback norm -- primary -> honest typed
   error): a bbox that contains no monitored US volcano is a legitimate "no

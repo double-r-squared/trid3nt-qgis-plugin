@@ -1,21 +1,20 @@
-"""openfema_disasters hooks: the two steps the field map cannot state.
+"""openfema_disasters hooks: the step the field map cannot state.
 
 ``build_request`` resolves the spatial selector - a state code, or the states a bbox
-touches - into one OData filter over the declared page window; ``parse_response``
-reduces many declaration rows to ONE aggregate per county, which is not a row walk."""
+touches - into one OData filter over the declared page window; ``parse_response`` returns
+every declaration whole, as a row with no geometry."""
 
 from __future__ import annotations
 
 import datetime as _dt
 import json
-from collections import defaultdict
 from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ...us_states import STATE_CODE_TO_FIPS, states_intersecting_bbox
 from ..._router import hooks as _hooks
-from ..._router.errors import router_input_error, router_upstream_error
+from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
 
 __all__ = ["build_request", "parse_response"]
 
@@ -155,67 +154,16 @@ def _page_records(sc: str, body: bytes) -> list[dict[str, Any]]:
 
 @_hooks.register_hook("openfema_disasters.parse_response")
 def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> list[dict[str, Any]]:
-    """Reduce every declaration row to ONE geometry-less aggregate per 5-digit county
-    FIPS. A statewide row (county 000) names no county and is excluded; the declared
-    enrich then joins each aggregate to its polygon."""
+    """Every declaration row as OpenFEMA returned it, geometry-less; none in scope is the typed empty."""
     sc = spec.error_code_prefix
     records: list[dict[str, Any]] = []
     for body in bodies:
         records.extend(_page_records(sc, body))
-
-    by_fips: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {
-            "n_declarations": 0,
-            "disaster_numbers": set(),
-            "incident_types": set(),
-            "declaration_types": set(),
-            "latest_declaration": None,
-            "ia_program": False,
-            "pa_program": False,
-        }
-    )
-    for rec in records:
-        state = str(rec.get("fipsStateCode") or "").strip()
-        county = str(rec.get("fipsCountyCode") or "").strip()
-        if not state or not county or county.zfill(3) == "000":
-            continue
-        agg = by_fips[f"{state.zfill(2)}{county.zfill(3)}"]
-        agg["n_declarations"] += 1
-        dn = rec.get("disasterNumber")
-        if dn is not None:
-            agg["disaster_numbers"].add(str(dn))
-        it = rec.get("incidentType")
-        if it:
-            agg["incident_types"].add(str(it))
-        dt = rec.get("declarationType")
-        if dt:
-            agg["declaration_types"].add(str(dt))
-        dd = rec.get("declarationDate")
-        if dd and (agg["latest_declaration"] is None or dd > agg["latest_declaration"]):
-            agg["latest_declaration"] = dd
-        if rec.get("iaProgramDeclared"):
-            agg["ia_program"] = True
-        if rec.get("paProgramDeclared"):
-            agg["pa_program"] = True
-
-    return [
-        {
-            "type": "Feature",
-            "geometry": None,
-            "properties": {
-                "county_fips": fips,
-                "county_name": None,
-                "state_fips": fips[:2],
-                "n_declarations": int(agg["n_declarations"]),
-                "disaster_numbers": ",".join(
-                    sorted(agg["disaster_numbers"], key=lambda s: int(s) if s.isdigit() else 0)
-                ),
-                "incident_types": ",".join(sorted(agg["incident_types"])),
-                "declaration_types": ",".join(sorted(agg["declaration_types"])),
-                "latest_declaration": str(agg["latest_declaration"] or ""),
-                "ia_program": bool(agg["ia_program"]),
-                "pa_program": bool(agg["pa_program"]),
-            },
-        }
-        for fips, agg in by_fips.items()
-    ]
+    if not records:
+        raise router_empty_error(
+            sc,
+            "No FEMA disaster declarations match the requested scope. Try dropping the incident_type "
+            "filter, extending the year window, or widening the area.",
+            spec.empty_error_suffix,
+        )
+    return [{"type": "Feature", "geometry": None, "properties": rec} for rec in records]

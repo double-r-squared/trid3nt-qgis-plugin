@@ -217,12 +217,13 @@ def test_tsu_parse_events_and_runups():
     ev = json.dumps({"items": [{"id": 7, "latitude": 38.3, "longitude": 142.4, "year": 2011,
         "causeCode": 1, "eqMagnitude": 9.1, "maxWaterHeight": 38.9, "deathsTotal": 18000, "numRunups": 5}]}).encode()
     feats = pr(spec, {"observation_type": "events"}, [ev])
-    p = feats[0]["properties"]
-    assert p["cause"] == "Earthquake" and p["max_water_height"] == 38.9 and p["deaths"] == 18000 and p["observation_type"] == "event"
+    p = {**feats[0]["properties"], **feats[0]["produced"]}
+    assert p["cause"] == "Earthquake" and p["maxWaterHeight"] == 38.9 and p["deathsTotal"] == 18000 and p["observation_type"] == "event"
     ru = json.dumps({"items": [{"id": 8, "latitude": 38.3, "longitude": 142.4, "year": 2011,
         "sourceCauseCode": 1, "sourceEqMagnitude": 9.1, "runupHt": 9.3, "distFromSource": 120.0}]}).encode()
-    fr = pr(spec, {"observation_type": "runups"}, [ru])[0]["properties"]
-    assert fr["max_water_height"] == 9.3 and fr["dist_from_source_km"] == 120.0 and fr["observation_type"] == "runup"
+    found = pr(spec, {"observation_type": "runups"}, [ru])[0]
+    fr = {**found["properties"], **found["produced"]}
+    assert fr["runupHt"] == 9.3 and fr["distFromSource"] == 120.0 and fr["observation_type"] == "runup"
 
 
 def test_tsu_parse_empty_raises_no_events():
@@ -280,7 +281,8 @@ def test_vol_execute_joins_and_serializes(monkeypatch):
         g = gpd.read_file(p)
     finally:
         os.unlink(p)
-    assert len(g) == 1 and g.iloc[0]["alert_level"] == "WATCH" and int(g.iloc[0]["alert_rank"]) == 2
+    assert len(g) == 1 and g.iloc[0]["alert.alert_level"] == "watch" and int(g.iloc[0]["alert_rank"]) == 2
+    assert g.iloc[0]["us_volcano.region"] == "Hawaii" and g.iloc[0]["us_volcano.elevation_meters"] == 1222
 
 
 @pytest.mark.parametrize("bodies,params", [

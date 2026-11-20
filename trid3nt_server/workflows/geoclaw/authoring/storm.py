@@ -20,11 +20,12 @@ __all__ = ["STORM", "landfall_instant", "storm_track", "write_stormfiles"]
 STORM = "storm"
 
 #: A fix's published fields -> the Clawpack ``Storm`` attribute, the unit it is published in and the unit the engine reads.
+#: ``wind_kt`` and ``pres_mb`` are the fetch's own (the USA agency's value, the WMO one where it states none); the radii are IBTrACS's.
 _FIELDS = {
     "wind_kt": ("max_wind_speed", "knots", "m/s"),
-    "rmw_nmi": ("max_wind_radius", "nmi", "m"),
+    "USA_RMW": ("max_wind_radius", "nmi", "m"),
     "pres_mb": ("central_pressure", "mbar", "Pa"),
-    "roci_nmi": ("storm_radius", "nmi", "m"),
+    "USA_ROCI": ("storm_radius", "nmi", "m"),
 }
 
 
@@ -43,29 +44,29 @@ def _fixes(doc: Any) -> list[dict[str, Any]]:
     features = doc.get("features") if isinstance(doc, Mapping) else None
     rows = [{**f["properties"], "longitude": f["geometry"]["coordinates"][0], "latitude": f["geometry"]["coordinates"][1]}
             for f in features or () if isinstance(f.get("geometry"), Mapping) and f["geometry"].get("type") == "Point"
-            and (f.get("properties") or {}).get("iso_time")]
+            and (f.get("properties") or {}).get("ISO_TIME")]
     if not rows:
         _refuse("STORM_UNSTATED", "the storm record holds no fix: Storm reads the points fetch_storm_tracks returns "
                 "(geometry 'points'), one per best-track fix.")
-    storms = sorted({(row.get("sid"), row.get("name")) for row in rows}, key=str)
+    storms = sorted({(row.get("SID"), row.get("NAME")) for row in rows}, key=str)
     if len(storms) != 1:
         _refuse("STORM_SEVERAL", f"the storm record holds {len(storms)} storms ({', '.join(f'{n} {s}' for s, n in storms)}): "
                 "a run has one storm, so state the name and season of one.")
-    ordered = sorted(rows, key=lambda row: _utc(row["iso_time"]))
+    ordered = sorted(rows, key=lambda row: _utc(row["ISO_TIME"]))
     for before, after in zip(ordered, ordered[1:]):
-        if _utc(before["iso_time"]) == _utc(after["iso_time"]):
-            _refuse("STORM_FIX_DUPLICATE", f"the storm record holds two fixes at {after['iso_time']}: the engine "
+        if _utc(before["ISO_TIME"]) == _utc(after["ISO_TIME"]):
+            _refuse("STORM_FIX_DUPLICATE", f"the storm record holds two fixes at {after['ISO_TIME']}: the engine "
                     "divides by the time between fixes.")
     return ordered
 
 
 def landfall_instant(doc: Any) -> str:
     """The instant of the storm's last landfall fix (USA_RECORD 'L') as a UTC ISO-8601 timestamp; a track with none refuses."""
-    landings = [row for row in _fixes(doc) if row.get("record") == "L"]
+    landings = [row for row in _fixes(doc) if row.get("USA_RECORD") == "L"]
     if not landings:
         _refuse("STORM_NO_LANDFALL", "the storm record holds no landfall fix (USA_RECORD 'L'), so no instant of the "
                 "storm's own to count the run from: state event_time.")
-    return landings[-1]["iso_time"].strip().replace(" ", "T") + "+00:00"
+    return landings[-1]["ISO_TIME"].strip().replace(" ", "T") + "+00:00"
 
 
 def storm_track(doc: Any, *, offset: str | None, t0: float, tfinal: float) -> dict[str, Any]:
@@ -79,24 +80,24 @@ def storm_track(doc: Any, *, offset: str | None, t0: float, tfinal: float) -> di
 
     rows = _fixes(doc)
     reference = _utc(offset if offset else landfall_instant(doc))
-    seconds = [(_utc(row["iso_time"]) - reference).total_seconds() for row in rows]
+    seconds = [(_utc(row["ISO_TIME"]) - reference).total_seconds() for row in rows]
     # A fix with no wind or pressure is the interpolated track between reports, not an observation of the storm's strength.
     strength = [i for i, row in enumerate(rows) if row.get("wind_kt") is not None and row.get("pres_mb") is not None]
     # Clawpack's writer omits a fix with no radius of maximum wind, so only a fix with one can span the run.
-    usable = [i for i in strength if rows[i].get("rmw_nmi") is not None]
+    usable = [i for i in strength if rows[i].get("USA_RMW") is not None]
     if not usable or seconds[usable[0]] > t0:
-        began = f"at {rows[usable[0]]['iso_time']}" if usable else "never"
+        began = f"at {rows[usable[0]]['ISO_TIME']}" if usable else "never"
         _refuse("STORM_STARTS_LATE", f"the storm's strength and radius of maximum wind are first reported {began}, after the run opens at "
                 f"{t0:g} s from {reference.isoformat()}: the engine stops when the track begins after the run.")
     if seconds[usable[-1]] < tfinal:
-        _refuse("STORM_ENDS_EARLY", f"the storm's strength and radius of maximum wind are last reported at {rows[usable[-1]]['iso_time']}, "
+        _refuse("STORM_ENDS_EARLY", f"the storm's strength and radius of maximum wind are last reported at {rows[usable[-1]]['ISO_TIME']}, "
                 f"before the run ends at {tfinal:g} s from {reference.isoformat()}: the engine would carry the last "
                 "fix on unchanged, so shorten CLAW_TFINAL.")
     first = max(i for i in usable if seconds[i] <= t0)
     last = min(i for i in usable if seconds[i] >= tfinal)
     kept = [i for i in strength if first <= i <= last]
-    if sum(rows[i].get("rmw_nmi") is not None for i in kept) < 2:
-        _refuse("STORM_TOO_FEW_FIXES", f"only {sum(rows[i].get('rmw_nmi') is not None for i in kept)} fix spans the run once the fixes with no "
+    if sum(rows[i].get("USA_RMW") is not None for i in kept) < 2:
+        _refuse("STORM_TOO_FEW_FIXES", f"only {sum(rows[i].get('USA_RMW') is not None for i in kept)} fix spans the run once the fixes with no "
                 "radius of maximum wind (IBTrACS USA_RMW) are omitted: the engine takes the storm's velocity from two.")
     # A value the fix lacks stays NaN: the writer omits a fix with no radius of maximum wind and fills a missing outer radius with 500 km.
     nan = float("nan")
@@ -104,8 +105,8 @@ def storm_track(doc: Any, *, offset: str | None, t0: float, tfinal: float) -> di
               **{attribute: float(units.convert(float(rows[i][name]), have, want)) if rows[i].get(name) is not None else nan
                  for name, (attribute, have, want) in _FIELDS.items()}} for i in kept]
     return {"time_offset": reference.isoformat(timespec="seconds"), "fixes": track,
-            "omitted": [rows[i]["iso_time"] for i in kept if rows[i].get("rmw_nmi") is None],
-            "default_radius": [rows[i]["iso_time"] for i in kept if rows[i].get("rmw_nmi") is not None and rows[i].get("roci_nmi") is None]}
+            "omitted": [rows[i]["ISO_TIME"] for i in kept if rows[i].get("USA_RMW") is None],
+            "default_radius": [rows[i]["ISO_TIME"] for i in kept if rows[i].get("USA_RMW") is not None and rows[i].get("USA_ROCI") is None]}
 
 
 def write_stormfiles(sheet: Any, work: Path) -> list[str]:

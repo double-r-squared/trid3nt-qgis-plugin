@@ -10,14 +10,13 @@ representative point and refuses a zero-match query by name. Waterways
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..._router.errors import router_empty_error, router_input_error
 from ..._router.hooks import register_hook
-from ..._router.hooks.osm import clip_to_bbox, osm_id_of, overpass_features
+from ..._router.hooks.osm import clip_to_bbox, osm_id_of, overpass_features, tags_of
 
 __all__ = ["validate", "delegate"]
 
@@ -45,10 +44,6 @@ _VALUE_KEY_ALIASES: dict[str, str] = {
 #: The OSM ``man_made`` values that are wave BARRIERS. ``pier`` is excluded on
 #: purpose: it is the berthing dock being sheltered, not a wave barrier.
 _BARRIER_VALUES: tuple[str, ...] = ("breakwater", "groyne")
-
-#: Columns the library adds that are not OSM tags, so the tag bag stays the tags.
-_NON_TAG_COLUMNS: frozenset[str] = frozenset({"geometry", "nodes", "ways", "element"})
-
 
 def _resolve_road_classes(sc: str, sfx: str, road_classes: Any) -> list[str]:
     """Validate the highway-tag set, sorted; an unknown value is a typed error. An
@@ -194,17 +189,6 @@ def _representative_point(geom: Any) -> tuple[float, float] | None:
     return (minx + maxx) / 2.0, (miny + maxy) / 2.0
 
 
-def _tag_bag(row: Any) -> dict[str, Any]:
-    """The element's own tags, in the shape OSM published them."""
-    import pandas as pd
-
-    return {
-        str(k): str(v)
-        for k, v in row.items()
-        if k not in _NON_TAG_COLUMNS and not pd.isna(v)
-    }
-
-
 def _roads_features(
     spec: SourceSpec, params: dict[str, Any], *, timeout_s: float
 ) -> list[dict[str, Any]]:
@@ -215,18 +199,12 @@ def _roads_features(
     bbox = tuple(float(v) for v in params["bbox"])
     out: list[dict[str, Any]] = []
     for idx, row in gdf.iterrows():
-        props = {
-            "osm_id": osm_id_of(idx),
-            "name": row.get("name"),
-            "highway": row.get("highway"),
-            "lanes": row.get("lanes"),
-            "maxspeed": row.get("maxspeed"),
-        }
         for seg in clip_to_bbox(row.geometry, bbox):
             out.append({
                 "type": "Feature",
                 "geometry": {"type": "LineString", "coordinates": seg},
-                "properties": dict(props),
+                "properties": tags_of(row),
+                "produced": {"osm_id": osm_id_of(idx)},
             })
     return out
 
@@ -252,14 +230,12 @@ def _pois_features(
         out.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [lon, lat]},
-            "properties": {
+            "properties": tags_of(row),
+            "produced": {
                 "osm_id": osm_id_of(idx),
                 "osm_type": str(idx[0]) if isinstance(idx, tuple) else None,
-                "name": row.get("name"),
                 "key": key,
                 "value": value,
-                "tags_json": json.dumps(
-                    _tag_bag(row), separators=(",", ":"), sort_keys=True),
             },
         })
     if not out:
@@ -288,11 +264,8 @@ def _coastline_features(
         out.append({
             "type": "Feature",
             "geometry": {"type": "LineString", "coordinates": coords},
-            "properties": {
-                "osm_id": osm_id_of(idx),
-                "name": row.get("name"),
-                "natural": row.get("natural"),
-            },
+            "properties": tags_of(row),
+            "produced": {"osm_id": osm_id_of(idx)},
         })
     return out
 
@@ -314,11 +287,8 @@ def _breakwaters_features(
         out.append({
             "type": "Feature",
             "geometry": {"type": "LineString", "coordinates": coords},
-            "properties": {
-                "osm_id": osm_id_of(idx),
-                "name": row.get("name"),
-                "man_made": row.get("man_made"),
-            },
+            "properties": tags_of(row),
+            "produced": {"osm_id": osm_id_of(idx)},
         })
     return out
 

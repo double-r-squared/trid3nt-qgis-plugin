@@ -409,15 +409,6 @@ def _parse_ibtracs_csv(
         pres = _blank_to_none_float(_col(row, "USA_PRES"))
         if pres is None:
             pres = _blank_to_none_float(_col(row, "WMO_PRES"))
-        cat = _blank_to_none_int(_col(row, "USA_SSHS"))
-        rmw_nmi = _blank_to_none_float(_col(row, "USA_RMW"))
-        poci_mb = _blank_to_none_float(_col(row, "USA_POCI"))
-        roci_nmi = _blank_to_none_float(_col(row, "USA_ROCI"))
-        r34_ne = _blank_to_none_float(_col(row, "USA_R34_NE"))
-        r34_se = _blank_to_none_float(_col(row, "USA_R34_SE"))
-        r34_sw = _blank_to_none_float(_col(row, "USA_R34_SW"))
-        r34_nw = _blank_to_none_float(_col(row, "USA_R34_NW"))
-        record = _col(row, "USA_RECORD").strip() or None
         storms.setdefault(sid, []).append(
             {
                 "sid": sid,
@@ -425,21 +416,12 @@ def _parse_ibtracs_csv(
                 "basin": _col(row, "BASIN").strip() or None,
                 "name": name or None,
                 "iso_time": _col(row, "ISO_TIME").strip() or None,
-                "nature": _col(row, "NATURE").strip() or None,
                 "lat": lat,
                 "lon": lon,
                 "wind_kt": wind,
                 "pres_mb": pres,
-                "category": cat,
-                "status": _col(row, "USA_STATUS").strip() or None,
-                "record": record,
-                "rmw_nmi": rmw_nmi,
-                "poci_mb": poci_mb,
-                "roci_nmi": roci_nmi,
-                "r34_ne_nmi": r34_ne,
-                "r34_se_nmi": r34_se,
-                "r34_sw_nmi": r34_sw,
-                "r34_nw_nmi": r34_nw,
+                "category": _blank_to_none_int(_col(row, "USA_SSHS")),
+                "row": {h: (row[i].strip() or None) if i < len(row) else None for h, i in idx.items()},
             }
         )
     return storms
@@ -520,28 +502,22 @@ def _parse_current_storms(raw: bytes) -> list[dict[str, Any]]:
                 s.get("id") or s.get("name"),
             )
             continue
-        fc_track = s.get("forecastTrack") or {}
-        records.append(
-            {
-                "id": str(s.get("id") or "").strip() or None,
-                "name": str(s.get("name") or "").strip() or None,
-                "classification": str(s.get("classification") or "").strip()
-                or None,
-                "intensity_kt": _blank_to_none_float(s.get("intensity")),
-                "pressure_mb": _blank_to_none_float(s.get("pressure")),
-                "lat": lat,
-                "lon": lon,
-                "movement_dir_deg": _blank_to_none_float(s.get("movementDir")),
-                "movement_speed_kt": _blank_to_none_float(s.get("movementSpeed")),
-                "last_update": str(s.get("lastUpdate") or "").strip() or None,
-                "forecast_track_zip": (
-                    str(fc_track.get("zipFile") or "").strip() or None
-                    if isinstance(fc_track, dict)
-                    else None
-                ),
-            }
-        )
+        records.append({"lon": lon, "lat": lat, "record": s})
     return records
+
+
+def _shapefile_record(row: Any) -> dict[str, Any]:
+    """One shapefile row as the advisory holds it: every field under its own name, a hole as null, an instant as ISO text."""
+    import pandas as pd
+
+    return {str(k): (None if pd.isna(v) else v.isoformat() if hasattr(v, "isoformat") else v.item() if hasattr(v, "item") else v)
+            for k, v in row.items()}
+
+
+def _current_position(storm: dict[str, Any]) -> dict[str, Any]:
+    """An active storm's NHC record, whole, as the point feature record of its current position."""
+    return {"lon": storm["lon"], "lat": storm["lat"], "properties": storm["record"],
+            "produced": {"tau_h": 0.0, "is_forecast": 0}}
 
 
 def _fetch_forecast_track_points(
@@ -574,43 +550,17 @@ def _fetch_forecast_track_points(
             gdf = gdf.to_crs("EPSG:4326")
         cols = {c.lower(): c for c in gdf.columns}
 
-        def _field(row: Any, *names: str) -> Any:
-            for n in names:
-                c = cols.get(n)
-                if c is not None:
-                    return row[c]
-            return None
-
         out: list[dict[str, Any]] = []
         for _, row in gdf.iterrows():
             geom = row.geometry
             if geom is None or geom.is_empty or geom.geom_type != "Point":
                 continue
-            tau = _blank_to_none_float(_field(row, "tau", "fhour"))
-            out.append(
-                {
-                    "id": storm.get("id"),
-                    "name": storm.get("name"),
-                    "classification": (
-                        str(_field(row, "tcdvlp", "stormtype", "dvlbl") or "").strip()
-                        or None
-                    ),
-                    "intensity_kt": _blank_to_none_float(
-                        _field(row, "maxwind", "vmax")
-                    ),
-                    "pressure_mb": _blank_to_none_float(_field(row, "mslp")),
-                    "lat": float(geom.y),
-                    "lon": float(geom.x),
-                    "movement_dir_deg": None,
-                    "movement_speed_kt": None,
-                    "last_update": (
-                        str(_field(row, "fldatelbl", "validtime", "datelbl") or "")
-                        .strip()
-                        or None
-                    ),
-                    "tau_h": tau,
-                }
-            )
+            tau = next((_blank_to_none_float(row[cols[n]]) for n in ("tau", "fhour") if n in cols), None)
+            out.append({
+                "lon": float(geom.x), "lat": float(geom.y),
+                "properties": _shapefile_record(row.drop(labels="geometry")),
+                "produced": {"tau_h": tau, "is_forecast": 1},
+            })
         return out
     except StormTracksUpstreamError as exc:
         logger.warning(
@@ -634,7 +584,7 @@ def _fetch_forecast_track_points(
 def _line_features(
     storms: dict[str, list[dict[str, Any]]],
 ) -> list[dict[str, Any]]:
-    """One LineString feature per storm (fixes in time order)."""
+    """One LineString feature per storm (fixes in time order): the storm's own IBTrACS fields and a summary of its fixes."""
     feats: list[dict[str, Any]] = []
     n_dropped = 0
     for sid, fixes in sorted(storms.items()):
@@ -652,11 +602,9 @@ def _line_features(
                     "type": "LineString",
                     "coordinates": [[f["lon"], f["lat"]] for f in fixes],
                 },
-                "properties": {
-                    "sid": sid,
-                    "name": fixes[0]["name"],
-                    "season": fixes[0]["season"],
-                    "basin": fixes[0]["basin"],
+                "properties": {"SID": sid, "SEASON": fixes[0]["season"], "BASIN": fixes[0]["basin"],
+                               "NAME": fixes[0]["name"]},
+                "produced": {
                     "max_wind_kt": max(winds) if winds else None,
                     "min_pres_mb": min(press) if press else None,
                     "max_category": max_cat,
@@ -681,24 +629,28 @@ def _line_features(
 
 
 def _point_features(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One Point feature per record (EPSG:4326)."""
-    feats: list[dict[str, Any]] = []
-    for r in records:
-        props = {
-            k: v
-            for k, v in r.items()
-            if k not in ("lat", "lon", "forecast_track_zip")
+    """One Point feature per ``{lon, lat, properties, produced}`` record (EPSG:4326)."""
+    return [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [r["lon"], r["lat"]]},
+            "properties": r["properties"],
+            "produced": r["produced"],
         }
-        feats.append(
-            {
-                "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [r["lon"], r["lat"]]},
-                "properties": props,
-            }
-        )
-    return feats
+        for r in records
+    ]
 
 
+def _typed(rows: list[dict[str, Any]]) -> None:
+    """Each IBTrACS column a number where every cell it holds is one (a whole number where all are), in place."""
+    for column in rows[0] if rows else ():
+        held = [row[column] for row in rows if row[column] is not None]
+        numbers = [_blank_to_none_float(v) for v in held]
+        if held and None not in numbers:
+            whole = all(v.lstrip("+-").isdigit() for v in held)
+            for row in rows:
+                if row[column] is not None:
+                    row[column] = int(row[column]) if whole else float(row[column])
 
 
 def _fetch_historical(
@@ -746,11 +698,14 @@ def _fetch_historical(
                 f"{_MAX_POINT_FEATURES}-point cap for {scope}. Narrow the "
                 f"bbox / year range, or use geometry='lines'."
             )
-        rows = [
-            dict(f, category_label=_saffir_label(f["category"]))
+        _typed([f["row"] for f in all_fixes])
+        records = [
+            {"lon": f["lon"], "lat": f["lat"], "properties": f["row"],
+             "produced": {"wind_kt": f["wind_kt"], "pres_mb": f["pres_mb"],
+                          "category_label": _saffir_label(f["category"])}}
             for f in all_fixes
         ]
-        return _point_features(rows), names
+        return _point_features(records), names
     return _line_features(selected), names
 
 
@@ -766,7 +721,7 @@ def _fetch_active(
 
     if storm_name:
         want = storm_name.strip().upper()
-        storms = [s for s in storms if (s.get("name") or "").upper() == want]
+        storms = [s for s in storms if str(s["record"].get("name") or "").strip().upper() == want]
     if bbox is not None:
         west, south, east, north = bbox
         storms = [
@@ -785,17 +740,13 @@ def _fetch_active(
 
     records: list[dict[str, Any]] = []
     for s in storms:
-        cur = {k: v for k, v in s.items() if k != "forecast_track_zip"}
-        cur["tau_h"] = 0.0
-        cur["is_forecast"] = 0
-        records.append(cur)
-        zip_url = s.get("forecast_track_zip")
+        records.append(_current_position(s))
+        zip_url = ((s["record"].get("forecastTrack") or {}).get("zipFile") or "").strip()
         if zip_url:
-            for p in _fetch_forecast_track_points(zip_url, s):
-                p["is_forecast"] = 1
-                records.append(p)
+            records.extend(_fetch_forecast_track_points(zip_url, s))
 
-    names = sorted({(s.get("name") or s.get("id") or "storm") for s in storms})
+    names = sorted({(str(s["record"].get("name") or "").strip() or str(s["record"].get("id") or "").strip() or "storm")
+                    for s in storms})
     return _point_features(records), names
 
 

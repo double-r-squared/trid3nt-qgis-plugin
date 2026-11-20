@@ -223,7 +223,7 @@ def test_two_datums_over_one_survey_are_refused_rather_than_chosen_between(spec)
 def test_two_surveys_on_two_zeros_are_refused_at_fetch_by_name(spec):
     """Each survey states one zero, but a layer laying both side by side would
     count its depths from two places: the fetch refuses, naming each."""
-    rows = [{"properties": {"survey_id": sid, "vertical_datum": datum}}
+    rows = [{"produced": {"survey_id": sid, "vertical_datum": datum}}
             for sid, datum in (("DE_01", "LWD_IGLD85"), ("DE_02", "MLLW"),
                                ("DE_01", "LWD_IGLD85"))]
     with pytest.raises(RouterEmptyError) as excinfo:
@@ -337,7 +337,8 @@ def test_a_blank_datum_reads_the_elevations_the_package_states_to_be_navd88(spec
     assert eh._stated_unit(points) == "usSurveyFoot"
     soundings, datum = eh._vouched_elevations(spec, archive, points, OMAHA)
     assert datum == "NAVD88" and len(soundings) == 300
-    lon, lat, depth_m = soundings[0]
+    lon, lat, depth_m, record = soundings[0]
+    assert record == {}     # the XYZ file names no field
     # 945.37 ft NAVD88 is 288.1494 m above the datum: a depth of -288.1494 m below it
     assert depth_m == pytest.approx(-288.1494, abs=1e-4)
     assert (lon, lat) == pytest.approx((-95.8422, 41.1797), abs=1e-4)
@@ -427,9 +428,9 @@ def test_a_package_stating_depths_is_left_out_and_the_navd88_package_kept(spec, 
     token = bind_notes()
     rows = eh.read(spec, {"bbox": (-95.945, 41.175, -95.87, 41.265)}, timeout_s=60.0)
     notes = drain_notes(token)
-    assert {r["properties"]["survey_id"] for r in rows} == {OMAHA}
-    assert sum(r["properties"]["part"] == "sounding" for r in rows) == 300
-    assert {r["properties"]["vertical_datum"] for r in rows} == {"NAVD88"}
+    assert {r["produced"]["survey_id"] for r in rows} == {OMAHA}
+    assert sum(r["produced"]["part"] == "sounding" for r in rows) == 300
+    assert {r["produced"]["vertical_datum"] for r in rows} == {"NAVD88"}
     left_out = [n for n in notes if DEPTHS_2024 in n and "left out" in n]
     assert len(left_out) == 1 and "EHYDRO_DEPTH_NOT_ELEVATION" in left_out[0]
     assert not any(DEPTHS_2024 in n for n in notes if "measured by" in n)

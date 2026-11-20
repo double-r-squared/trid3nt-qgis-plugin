@@ -44,18 +44,8 @@ ingest:
     library: dataretrieval
     timeout_s: 60.0
   properties:
-    - site_id
-    - site_name
-    - site_type
-    - huc8
-    - activity_id
-    - sample_date
-    - characteristic
-    - collection_equipment
-    - horizontal_datum
+    - ActivityIdentifier
     - vertical_datum
-    - vertical_elevation
-    - vertical_elevation_unit
     - n_size_classes
     - pct_finer_0p004mm
     - pct_finer_0p008mm
@@ -137,7 +127,7 @@ caveats:
   - "only ActivityMediaSubdivisionName=='Bottom material' rows count as bed material (Surface Water rows are a different medium) and only ResultMeasure/MeasureUnitCode=='%' rows are percent-finer (a handful of WQP rows carry a mass in grams instead); both are dropped and the drop counts are logged, never silently folded in"
   - "a sample whose site has no matching WQP Station record carries no geometry and is dropped (counted, logged) rather than placed by guess"
   - "ResultParticleSizeBasisText outside the standard less-than-X-mm phrasing (a range, or a size this fetch does not recognize) is skipped for that one result and logged; the rest of the sample's classes still carry"
-  - "vertical_elevation is the WQP Station's own VerticalMeasure, in whatever unit and vertical_datum the station states (NGVD29 or NAVD88 per station, never assumed); null where the station states none"
+  - "VerticalMeasure/MeasureValue is the WQP Station's own, in the unit VerticalMeasure/MeasureUnitCode and the vertical_datum the station states (NGVD29 or NAVD88 per station, never assumed); null where the station states none"
   - "bbox area capped at 100 deg^2"
 
 docstring: |-
@@ -178,10 +168,13 @@ docstring: |-
 
   Returns:
       ``LayerURI`` for a point FlatGeobuf in EPSG:4326, one feature per
-      sample, carrying ``site_id``, ``site_name``, ``site_type``, ``huc8``,
-      ``activity_id``, ``sample_date``, ``collection_equipment``,
-      ``horizontal_datum``, ``vertical_datum``, ``vertical_elevation`` (+
-      unit), ``n_size_classes``, and one ``pct_finer_<x>mm`` column per
+      sample, carrying the WQP Station record whole under the portal's own
+      names (``MonitoringLocationIdentifier``, ``MonitoringLocationName``,
+      ``HUCEightDigitCode``, ``VerticalMeasure/MeasureValue``, ...),
+      ``results`` (JSON text: every resultPhysChem row of the sample whole, one
+      per grain-size class), ``ActivityIdentifier``, ``vertical_datum`` (the
+      Station's ``VerticalCoordinateReferenceSystemDatumName``),
+      ``n_size_classes``, and one ``pct_finer_<x>mm`` column per
       standard grain-size threshold from 0.004 mm to 32 mm (null where the
       sample states none). ``layer_type="vector"``.
 

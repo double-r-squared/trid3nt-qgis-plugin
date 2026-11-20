@@ -1,8 +1,9 @@
 """fault_sources hooks: the kinematics GEM states in prose.
 
 ``parse_response`` bbox-filters the whole-world harmonized GeoJSON the declared
-request downloads once, and reads each fault's kinematics out of it. A zero-fault AOI
-returns no feature, so the emptiness switch answers with a record."""
+request downloads once, keeps each fault's GEM record whole and produces the kinematics
+read out of it. A zero-fault AOI returns no feature, so the emptiness switch answers
+with a record."""
 
 # The kinematic parse is the irreducible step: the '(best,min,max)' triple, the
 # two-distinct-vertex and positive-slip gate, and the refusal to supply a dip, rake or
@@ -26,12 +27,9 @@ __all__ = ["parse_response", "envelope", "empty_record"]
 #: Provenance label, mirrored on both the dict and LayerURI return shapes.
 _SOURCE_LABEL = "GEM Global Active Faults (harmonized)"
 
-#: The drawable/kinematic property columns carried on every fault feature (the
-#: fault-source record fields the OpenQuake deck builder + click-inspect read).
-_PROPS = (
-    "name", "net_slip_rate_mm_yr", "dip_deg", "rake_deg",
-    "upper_seis_depth_km", "lower_seis_depth_km", "slip_type", "catalog_name",
-    "dropped_reason",
+#: The columns a fault feature produces beside GEM's own record: the kinematics read off its triples.
+_PRODUCED = (
+    "net_slip_rate_mm_yr", "dip_deg", "rake_deg", "upper_seis_depth_km", "lower_seis_depth_km", "dropped_reason",
 )
 
 
@@ -116,18 +114,13 @@ def _parse_fault_feature(feature: dict[str, Any]) -> dict[str, Any] | None:
     if reason is not None:
         dip = rake = usd = lsd = None
 
-    slip_type = props.get("slip_type")
-    catalog_name = props.get("catalog_name")
     return {
-        "name": str(props.get("name") or "fault"),
         "geometry": pts,
         "net_slip_rate_mm_yr": float(slip),
         "dip_deg": dip,
         "rake_deg": rake,
         "upper_seis_depth_km": usd,
         "lower_seis_depth_km": lsd,
-        "slip_type": str(slip_type) if slip_type else None,
-        "catalog_name": str(catalog_name) if catalog_name else None,
         "dropped_reason": reason,
     }
 
@@ -171,7 +164,8 @@ def parse_response(
             {
                 "type": "Feature",
                 "geometry": {"type": "LineString", "coordinates": line},
-                "properties": {k: record.get(k) for k in _PROPS},
+                "properties": feature.get("properties") or {},
+                "produced": {k: record.get(k) for k in _PRODUCED},
             }
         )
     return out
@@ -203,7 +197,7 @@ def _faults_from_fgb(data: bytes) -> list[dict[str, Any]]:
         if geom is not None and geom.geom_type == "LineString":
             coords = [[float(x), float(y)] for x, y in geom.coords]
         rec: dict[str, Any] = {"geometry": coords}
-        for k in _PROPS:
+        for k in ("name", "slip_type", "catalog_name", *_PRODUCED):
             v = row.get(k)
             if v is None or (isinstance(v, float) and v != v):  # drop NaN
                 rec[k] = None
@@ -212,6 +206,7 @@ def _faults_from_fgb(data: bytes) -> list[dict[str, Any]]:
                 rec[k] = float(v)
             else:
                 rec[k] = str(v)
+        rec["name"] = rec["name"] or "fault"
         recs.append(rec)
     return recs
 

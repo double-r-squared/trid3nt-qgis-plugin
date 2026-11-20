@@ -22,8 +22,8 @@ def test_the_epicentre_is_the_records_preferred_origin():
     rec = hooks.record(get_spec("fetch_earthquake_epicentre"), {"event_id": "us6000qw60"}, [_EVENT.read_bytes()])
 
     assert (rec["longitude"], rec["latitude"], rec["depth_km"]) == (160.2395, 52.4948, 35.0)
-    assert rec["time"] == "2025-07-29T23:24:52.483000Z"
-    assert (rec["event_id"], rec["magnitude"], rec["magnitude_type"], rec["status"]) == ("us6000qw60", 8.8, "mww", "reviewed")
+    assert rec["origin_time"] == "2025-07-29T23:24:52.483000Z" and rec["time"] == 1753831492483
+    assert (rec["event_id"], rec["mag"], rec["magType"], rec["status"]) == ("us6000qw60", 8.8, "mww", "reviewed")
 
 
 def test_a_record_without_a_point_and_an_unstated_event_refuse_by_name():

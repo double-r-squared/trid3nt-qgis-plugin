@@ -173,8 +173,25 @@ def _aggregate(fips):
             "properties": {"county_fips": fips, "state_fips": fips[:2], "county_name": None}}
 
 
+def _county_enrich_spec() -> SourceSpec:
+    """The declared county-polygon join, on a copy of a source that no longer declares one: the mechanism is what is tested."""
+    spec = _with_ingest("fetch_openfema_disasters", enrich={
+        "key_column": "state_fips", "max_detail_fetches": 3000,
+        "request": {"endpoint": "counties", "params": {
+            "where": "STATE='{key}'", "outFields": "GEOID,NAME,STATE,COUNTY", "returnGeometry": "true",
+            "outSR": "4326", "f": "geojson"}},
+        "body": {"format": "json", "rows_path": "features"},
+        "join": {"detail_key": "properties.GEOID", "feature_key": "county_fips", "geometry": True,
+                 "drop_unmatched": True, "take": {"county_name": "properties.NAME"}},
+        "clip_to_bbox": True}, empty={
+        "code": "NO_DECLARATIONS", "message": "No declaration joined a county polygon in scope."})
+    counties = spec.endpoints["data"].model_copy(update={
+        "url": "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/1/query"})
+    return spec.model_copy(update={"endpoints": {**spec.endpoints, "counties": counties}})
+
+
 def test_enrich_plans_are_one_request_per_distinct_key():
-    spec = _spec("fetch_openfema_disasters")
+    spec = _county_enrich_spec()
     params = R.validate_params(spec, {"state_code": "RI"})
     plans = F.enrich_plans(spec, params, [_aggregate("44001"), _aggregate("44003"),
                                           _aggregate("25001")])
@@ -183,7 +200,7 @@ def test_enrich_plans_are_one_request_per_distinct_key():
 
 
 def test_enrich_join_lifts_geometry_and_the_named_columns():
-    spec = _spec("fetch_openfema_disasters")
+    spec = _county_enrich_spec()
     params = R.validate_params(spec, {"state_code": "RI"})
     out = F.enrich_merge(spec, params, [_aggregate("44001")],
                          {"44": _counties(("44001", "Bristol", _RING_A))})
@@ -192,7 +209,7 @@ def test_enrich_join_lifts_geometry_and_the_named_columns():
 
 
 def test_enrich_drops_the_unmatched_and_clips_to_the_bbox():
-    spec = _spec("fetch_openfema_disasters")
+    spec = _county_enrich_spec()
     params = R.validate_params(spec, {"bbox": [-71.45, 41.55, -71.28, 41.72]})
     detail = {"44": _counties(("44001", "Bristol", _RING_A), ("44003", "Kent", _RING_B))}
     out = F.enrich_merge(spec, params, [_aggregate("44001"), _aggregate("44003"),
@@ -201,7 +218,7 @@ def test_enrich_drops_the_unmatched_and_clips_to_the_bbox():
 
 
 def test_enrich_joining_nothing_raises_the_declared_empty():
-    spec = _spec("fetch_openfema_disasters")
+    spec = _county_enrich_spec()
     params = R.validate_params(spec, {"state_code": "RI"})
     with pytest.raises(RouterEmptyError) as ee:
         F.enrich_merge(spec, params, [_aggregate("44001")], {"44": _counties()})

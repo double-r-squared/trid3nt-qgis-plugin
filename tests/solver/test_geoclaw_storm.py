@@ -31,8 +31,8 @@ _LANDFALL = "2008-09-13T07:00:00+00:00"
 def _doc(rows=_ROWS, sid="2008245N17323", name="IKE", **gaps) -> dict:
     features = []
     for time, lat, lon, record, wind, pres, rmw, roci in rows:
-        props = {"sid": sid, "name": name, "iso_time": time, "record": record, "wind_kt": wind, "pres_mb": pres,
-                 "rmw_nmi": rmw, "roci_nmi": roci, **gaps.get(time, {})}
+        props = {"SID": sid, "NAME": name, "ISO_TIME": time, "USA_RECORD": record, "wind_kt": wind, "pres_mb": pres,
+                 "USA_RMW": rmw, "USA_ROCI": roci, **gaps.get(time, {})}
         features.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props})
     return {"type": "FeatureCollection", "features": features}
 
@@ -87,7 +87,7 @@ def _read(track, tmp_path):
 
 
 def test_a_fix_without_the_outer_radius_takes_clawpacks_500_km_and_is_named(tmp_path):
-    track = storm_track(_doc(**{"2008-09-13 09:00:00": {"roci_nmi": None}}), offset=_LANDFALL, t0=-3600.0, tfinal=7200.0)
+    track = storm_track(_doc(**{"2008-09-13 09:00:00": {"USA_ROCI": None}}), offset=_LANDFALL, t0=-3600.0, tfinal=7200.0)
     read = _read(track, tmp_path)
 
     assert track["default_radius"] == ["2008-09-13 09:00:00"] and track["omitted"] == []
@@ -96,7 +96,7 @@ def test_a_fix_without_the_outer_radius_takes_clawpacks_500_km_and_is_named(tmp_
 
 
 def test_a_fix_without_the_radius_of_maximum_wind_is_omitted_by_the_writer_and_named(tmp_path):
-    track = storm_track(_doc(**{"2008-09-13 06:00:00": {"rmw_nmi": None}}), offset=_LANDFALL, t0=-3600.0, tfinal=7200.0)
+    track = storm_track(_doc(**{"2008-09-13 06:00:00": {"USA_RMW": None}}), offset=_LANDFALL, t0=-3600.0, tfinal=7200.0)
     read = _read(track, tmp_path)
 
     assert track["omitted"] == ["2008-09-13 06:00:00"] and len(track["fixes"]) == 4
@@ -104,20 +104,20 @@ def test_a_fix_without_the_radius_of_maximum_wind_is_omitted_by_the_writer_and_n
 
 
 def test_a_track_spans_the_run_by_the_fixes_the_writer_keeps():
-    gaps = {"2008-09-13 03:00:00": {"rmw_nmi": None}, "2008-09-13 06:00:00": {"rmw_nmi": None}}
+    gaps = {"2008-09-13 03:00:00": {"USA_RMW": None}, "2008-09-13 06:00:00": {"USA_RMW": None}}
 
     assert "2008-09-13 07:00:00" in _refused("STORM_STARTS_LATE", _doc(**gaps), offset=_LANDFALL, t0=-14400.0, tfinal=0.0)
 
 
 def test_fewer_than_two_usable_fixes_refuse():
-    gaps = {t: {"rmw_nmi": None} for t in ("2008-09-13 03:00:00", "2008-09-13 06:00:00", "2008-09-13 09:00:00", "2008-09-13 12:00:00")}
+    gaps = {t: {"USA_RMW": None} for t in ("2008-09-13 03:00:00", "2008-09-13 06:00:00", "2008-09-13 09:00:00", "2008-09-13 12:00:00")}
     message = _refused("STORM_TOO_FEW_FIXES", _doc(**gaps), offset=_LANDFALL, t0=0.0, tfinal=0.0)
 
     assert "USA_RMW" in message
 
 
 def test_a_fix_outside_the_window_without_a_radius_is_not_read():
-    track = storm_track(_doc(**{"2008-09-13 12:00:00": {"rmw_nmi": None}}), offset=_LANDFALL, t0=-3600.0, tfinal=7200.0)
+    track = storm_track(_doc(**{"2008-09-13 12:00:00": {"USA_RMW": None}}), offset=_LANDFALL, t0=-3600.0, tfinal=7200.0)
 
     assert len(track["fixes"]) == 3
 
@@ -204,7 +204,7 @@ def test_fixed_grids_frames_start_at_the_runs_first_instant():
 
 
 def test_the_review_card_says_how_many_fixes_were_omitted_and_which_took_the_default_radius():
-    gaps = {"2008-09-13 06:00:00": {"rmw_nmi": None}, "2008-09-13 09:00:00": {"roci_nmi": None}}
+    gaps = {"2008-09-13 06:00:00": {"USA_RMW": None}, "2008-09-13 09:00:00": {"USA_ROCI": None}}
     _, files = GEO.COMPOSITES["Storm"].apply(_stated(storm_tracks=_doc(**gaps)), _RUN)
     rows, _ = GEO.sheet({}, files, {}).engine_rows()
 

@@ -176,15 +176,7 @@ def features(spec: SourceSpec, params: dict[str, Any], *,
         geom = feat.get("geometry")
         if not isinstance(geom, dict) or geom.get("type") != "LineString":
             continue
-        props = feat.get("properties") or {}
-        cid = props.get("nhdplus_comid") or props.get("comid") or feat.get("id")
-        try:
-            cid_int = int(cid) if cid is not None else None
-        except (TypeError, ValueError):
-            cid_int = None
-        feats.append(
-            {"type": "Feature", "geometry": geom, "properties": {"nhdplus_comid": cid_int}}
-        )
+        feats.append({"type": "Feature", "geometry": geom, "properties": feat.get("properties") or {}})
 
     if len(feats) > _NLDI_MAX_FLOWLINES:
         logger.warning(

@@ -71,8 +71,11 @@ docstring: |-
       event_id: the ComCat event id, such as ``us6000qw60``.
 
   Returns:
-      a JSON-compatible dict with ``event_id``, ``longitude``, ``latitude``, ``depth_km``,
-      ``time`` (ISO 8601 UTC), ``magnitude``, ``magnitude_type``, ``title`` and ``status``.
+      a JSON-compatible dict: every property ComCat returns for the event under its own names
+      (``mag``, ``magType``, ``time`` epoch milliseconds, ``place``, ``title``, ``status``, ``sig``,
+      ``products`` with each product's properties - the origin's ``depth-error`` and
+      ``horizontal-error`` among them - ...) and beside them ``event_id``, ``longitude``,
+      ``latitude``, ``depth_km`` (the preferred origin's point) and ``origin_time`` (ISO 8601 UTC).
 
   Cross-tool dependencies:
       - Composes WITH: the GeoClaw templates' ``catalogue_epicentre``.

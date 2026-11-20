@@ -58,13 +58,6 @@ ingest:
     endpoint_fallback: true
   properties:
     - part
-    - gnis_name
-    - gnis_id
-    - permanent_identifier
-    - ftype
-    - fcode
-    - reachcode
-    - areasqkm
     - seed_distance_km
 
 hooks:
@@ -171,10 +164,11 @@ docstring: |-
 
   Returns:
       ``LayerURI`` for a FlatGeobuf in EPSG:4326 carrying one polygon with
-      ``part``, ``gnis_name`` (null for many small ponds), ``gnis_id``,
-      ``permanent_identifier``, ``ftype`` (390 LakePond, 436 Reservoir, 361
-      Playa, 466 SwampMarsh, 493 Estuary, 378 IceMass), ``fcode``,
-      ``reachcode``, ``areasqkm`` (the source's own area) and
+      every field the NHD service returns, lower-cased (``gnis_name`` null for
+      many small ponds, ``gnis_id``, ``permanent_identifier``, ``ftype`` 390
+      LakePond, 436 Reservoir, 361 Playa, 466 SwampMarsh, 493 Estuary, 378
+      IceMass, ``fcode``, ``reachcode``, ``areasqkm`` the source's own area,
+      ``fdate``, ``elevation``, ...), and beside them ``part`` and
       ``seed_distance_km`` (0.0 when the seed is inside it).
       ``layer_type="vector"``, ``role="primary"``.
 

@@ -89,7 +89,7 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]
 
 
 def _property(properties: dict[str, Any], name: str) -> Any:
-    """One NHD column, whichever case the mirror that answered spells it in."""
+    """One NHD column, whichever case the mirror that answered spells it in; the layer carries them all lower-cased."""
     lowered = {str(k).lower(): v for k, v in (properties or {}).items()}
     return lowered.get(name)
 
@@ -178,14 +178,6 @@ def parse_response(spec: SourceSpec, params: dict[str, Any],
     properties = picked.get("properties") or {}
     logger.info("nhd_waterbody_at_point: %s, %.0f km2, %.3f km from the seed",
                 name or "unnamed", area_km2, metres / 1000.0)
-    return [{"type": "Feature", "geometry": picked["geometry"], "properties": {
-        "part": "waterbody",
-        "gnis_name": name,
-        "gnis_id": _property(properties, "gnis_id"),
-        "permanent_identifier": _property(properties, "permanent_identifier"),
-        "ftype": _property(properties, "ftype"),
-        "fcode": _property(properties, "fcode"),
-        "reachcode": _property(properties, "reachcode"),
-        "areasqkm": _property(properties, "areasqkm"),
-        "seed_distance_km": round(metres / 1000.0, 4),
-    }}]
+    return [{"type": "Feature", "geometry": picked["geometry"],
+             "properties": {str(k).lower(): v for k, v in properties.items()},
+             "produced": {"part": "waterbody", "seed_distance_km": round(metres / 1000.0, 4)}}]

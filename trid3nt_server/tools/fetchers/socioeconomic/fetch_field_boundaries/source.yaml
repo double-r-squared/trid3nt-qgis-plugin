@@ -35,7 +35,6 @@ ingest:
       - -66.945392
       - 49.382808
       pushdown: true
-      crop_field: crop:name
     - key: japan
       label: Japan Field Boundaries (fiboa)
       url: https://data.source.coop/fiboa/japan/japan.parquet
@@ -45,7 +44,6 @@ ingest:
       - 145.802669174
       - 45.520014956
       pushdown: true
-      crop_field: land_type_en
     - key: denmark
       label: Denmark Field Boundaries (fiboa)
       url: https://data.source.coop/fiboa/denmark/denmark.parquet
@@ -55,9 +53,8 @@ ingest:
       - 15.573199436854463
       - 57.75163614760113
       pushdown: false
-      crop_field: crop_name
   properties:
-  - crop_name
+  - id
 hooks:
   delegate: field_boundaries.read
   pre_resolve: field_boundaries.select
@@ -124,7 +121,9 @@ docstring: |-
 
   **Returns:** A ``LayerURI`` (``layer_type="vector"``, ``role="context"``,
   ``units=None``) pointing at a FlatGeobuf of field polygons. Each feature
-  carries a ``crop_name`` property (the source crop / land-type label where
-  the dataset provides one). An AOI with coverage but no fields (e.g. urban /
+  carries every column its dataset's file holds, under the file's own names
+  (``id``, ``crop:code``, ``crop:name``, ``administrative_area_level_2``,
+  ``determination_datetime``, ... in the USDA cropland file; ``land_type_en``
+  in Japan's). An AOI with coverage but no fields (e.g. urban /
   water) returns a valid 0-feature layer, not an error.
 

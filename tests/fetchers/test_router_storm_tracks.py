@@ -344,9 +344,9 @@ def test_line_features_shape_and_single_fix_drop() -> None:
     feat = feats[0]
     assert feat["geometry"]["type"] == "LineString"
     assert len(feat["geometry"]["coordinates"]) == 3
-    props = feat["properties"]
-    assert props["sid"] == "2022266N12294"
-    assert props["name"] == "IAN"
+    assert (feat["properties"]["SID"], feat["properties"]["NAME"], feat["properties"]["SEASON"]) == (
+        "2022266N12294", "IAN", 2022)
+    props = feat["produced"]
     assert props["max_wind_kt"] == 125.0
     assert props["min_pres_mb"] == 940.0
     assert props["max_category"] == 4
@@ -363,16 +363,17 @@ def test_line_features_raises_when_every_storm_is_single_fix() -> None:
         st._line_features(single_fix_only)
 
 
-def test_point_features_shape_excludes_lat_lon() -> None:
+def test_point_features_carry_the_fixs_own_record_and_what_is_produced() -> None:
     selected = _historical_selection()
     all_fixes = [f for fixes in selected.values() for f in fixes]
-    feats = st._point_features(all_fixes)
+    feats = st._point_features([{"lon": f["lon"], "lat": f["lat"], "properties": f["row"],
+                                 "produced": {"wind_kt": f["wind_kt"]}} for f in all_fixes])
     assert len(feats) == 4  # IAN (3) + NINE (1)
     assert all(f["geometry"]["type"] == "Point" for f in feats)
     for f, fix in zip(feats, all_fixes):
         assert f["geometry"]["coordinates"] == [fix["lon"], fix["lat"]]
-        assert "lat" not in f["properties"] and "lon" not in f["properties"]
-        assert "forecast_track_zip" not in f["properties"]
+        assert f["properties"]["SID"] == fix["sid"] and f["properties"]["ISO_TIME"] == fix["iso_time"]
+        assert f["produced"] == {"wind_kt": fix["wind_kt"]}
 
 
 
@@ -381,15 +382,15 @@ def test_parse_current_storms_mixed_coords() -> None:
     recs = st._parse_current_storms(_ACTIVE_BODY)
     assert len(recs) == 2
     ernesto = recs[0]
-    assert ernesto["name"] == "Ernesto"
+    assert ernesto["record"]["name"] == "Ernesto"
     assert ernesto["lat"] == pytest.approx(24.5)
     assert ernesto["lon"] == pytest.approx(-70.1)
-    assert ernesto["intensity_kt"] == 85.0
-    assert ernesto["forecast_track_zip"].endswith("al052026_5day_latest.zip")
+    assert ernesto["record"]["intensity"] == "85"
+    assert ernesto["record"]["forecastTrack"]["zipFile"].endswith("al052026_5day_latest.zip")
     blas = recs[1]
     assert blas["lat"] == pytest.approx(14.8)
     assert blas["lon"] == pytest.approx(-112.9)
-    assert blas["forecast_track_zip"] is None
+    assert "forecastTrack" not in blas["record"]
 
 
 def test_parse_current_storms_schema_drift_is_upstream_error() -> None:
@@ -480,7 +481,7 @@ def test_end_to_end_historical_lines_happy_path(monkeypatch, fake_s3) -> None:
     assert len(gdf) == 1
     row = gdf.iloc[0]
     assert row.geometry.geom_type == "LineString"
-    assert row["name"] == "IAN"
+    assert row["NAME"] == "IAN" and row["SID"] == "2022266N12294"
     assert row["max_wind_kt"] == 125.0
 
 
@@ -503,7 +504,7 @@ def test_end_to_end_historical_points_mode_roundtrip(monkeypatch, fake_s3) -> No
     # IAN (3 fixes) + NINE (1 fix) = 4 points.
     assert len(gdf) == 4
     assert set(gdf.geometry.geom_type) == {"Point"}
-    ian_peak = gdf[gdf["iso_time"] == "2022-09-28 12:00:00"].iloc[0]
+    ian_peak = gdf[gdf["ISO_TIME"] == "2022-09-28 12:00:00"].iloc[0]
     assert ian_peak["wind_kt"] == 125.0
     assert ian_peak["category_label"] == "category 4"
 
@@ -532,17 +533,10 @@ def test_end_to_end_active_happy_path_with_forecast_points(monkeypatch, fake_s3)
         assert zip_url.endswith(".zip")
         return [
             {
-                "id": storm["id"],
-                "name": storm["name"],
-                "classification": "HU",
-                "intensity_kt": 90.0,
-                "pressure_mb": 965.0,
-                "lat": 26.0,
                 "lon": -72.0,
-                "movement_dir_deg": None,
-                "movement_speed_kt": None,
-                "last_update": "2026-07-08 12:00 AST",
-                "tau_h": 24.0,
+                "lat": 26.0,
+                "properties": {"STORMNAME": storm["record"]["name"], "TAU": 24, "MAXWIND": 90, "MSLP": 965},
+                "produced": {"tau_h": 24.0, "is_forecast": 1},
             }
         ]
 
@@ -567,7 +561,7 @@ def test_end_to_end_active_happy_path_with_forecast_points(monkeypatch, fake_s3)
         gdf = gpd.read_file(f.name)
     # Ernesto current + 1 forecast point; Blas current only (no zip).
     assert len(gdf) == 3
-    ern = gdf[gdf["name"] == "Ernesto"].sort_values("tau_h")
+    ern = gdf[(gdf["name"] == "Ernesto") | (gdf["STORMNAME"] == "Ernesto")].sort_values("tau_h")
     assert list(ern["tau_h"]) == [0.0, 24.0]
     assert list(ern["is_forecast"]) == [0, 1]
 

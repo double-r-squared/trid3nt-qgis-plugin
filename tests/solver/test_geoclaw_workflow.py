@@ -429,7 +429,7 @@ def test_the_catalogue_epicentre_is_drawn_only_when_asked_and_only_for_a_named_e
     async def fake_fetch(env, row, runner, **kwargs):
         fetched.append((row, runner, kwargs))
         return {"event_id": kwargs["event_id"], "longitude": 160.2395, "latitude": 52.4948, "depth_km": 35.0,
-                "time": "2025-07-29T23:24:52.483000Z", "magnitude": 8.8, "magnitude_type": "mww"}
+                "time": 1753831492483, "origin_time": "2025-07-29T23:24:52.483000Z", "mag": 8.8, "magType": "mww"}
 
     monkeypatch.setattr(gw, "_fetch", fake_fetch)
 

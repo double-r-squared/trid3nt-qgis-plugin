@@ -36,7 +36,7 @@ def nldi(monkeypatch):
             raise HTTPError(f"HTTP 404 Not Found (URL: {url})", status_code=404)
         if url.endswith("/comid/6498944/navigation/DM/flowlines"):
             return {"type": "FeatureCollection", "features": [
-                {"type": "Feature", "properties": {"nhdplus_comid": "6498944"},
+                {"type": "Feature", "properties": {"nhdplus_comid": 6498944},
                  "geometry": {"type": "LineString", "coordinates": [[-84.98, 34.21], [-84.97, 34.20]]}}]}
         raise AssertionError(url)
 

@@ -623,7 +623,7 @@ class GeoclawWorkflow(Workflow):
         record = await _fetch(env, "catalogue_epicentre_fetch", "fetch_earthquake_epicentre", event_id=event)
         return {"type": "Feature", "properties": {
                     "kind": "catalogue epicentre", "event_id": record["event_id"], "depth_m": record["depth_km"] * 1000.0,
-                    "time": record["time"], "magnitude": record["magnitude"], "magnitude_type": record["magnitude_type"]},
+                    "time": record["origin_time"], "magnitude": record.get("mag"), "magnitude_type": record.get("magType")},
                 "geometry": {"type": "Point", "coordinates": [record["longitude"], record["latitude"]]}}
 
     async def _storm(self, env: Any, statement: Mapping[str, Any]) -> None:

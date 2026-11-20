@@ -1,7 +1,7 @@
 """``fetch_buildings``: the Overpass footprints through the library delegate.
 
 The offline surfaces: row identity, the features parse (ways to polygons,
-relations to multipolygons, slim properties, intersects rather than clip, junk
+relations to multipolygons, every tag kept, intersects rather than clip, junk
 dropped), the typed empty and param validation. The live parity is a separate drive."""
 
 from __future__ import annotations
@@ -102,31 +102,34 @@ def test_promoted_signature_matches_twin():
 
 
 
-def test_features_keeps_areal_footprints_slim(monkeypatch):
+def test_features_keeps_areal_footprints_with_every_tag(monkeypatch):
     _serve(monkeypatch, _ROWS)
     features = BH.features(SPEC, _vp(bbox=list(_AOI)), timeout_s=1)
     assert len(features) == 2                       # the node is not a footprint
     assert {f["geometry"]["type"] for f in features} <= {"Polygon", "MultiPolygon"}
-    assert {f["properties"]["osm_id"] for f in features} == {111, 222}
-    # SLIM inline props: id-only, no building/name.
+    assert {f["produced"]["osm_id"] for f in features} == {111, 222}
+    # Every tag the element carries is its record; the ids are what the hook produces.
+    by_id = {f["produced"]["osm_id"]: f for f in features}
+    assert by_id[111]["properties"] == {"building": "yes", "name": "Block A"}
+    assert by_id[222]["properties"] == {"building": "commercial"}
     for f in features:
-        assert set(f["properties"]) == {"osm_id", "osm_type", "fid"}
-    assert {f["properties"]["fid"] for f in features} == {"w111", "r222"}
+        assert set(f["produced"]) == {"osm_id", "osm_type", "fid"}
+    assert {f["produced"]["fid"] for f in features} == {"w111", "r222"}
 
 
 def test_a_relation_keeps_its_courtyard(monkeypatch):
     _serve(monkeypatch, _ROWS)
     features = BH.features(SPEC, _vp(bbox=list(_AOI)), timeout_s=1)
-    courtyard = next(f for f in features if f["properties"]["osm_id"] == 222)
+    courtyard = next(f for f in features if f["produced"]["osm_id"] == 222)
     assert len(courtyard["geometry"]["coordinates"]) == 2     # an outer ring and a hole
 
 
-def test_features_serializes_to_slim_fgb(monkeypatch):
+def test_features_serializes_every_tag_to_fgb(monkeypatch):
     _serve(monkeypatch, _ROWS)
     features = BH.features(SPEC, _vp(bbox=list(_AOI)), timeout_s=1)
     gdf = _to_gdf(features_to_fgb_bytes(features, SPEC, _vp(bbox=list(_AOI))))
     assert len(gdf) == 2
-    assert set(gdf.columns) == {"osm_id", "osm_type", "fid", "geometry"}
+    assert set(gdf.columns) == {"building", "name", "osm_id", "osm_type", "fid", "geometry"}
 
 
 def test_empty_features_raise_buildings_empty(monkeypatch):

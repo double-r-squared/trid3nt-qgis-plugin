@@ -46,11 +46,7 @@ ingest:
     - part
     - survey_id
     - survey_date
-    - district
-    - feature_name
-    - survey_type
     - vertical_datum
-    - source_uom
     - depth_below_datum_m
     - sounding_count
     - datum_offset_m
@@ -191,9 +187,15 @@ docstring: |-
           considered, which is how a bed is compared against an earlier one.
 
   Returns:
-      ``LayerURI`` for a FlatGeobuf in EPSG:4326 carrying ``part``,
-      ``survey_id``, ``survey_date``, ``district``, ``feature_name``,
-      ``survey_type``, ``vertical_datum``, ``source_uom``, ``datum_offset_m``
+      ``LayerURI`` for a FlatGeobuf in EPSG:4326 carrying, on a
+      survey row, the survey's index record whole under the index's own names
+      with a ``survey.`` prefix (``survey.surveyjobidpk``, ``survey.sdsfeaturename``,
+      ``survey.surveytype``, ``survey.usacedistrictcode``, ``survey.surveydateend``
+      epoch milliseconds, ``survey.sourcedatalocation``) and, on a sounding row, the package's own
+      ``SurveyPoint`` row (``Z_depth``, ``elevationDatum``, ``elevationUOM``,
+      ``SurveyId``, ``surveyPointElev``, ``Z_use``, ...; none for a sounding read
+      from a package's ``_FULL.XYZ``), and beside them ``part``, ``survey_id``,
+      ``survey_date``, ``vertical_datum``, ``datum_offset_m``
       and ``datum_offset_frame`` (the shift the package's own metadata publishes
       between its datum and a national frame, null where it publishes none),
       ``depth_below_datum_m`` (on the sounding rows) and ``sounding_count`` (on

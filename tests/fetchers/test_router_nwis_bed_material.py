@@ -105,11 +105,13 @@ def test_read_joins_station_geometry_onto_the_bottom_material_percent_samples(sp
 
     rows = nb.read(spec, _params(), timeout_s=30.0)
     assert len(rows) == 1
-    props = rows[0]["properties"]
+    props = {**rows[0]["properties"], **rows[0]["produced"]}
     assert rows[0]["geometry"] == {"type": "Point", "coordinates": [-121.3302245, 37.93547987]}
-    assert props["site_id"] == "USGS-11304810"
-    assert props["horizontal_datum"] == "NAD83"
-    assert props["vertical_datum"] == "NAVD88"
+    assert props["MonitoringLocationIdentifier"] == "USGS-11304810"
+    assert props["HorizontalCoordinateReferenceSystemDatumName"] == "NAD83"
+    assert props["vertical_datum"] == "NAVD88" and props["ActivityIdentifier"] == "A1"
+    # the sample's own result rows ride whole: the two size classes and the one no class names
+    assert [r["ResultParticleSizeBasisText"] for r in props["results"]] == ["< 2 mm", "<0.0625mm", "0.063-4mm"]
     assert props["pct_finer_2mm"] == 100.0
     assert props["pct_finer_0p0625mm"] == 7.0
     assert props["pct_finer_1mm"] is None  # the gram row never lands

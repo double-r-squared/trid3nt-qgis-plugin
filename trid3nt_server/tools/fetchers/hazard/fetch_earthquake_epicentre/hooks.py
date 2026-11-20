@@ -1,7 +1,8 @@
 """Earthquake-epicentre hooks: the ComCat event record read into its preferred origin.
 
 The event GeoJSON's own point is the preferred origin (longitude, latitude, depth in km); its
-properties carry the origin time in epoch milliseconds and the preferred magnitude.
+properties carry the origin time in epoch milliseconds and the preferred magnitude. The record
+keeps every property ComCat returns, products included, under ComCat's names.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]
 
 @register_hook("earthquake_epicentre.record")
 def record(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> dict[str, Any] | None:
-    """The event record -> its preferred origin and magnitude."""
+    """The event record whole, with its preferred origin read off the point and the origin time as ISO UTC."""
     event = _event(spec, params)
     sc = spec.error_code_prefix
     try:
@@ -47,9 +48,8 @@ def record(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> dic
     lon, lat, depth = location
     when = datetime.fromtimestamp(int(props["time"]) / 1000.0, tz=timezone.utc).isoformat().replace("+00:00", "Z")
     logger.info("earthquake_epicentre: %s at %.4f, %.4f, %.1f km", event, lon, lat, depth)
-    return {"event_id": str(body.get("id") or event), "longitude": lon, "latitude": lat, "depth_km": depth, "time": when,
-            "magnitude": _finite(props.get("mag")), "magnitude_type": props.get("magType"),
-            "title": props.get("title"), "status": props.get("status")}
+    return {**props, "event_id": str(body.get("id") or event), "longitude": lon, "latitude": lat, "depth_km": depth,
+            "origin_time": when}
 
 
 def _finite(raw: Any) -> float | None:

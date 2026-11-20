@@ -135,22 +135,13 @@ def _resolve_column(rule: dict[str, Any], src_props: dict[str, Any]) -> Any:
     return raw
 
 
-def _resolve_column_map(spec: SourceSpec, params: dict[str, Any] | None) -> dict[str, Any] | None:
-    """The effective column_map: the static one, or a passthrough synthesized from ``ingest.properties_by_param``."""
-    ingest = spec.ingest or {}
-    pbp = ingest.get("properties_by_param")
-    if isinstance(pbp, dict) and params is not None:
-        pval = params.get(pbp.get("param"))
-        cols = (pbp.get("map") or {}).get(pval)
-        if cols:
-            return {str(c): {"from": str(c), "kind": "passthrough"} for c in cols}
-    return ingest.get("column_map")
+def _resolve_column_map(spec: SourceSpec) -> dict[str, Any] | None:
+    """The source's declared column_map, or ``None``."""
+    return (spec.ingest or {}).get("column_map")
 
 
-def apply_column_map(
-    features: list[dict[str, Any]], spec: SourceSpec, params: dict[str, Any] | None = None
-) -> list[dict[str, Any]]:
-    cmap = _resolve_column_map(spec, params)
+def apply_column_map(features: list[dict[str, Any]], spec: SourceSpec) -> list[dict[str, Any]]:
+    cmap = _resolve_column_map(spec)
     if not cmap:
         return features
     return [
@@ -193,7 +184,7 @@ def apply_ingest_transforms(
     params: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """The column map, then ``geometry_filter``; every record flattened, with what its hook produced beside it."""
-    features = apply_column_map(features, spec, params)
+    features = apply_column_map(features, spec)
     gf = (spec.ingest or {}).get("geometry_filter")
     out: list[dict[str, Any]] = []
     for feat in features:
@@ -234,11 +225,9 @@ def _with_produced(record: dict[str, Any], produced: dict[str, Any], spec: Sourc
     return {**record, **produced}
 
 
-def _out_columns(
-    spec: SourceSpec, features: list[dict[str, Any]], params: dict[str, Any] | None = None
-) -> list[str]:
+def _out_columns(spec: SourceSpec, features: list[dict[str, Any]]) -> list[str]:
     ingest = spec.ingest or {}
-    cmap = _resolve_column_map(spec, params)
+    cmap = _resolve_column_map(spec)
     declared = ingest.get("properties")
     if cmap:
         # column_map is authoritative: the empty header still carries every mapped column.
@@ -280,7 +269,7 @@ def features_to_fgb_bytes(
             if isinstance(f, dict) and f.get("geometry") is not None
         ]
     valid = [f for f in rows if f.get("geometry") is not None]
-    cols = _out_columns(spec, features, params)
+    cols = _out_columns(spec, features)
 
     if not rows:
         empty_df = pd.DataFrame(columns=cols)

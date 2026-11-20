@@ -27,3 +27,38 @@ Recorded 2026-11-18, verbatim, from the public services:
   `StormEvents_details-ftp_v1.0_d2023_c20261119.csv.gz`, all 51 columns, recorded 2026-11-20.
 - OpenAQ and AirNow are keyed and no key is stored on this host, so no answer of either is recorded: their tests state the
   documented v3 and `aq/data` shapes by hand and say so.
+- `gem_faults_excerpt.geojson` - four features of the GEM Global Active Faults harmonized GeoJSON
+  (three UCERF3 faults of the Bay Area, one Australian fault with no `average_rake`), traces cut to six vertices,
+  recorded 2026-11-20.
+- `ncei_tsunami_events_2011.json` and `ncei_tsunami_runups_2011.json` - NCEI hazel `tsunamis/events` (the Tohoku year,
+  two items) and `tsunamis/runups` (two items) answers, recorded 2026-11-20.
+- `hans_monitored_volcanoes.json` and `hans_us_volcanoes.json` - the HANS `getMonitoredVolcanoes` and `getUSVolcanoes`
+  lists cut to three vnums (311320, 312090, 311160), recorded 2026-11-20.
+- `ibtracs_idalia_2023_excerpt.csv` - the IBTrACS v04r01 last3years CSV: header, units row and nine fixes of IDALIA
+  (SID 2023239N21274) either side of its landfall record, recorded 2026-11-20.
+- `wfigs_year_to_date_features.json` - two features of WFIGS_Incident_Locations_YearToDate (the ten fields the fetch
+  asks for, `f=json`), recorded 2026-11-20.
+- `ehydro_index_feature.json` - one feature of the eHydro_Survey_Data index (the fields the fetch asks for), footprint
+  cut to 12 vertices, recorded 2026-11-20.
+- `nhd_waterbody_hr.json` and `nhd_waterbody_medium.json` - the same waterbody (NHD permanent identifier
+  {1D017476-8ADD-42BA-832D-B4FB83B615D2}) from the NHDPlus HR MapServer layer 9 and the NHD MapServer layer 12,
+  `outFields=*`, `maxAllowableOffset=0.0005`, recorded 2026-11-20; the mirrors spell the names in different case.
+- `nldi_flowlines_comid13294314.json` - the NLDI `comid/13294314/navigation/DM/flowlines` answer (3 km), recorded 2026-11-20.
+- `osm_buildings.parquet`, `osm_roads.parquet`, `osm_waterway.parquet`, `osm_coast.parquet` - the frames `osmnx.features_from_bbox`
+  returned for building (Council Bluffs box), highway (primary, secondary, residential), waterway (river, stream, canal)
+  and natural=coastline (Casco Bay box), index reset, recorded 2026-11-20; read with `geopandas.read_parquet` and
+  `set_index(["element", "id"])`. The Overpass man_made and amenity requests timed out, so those two classes have no frame.
+- `fiboa_us_cropland_omaha.parquet` - three rows of the fiboa US USDA cropland GeoParquet (the file's own Albers CRS and
+  columns), read with a bbox over the Omaha area, recorded 2026-11-20.
+- `usseabed_chesapeake_ext_excerpt.zip` - the usSEABED packager's `us9_ext.csv` for a box off the Virginia shore, header
+  and 12 rows, the `geom` and every sentinel as the service writes them, recorded 2026-11-20.
+- `wqp_bed_material_sites.csv` and `wqp_bed_material_results.csv` - the WQP Station row and the 18 `resultPhysChem`
+  rows of one bed-sediment sample (Stockton area, NWIS provider, 83 columns) as `dataretrieval.wqp` returned them,
+  recorded 2026-11-20.
+- `comcat_event_us6000qw60.json` - the full ComCat event GeoJSON for us6000qw60 (Kamchatka 2025, every product),
+  recorded 2026-11-20.
+- `openfema_declarations_ri.json` - six rows of the OpenFEMA DisasterDeclarationsSummaries answer for Rhode Island,
+  recorded 2026-11-20.
+- EDI's PASTA and portal answer no public request from this host, so no LTER entity is recorded: its test states the
+  documented delimited shape by hand and says so. NHC's CurrentStorms.json held no active storm on the recording day,
+  so the active-storm record is stated by hand in its test.

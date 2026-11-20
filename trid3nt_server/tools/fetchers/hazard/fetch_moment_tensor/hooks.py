@@ -1,8 +1,9 @@
 """Moment-tensor hooks: the ComCat event record read into every published solution.
 
-The products ride in the event GeoJSON, each with flat string properties; the centroid is the
-product's ``derived-*`` origin, since ``latitude``/``longitude``/``depth`` are the hypocentre the
-tensor was attached to.
+The products ride in the event GeoJSON, each with flat string properties; each solution keeps its
+product whole and carries the numbers read off its properties. The centroid is the product's
+``derived-*`` origin, since ``latitude``/``longitude``/``depth`` are the hypocentre the tensor was
+attached to.
 """
 
 from __future__ import annotations
@@ -71,13 +72,7 @@ def _solution(product: dict[str, Any], sc: str) -> dict[str, Any]:
     depth = _number(props, "derived-depth", code, sc, required=False)
     centroid = ({"longitude": lon, "latitude": lat, "depth_km": depth}
                 if None not in (lon, lat, depth) else None)
-    return {"code": code, "source": str(product.get("source") or ""),
-            "magnitude": _number(props, "derived-magnitude", code, sc, required=False),
-            "magnitude_type": props.get("derived-magnitude-type"),
-            "scalar_moment_nm": _number(props, "scalar-moment", code, sc),
-            "centroid": centroid, "planes": planes,
-            "duration_s": _number(props, "sourcetime-duration", code, sc, required=False),
-            "updated_ms": int(product.get("updateTime") or 0)}
+    return {**product, "scalar_moment_nm": _number(props, "scalar-moment", code, sc), "centroid": centroid, "planes": planes}
 
 
 def _event(spec: SourceSpec, params: dict[str, Any]) -> str:

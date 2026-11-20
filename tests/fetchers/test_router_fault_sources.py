@@ -108,7 +108,7 @@ def test_parse_filters_and_kinematic_parse(spec):
     names = {f["properties"]["name"] for f in feats}
     assert names == {"San Andreas (Peninsula)", "Mount Diablo Thrust"}
     sa = next(f for f in feats if f["properties"]["name"].startswith("San Andreas"))
-    p = sa["properties"]
+    p = {**sa["properties"], **sa["produced"]}
     assert p["net_slip_rate_mm_yr"] == pytest.approx(17.0)
     assert p["dip_deg"] == pytest.approx(90.0)
     assert p["rake_deg"] == pytest.approx(180.0)
@@ -121,7 +121,7 @@ def test_parse_filters_and_kinematic_parse(spec):
     diablo = next(f for f in feats if f["properties"]["name"] == "Mount Diablo Thrust")
     # MultiLineString flattened to a single ordered 4-vertex trace.
     assert len(diablo["geometry"]["coordinates"]) == 4
-    assert diablo["properties"]["dip_deg"] == pytest.approx(38.0)
+    assert diablo["produced"]["dip_deg"] == pytest.approx(38.0)
 
 
 def test_parse_empty_aoi_is_no_features(spec):
@@ -191,7 +191,7 @@ _NO_DIP = {
 
 def test_omitted_kinematics_are_never_defaulted(spec):
     feats = fsh.parse_response(spec, {"bbox": _SF_BBOX}, [json.dumps(_NO_DIP).encode()])
-    by = {f["properties"]["name"]: f["properties"] for f in feats}
+    by = {f["properties"]["name"]: {**f["properties"], **f["produced"]} for f in feats}
     assert by["Undipped"]["dip_deg"] is None
     assert "average_dip" in by["Undipped"]["dropped_reason"]
     assert by["Inverted"]["lower_seis_depth_km"] is None

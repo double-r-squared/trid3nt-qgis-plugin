@@ -12,8 +12,8 @@ docstring: |-
   **What it does:** Looks a named wildland-fire incident up in the NIFC WFIGS
   Incident Locations Current ArcGIS FeatureService and returns its authoritative
   point of origin (lat/lon), the FireDiscoveryDateTime (ISO UTC), the incident
-  size (acres) + percent contained, the point-of-origin state/county, the IRWIN
-  id, AND a padded AOI bbox built around the point. Resolves BY NAME (a case-
+  record's attributes (size in acres, percent contained, the point-of-origin
+  state/county, the IRWIN id, ...), AND a padded AOI bbox built around the point. Resolves BY NAME (a case-
   insensitive LIKE), so it works for incidents a county geocode would miss
   (e.g. Santa Rosa Island, an offshore island in Channel Islands National Park).
 
@@ -42,11 +42,13 @@ docstring: |-
     bbox built around the incident point (E-W widened by 1/cos(lat) so the AOI
     is roughly square on the ground).
 
-  **Returns:** a JSON-compatible dict with ``incident_name``, ``lat``, ``lon``,
-  ``bbox`` (``[min_lon, min_lat, max_lon, max_lat]`` EPSG:4326),
-  ``fire_discovery_datetime`` (ISO-8601 UTC or null), ``incident_size_acres``,
-  ``percent_contained``, ``poo_state``, ``poo_county``, ``irwin_id``,
-  ``unique_fire_identifier``. Cached ``dynamic-1h``.
+  **Returns:** a JSON-compatible dict: every attribute WFIGS returns for the
+  incident under its own name (``IncidentName``, ``IncidentSize`` acres,
+  ``PercentContained``, ``POOState``, ``POOCounty``, ``IrwinID``,
+  ``UniqueFireIdentifier``, ``FireDiscoveryDateTime`` epoch milliseconds, ...)
+  and beside them ``lat``, ``lon``, ``bbox`` (``[min_lon, min_lat, max_lon,
+  max_lat]`` EPSG:4326) and ``fire_discovery_datetime`` (ISO-8601 UTC or
+  null). Cached ``dynamic-1h``.
 endpoints:
   current:
     url: https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_Current/FeatureServer/0/query

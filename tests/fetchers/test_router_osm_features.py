@@ -112,7 +112,7 @@ def test_roads_clip_keeps_only_the_in_aoi_run(monkeypatch):
          {"name": "gone", "highway": "primary"}),
     ]))
     feats = osm.delegate(SPEC, {"feature": "roads", "bbox": list(_FORT_MYERS)}, timeout_s=1)
-    ids = sorted(f["properties"]["osm_id"] for f in feats)
+    ids = sorted(f["produced"]["osm_id"] for f in feats)
     assert 3 not in ids and {1, 2} <= set(ids)
     for f in feats:
         for lon, lat in f["geometry"]["coordinates"]:
@@ -120,7 +120,7 @@ def test_roads_clip_keeps_only_the_in_aoi_run(monkeypatch):
             assert 26.5 - 1e-9 <= lat <= 26.7 + 1e-9
 
 
-def test_roads_serializes_with_the_declared_columns(monkeypatch):
+def test_roads_serializes_every_tag_the_ways_carry(monkeypatch):
     _serve(monkeypatch, _frame([
         ("way", 100 + i,
          LineString([(-82.0 + 0.001 * i, 26.5 + 0.001 * i),
@@ -133,16 +133,14 @@ def test_roads_serializes_with_the_declared_columns(monkeypatch):
     gdf = _fgb_gdf(features_to_fgb_bytes(feats, SPEC, params))
     assert len(gdf) == 50
     assert (gdf.geometry.geom_type == "LineString").all()
-    for col in ("osm_id", "name", "highway", "lanes", "maxspeed"):
-        assert col in gdf.columns
+    assert {"osm_id", "name", "highway"} <= set(gdf.columns) and "lanes" not in gdf.columns
 
 
 def test_roads_empty_yields_header_only_fgb():
     params = {"feature": "roads", "bbox": list(_FORT_MYERS)}
     gdf = _fgb_gdf(features_to_fgb_bytes([], SPEC, params))
     assert len(gdf) == 0
-    for col in ("osm_id", "name", "highway", "lanes", "maxspeed"):
-        assert col in gdf.columns
+    assert "osm_id" in gdf.columns
 
 
 # --- pois ---------------------------------------------------------------
@@ -192,26 +190,24 @@ def test_pois_a_node_is_its_own_point_and_an_area_is_its_bbox_centre(monkeypatch
     feats = osm.delegate(
         SPEC, {"feature": "pois", "bbox": list(_FORT_MYERS), "amenity": "hospital"},
         timeout_s=1)
-    assert sorted(f["properties"]["osm_id"] for f in feats) == [1, 2]
-    area = next(f for f in feats if f["properties"]["osm_id"] == 2)
+    assert sorted(f["produced"]["osm_id"] for f in feats) == [1, 2]
+    area = next(f for f in feats if f["produced"]["osm_id"] == 2)
     assert area["geometry"]["coordinates"] == pytest.approx([-81.88, 26.62])
     assert all(f["geometry"]["type"] == "Point" for f in feats)
-    assert all(f["properties"]["key"] == "amenity" for f in feats)
+    assert all(f["produced"]["key"] == "amenity" for f in feats)
 
 
-def test_pois_carries_the_element_type_and_the_whole_tag_bag(monkeypatch):
+def test_pois_carries_the_element_type_and_every_tag_as_a_column(monkeypatch):
     _serve(monkeypatch, _frame([
         ("node", 1, Point(-81.9, 26.6),
          {"amenity": "hospital", "name": "H1", "emergency": "yes"}),
     ]))
     params = {"feature": "pois", "bbox": list(_FORT_MYERS), "amenity": "hospital"}
     feats = osm.delegate(SPEC, params, timeout_s=1)
-    props = feats[0]["properties"]
-    assert props["osm_type"] == "node"
-    assert props["tags_json"] == (
-        '{"amenity":"hospital","emergency":"yes","name":"H1"}')
+    assert feats[0]["produced"]["osm_type"] == "node"
+    assert feats[0]["properties"] == {"amenity": "hospital", "name": "H1", "emergency": "yes"}
     gdf = _fgb_gdf(features_to_fgb_bytes(feats, SPEC, params))
-    for col in ("osm_id", "osm_type", "name", "key", "value", "tags_json"):
+    for col in ("osm_id", "osm_type", "name", "key", "value", "amenity", "emergency"):
         assert col in gdf.columns
 
 

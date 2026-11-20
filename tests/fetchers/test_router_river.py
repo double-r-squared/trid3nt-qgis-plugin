@@ -169,7 +169,7 @@ def test_river_parse_fills_bbox_and_clips_spill(monkeypatch):
     ])
     feats = river.delegate(RIVER_SPEC, {"bbox": list(_KANSAS)}, timeout_s=1)
     assert len(feats) >= 1
-    assert sorted(feats[0]["properties"]) == ["name", "osm_id", "waterway"]
+    assert sorted(feats[0]["properties"]) == ["name", "waterway"] and set(feats[0]["produced"]) == {"osm_id"}
     gdf = _fgb_gdf(features_to_fgb_bytes(feats, RIVER_SPEC, {"bbox": list(_KANSAS)}))
     minx, miny, maxx, maxy = gdf.total_bounds
     eps = 1e-6

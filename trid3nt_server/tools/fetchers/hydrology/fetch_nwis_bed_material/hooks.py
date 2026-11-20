@@ -67,6 +67,12 @@ def _str_or_none(v: Any) -> str | None:
     return s or None
 
 
+def _record(rd: dict[str, Any]) -> dict[str, Any]:
+    """One portal row as the service published it: every field under its own name, the frame's hole as null."""
+    return {str(k): (None if v is None or (isinstance(v, float) and math.isnan(v)) else (v.item() if hasattr(v, "item") else v))
+            for k, v in rd.items()}
+
+
 def _basis_column(basis: str) -> str | None:
     """The ``pct_finer_<x>mm`` column this basis text names, or None if it is
     not the standard less-than phrasing at a recognized threshold."""
@@ -125,19 +131,7 @@ def _stations(spec: SourceSpec, params: dict[str, Any]) -> dict[str, dict[str, A
             continue
         if not (math.isfinite(lon) and math.isfinite(lat)):
             continue
-        out[site_id] = {
-            "lon": lon, "lat": lat,
-            "site_name": _str_or_none(rd.get("MonitoringLocationName")) or "",
-            "site_type": _str_or_none(rd.get("MonitoringLocationTypeName")) or "",
-            "huc8": _str_or_none(rd.get("HUCEightDigitCode")) or "",
-            "horizontal_datum": _str_or_none(
-                rd.get("HorizontalCoordinateReferenceSystemDatumName")) or "",
-            "vertical_datum": _str_or_none(
-                rd.get("VerticalCoordinateReferenceSystemDatumName")) or "",
-            "vertical_elevation": _str_or_none(rd.get("VerticalMeasure/MeasureValue")),
-            "vertical_elevation_unit": _str_or_none(
-                rd.get("VerticalMeasure/MeasureUnitCode")) or "",
-        }
+        out[site_id] = {"lon": lon, "lat": lat, "record": _record(rd)}
     return out
 
 
@@ -189,15 +183,9 @@ def _samples(spec: SourceSpec, params: dict[str, Any]) -> tuple[dict[tuple[str, 
         key = (site_id, activity_id)
         group = groups.get(key)
         if group is None:
-            group = {
-                "site_id": site_id, "activity_id": activity_id,
-                "sample_date": _str_or_none(rd.get("ActivityStartDate")) or "",
-                "characteristic": _str_or_none(rd.get("CharacteristicName")) or "",
-                "collection_equipment": _str_or_none(
-                    rd.get("SampleCollectionEquipmentName")) or "",
-                "sizes": {},
-            }
+            group = {"sizes": {}, "results": []}
             groups[key] = group
+        group["results"].append(_record(rd))
         if column is None or value is None or not math.isfinite(value):
             if basis is not None and column is None:
                 dropped_basis += 1
@@ -222,27 +210,18 @@ def read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[
         if station is None:
             dropped_no_station += 1
             continue
-        properties: dict[str, Any] = {
-            "site_id": site_id,
-            "site_name": station["site_name"],
-            "site_type": station["site_type"],
-            "huc8": station["huc8"],
-            "activity_id": group["activity_id"],
-            "sample_date": group["sample_date"],
-            "characteristic": group["characteristic"],
-            "collection_equipment": group["collection_equipment"],
-            "horizontal_datum": station["horizontal_datum"],
-            "vertical_datum": station["vertical_datum"],
-            "vertical_elevation": station["vertical_elevation"],
-            "vertical_elevation_unit": station["vertical_elevation_unit"],
+        produced: dict[str, Any] = {
+            "ActivityIdentifier": _activity_id,
+            "vertical_datum": station["record"].get("VerticalCoordinateReferenceSystemDatumName"),
             "n_size_classes": len(group["sizes"]),
         }
         for column in _MM_TO_COLUMN.values():
-            properties[column] = group["sizes"].get(column)
+            produced[column] = group["sizes"].get(column)
         rows.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [station["lon"], station["lat"]]},
-            "properties": properties,
+            "properties": {**station["record"], "results": group["results"]},
+            "produced": produced,
         })
 
     logger.info(
