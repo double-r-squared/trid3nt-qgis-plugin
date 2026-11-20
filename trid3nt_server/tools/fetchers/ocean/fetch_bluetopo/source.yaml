@@ -76,9 +76,6 @@ coverage:
       latest: '2024-01-01'
     resolution_m: 2.0
     datum: NAVD88
-    units:
-      elevation: m
-    value_column: elevation
 
 caveats:
 - NOAA BlueTopo is BATHYMETRY ONLY - there is no land in it. An AOI spanning a shoreline is

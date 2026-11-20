@@ -103,7 +103,7 @@ class UriRecord:
 
 
 _SUMMARY = ("name", "quantity", "vertical_datum", "units", "sources",
-            "datum_offset_m", "datum_offset_frame", "stamp_column")
+            "datum_offset_m", "datum_offset_frame")
 
 
 def _is_object_store(value: str) -> bool:

@@ -73,9 +73,6 @@ coverage:
       latest: '2022-01-01'
     resolution_m: 450.0
     datum: egm2008
-    units:
-      elevation: m
-    value_column: elevation
     # AS A BED this row is the SEA FLOOR: a land cell under a river or lake is the ground around the water,
     # never its bed, so the match asks for the cells at or below the relief's zero and an inland box holds none.
     ask: {surface: sea_floor}

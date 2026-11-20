@@ -91,9 +91,6 @@ coverage:
     cadence: gauge-corrected Pass2, ~2 h latency; accumulation window 1h-72h
   resolution_m: 1000.0
   datum: null
-  units:
-    precip: mm
-  value_column: precip
 
 caveats:
 - the S3 key is resolved by an S3 list-objects walk (latest file / nearest-earlier hour within

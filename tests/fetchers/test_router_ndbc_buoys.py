@@ -110,13 +110,14 @@ def test_the_row_states_a_measured_sea_state_over_a_station_network(row):
     assert row.datum is None
 
 
-def test_every_column_the_row_names_is_published_in_a_stated_unit(row):
-    assert row.value_column == "wave_height_m"
-    assert row.series_column == "wave_height_series_csv"
-    assert row.units["wave_height_series_csv"] == "m"
-    assert row.units["peak_period_series_csv"] == "s"
+def test_every_member_the_row_maps_is_published_in_a_stated_unit(row):
+    stated = {name: (m.field, m.unit) for name, m in row.fields.items()}
+    assert stated["value"] == ("wave_height_m", "m")
+    assert stated["series"] == ("wave_height_series_csv", "m")
+    assert stated["height"] == ("wave_height_series_csv", "m")
+    assert stated["period"] == ("peak_period_series_csv", "s")
     # degT is the compass bearing the waves come FROM, not a heading of travel.
-    assert row.units["wave_direction_deg_true"] == "degT"
+    assert stated["from_direction"] == ("wave_direction_series_csv", "degT")
 
 
 def test_the_buoy_answers_for_the_peak_direction_it_measures_and_no_mean_one(row):

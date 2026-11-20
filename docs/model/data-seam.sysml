@@ -1508,9 +1508,9 @@ package DataSeam {
     verify requirement ASourceStatesWhatItCovers by
         "tests/fetchers/test_rows.py::test_the_nearest_station_is_what_a_listed_set_is_measured_from";
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_rows.py::test_every_series_source_states_the_unit_of_its_value_columns";
+        "tests/fetchers/test_rows.py::test_every_record_row_maps_the_reading_its_slot_reads";
     verify requirement ASourceStatesWhatItCovers by
-        "tests/fetchers/test_rows.py::test_the_gauge_network_states_each_column_on_its_own_row";
+        "tests/fetchers/test_rows.py::test_the_gauge_network_states_each_member_on_its_own_row";
     verify requirement ASourceStatesWhatItCovers by
         "tests/fetchers/test_rows.py::test_a_lake_row_covers_its_lake_and_not_the_open_coast";
     verify requirement ASourceStatesWhatItCovers by
@@ -1606,9 +1606,9 @@ package DataSeam {
     verify requirement ASeaStateIsAReservedSlot by
         "tests/inputs/test_wave.py::test_the_slot_reserves_the_name_and_reads_the_class_the_buoys_publish";
     verify requirement ASeaStateIsAReservedSlot by
-        "tests/inputs/test_wave.py::test_each_quantity_is_read_off_the_column_stated_in_its_own_unit";
+        "tests/inputs/test_wave.py::test_each_quantity_is_read_off_the_member_its_source_maps";
     verify requirement ASeaStateIsAReservedSlot by
-        "tests/inputs/test_wave.py::test_two_columns_in_one_unit_refuse_rather_than_the_first_being_taken";
+        "tests/inputs/test_wave.py::test_a_source_that_maps_no_period_refuses_by_the_quantity_it_lacks";
     satisfy requirement ARecordSlotHoldsWhatWasMeasured by weatherReader;
     satisfy requirement ARecordSlotHoldsWhatWasMeasured by rainReader;
     satisfy requirement ARecordSlotHoldsWhatWasMeasured by seaStateReader;

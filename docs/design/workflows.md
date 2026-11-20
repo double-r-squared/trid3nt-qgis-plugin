@@ -301,10 +301,9 @@ A row resolves in ONE order (pinned by `tests/runtime/test_resolution_order.py`)
 what the caller supplied, then the row's one source - its producer, or the
 match its need asks; a row declares one or neither - then, for a row that
 declares neither, the canvas, and nothing answering refuses by name
-(`DATA_SLOT_UNSATISFIED`). A supplied layer an observation slot reads is read
-by the row of the fetch that produced it - its value and series columns, the
-zero its sites state - exactly as the matched one; it is the caller's choice, so
-no reach test is put to it. A river domain's water surface (`banks`, the polygon
+(`DATA_SLOT_UNSATISFIED`). A supplied layer a record slot reads is read
+by the row of the fetch that produced it - the field map that row reads by - exactly
+as the matched one; it is the caller's choice, so no reach test is put to it. A river domain's water surface (`banks`, the polygon
 its reach is cut square from) may be handed the same way: it is used as it is,
 the run's own fetch of it is not made, and the cut is unchanged. A need nothing measures refuses
 (`DATA_NEED_UNMATCHED`) and is never drawn instead. A stated-only row nothing
@@ -391,6 +390,42 @@ published variable a record carries (`of="TEMPERATURE"` on a water quality
 sample) or the feature a hydrography source publishes - and a row with no word
 for it in its `vocabulary` leaves the list. A word neither reading finds refuses
 `DATA_NEED_UNMATCHED` naming it.
+
+## Fetched fields - the field map and the one reader
+
+A fetch keeps every field its source returned under the source's own name and
+adds only what it produces. The vector writer (`_router/executors/vector_fgb.py`,
+`apply_ingest_transforms`) flattens each record - a nested object to dotted names,
+a list to JSON text - and writes the hook's `produced` dict beside it; a produced
+name the record already carries refuses `<PREFIX>_FIELD_COLLISION`, the source's
+field keeping its name. A column-mapped source still projects its map.
+
+Code reads a record by MEMBERS, never by a literal field name. A source states its
+`fields:` in its `source.yaml` (`Member`, `contracts/trid3nt_contracts/coverage.py`):
+each member is the record's own `field` (a dotted name reads a nested one), a
+`field` read through a `table` of its codes, a `constant`, or an accuracy rule
+(`absolute`, `relative`: the larger of the two, the relative one a fraction of the
+value read); every form but a plain field carries the `cite` it was read from, and
+every numeric member states its `unit`, literal or `{field: ...}` off the record.
+The vocabulary is closed (`MEMBERS`): `value`, `series`, `time`, `above`,
+`above_accuracy`, `accuracy`, and the sea state's `height`, `period`,
+`from_direction`, each naming the window it is reported over. A coverage row
+restates only the members that differ for its class and, once loaded, carries its
+source's map with its own over it.
+
+The one reader is `trid3nt_server/inputs/fields.py`: `records(layer, fields,
+source=)` gives one `Record` per feature, `rec.value` / `rec.accuracy` as a
+`Measured` (number, unit), `rec.time` as written, `rec.raw[...]` every field
+untouched. A member the source does not map refuses `FIELD_UNMAPPED`, a mapped
+field empty on the record `FIELD_EMPTY`, a code the table holds no row for
+`FIELD_UNTABLED` - each naming the source, the member and the record's site. The
+fill hands a record slot the matched row's map and its source (`fields=`,
+`producer=`); observation, rain and wave read their members through it, and
+observation reads `accuracy` only where its slot asks. A layer no registered
+source produced reads by its ingestion's stated convention (observation: `value`
+and `time_series_csv` in the record's `unit`; rain: `times` and `precip_mm`); the
+bed reads a fetched layer's `value` member through `produced_by`, the producer the
+uri registry recorded.
 
 ## The alignment - one record onto a reader's clock
 

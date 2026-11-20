@@ -81,9 +81,6 @@ coverage:
   # finer at 60 m - the row states its worst cell.
   resolution_m: 121.92
   datum: null
-  units:
-    hydraulic_conductivity: m/day
-  value_column: hydraulic_conductivity
 
 caveats:
   - "Two published calibrated USGS MODFLOW model grids, nothing more: Cape Cod JBCC (2019 release, 32 layers, ~400 ft cells, NAD27 state plane, K stored in ft/d and converted here to m/day) and Des Moines MF6 (2024 release, 6 layers, 60 m cells, K native m/day). A bbox outside both raises USGS_MODEL_K_INPUT_INVALID naming them; there is no third grid and nothing is interpolated between grids."

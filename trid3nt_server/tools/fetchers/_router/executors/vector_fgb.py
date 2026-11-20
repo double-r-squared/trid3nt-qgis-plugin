@@ -28,6 +28,7 @@ __all__ = [
     "apply_ingest_transforms",
     "apply_column_map",
     "build_where",
+    "flatten_record",
     "resolve_endpoints",
 ]
 
@@ -191,13 +192,9 @@ def apply_ingest_transforms(
     spec: SourceSpec,
     params: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Apply the column map, then ``geometry_filter`` / ``json_coerce_nested`` to raw features."""
-    ingest = spec.ingest or {}
+    """The column map, then ``geometry_filter``; every record flattened, with what its hook produced beside it."""
     features = apply_column_map(features, spec, params)
-    gf = ingest.get("geometry_filter")
-    json_coerce = bool(ingest.get("json_coerce_nested"))
-    if not (gf or json_coerce):
-        return features
+    gf = (spec.ingest or {}).get("geometry_filter")
     out: list[dict[str, Any]] = []
     for feat in features:
         if not isinstance(feat, dict):
@@ -205,13 +202,36 @@ def apply_ingest_transforms(
         geom = feat.get("geometry")
         if gf and not _passes_geometry_filter(geom, gf):
             continue
-        props = dict(feat.get("properties") or {})
-        if json_coerce:
-            for k, v in list(props.items()):
-                if isinstance(v, (dict, list)):
-                    props[k] = json.dumps(v)
-        out.append({"type": "Feature", "geometry": geom, "properties": props})
+        out.append({"type": "Feature", "geometry": geom,
+                    "properties": _with_produced(flatten_record(feat.get("properties") or {}),
+                                                 feat.get("produced") or {}, spec)})
     return out
+
+
+def flatten_record(record: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    """A source's record as one flat row under its own names: a nested object as dotted keys, a list as JSON text."""
+    flat: dict[str, Any] = {}
+    for key, value in record.items():
+        name = f"{prefix}{key}"
+        if isinstance(value, dict) and value:
+            flat.update(flatten_record(value, f"{name}."))
+        elif isinstance(value, (dict, list, tuple)):
+            flat[name] = json.dumps(value, default=str)
+        else:
+            flat[name] = value
+    return flat
+
+
+def _with_produced(record: dict[str, Any], produced: dict[str, Any], spec: SourceSpec) -> dict[str, Any]:
+    """The record with what the fetch made of it; a made field named like one the source returned refuses."""
+    clash = sorted(set(produced) & set(record))
+    if clash:
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"the fetch produces {', '.join(clash)}, a name the source's own record already "
+            "carries; the source's field keeps its name, so the produced one is renamed in the hook",
+            retryable=False, suffix="FIELD_COLLISION")
+    return {**record, **produced}
 
 
 def _out_columns(

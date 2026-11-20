@@ -80,9 +80,6 @@ coverage:
     latest: '2020-01-01'
   resolution_m: 247.0
   datum: null
-  units:
-    saturated_thickness: m
-  value_column: saturated_thickness
 
 caveats:
   - "An AOI outside the staged envelope raises AQUIFER_THICKNESS_INPUT_INVALID naming it."

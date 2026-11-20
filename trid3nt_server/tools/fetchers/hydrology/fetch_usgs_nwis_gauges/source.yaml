@@ -98,11 +98,9 @@ coverage:
     max_span_days: 120.0
     cadence: 5-min to hourly instantaneous samples
   datum: null
-  units:
-    discharge_cfs: ft3/s
-    time_series_csv: ft3/s
-  value_column: discharge_cfs
-  series_column: time_series_csv
+  fields:
+    value: {field: discharge_cfs, unit: ft3/s}
+    series: {field: time_series_csv, unit: ft3/s}
 - data_class: water level series
   kind: measured
   reach_km: 25
@@ -123,13 +121,10 @@ coverage:
     max_span_days: 120.0
     cadence: 5-min to hourly instantaneous samples
   datum: null
-  units:
-    gage_height_ft: ft
-    stage_series_csv: ft
-    gauge_datum_ft: ft
-  value_column: gage_height_ft
-  series_column: stage_series_csv
-  above_column: gauge_datum_ft
+  fields:
+    value: {field: gage_height_ft, unit: ft}
+    series: {field: stage_series_csv, unit: ft}
+    above: {field: gauge_datum_ft, unit: ft}
 - data_class: water quality sample
   kind: measured
   reach_km: 25
@@ -151,11 +146,9 @@ coverage:
     max_span_days: 120.0
     cadence: 5-min to hourly instantaneous samples
   datum: null
-  units:
-    water_temp_c: degC
-    temp_series_csv: degC
-  value_column: water_temp_c
-  series_column: temp_series_csv
+  fields:
+    value: {field: water_temp_c, unit: degC}
+    series: {field: temp_series_csv, unit: degC}
   # THE MEASUREMENT this row is asked for, in NWIS's own parameter-code
   # vocabulary: the slot names the variable its run publishes and this table is
   # where that name becomes the code the service answers to. A variable with no

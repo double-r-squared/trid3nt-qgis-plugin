@@ -13,6 +13,8 @@ from typing import Any
 
 import pytest
 
+from trid3nt_contracts.coverage import UnitField, Member
+
 from trid3nt_server.inputs.input import Input, declared
 from trid3nt_server.workflows.runtime import DeclarationError, tool
 from trid3nt_server.workflows.runtime.data import refuse_wrong_shape
@@ -477,7 +479,8 @@ def _level_told(fill, tmp_path, datums, monkeypatch, *, record_datum=None):
     env = fill._Env(run={}, data={})
     told = asyncio.run(fill._on_the_run_s_frame(
         env, _elevation_slot(LEVEL), value,
-        {"near": (-122.67, 45.52), "field": "value", "series_field": "none"}))
+        {"near": (-122.67, 45.52),
+         "fields": {"value": Member(field="value", unit=UnitField(field="unit"))}}))
     return told, asked
 
 

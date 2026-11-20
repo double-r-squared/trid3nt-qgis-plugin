@@ -80,9 +80,6 @@ coverage:
   # The COARSER of the two grids (Cape Cod 400 ft = 121.92 m).
   resolution_m: 121.92
   datum: null
-  units:
-    aquifer_saturated_thickness: m
-  value_column: aquifer_saturated_thickness
 
 caveats:
   - "Two published calibrated USGS MODFLOW model grids, nothing more: Cape Cod JBCC (2019 release, 32 layers) and Des Moines MF6 (2024 release, 6 layers). A bbox outside both raises USGS_MODEL_THICKNESS_INPUT_INVALID naming them; a bbox a grid holds only in part, or a box with a cell the model leaves unmeasured, raises USGS_MODEL_THICKNESS_EMPTY so the next source answers the whole run; there is no third grid and nothing is interpolated between grids."

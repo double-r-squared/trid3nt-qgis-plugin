@@ -105,13 +105,6 @@ coverage:
     window:
       series: false
     resolution_m: 250.0
-    units:
-      clay: percent
-      sand: percent
-      silt: percent
-      soc: g/kg
-      bdod: kg/dm3
-      phh2o: pH
     # WHICH PROPERTY a soil need asks for: the slot names it in its own word and
     # this table is the word the property's VRT is named by.
     ask: {soil_property: "need:of"}

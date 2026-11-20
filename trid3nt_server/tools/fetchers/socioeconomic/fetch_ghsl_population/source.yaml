@@ -74,9 +74,6 @@ coverage:
     series: false
     latest: '2020-01-01'
   resolution_m: 100.0
-  units:
-    persons_per_cell: persons
-  value_column: persons_per_cell
 
 caveats:
 - JRC GHS-POP R2023A epoch 2020, ~100 m EPSG:4326; modeled gridded residential population (persons/cell),

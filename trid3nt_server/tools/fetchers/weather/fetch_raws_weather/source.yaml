@@ -97,16 +97,6 @@ coverage:
     series: true
     cadence: hourly observations, per-station-per-day enrich, best-effort
   datum: null
-  units:
-    tmpf: F
-    dwpf: F
-    relh: "%"
-    sknt: kt
-    drct: deg
-    gust: kt
-    solar_rad: W/m2
-    precip_in: in
-  value_column: ""
 
 caveats:
 - 'The station-discovery box is the request bbox GROWN by search_radius_km (default 60 km):

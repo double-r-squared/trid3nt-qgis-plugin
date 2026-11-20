@@ -182,14 +182,23 @@ def _sounded(layer: Any, *, label: str, code: str) -> Any:
                              code=code) from exc
     quantity = str(_said(layer, "quantity") or "").strip()
     rows = [(g["coordinates"], p) for g, p in flatten_features(doc) if g.get("type") == "Point"]
-    field = next((name for name in (quantity, f"{quantity}_m") if quantity
-                  and any(p.get(name) is not None for _c, p in rows)), None)
+    # A fetched layer's value is the member its source maps; one no source produced names it by its quantity.
+    from .fields import produced_by
+
+    mapped = produced_by(layer)
+    member = mapped[1].get("value") if mapped is not None else None
+    field = member.field if member is not None and member.field else next(
+        (name for name in (quantity, f"{quantity}_m") if quantity
+         and any(p.get(name) is not None for _c, p in rows)), None)
     if field is None:
         raise UserInputError(
             f"the {label} is a layer of points naming no value to lay: its quantity is {quantity or 'unstated'} "
             "and no point carries a property of that name (or that name with _m). Hand a layer whose points "
             "state their elevation or depth under its quantity.", code="BED_SOUNDINGS_VALUE")
-    held = [(c[0], c[1], float(p[field])) for c, p in rows if p.get(field) is not None]
+    from .observation import convert
+
+    unit = member.unit if member is not None and isinstance(member.unit, str) and member.unit else "m"
+    held = [(c[0], c[1], convert(float(p[field]), unit, "m")) for c, p in rows if p.get(field) is not None]
     lon, lat, value = (np.array(col, dtype="float64") for col in zip(*held))
     keep = np.isfinite(value)
     lon, lat, value = lon[keep], lat[keep], value[keep]

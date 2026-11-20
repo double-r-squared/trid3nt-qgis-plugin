@@ -69,9 +69,6 @@ coverage:
       latest: '2020-01-01'
     resolution_m: 1.0
     datum: NAVD88
-    units:
-      elevation: m
-    value_column: elevation
 
 caveats:
 - These are the FINEST beds published on the US coast - 1 m where a CoNED integration

@@ -114,7 +114,6 @@ coverage:
       latest: '2023-01-01'
     resolution_m: 5.0
     datum: null
-    units: {}
     # WHAT THIS ROW PUBLISHES of its class: one WATERBODY - the open water NHD
     # maps as a closed outline. Not the channel network feeding it and not a
     # cut stretch of river.

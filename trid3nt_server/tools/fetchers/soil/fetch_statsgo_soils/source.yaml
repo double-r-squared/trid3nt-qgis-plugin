@@ -60,9 +60,6 @@ coverage:
     window:
       series: false
     resolution_m: 1000.0
-    units:
-      THICK: centimeters
-      KFFACT: dimensionless
 caveats:
 - USGS STATSGO soils (KFFACT erodibility / THICK thickness) 30 m COG via pfdf.data.usgs.statsgo (library-delegate;
   the library owns discovery + the socket). An open-water bbox inside the covered extent returns a typed

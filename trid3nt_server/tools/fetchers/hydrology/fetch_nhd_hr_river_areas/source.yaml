@@ -80,7 +80,6 @@ coverage:
       latest: '2023-01-01'
     resolution_m: 5.0
     datum: null
-    units: {}
     # WHAT THIS ROW PUBLISHES of its class: every river and canal mapped as a
     # surface in the box, each a closed outline with its NHD identity.
     vocabulary:

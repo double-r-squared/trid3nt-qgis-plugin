@@ -79,6 +79,12 @@ payload_estimate:
   overhead_kb: 30.0
   floor_mb: 0.03
 
+fields:
+  value: {field: wave_height_m, unit: m}
+  series: {field: wave_height_series_csv, unit: m}
+  height: {field: wave_height_series_csv, unit: m}
+  period: {field: peak_period_series_csv, unit: s}
+  from_direction: {field: wave_direction_series_csv, unit: degT}
 coverage:
 -   data_class: wave series
     kind: measured
@@ -103,15 +109,6 @@ coverage:
       max_span_days: 366.0
       cadence: 30-min samples in the realtime file, hourly in the older archive years
     datum: null
-    units:
-      wave_height_m: m
-      wave_height_series_csv: m
-      peak_period_s: s
-      peak_period_series_csv: s
-      wave_direction_deg_true: degT
-      wave_direction_series_csv: degT
-    value_column: wave_height_m
-    series_column: wave_height_series_csv
     # THE SEA STATE THIS BUOY MEASURES, under the name a run publishes it by.
     # NDBC's MWD is the direction at the DOMINANT period, so it answers a peak
     # direction and not a mean one; a mean period and a spread are spectral

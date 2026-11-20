@@ -39,19 +39,18 @@ def surface(data_class="bathymetry", rings=None, res=1.0, datum="NAVD88",
         data_class=data_class, kind=kind,
         extent=CoverageExtent(kind="surface", rings=rings or CONUS, note=note),
         window=CoverageWindow(series=False, latest=latest),
-        resolution_m=res, datum=datum, units={"elevation": "m"})
+        resolution_m=res, datum=datum)
 
 
 def gauges(data_class="discharge series", rings=None, earliest=None,
-           latest=None, units=None, kind="measured", reach_km=25.0,
+           latest=None, kind="measured", reach_km=25.0,
            note="a gauge network", cadence="hourly"):
     return Coverage(
         data_class=data_class, kind=kind, reach_km=reach_km,
         extent=CoverageExtent(kind="stations", rings=rings or CONUS, note=note,
                               discover="bbox"),
         window=CoverageWindow(series=True, earliest=earliest, latest=latest,
-                              cadence=cadence),
-        units=units or {"time_series_csv": "ft3/s"})
+                              cadence=cadence))
 
 
 def bed_need(**over):
@@ -194,8 +193,7 @@ def test_a_measured_gauge_at_the_place_outranks_a_modelled_grid_over_it():
             data_class="discharge series", kind="modelled",
             extent=CoverageExtent(kind="surface", rings=CONUS,
                                   note="a modelled channel network"),
-            window=CoverageWindow(series=True, cadence="hourly"),
-            units={"streamflow_cms": "m3/s"})),
+            window=CoverageWindow(series=True, cadence="hourly"))),
         ("fetch_gauges", gauges(rings=AT_THE_PLACE)),
     ])
     assert choice.picked == "fetch_gauges"
@@ -207,9 +205,9 @@ def test_a_measured_gauge_outranks_a_prediction_a_hundred_kilometres_away():
     choice = match(level_need(), [
         ("fetch_tides", gauges(data_class="water level series",
                                rings=DOWN_THE_ESTUARY, kind="predicted",
-                               reach_km=200.0, units={"water_level": "m"})),
+                               reach_km=200.0)),
         ("fetch_gauges", gauges(data_class="water level series",
-                                rings=AT_THE_PLACE, units={"water_level": "m"})),
+                                rings=AT_THE_PLACE)),
     ])
     assert choice.picked == "fetch_gauges"
     assert not choice.tie
@@ -220,10 +218,9 @@ def test_a_station_beyond_its_reach_is_not_a_survivor_at_all():
     coast = level_need(lon=-124.4, lat=45.5)
     choice = match(coast, [
         ("fetch_gauges", gauges(data_class="water level series",
-                                rings=AT_THE_PLACE, units={"water_level": "m"})),
+                                rings=AT_THE_PLACE)),
         ("fetch_tides", gauges(data_class="water level series",
-                               rings=DOWN_THE_ESTUARY, kind="predicted",
-                               units={"water_level": "m"})),
+                               rings=DOWN_THE_ESTUARY, kind="predicted")),
     ])
     assert choice.picked == "fetch_tides"
     excluded = next(row for row in choice.rows if row.fetcher == "fetch_gauges")
@@ -233,9 +230,8 @@ def test_a_station_beyond_its_reach_is_not_a_survivor_at_all():
 def test_a_run_that_picks_a_survivor_takes_it_as_the_user_s_choice():
     choice = match(level_need(pick="fetch_tides"), [
         ("fetch_gauges", gauges(data_class="water level series",
-                                rings=AT_THE_PLACE, units={"water_level": "m"})),
-        ("fetch_tides", gauges(data_class="water level series", kind="predicted",
-                               units={"water_level": "m"})),
+                                rings=AT_THE_PLACE)),
+        ("fetch_tides", gauges(data_class="water level series", kind="predicted")),
     ])
     assert choice.picked == "fetch_tides"
     assert choice.picked_by_user and not choice.tie
@@ -247,8 +243,7 @@ def test_a_run_that_picks_a_source_the_filters_excluded_is_refused():
     with pytest.raises(DeclarationError) as caught:
         match(level_need(pick="fetch_europe"), [
             ("fetch_europe", gauges(data_class="water level series",
-                                    rings=EUROPE, note="Europe only",
-                                    units={"water_level": "m"}))])
+                                    rings=EUROPE, note="Europe only"))])
     assert "fetch_europe" in str(caught.value)
     assert "not a survivor" in str(caught.value)
 
@@ -425,7 +420,7 @@ def hydrography(vocabulary=None, ask=None, rings=None):
         data_class="hydrography", kind="measured",
         extent=CoverageExtent(kind="surface", rings=rings or CONUS,
                               note="a stated extent"),
-        window=CoverageWindow(series=False), units={},
+        window=CoverageWindow(series=False),
         ask=dict(ask or {}), vocabulary=dict(vocabulary or {}))
 
 

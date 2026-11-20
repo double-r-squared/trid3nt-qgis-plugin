@@ -362,18 +362,6 @@
       "title": "Role",
       "type": "string"
     },
-    "stamp_column": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Stamp Column"
-    },
     "style": {
       "anyOf": [
         {

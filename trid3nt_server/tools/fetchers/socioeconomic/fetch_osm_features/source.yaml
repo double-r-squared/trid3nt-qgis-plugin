@@ -107,7 +107,6 @@ coverage:
   window:
     series: false
   datum: null
-  units: {}
   ask: {feature: coastline}
   vocabulary:
     coastline: coastline

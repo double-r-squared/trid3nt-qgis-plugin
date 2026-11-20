@@ -27,6 +27,10 @@ from .temporal import (
 
 from .series import align
 
+from trid3nt_contracts.coverage import UnitField, Member
+
+from .fields import FieldError, Record
+
 from .geometry import read_geometry_doc, source_uri
 from .vertical_datum import DatumError, datum_of, onto_frame
 
@@ -49,6 +53,13 @@ _LONE_CADENCE = dt.timedelta(days=1)
 #: What a ROW calls the zero its elevation is counted from; a portal federating
 #: programs publishes several, so the layer's own datum is read only where rows state none.
 _DATUM_FIELD = "vertical_datum"
+
+#: How a record no source states a field map for is read: the layer a user hands over names its reading
+#: ``value`` and its window ``time_series_csv``, each in the unit its ``unit`` field states.
+_UNSOURCED: Mapping[str, Member] = {
+    "value": Member(field="value", unit=UnitField(field="unit")),
+    "series": Member(field="time_series_csv", unit=UnitField(field="unit")),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +93,8 @@ class Observation:
     #: where the source publishes no depth.
     depth: float | None = None
     depth_units: str | None = None
+    #: The published accuracy of ``value``, in ``units``, read off the source's map where the slot asks for it.
+    accuracy: float | None = None
 
     @property
     def forcing(self) -> Series | float:
@@ -114,8 +127,8 @@ def convert(value: float, units: Any, to_units: Any) -> float:
         raise ObservationError(
             "OBSERVATION_UNIT_UNSTATED",
             f"a reading in no stated unit cannot be read as {to_units!r}. The "
-            "unit of a record's value column is stated on the source's coverage "
-            "row; a number read in the unit the slot wanted is a different "
+            "unit of a record's value is stated on its member in the source's "
+            "fields; a number read in the unit the slot wanted is a different "
             "measurement.")
     try:
         return convert_units(float(value), str(units), str(to_units))
@@ -186,23 +199,22 @@ def _pick(rows: list[tuple[str, float]],
     return None
 
 
-def _reading(props: Mapping[str, Any], field: str, series_field: str,
-             at: Any = None, stamp_field: str = ""
-             ) -> tuple[str | None, float, dt.timedelta] | None:
-    """One feature's value, the stamp it carries and the cadence it speaks at.
+def _reading(rec: Record, at: Any = None) -> tuple[str | None, float, dt.timedelta] | None:
+    """One record's value, the stamp it carries and the cadence it speaks at.
 
-    A windowed record is read AT the moment asked; a single-number column is read at the lone cadence,
-    stamped by the column the source declares, and undated where it declares none."""
-    if series_field and props.get(series_field):
-        rows = _samples(str(props[series_field]))
+    A windowed record is read AT the moment asked; a single reading is read at the lone cadence,
+    stamped by the source's ``time`` member, and undated where it maps none."""
+    window = rec.stated("series")
+    if window:
+        rows = _samples(str(window))
         found = _pick(rows, at)
         if found is not None:
             return (found[0], found[1], _cadence(rows))
-    direct = props.get(field)
+    direct = rec.stated("value")
     if direct is not None:
         try:
-            stamp = _text(props, stamp_field) if stamp_field else None
-            return (stamp, float(direct), _LONE_CADENCE)
+            stamp = rec.stated("time")
+            return (None if stamp is None else str(stamp), float(direct), _LONE_CADENCE)
         except (TypeError, ValueError):
             return None
     return None
@@ -235,24 +247,9 @@ def _in_window(sampled: Any, at: Any,
     return taken - asked <= cadence
 
 
-def _recorded_stamp(source: Any) -> str:
-    """The time column a handed-in layer's own record states, "" where it states none.
-
-    A layer named by its uri is looked up as the record its producer returned."""
-    if isinstance(source, str):
-        from trid3nt_server.render.uri_registry import lookup_layer_for_handle
-
-        source = lookup_layer_for_handle(source) or {}
-    stated = (source.get("stamp_column") if isinstance(source, Mapping)
-              else getattr(source, "stamp_column", None))
-    return str(stated or "").strip()
-
-
-def observation(source: Any, *, near: Any = None, field: str = "value",
-                units_field: str = "unit", to_units: Any = None,
-                series_field: str = "time_series_csv", stamp_field: str = "",
-                record_units: Any = None, column_units: Any = None,
-                above_field: str = "", at: Any = None, window_s: Any = None,
+def observation(source: Any, *, near: Any = None, fields: Mapping[str, Member] | None = None,
+                producer: str = "", to_units: Any = None, accuracy: bool = False,
+                at: Any = None, window_s: Any = None,
                 to_datum: Any = None, offset: Any = None, caption: str = "",
                 quantity: str = "state", label: str = "observation",
                 code: str = _CODE, every: bool = False,
@@ -263,7 +260,8 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
     A number stands over any record and is already on the slot's datum; a reading on
     another zero reaches ``to_datum`` only through ``offset``. ``near`` ranks several
     candidates, none outside the window closing at ``at`` and none ``off`` names (site id ->
-    why it is not this run's water); ``caption`` names the quantity in every refusal and the journal note."""
+    why it is not this run's water); ``caption`` names the quantity in every refusal and the journal note.
+    A record reads by ``fields``, the map its ``producer`` states; ``accuracy`` reads that member too, refusing where unmapped."""
     if source is None:
         return None
     measures, opens = caption or "this value", _opening(caption)
@@ -274,19 +272,19 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
                             datum=str(to_datum) if to_datum is not None else None)
         _journal(found, opens=opens, stated=True)
         return found
-    stamp_field = stamp_field or _recorded_stamp(source)
+    fields = dict(fields) if fields else dict(_UNSOURCED)
     candidates: list[tuple[float, dict[str, Any], tuple[str | None, float]]] = []
     for feature in _features(source):
         props = feature.get("properties") or {}
-        reading = _reading(props, field, series_field, at, stamp_field)
+        reading = _reading(_record(props, fields, producer, label), at)
         if reading is None:
             continue
         candidates.append((_distance_km(feature, near), feature, reading))
     within = [row for row in candidates if _in_window(row[2][0], at, row[2][2])]
     if candidates and not within:
-        undated = ("" if stamp_field or not any(row[2][0] is None for row in candidates) else
-                   f" {label} states no column carrying the moment a reading was taken, so its "
-                   "readings are undated: state that column as the layer's stamp_column.")
+        undated = ("" if "time" in fields or not any(row[2][0] is None for row in candidates) else
+                   f" {label} maps no time member, the field carrying the moment a reading was "
+                   "taken, so its readings are undated: state it in the source's fields.")
         raise ObservationError(
             code,
             f"{label} reports {measures} near this domain, but nothing sampled "
@@ -302,10 +300,9 @@ def observation(source: Any, *, near: Any = None, field: str = "value",
             "opens on is not measured anywhere near it. State the value on the "
             "call, or name a source that reaches this place.")
     candidates.sort(key=lambda row: row[0])
-    found = tuple(_found(source, feature, sampled, raw, distance_km, field=field,
-                         units_field=units_field, to_units=to_units,
-                         series_field=series_field, record_units=record_units,
-                         column_units=column_units, above_field=above_field,
+    found = tuple(_found(source, feature, sampled, raw, distance_km,
+                         _record(feature.get("properties") or {}, fields, producer, label),
+                         to_units=to_units, accuracy=accuracy,
                          at=at, window_s=window_s, to_datum=to_datum,
                          offset=offset, quantity=quantity, label=label,
                          measures=measures)
@@ -357,16 +354,19 @@ def sites(source: Any) -> list[tuple[str | None, str | None, float | None, float
             for usgs, reach in ((_text(props, "site_no"), _text(props, "feature_id")),)]
 
 
+def _record(props: Mapping[str, Any], fields: Mapping[str, Member], producer: str,
+            label: str) -> Record:
+    return Record(props, fields, source=producer or label, site=_text(props, *_SITE_FIELDS))
+
+
 def _found(source: Any, feature: Mapping[str, Any], sampled: str | None, raw: float,
-           distance_km: float, *, field: str, units_field: str, to_units: Any,
-           series_field: str, record_units: Any, column_units: Any,
-           above_field: str, at: Any, window_s: Any, to_datum: Any, offset: Any,
+           distance_km: float, rec: Record, *, to_units: Any, accuracy: bool,
+           at: Any, window_s: Any, to_datum: Any, offset: Any,
            quantity: str, label: str, measures: str) -> Observation:
     """One site's reading on the slot's unit and datum, with its window where it reported one."""
     props = feature.get("properties") or {}
-    columns = dict(column_units or {})
-    units = props.get(units_field) or columns.get(field) or record_units
-    zero = _gauge_zero(props, above_field, units, columns, label, measures)
+    units = rec.unit("value") or rec.unit("series")
+    zero = _gauge_zero(rec, units, label, measures)
     value = (convert(raw + zero, units, to_units) if to_units is not None
              else float(raw) + zero)
     datum, shift, datum_note = _onto_datum(source, props, to_datum, offset, label)
@@ -391,7 +391,8 @@ def _found(source: Any, feature: Mapping[str, Any], sampled: str | None, raw: fl
         datum=datum, datum_note=datum_note,
         asked=None if asked is None else asked.isoformat(),
         depth=depth, depth_units=_text(props, "depth_unit"),
-        series=_series(props, series_field, columns.get(series_field) or units,
+        accuracy=_accuracy(rec, to_units) if accuracy else None,
+        series=_series(rec, rec.unit("series") or units,
                        to_units, shift + convert(zero, units, to_units)
                        if to_units is not None else shift + zero,
                        label, at, window_s, quantity))
@@ -404,22 +405,22 @@ def sited(at: Any) -> bool:
         and all(isinstance(one, Observation) for one in at))
 
 
-def _series(props: Mapping[str, Any], series_field: str, units: Any,
+def _series(rec: Record, units: Any,
             to_units: Any, shift: float, label: str, at: Any = None,
             window_s: Any = None, quantity: str = "state") -> Series | None:
     """THE WINDOW this station reported, on the slot's unit and datum, opened at the run's moment.
 
     It rides the SAME shift as the value; ``None`` for a single reading. A record with
     no unit refuses: 2000 ft3/s read as 2000 m3/s is a different river."""
-    rows = _samples(str(props.get(series_field) or "")) if series_field else []
+    rows = _samples(str(rec.stated("series") or ""))
     if len(rows) < 2:
         return None
     if to_units is not None and not units:
         raise ObservationError(
             "OBSERVATION_UNIT_UNSTATED",
             f"{label} reports a window in no stated unit and this slot reads "
-            f"{to_units!r}. The unit of a record's value column is stated on "
-            "the source's row.")
+            f"{to_units!r}. The unit of a record's window is stated on its "
+            "member in the source's fields.")
     _covers_the_run(rows, at, window_s, label)
     try:
         found = Series.from_samples(rows, units=str(units), at=at)
@@ -443,22 +444,30 @@ def _series(props: Mapping[str, Any], series_field: str, units: Any,
     return found.shifted(shift)
 
 
-def _gauge_zero(props: Mapping[str, Any], above_field: str, units: Any,
-                columns: Mapping[str, str], label: str, measures: str) -> float:
+def _gauge_zero(rec: Record, units: Any, label: str, measures: str) -> float:
     """The elevation of the zero this reading is counted from, in the reading's own unit.
 
     A gauge publishes a HEIGHT above its own datum; a record that states no zero refuses."""
-    if not above_field:
+    if not rec.maps("above"):
         return 0.0
-    stated = props.get(above_field)
+    stated = rec.stated("above")
     if stated is None:
         raise ObservationError(
             "OBSERVATION_GAUGE_ZERO_UNSTATED",
             f"{label} reports {measures} as a height above its own zero and "
-            f"publishes no {above_field!r}, so there is nothing to place it on "
+            f"publishes no {rec.field('above')!r}, so there is nothing to place it on "
             "the frame this run is solved on. State the elevation on the call, "
             "or ask about a site whose datum is published.")
-    return convert(float(stated), columns.get(above_field) or units, units)
+    return convert(float(stated), rec.unit("above") or units, units)
+
+
+def _accuracy(rec: Record, to_units: Any) -> float:
+    """The published accuracy of this record's value, on the slot's unit; a source publishing none refuses."""
+    try:
+        found = rec.accuracy
+    except FieldError as exc:
+        raise ObservationError(exc.error_code, str(exc)) from exc
+    return convert(found.value, found.unit, to_units) if to_units is not None else float(found.value)
 
 
 def _covers_the_run(rows: list[tuple[str, float]], at: Any,

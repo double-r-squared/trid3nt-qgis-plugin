@@ -57,6 +57,9 @@ payload_estimate:
   mb_per_sq_deg: 0.001
   floor_mb: 0.01
 
+fields:
+  value: {field: water_level, unit: m}
+  series: {field: time_series_csv, unit: m}
 coverage:
 - data_class: water level series
   kind: modelled
@@ -75,11 +78,6 @@ coverage:
   # GTSM publishes its water levels relative to mean sea level, which the
   # offset service names LMSL.
   datum: LMSL
-  units:
-    water_level: m
-    time_series_csv: m
-  value_column: water_level
-  series_column: time_series_csv
 
 caveats:
   - "GTSM v3.0 is a reanalysis, a MODEL, not a gauge -- for CONUS use fetch_noaa_coops_tides"

@@ -70,7 +70,6 @@ ingest:
     instruction: {from: properties.instruction}
     response: {from: properties.response}
     id: {from: properties.id}
-  json_coerce_nested: true
   geometry_filter:
     # A zone-based statewide watch carries a NULL geometry: pyogrio rejects one and
     # it has no map footprint.

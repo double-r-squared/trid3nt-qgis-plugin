@@ -98,25 +98,30 @@ def test_the_contract_refuses_a_station_set_drawn_as_rings_alone():
         CoveragePoint(id="8452660", lon=-71.32614, lat=41.504333)])
 
 
+#: The classes a record slot reads a fetched layer's value or window from.
+_RECORD_CLASSES = ("water level series", "discharge series", "water quality sample",
+                   "groundwater level", "wave series", "precipitation series")
+
+
 @pytest.mark.parametrize("path", SPECS, ids=lambda p: p.parent.name)
-def test_every_series_source_states_the_unit_of_its_value_columns(path):
-    for row in load_spec_from_path(path).coverage:
-        if row.window.series:
-            assert row.units, f"{path} reports a series in no stated unit"
+def test_every_record_row_maps_the_reading_its_slot_reads(path):
+    spec = load_spec_from_path(path)
+    for row in spec.coverage:
+        if row.data_class in _RECORD_CLASSES and spec.shape != "raster-cog":
+            assert {"value", "series"} & set(row.fields), \
+                f"{path} serves {row.data_class} and maps neither a value nor a series"
 
 
-def test_the_gauge_network_states_each_column_on_its_own_row():
+def test_the_gauge_network_states_each_member_on_its_own_row():
     rows = {row.data_class: row for row in load_spec_from_path(
         _ROOT / "hydrology/fetch_usgs_nwis_gauges/source.yaml").coverage}
-    flow = rows["discharge series"]
-    assert flow.series_column == "time_series_csv"
-    assert flow.units["time_series_csv"] == "ft3/s"
-    stage = rows["water level series"]
-    assert stage.series_column == "stage_series_csv"
-    assert stage.units["stage_series_csv"] == "ft"
-    # a gage height is a height above the gauge's OWN zero, and the row names
-    # the column carrying that zero's elevation.
-    assert stage.above_column == "gauge_datum_ft"
+    flow = rows["discharge series"].fields
+    assert (flow["series"].field, flow["series"].unit) == ("time_series_csv", "ft3/s")
+    stage = rows["water level series"].fields
+    assert (stage["series"].field, stage["series"].unit) == ("stage_series_csv", "ft")
+    # a gage height is a height above the gauge's OWN zero, and the row maps the
+    # field carrying that zero's elevation.
+    assert (stage["above"].field, stage["above"].unit) == ("gauge_datum_ft", "ft")
 
 
 def test_a_lake_row_covers_its_lake_and_not_the_open_coast():

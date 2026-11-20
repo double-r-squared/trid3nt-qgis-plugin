@@ -96,9 +96,6 @@ coverage:
       latest: '2012-03-01'
     resolution_m: 10.0
     datum: MHW
-    units:
-      elevation: m
-    value_column: elevation
 
 caveats:
 - The communities are Chignik, Cordova, Craig, Dutch Harbor, Elfin Cove, Kachemak Bay, King Cove, Kodiak, Port Alexander, Sand Point, Seward, Shemya and Sitka.

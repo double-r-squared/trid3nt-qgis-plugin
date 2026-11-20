@@ -15,6 +15,11 @@ from types import MappingProxyType, SimpleNamespace
 
 import pytest
 
+from trid3nt_contracts.coverage import UnitField, Member
+
+#: A sample layer's map: the reading under ``value`` in the unit its ``unit`` field states, dated by ``result_date``.
+_DATED = {"value": Member(field="value", unit=UnitField(field="unit")), "time": Member(field="result_date")}
+
 from trid3nt_server.errors import DeclarationError
 from trid3nt_server.inputs.input import Input, declared
 from trid3nt_server.inputs.observation import Observation, observation, sited
@@ -79,14 +84,14 @@ def test_a_snapshot_naming_no_input_refuses():
 
 def test_the_reading_carries_the_instant_it_was_asked_at():
     found = observation(_wells(), near=(-70.56, 41.6), at="1994-06-01T00:00:00Z",
-                        stamp_field="result_date")
+                        fields=_DATED)
     assert found.site_id == "NEAR"
     assert found.asked == "1994-06-01T00:00:00+00:00"
 
 
 def test_a_stated_set_takes_every_site_its_window_holds_nearest_first():
     found = observation(_wells(), near=(-70.56, 41.6), at="1994-06-01T00:00:00Z",
-                        stamp_field="result_date",
+                        fields=_DATED,
                         to_units="mg/L", every=True)
     assert isinstance(found, tuple) and sited(found)
     assert [one.site_id for one in found] == ["NEAR", "FAR"]
@@ -96,7 +101,7 @@ def test_a_stated_set_takes_every_site_its_window_holds_nearest_first():
 
 def test_the_nearest_site_alone_is_read_by_default():
     found = observation(_wells(), near=(-70.56, 41.6), at="1994-06-01T00:00:00Z",
-                        stamp_field="result_date")
+                        fields=_DATED)
     assert isinstance(found, Observation)
 
 

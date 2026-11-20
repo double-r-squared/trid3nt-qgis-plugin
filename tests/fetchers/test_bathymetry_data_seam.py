@@ -459,8 +459,6 @@ def test_every_bed_row_states_a_cell_and_a_frame_the_offset_service_names() -> N
         coverage = next(c for c in spec.coverage if c.data_class == "bathymetry")
         assert coverage.resolution_m and coverage.resolution_m > 0
         assert (coverage.datum or "").lower() in frames
-        assert coverage.units == {"elevation": "m"}
-        assert coverage.value_column == "elevation"
 
 
 def test_the_composite_row_is_gone_from_the_registry() -> None:

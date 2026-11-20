@@ -98,17 +98,6 @@ coverage:
     series: true
     cadence: hourly (plus SPECI); IEM archive reaches the 1920s at some sites
   datum: null
-  units:
-    tmpf: F
-    dwpf: F
-    sknt: kt
-    drct: deg
-    gust: kt
-    alti: inHg
-    mslp: hPa
-    p01i: in
-    vsby: mi
-  value_column: ""
 
 caveats:
 - Iowa State IEM ASOS/METAR hourly surface observations; multi-state per-state-GeoJSON discovery (states

@@ -72,10 +72,10 @@ def router_input_error(
 
 
 def router_upstream_error(
-    code_prefix: str, message: str, retryable: bool = True
+    code_prefix: str, message: str, retryable: bool = True, suffix: str = "UPSTREAM_ERROR"
 ) -> RouterUpstreamError:
     """Typed upstream failure; ``retryable`` carries the TRANSPORT's verdict (a 404 is not worth a second call), else True."""
-    exc = _stamp(RouterUpstreamError, code_prefix, "UPSTREAM_ERROR", message)
+    exc = _stamp(RouterUpstreamError, code_prefix, suffix, message)
     exc.retryable = retryable
     return exc  # type: ignore[return-value]
 

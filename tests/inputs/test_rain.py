@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import pytest
 
+from trid3nt_contracts.coverage import Member
+
 from trid3nt_server.inputs.observation import ObservationError
 from trid3nt_server.inputs.rain import Rain, rain
 from trid3nt_server.inputs.slots import RAIN, ingest_slot
@@ -43,10 +45,11 @@ def test_every_series_reads_zero_at_the_moment_the_run_opens_at():
     assert found.series.times_s == (-900.0, 0.0, 900.0)
 
 
-def test_the_column_and_its_unit_are_the_matched_row_s_own_statement():
-    found = ingest_slot(RAIN, {"times": _QUARTERS, "depth": [0.1, 0.0, 1.0]},
-                        label="rain", series_field="depth",
-                        column_units={"depth": "in"}, window_s=1800.0)
+def test_the_field_and_its_unit_are_the_matched_row_s_own_statement():
+    found = ingest_slot(RAIN, {"stamps": _QUARTERS, "depth": [0.1, 0.0, 1.0]},
+                        label="rain", fields={"time": Member(field="stamps"),
+                                              "series": Member(field="depth", unit="in")},
+                        window_s=1800.0)
     assert found.series.values == pytest.approx((2.54, 0.0, 25.4))
     assert found.series.units == "mm"
 

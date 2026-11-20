@@ -63,8 +63,6 @@ coverage:
       drawn; a bbox over unmapped ground answers with nothing
   window:
     series: false
-  units:
-    osm_id: identifier
 
 caveats:
 - OSM Overpass building footprints (ways + multipolygon relations) intersecting the bbox, kept whole (never

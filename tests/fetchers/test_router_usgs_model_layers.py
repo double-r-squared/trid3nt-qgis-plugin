@@ -164,7 +164,6 @@ def test_spec_identity_states_metres_on_navd88():
     assert _SPEC.normalize.units == "m"
     assert _SPEC.normalize.quantity == "aquifer_layer_elevation"
     assert row.datum == "NAVD88" and _SPEC.vertical_datum == "NAVD88"
-    assert row.units["elevation"] == "m" and row.value_column == "elevation"
 
 
 def test_found_through_the_aquifer_property_class(class_routes_to_the_match):

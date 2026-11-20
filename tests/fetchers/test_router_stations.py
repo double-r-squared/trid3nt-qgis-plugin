@@ -285,8 +285,8 @@ def test_the_water_temperature_row_is_counted_from_nothing_and_asks_its_own_prod
     assert row.window.series is True
     assert dict(row.ask) == {"product": "water_temperature"}
     assert dict(row.vocabulary) == {"TEMPERATURE": "water_temperature"}
-    assert row.units["water_temperature"] == "degC"
-    assert row.series_column == "time_series_csv"
+    assert row.fields["value"].field == "water_temperature" and row.fields["value"].unit == "degC"
+    assert row.fields["series"].field == "time_series_csv" and row.fields["series"].unit == "degC"
 
 
 def test_the_temperature_product_asks_at_its_own_cadence_and_on_no_datum(monkeypatch):

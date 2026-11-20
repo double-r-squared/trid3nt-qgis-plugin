@@ -70,6 +70,8 @@ payload_estimate:
   floor_mb: 0.02
   ceil_mb: 50.0
 
+fields:
+  value: {field: grainsize_phi, unit: phi}
 coverage:
   - data_class: bed material
     kind: measured
@@ -86,15 +88,6 @@ coverage:
       series: false
     resolution_m: null
     datum: null
-    units:
-      waterdepth_m: m
-      gravel_pct: percent
-      sand_pct: percent
-      mud_pct: percent
-      clay_pct: percent
-      grainsize_phi: phi
-      sorting_phi: phi
-    value_column: grainsize_phi
 
 caveats:
   - "the ``ext`` (lab-analysed) table only; ``prs`` (values mined from written

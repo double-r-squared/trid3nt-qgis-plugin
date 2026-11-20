@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from .temporal import spelling
+from trid3nt_contracts.coverage import Member
 
 from .observation import Observation, ObservationError, observation
 
@@ -21,17 +21,11 @@ logger = logging.getLogger("trid3nt_server.inputs.wave")
 
 _CODE = "WAVE_INVALID"
 
-#: The unit each of the three quantities a sea state is is reported in, and what it
-#: measures. A source states the unit of EVERY column, so a quantity is read
-#: from the column in its own unit; a record with none measures no sea state and one
-#: with two refuses rather than picking.
+#: The unit each of the three quantities a sea state is is read in, and what it measures; each is the
+#: member of that name in the source's field map, naming the window the record reports it over.
 _HEIGHT = ("m", "a wave height")
 _PERIOD = ("s", "a wave period")
 _BEARING = ("degT", "a wave direction")
-
-#: What every source in this tree writes into the name of the column carrying a WINDOW
-#: rather than a single reading.
-_WINDOW = "series"
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,22 +43,23 @@ class Wave:
 
 
 def wave(source: Any, *, near: Any = None, at: Any = None,
-         column_units: Any = None, window_s: Any = None, caption: str = "",
+         fields: Mapping[str, Member] | None = None, producer: str = "",
+         window_s: Any = None, caption: str = "",
          label: str = "wave", code: str = _CODE) -> Wave | None:
     """THE ingestion: a fetched sea-state record -> the one sea state measured.
 
-    ``column_units`` says which column carries which quantity; ``near`` ranks the
-    candidates and ``at``/``window_s`` pick the sea state measured when the run is about."""
+    ``fields`` is the source's map, whose ``height``, ``period`` and ``from_direction`` name each
+    quantity's window; ``near`` ranks the candidates and ``at``/``window_s`` pick the sea state measured
+    when the run is about."""
     if source is None:
         return None
-    columns = dict(column_units or {})
     read = {
-        name: _measured(source, columns, unit, measures, near=near, at=at,
-                        window_s=window_s, label=label, code=code)
+        name: _measured(source, dict(fields or {}), name, unit, measures, near=near, at=at,
+                        window_s=window_s, label=label, code=code, producer=producer)
         for name, (unit, measures) in (("height", _HEIGHT),
                                        ("period", _PERIOD),
-                                       ("heading", _BEARING))}
-    height, period, heading = read["height"], read["period"], read["heading"]
+                                       ("from_direction", _BEARING))}
+    height, period, heading = read["height"], read["period"], read["from_direction"]
     if period.value <= 0.0:
         raise ObservationError(
             code,
@@ -79,40 +74,22 @@ def wave(source: Any, *, near: Any = None, at: Any = None,
     return found
 
 
-def _measured(source: Any, columns: Mapping[str, str], unit: str,
+def _measured(source: Any, fields: Mapping[str, Member], name: str, unit: str,
               measures: str, **asked: Any) -> Observation:
-    """One quantity of the sea state, off the column reported in its own unit."""
+    """One quantity of the sea state, off the window its member names."""
     label, code = str(asked.pop("label")), str(asked.pop("code"))
-    field, window = _column(columns, unit, measures, label, code)
-    found = observation(source, field=field, series_field=window,
-                        column_units=dict(columns), to_units=unit,
+    member = fields.get(name)
+    if member is None:
+        raise ObservationError(
+            code,
+            f"{label} has to report {measures}, and its source maps no {name!r} "
+            f"(it maps {', '.join(sorted(fields)) or 'nothing'}). Name a source that measures it.")
+    found = observation(source, fields={"series": member}, to_units=unit,
                         label=label, code=code, **asked)
     if found is None:
         raise ObservationError(
             code, f"{label} was handed no record, so {measures} was not read.")
     return found
-
-
-def _column(columns: Mapping[str, str], unit: str, measures: str, label: str,
-            code: str) -> tuple[str, str]:
-    """The column carrying one quantity, and the one carrying its window.
-
-    Where the window is published, the reading is taken at the moment the run opens."""
-    named = [name for name, stated in columns.items()
-             if spelling(stated) == spelling(unit)]
-    windows = [name for name in named if _WINDOW in name]
-    values = [name for name in named if _WINDOW not in name]
-    if len(values) != 1:
-        raise ObservationError(
-            code,
-            f"{label} has to report {measures}, in {unit}, and it states "
-            + (f"{len(values)} columns in that unit ({', '.join(values)}): a "
-               "sea state read off whichever of them came first is not a "
-               "measurement anybody took."
-               if values else
-               f"none (it states {', '.join(columns) or 'no column at all'}). "
-               "Name a source that measures it."))
-    return (values[0], windows[0] if len(windows) == 1 else "")
 
 
 def _journal(found: Wave, *, caption: str) -> None:

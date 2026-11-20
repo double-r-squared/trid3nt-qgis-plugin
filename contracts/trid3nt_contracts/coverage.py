@@ -2,7 +2,7 @@
 
 A row is a fetcher's only statement of what it holds: the class of
 thing it measures, where, over what time, at what cell, counted from what zero,
-and the unit of each value column it publishes. A slot states a NEED of the same
+and the field map its records are read by. A slot states a NEED of the same
 vocabulary and the match reads the two; nothing here knows about a template.
 """
 
@@ -19,7 +19,14 @@ __all__ = [
     "DATA_CLASSES",
     "PROVENANCE_KINDS",
     "DataClass",
+    "FieldMap",
+    "UnitField",
+    "MEMBERS",
+    "Member",
+    "NUMERIC_MEMBERS",
     "PER_RECORD",
+    "Rule",
+    "SERIES_MEMBERS",
     "Coverage",
     "CoverageExtent",
     "CoveragePoint",
@@ -78,7 +85,7 @@ DataClass = Literal[
 #: Kilometres per degree of latitude.
 _KM_PER_DEGREE = 111.32
 
-#: A unit or zero the record carries per feature; the slot reads it off the feature and refuses a feature carrying none.
+#: A zero the record carries per feature; the slot reads it off the feature and refuses a feature carrying none.
 PER_RECORD = "record"
 
 
@@ -216,6 +223,95 @@ def _in_ring(ring: list[tuple[float, float]], lon: float, lat: float) -> bool:
     return inside
 
 
+#: The names code reads a fetched record by. A source maps each it publishes onto its own field or a cited
+#: number; a member it does not map is one it does not report, and a read of it refuses.
+MEMBERS = ("value", "series", "time", "above", "above_accuracy", "accuracy",
+           "height", "period", "from_direction")
+
+MemberName = Literal["value", "series", "time", "above", "above_accuracy", "accuracy",
+                     "height", "period", "from_direction"]
+
+#: Members holding a number (a series holds numbers), so each states the unit it is counted in.
+NUMERIC_MEMBERS = frozenset(MEMBERS) - {"time"}
+
+#: Members naming a record's window - the source's own text of stamped readings, a sea-state quantity's included.
+SERIES_MEMBERS = frozenset({"series", "height", "period", "from_direction"})
+
+
+class UnitField(ContractModel):
+    """A unit the record carries beside its value, by the record's own field name."""
+
+    field: str = Field(min_length=1)
+
+
+class Rule(ContractModel):
+    """A published accuracy: the larger of an absolute bound and a fraction of the value read."""
+
+    absolute: float = Field(default=0.0, ge=0.0)
+    relative: float = Field(default=0.0, ge=0.0)
+    unit: str = Field(min_length=1)
+
+
+class Member(ContractModel):
+    """One member as a source states it, in exactly one of four forms: its own ``field``; a ``field``
+    read through a ``table`` of its codes; a ``constant``; or an accuracy rule (``absolute`` /
+    ``relative``). Every form but a plain field carries the ``cite`` it was read from."""
+
+    #: The record's own field; a dotted name reads a nested one.
+    field: str = ""
+    #: The source's code -> our word, a cited number, or a cited rule.
+    table: dict[str, str | float | Rule] | None = None
+    constant: float | None = None
+    absolute: float | None = Field(default=None, ge=0.0)
+    relative: float | None = Field(default=None, ge=0.0)
+    #: The unit the number is counted in: stated here, or a field of the record.
+    unit: str | UnitField = ""
+    cite: str = Field(default="", max_length=600)
+
+    @property
+    def rule(self) -> Rule | None:
+        if self.absolute is None and self.relative is None:
+            return None
+        return Rule(absolute=self.absolute or 0.0, relative=self.relative or 0.0,
+                    unit=str(self.unit))
+
+    @model_validator(mode="after")
+    def _validate_form(self) -> "Member":
+        """One form; a table reads a field; a number nobody can trace refuses."""
+        ruled = self.absolute is not None or self.relative is not None
+        if sum((bool(self.field), self.constant is not None, ruled)) != 1:
+            raise ValueError(
+                "a member is exactly one of a field (with or without a table), a constant, "
+                "or an absolute/relative rule")
+        if self.table is not None and not self.field:
+            raise ValueError("a table translates a field's codes, so it names the field")
+        cited = self.table is not None or not self.field
+        if cited and not self.cite.strip():
+            raise ValueError(
+                "a constant, a table or a rule states the publication it was read from as "
+                "cite; a number nobody can trace is an invented one")
+        if not cited and self.cite:
+            raise ValueError("a plain field carries no cite: the source itself is its origin")
+        if ruled and not (isinstance(self.unit, str) and self.unit):
+            raise ValueError("a rule states its own unit, never a record's field")
+        return self
+
+
+def validate_fields(fields: dict[str, Member]) -> None:
+    """A numeric member states its unit: on itself, a field of the record, or each table row's rule."""
+    for name, member in fields.items():
+        if name not in NUMERIC_MEMBERS or member.unit:
+            continue
+        if member.table and all(isinstance(row, Rule) for row in member.table.values()):
+            continue
+        raise ValueError(
+            f"fields.{name} states no unit; a number read in no stated unit is a number "
+            "nobody measured")
+
+
+FieldMap = dict[MemberName, Member]
+
+
 #: How a source came by its numbers, ranked: an instrument record beats a prediction beats a model grid; the match sorts on it first.
 PROVENANCE_KINDS = ("measured", "predicted", "modelled")
 
@@ -269,21 +365,15 @@ class Coverage(ContractModel):
     #: The zero elevations are counted from, as one frame name the offset service converts (the loader refuses prose).
     #: None where the dataset publishes none; :data:`PER_RECORD` where each feature carries its own.
     datum: str | None = None
-    #: Unit of each value column, by column name; an absent column is a unit nobody stated and refuses.
-    #: :data:`PER_RECORD` where the record carries the unit beside the value.
-    units: dict[str, str] = Field(default_factory=dict)
     #: Request values this row is fetched under, by param name, so the source answers with this row.
     #: ``need:<attribute>`` maps a need's generic attribute (``span_km``, ``seed_point``) onto the param this source states it in.
     ask: dict[str, str] = Field(default_factory=dict)
-    #: Which record columns carry the value, the reported window and the zero elevation; each name needs a unit stated above.
-    value_column: str = ""
-    series_column: str = ""
-    above_column: str = ""
-    #: Which record column carries the moment a single reading was taken; "" where the record states none.
-    stamp_column: str = ""
     #: This source's own word for each published variable, by the variable's name; a variable with no word here
     #: is a measurement the source does not take, and the match excludes it.
     vocabulary: dict[str, str] = Field(default_factory=dict)
+    #: The members this row reads differently from its source's map; after load, the source's map
+    #: with these over it.
+    fields: FieldMap = Field(default_factory=dict)
 
     def word_for(self, variable: str) -> str:
         """This source's own name for a published variable, "" where it has none."""
@@ -304,16 +394,8 @@ class Coverage(ContractModel):
         return self
 
     @model_validator(mode="after")
-    def _validate_columns(self) -> "Coverage":
-        """A named column is one this row states a unit for."""
-        for role, column in (("value_column", self.value_column),
-                             ("series_column", self.series_column),
-                             ("above_column", self.above_column)):
-            if column and column not in self.units:
-                raise ValueError(
-                    f"{role}={column!r} names a column this row states no unit "
-                    "for; a column read in no stated unit is a number nobody "
-                    "measured")
+    def _validate_fields(self) -> "Coverage":
+        validate_fields(dict(self.fields))
         return self
 
 

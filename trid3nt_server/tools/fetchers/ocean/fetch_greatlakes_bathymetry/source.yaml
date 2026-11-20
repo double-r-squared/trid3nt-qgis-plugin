@@ -99,9 +99,6 @@ coverage:
     # lake's low water plane on IGLD85; the offset service answers it per lake
     # by point.
     datum: LWD_IGLD85
-    units:
-      elevation: m
-    value_column: elevation
 
 caveats:
 - The NCEI Great Lakes bathymetric grids, referenced to each lake's own LOW WATER DATUM (LWD) - the

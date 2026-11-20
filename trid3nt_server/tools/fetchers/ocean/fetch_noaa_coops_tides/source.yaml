@@ -84,6 +84,9 @@ payload_estimate:              # ~2 KB/station/day + 0.5 KB/station overhead; ~2
   stations_per_sq_deg: 2.0
   floor_mb: 0.01
 
+fields:
+  value: {field: water_level, unit: m}
+  series: {field: time_series_csv, unit: m}
 # --- honesty: caveats + fallback -----------------------------------------
 coverage:
 -   data_class: water level series
@@ -114,11 +117,6 @@ coverage:
       max_span_days: 366.0
       cadence: 6-min samples, requested hourly
     datum: MLLW
-    units:
-      water_level: m
-      time_series_csv: m
-    value_column: water_level
-    series_column: time_series_csv
     ask:
       product: water_level
 -   data_class: water level series
@@ -149,11 +147,6 @@ coverage:
       max_span_days: 366.0
       cadence: hourly astronomical predictions
     datum: MLLW
-    units:
-      water_level: m
-      time_series_csv: m
-    value_column: water_level
-    series_column: time_series_csv
     ask:
       product: predictions
 
@@ -188,11 +181,9 @@ coverage:
     # A TEMPERATURE IS COUNTED FROM NOTHING: no datum belongs on this row, and
     # none is asked of the API.
     datum: null
-    units:
-      water_temperature: degC
-      time_series_csv: degC
-    value_column: water_temperature
-    series_column: time_series_csv
+    fields:
+      value: {field: water_temperature, unit: degC}
+      series: {field: time_series_csv, unit: degC}
     ask:
       product: water_temperature
     vocabulary:

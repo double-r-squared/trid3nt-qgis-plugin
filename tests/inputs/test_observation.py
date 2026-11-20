@@ -23,6 +23,7 @@ from trid3nt_server.inputs.observation import (
     note,
     observation,
 )
+from trid3nt_contracts.coverage import UnitField, Member
 
 
 def _site(site_id: str, lon: float, lat: float, value: object,
@@ -39,8 +40,24 @@ def _fc(*features: dict) -> dict:
     return {"type": "FeatureCollection", "features": list(features)}
 
 
+_UNIT = UnitField(field="unit")
+
+
+def _fields(value: str = "value", unit: object = _UNIT, *, series: str = "time_series_csv",
+            above: str = "", time: str = "") -> dict:
+    """A source's field map as a row states it: the value and its window in one unit, a zero, a moment."""
+    out = {"value": Member(field=value, unit=unit)}
+    if series:
+        out["series"] = Member(field=series, unit=unit)
+    if above:
+        out["above"] = Member(field=above, unit=unit)
+    if time:
+        out["time"] = Member(field=time)
+    return out
+
+
 def test_one_value_off_a_narrowed_layer() -> None:
-    found = observation(_fc(_site("A", -122.68, 45.51, 9.5)), stamp_field="result_date")
+    found = observation(_fc(_site("A", -122.68, 45.51, 9.5)), fields=_fields(time="result_date"))
     assert found.value == pytest.approx(9.5)
     assert found.site_id == "A"
     assert found.sampled == "2026-03-04"
@@ -105,7 +122,7 @@ def test_a_sample_from_another_decade_is_not_this_runs_water() -> None:
                 _site("gauge", -122.6692, 45.5175, 7.2,
                       result_date="2023-12-18"))
     found = observation(layer, near=[-122.6698, 45.5185],
-                        at="2024-01-14T12:00:00Z", stamp_field="result_date")
+                        at="2024-01-14T12:00:00Z", fields=_fields(time="result_date"))
     assert found.site_id == "gauge"
     assert found.value == pytest.approx(7.2)
     assert found.sampled == "2023-12-18"
@@ -116,7 +133,7 @@ def test_nothing_sampled_in_the_window_refuses_rather_than_reaching_back() -> No
                       result_date="1974-05-10"))
     with pytest.raises(ObservationError) as caught:
         observation(layer, near=[-122.6698, 45.5185], at="2024-01-14T12:00:00Z",
-                    stamp_field="result_date", caption="a water temperature", label="the sample layer",
+                    fields=_fields(time="result_date"), caption="a water temperature", label="the sample layer",
                     code="TELEMAC_WATER_TEMPERATURE_UNMEASURED")
     assert caught.value.error_code == "TELEMAC_WATER_TEMPERATURE_UNMEASURED"
     assert "within 30 days" in str(caught.value)
@@ -130,7 +147,7 @@ def test_a_row_that_states_no_moment_ranks_every_sample_it_fetched() -> None:
 
 def test_the_note_names_the_site_the_distance_and_the_moment() -> None:
     found = observation(_fc(_site("A", -122.68, 45.51, 9.5)), near=[-122.67, 45.51],
-                        stamp_field="result_date")
+                        fields=_fields(time="result_date"))
     said = note(found, opens="the reach opens at")
     assert "A site" in said and "2026-03-04" in said and "SAMPLE" in said
 
@@ -159,7 +176,7 @@ def test_the_whole_window_is_kept_beside_the_reading() -> None:
                                   "2026-09-05T00:00Z,100\n"
                                   "2026-09-05T01:00Z,200\n"
                                   "2026-09-05T02:00Z,300\n"}}
-    found = observation(_fc(station), field="discharge_cfs", to_units="m3/s",
+    found = observation(_fc(station), fields=_fields("discharge_cfs"), to_units="m3/s",
                         caption="a streamflow")
     assert str(found.series) == "series, 3 points over the window"
     assert found.series.units == "m3/s"
@@ -175,8 +192,8 @@ def test_the_window_is_read_in_the_unit_the_row_states_for_it() -> None:
                               "time_series_csv":
                                   "2026-09-05T00:00Z,100\n"
                                   "2026-09-05T01:00Z,200\n"}}
-    found = observation(_fc(station), field="discharge_cfs", to_units="m3/s",
-                        record_units="ft3/s", caption="a streamflow")
+    found = observation(_fc(station), fields=_fields("discharge_cfs", "ft3/s"), to_units="m3/s",
+                        caption="a streamflow")
     assert found.series.units == "m3/s"
     assert found.series.values[0] == pytest.approx(2.8316846592)
 
@@ -196,7 +213,7 @@ def test_the_run_opens_at_its_own_moment_inside_the_record() -> None:
                                   "2026-09-13T21:00Z,100\n"
                                   "2026-09-13T22:00Z,200\n"
                                   "2026-09-13T23:00Z,300\n"}}
-    found = observation(_fc(station), field="discharge_cfs", to_units="m3/s",
+    found = observation(_fc(station), fields=_fields("discharge_cfs"), to_units="m3/s",
                         at="2026-09-13T22:00:00Z", window_s=3600.0,
                         caption="a streamflow")
     assert found.series.times_s == (-3600.0, 0.0, 3600.0)
@@ -212,7 +229,7 @@ def test_a_record_that_stops_before_the_run_does_refuses_naming_the_nearest() ->
                                   "2026-09-13T21:00Z,100\n"
                                   "2026-09-13T22:00Z,200\n"}}
     with pytest.raises(ObservationError) as caught:
-        observation(_fc(station), field="discharge_cfs", to_units="m3/s",
+        observation(_fc(station), fields=_fields("discharge_cfs"), to_units="m3/s",
                     at="2026-09-13T21:30:00Z", window_s=172800.0,
                     caption="a streamflow", label="the gauge")
     assert caught.value.error_code == "OBSERVATION_WINDOW_UNCOVERED"
@@ -229,7 +246,7 @@ def test_a_window_in_no_stated_unit_refuses_rather_than_reading_the_slot_s() -> 
                                   "2026-09-05T00:00Z,1000\n"
                                   "2026-09-05T01:00Z,2000\n"}}
     with pytest.raises(ObservationError) as caught:
-        observation(_fc(station), field="discharge_cfs", to_units="m3/s",
+        observation(_fc(station), fields=_fields("discharge_cfs"), to_units="m3/s",
                     caption="a streamflow")
     assert caught.value.error_code == "OBSERVATION_UNIT_UNSTATED"
 
@@ -241,9 +258,7 @@ def test_the_row_s_column_unit_is_what_a_bare_record_is_read_in() -> None:
                               "time_series_csv":
                                   "2026-09-05T00:00Z,1000\n"
                                   "2026-09-05T01:00Z,2000\n"}}
-    found = observation(_fc(station), field="discharge_cfs", to_units="m3/s",
-                        column_units={"discharge_cfs": "ft3/s",
-                                      "time_series_csv": "ft3/s"},
+    found = observation(_fc(station), fields=_fields("discharge_cfs", "ft3/s"), to_units="m3/s",
                         caption="a streamflow")
     assert found.value == pytest.approx(56.633693184)
     assert found.series.units == "m3/s"
@@ -264,11 +279,9 @@ def _gauge(**over):
 
 def test_a_gage_height_reaches_the_run_s_frame_over_the_gauge_s_own_zero() -> None:
     """3.4 ft above a zero that stands 37.2 ft up is 40.6 ft, not 3.4."""
-    found = observation(_fc(_gauge()), field="gage_height_ft",
-                        series_field="stage_series_csv", above_field="gauge_datum_ft",
-                        column_units={"gage_height_ft": "ft",
-                                      "stage_series_csv": "ft",
-                                      "gauge_datum_ft": "ft"},
+    found = observation(_fc(_gauge()),
+                        fields=_fields("gage_height_ft", "ft", series="stage_series_csv",
+                                       above="gauge_datum_ft"),
                         to_units="m", to_datum="NAVD88",
                         caption="a water-surface elevation")
     assert found.value == pytest.approx(40.6 * 0.3048)
@@ -278,9 +291,8 @@ def test_a_gage_height_reaches_the_run_s_frame_over_the_gauge_s_own_zero() -> No
 
 def test_a_gauge_that_publishes_no_zero_refuses_rather_than_reading_a_height() -> None:
     with pytest.raises(ObservationError) as caught:
-        observation(_fc(_gauge(gauge_datum_ft=None)), field="gage_height_ft",
-                    above_field="gauge_datum_ft",
-                    column_units={"gage_height_ft": "ft"},
+        observation(_fc(_gauge(gauge_datum_ft=None)),
+                    fields=_fields("gage_height_ft", "ft", above="gauge_datum_ft"),
                     to_units="m", to_datum="NAVD88",
                     caption="a water-surface elevation")
     assert caught.value.error_code == "OBSERVATION_GAUGE_ZERO_UNSTATED"
@@ -343,9 +355,7 @@ def test_the_gauge_row_says_which_column_carries_a_temperature() -> None:
                             "discharge_cfs": None,
                             "temp_series_csv": "2026-09-20T02:30Z,18.5\n"
                                                "2026-09-20T03:30Z,18.4\n"}}
-    found = observation(_fc(gauge), field=row.value_column,
-                        series_field=row.series_column,
-                        column_units=dict(row.units), to_units="degC",
+    found = observation(_fc(gauge), fields=row.fields, to_units="degC",
                         at="2026-09-20T03:30:00Z")
     assert found.value == pytest.approx(18.4)
     assert found.units == "degC"
@@ -378,20 +388,18 @@ def test_a_stated_number_stands_at_no_site_and_states_no_quantity() -> None:
     assert (found.lon, found.lat, found.quantity) == (None, None, None)
 
 
-def test_a_reading_is_stamped_by_the_column_its_row_declares() -> None:
-    """The NWS row stamps its forecast by ``fcst_valid_time``, which no guess names: the
-    reading is dated by the declared column and read at the moment asked."""
+def test_a_reading_is_stamped_by_the_time_member_its_source_maps() -> None:
+    """The NWS source stamps its forecast by ``fcst_valid_time``, which no guess names: the
+    reading is dated by the mapped field, lifted by the row's zero, and read at the moment asked."""
     from trid3nt_server.tools.fetchers._router.registration import get_spec
 
     row = next(r for r in get_spec("fetch_nws_river_forecast").coverage
                if r.data_class == "water level series")
     gauge = {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-122.67, 45.51]},
-             "properties": {"lid": "PRTO3", "fcst_stage_ft": 6.1,
+             "properties": {"lid": "PRTO3", "fcst_stage_ft": 6.1, "gauge_datum_ft": 10.0,
                             "fcst_valid_time": "2026-11-09T18:00:00Z"}}
-    found = observation(_fc(gauge), field=row.value_column, series_field=row.series_column,
-                        stamp_field=row.stamp_column, column_units=dict(row.units),
-                        at="2026-11-09T19:40:00Z")
-    assert found.value == pytest.approx(6.1)
+    found = observation(_fc(gauge), fields=row.fields, at="2026-11-09T19:40:00Z")
+    assert found.value == pytest.approx(16.1)
     assert found.sampled == "2026-11-09T18:00:00Z"
 
 
@@ -401,22 +409,29 @@ def test_a_stamp_in_a_column_nobody_declared_is_undated() -> None:
         observation(layer, at="2026-03-04T12:00:00Z")
 
 
-def test_a_handed_in_layer_states_its_own_time_column() -> None:
-    layer = {**_fc(_site("A", -122.68, 45.51, 9.5)), "stamp_column": "result_date"}
-    found = observation(layer, at="2026-03-04T12:00:00Z")
-    assert found.value == pytest.approx(9.5)
-    assert found.sampled == "2026-03-04"
-
-
-def test_a_layer_stating_no_time_column_refuses_naming_the_field_to_state() -> None:
-    with pytest.raises(ObservationError, match="stamp_column"):
+def test_a_layer_whose_source_maps_no_time_refuses_naming_the_member_to_state() -> None:
+    with pytest.raises(ObservationError, match="maps no time member"):
         observation(_fc(_site("A", -122.68, 45.51, 9.5)), at="2026-03-04T12:00:00Z")
 
 
-def test_a_rows_declared_column_wins_over_the_layer_record() -> None:
-    layer = {**_fc(_site("A", -122.68, 45.51, 9.5, other_date="2020-01-01")), "stamp_column": "other_date"}
-    found = observation(layer, at="2026-03-04T12:00:00Z", stamp_field="result_date")
+def test_the_sources_time_member_dates_the_reading_and_no_other_field_does() -> None:
+    layer = _fc(_site("A", -122.68, 45.51, 9.5, other_date="2020-01-01"))
+    found = observation(layer, at="2026-03-04T12:00:00Z", fields=_fields(time="result_date"))
     assert found.sampled == "2026-03-04"
+
+
+def test_accuracy_is_read_off_the_source_s_map_only_when_the_slot_asks_for_it() -> None:
+    cite = ("Sauer and Turnipseed 2010, USGS TM 3-A7, Stage-Accuracy Requirements p.3: 0.01 ft or "
+            "0.2 percent of the effective stage, whichever is greater")
+    stage = _fields("gage_height_ft", "ft", series="stage_series_csv")
+    gauge = _fc(_gauge())
+    assert observation(gauge, fields=stage).accuracy is None
+    with pytest.raises(ObservationError) as caught:
+        observation(gauge, fields=stage, accuracy=True)
+    assert caught.value.error_code == "FIELD_UNMAPPED"
+    ruled = {**stage, "accuracy": Member(absolute=0.01, relative=0.002, unit="ft", cite=cite)}
+    found = observation(gauge, fields=ruled, accuracy=True, to_units="m")
+    assert found.accuracy == pytest.approx(0.01 * 0.3048)
 
 
 def test_a_usgs_gauge_is_named_by_its_site_no() -> None:
@@ -427,7 +442,7 @@ def test_a_usgs_gauge_is_named_by_its_site_no() -> None:
     layer = (Path(__file__).resolve().parents[1] / "fixtures" / "usgs_nwis_gauges"
              / "etowah_bbox_2026-09-21.fgb")
     found = observation(str(layer), near=[-84.978229605, 34.207328998],
-                        field="gage_height_ft", series_field="stage_series_csv",
+                        fields=_fields("gage_height_ft", "ft", series="stage_series_csv"),
                         at="2026-09-21T23:00:00Z")
     assert found.site_name == "ETOWAH RIVER NEAR KINGSTON,GA"
     assert found.site_id == "02395000"

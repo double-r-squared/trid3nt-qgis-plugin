@@ -56,7 +56,6 @@ ingest:
     # per-structure USD value, so the exposure consumer reads them under its own names.
     component_type: {from: properties.occtype, kind: str}
     replacement_value: {from: properties.val_struct, kind: float}
-  json_coerce_nested: true
   geometry_filter:
     geom_types: [Point]
     require_finite: true
@@ -92,15 +91,6 @@ coverage:
   window:
     series: false
     latest: '2022-01-01'
-  units:
-    val_struct: USD
-    val_cont: USD
-    val_vehic: USD
-    sqft: ft2
-    found_ht: ft
-    num_story: storeys
-    ground_elv_m: m
-  value_column: val_struct
 
 caveats:
 - Per-axis bbox span capped at 1 degree (NSI 500s oversized envelopes). A bbox with no structures ->

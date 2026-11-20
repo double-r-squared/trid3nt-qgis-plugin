@@ -87,6 +87,8 @@ payload_estimate:
   floor_mb: 0.2
   ceil_mb: 50.0
 
+fields:
+  value: {field: depth_below_datum_m, unit: m}
 coverage:
 -   data_class: bathymetry
     kind: measured
@@ -116,9 +118,6 @@ coverage:
     # LWD_IGLD85, the surface an offset service serves and 176 m above IGLD85's
     # own zero on Lake Huron.
     datum: record
-    units:
-      depth_below_datum_m: m
-    value_column: depth_below_datum_m
 
 -   data_class: channel survey
     kind: measured
@@ -139,9 +138,6 @@ coverage:
     # The zero rides on the record and names the surface a depth hangs below,
     # the way the bathymetry row above states it.
     datum: record
-    units:
-      depth_below_datum_m: m
-    value_column: depth_below_datum_m
 
 caveats:
   - "the soundings are DEPTHS BELOW the survey's own stated datum, positive down, in metres - not elevations; the datum is on every row and is a local project datum on many rivers (Columbia River Datum on the Willamette) or a chart datum on the lakes (the Low Water Datum on IGLD85, published as LWD_IGLD85), so a bed built from these needs a deliberate datum shift"

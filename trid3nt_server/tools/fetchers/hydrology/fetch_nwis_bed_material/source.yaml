@@ -131,29 +131,6 @@ coverage:
     series: false
     cadence: irregular field campaigns, years to decades apart
   datum: record
-  units:
-    pct_finer_0p004mm: "%"
-    pct_finer_0p008mm: "%"
-    pct_finer_0p016mm: "%"
-    pct_finer_0p031mm: "%"
-    pct_finer_0p0625mm: "%"
-    pct_finer_0p125mm: "%"
-    pct_finer_0p25mm: "%"
-    pct_finer_0p5mm: "%"
-    pct_finer_1mm: "%"
-    pct_finer_2mm: "%"
-    pct_finer_2p8mm: "%"
-    pct_finer_4mm: "%"
-    pct_finer_4p75mm: "%"
-    pct_finer_5p6mm: "%"
-    pct_finer_8mm: "%"
-    pct_finer_9p5mm: "%"
-    pct_finer_11p2mm: "%"
-    pct_finer_16mm: "%"
-    pct_finer_19mm: "%"
-    pct_finer_22p4mm: "%"
-    pct_finer_32mm: "%"
-    vertical_elevation: record
 
 caveats:
   - "one feature per SAMPLE (a site + an activity), never per size class; the size classes are columns, at the standard half-phi grain-size thresholds the USGS Sediment Laboratory reports bed-material analyses in (0.004 mm to 32 mm) - a sample missing a class states null there, never zero"

@@ -98,9 +98,6 @@ coverage:
       latest: '2023-01-01'
       cadence: annual
     resolution_m: 10.0
-    units:
-      esri_io_lulc_class_code: class
-    value_column: esri_io_lulc_class_code
 
 # --- honesty: caveats + fallback -----------------------------------------
 caveats:

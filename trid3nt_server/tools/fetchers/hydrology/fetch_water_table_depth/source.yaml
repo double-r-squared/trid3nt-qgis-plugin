@@ -88,9 +88,6 @@ coverage:
   # publishes none, so this row states none and a slot wanting an elevation
   # refuses rather than reading the terrain as a zero.
   datum: null
-  units:
-    water_table_depth: m
-  value_column: water_table_depth
 
 caveats:
   - "An AOI outside the staged envelope raises WATER_TABLE_INPUT_INVALID naming it."

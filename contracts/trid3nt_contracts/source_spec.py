@@ -13,7 +13,7 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from .common import ContractModel
-from .coverage import PER_RECORD, Coverage
+from .coverage import PER_RECORD, Coverage, FieldMap, validate_fields
 from .tool_registry import TTLClass
 
 __all__ = [
@@ -390,6 +390,9 @@ class SourceSpec(ContractModel):
     # zero, value units). The only statement of coverage; a source with no row is never matched but stays model-callable.
     coverage: list[Coverage] = Field(default_factory=list)
 
+    #: The members every record of this source reads by: canonical name -> its own field or a cited number.
+    fields: FieldMap = Field(default_factory=dict)
+
     # Vertical reference stated from the dataset's own documentation, never inferred; a source with no single
     # datum carries none and a consumer refuses rather than assuming zero.
     vertical_datum: str | None = None
@@ -415,6 +418,16 @@ class SourceSpec(ContractModel):
             raise ValueError(
                 f"{self.name} carries more than one row of "
                 f"{', '.join(twice)}: one row per data class and kind")
+        return self
+
+    @model_validator(mode="after")
+    def _adopt_the_source_fields(self) -> "SourceSpec":
+        """A row reads by its source's map, the members it restates winning."""
+        validate_fields(dict(self.fields))
+        for row in self.coverage:
+            merged = {**self.fields, **row.fields}
+            if merged != row.fields:
+                row.fields = merged
         return self
 
     @model_validator(mode="after")

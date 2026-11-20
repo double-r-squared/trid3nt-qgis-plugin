@@ -11,12 +11,22 @@ from typing import Any, Mapping, Sequence
 
 from trid3nt_server.settings import setting
 
+from trid3nt_contracts.coverage import UnitField, Member
+
+from .fields import Record
 from .observation import ObservationError, _median_gap, convert
 from .temporal import Series, TemporalShapeError
 
 __all__ = ["Rain", "rain"]
 
 _CODE = "RAIN_INVALID"
+
+#: How a hyetograph no source states a field map for is read: instants under ``times``, depths under
+#: ``precip_mm`` in the unit its ``units`` field states.
+_STATED: Mapping[str, Member] = {
+    "time": Member(field="times"),
+    "series": Member(field="precip_mm", unit=UnitField(field="units")),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,27 +49,29 @@ class Rain:
         return max(self.series.values) / self.interval_s
 
 
-def rain(source: Any, *, series_field: str = "precip_mm", column_units: Any = None,
+def rain(source: Any, *, fields: Mapping[str, Member] | None = None, producer: str = "",
          at: Any = None, label: str = "rain", code: str = _CODE) -> Rain | None:
     """THE ingestion: a fetched rainfall record -> its depths per interval, in millimetres.
 
-    The record states its instants under ``times`` and its depths under ``series_field``,
-    in the unit the source's row states for that column; ``at`` is the run's zero."""
+    The record states its instants under its ``time`` member and its depths under its ``series``
+    member, read by the source's ``fields``; ``at`` is the run's zero."""
     if source is None:
         return None
-    if not isinstance(source, Mapping) or not series_field \
-            or source.get(series_field) is None or source.get("times") is None:
+    rec = Record(source, dict(fields or _STATED), source=producer or label) \
+        if isinstance(source, Mapping) else None
+    times = rec.stated("time") if rec is not None else None
+    depths = rec.stated("series") if rec is not None else None
+    if depths is None or times is None:
         raise ObservationError(
-            code, f"{label} is no rainfall record: one states its instants under "
-            "'times' and the depth that fell from each under a series column, and "
+            code, f"{label} is no rainfall record: one states its instants and the depth "
+            "that fell from each under the fields its source maps as time and series, and "
             "this states " + (f"{', '.join(map(str, source)) or 'nothing'}."
                               if isinstance(source, Mapping)
                               else f"a {type(source).__name__}."))
-    units = dict(column_units or {}).get(series_field) or source.get("units")
+    units = rec.unit("series")
     try:
         series = Series.from_samples(
-            list(zip(source["times"], (convert(depth, units, "mm")
-                                       for depth in source[series_field]),
+            list(zip(times, (convert(depth, units, "mm") for depth in depths),
                      strict=True)), units="mm", at=at)
     except (ValueError, TemporalShapeError) as why:
         raise ObservationError(code, f"{label} states no hyetograph: {why}") from why
@@ -67,7 +79,7 @@ def rain(source: Any, *, series_field: str = "precip_mm", column_units: Any = No
 
     cadence = _median_gap(series.times_s)
     hole = setting("RAIN_HOLE_INTERVALS")
-    stamps = sorted(pd.to_datetime(list(source["times"]), utc=True))
+    stamps = sorted(pd.to_datetime(list(times), utc=True))
     for before, after in zip(stamps, stamps[1:]):
         if (after - before).total_seconds() >= hole * cadence:
             raise ObservationError(

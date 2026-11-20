@@ -98,7 +98,6 @@ coverage:
     # grid under it. GLO-30 is the global floor; 3DEP is finer over the US.
     resolution_m: 30.0
     datum: null
-    units: {}
     # A catchment is asked at its POUR POINT, and how far it may reach is the
     # question's own span - the half-width of the window the trace runs inside.
     ask: {pour_point: "need:seed_point", buffer_km: "need:span_km"}

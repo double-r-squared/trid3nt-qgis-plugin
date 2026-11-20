@@ -70,9 +70,6 @@ coverage:
     series: false
     latest: '2020-01-01'
   resolution_m: 30.0
-  units:
-    persons_per_cell: persons
-  value_column: persons_per_cell
 
 caveats:
   - "global ~30 m (1 arcsec) Meta HRSL persons/cell; an all-nodata window (open water / off coverage) -> HRSL_EMPTY (never a fabricated layer)"

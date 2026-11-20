@@ -87,9 +87,6 @@ coverage:
     ask: {resolution: 1 arc-second}
     resolution_m: 30.0
     datum: NAVD88
-    units:
-      elevation: m
-    value_column: elevation
 
 caveats:
 - USGS 3DEP non-default DEM resolutions via pfdf.data.usgs.tnm.dem (library-delegate; the library owns

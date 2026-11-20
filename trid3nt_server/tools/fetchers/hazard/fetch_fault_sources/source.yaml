@@ -78,12 +78,6 @@ coverage:
   window:
     series: false
   datum: null
-  units:
-    net_slip_rate_mm_yr: mm/yr
-    dip_deg: deg
-    rake_deg: deg
-    upper_seis_depth_km: km
-    lower_seis_depth_km: km
 docstring: "Fetch REAL active-fault seismic sources (traces + slip rates) for an AOI.\n\nRetrieves harmonized\
   \ active-fault traces from the GEM Global Active Faults\nDatabase and returns the kinematic source records used to build
 physics-based ``simpleFaultSource`` seismic sources (each with\

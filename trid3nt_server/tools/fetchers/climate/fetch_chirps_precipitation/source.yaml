@@ -77,9 +77,6 @@ coverage:
     cadence: daily or monthly composites
   resolution_m: 5500.0
   datum: null
-  units:
-    precipitation_mm: mm
-  value_column: precipitation_mm
 
 caveats:
   - "the CHIRPS ocean/no-data sentinel (<= -9000) collapses to nodata -9999; an all-nodata window -> CHIRPS_EMPTY (never a fabricated layer)"

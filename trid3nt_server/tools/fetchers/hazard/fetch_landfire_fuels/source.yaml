@@ -88,11 +88,6 @@ coverage:
     latest: '2022-01-01'
   resolution_m: 30.0
   datum: null
-  units:
-    cbh: m * 10
-    cbd: kg/m^3 * 100
-    cc: percent
-    ch: m * 10
 
 caveats:
   - "30 m LANDFIRE LF2022 fuels/vegetation via ImageServer exportImage; an all-nodata raster (outside the covered extent, see the coverage row) -> LANDFIRE_FUELS_EMPTY (never a fabricated layer)"

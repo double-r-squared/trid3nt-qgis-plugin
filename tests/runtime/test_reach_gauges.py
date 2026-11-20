@@ -12,6 +12,8 @@ import dataclasses
 from pathlib import Path
 
 import pytest
+
+from trid3nt_contracts.coverage import Member
 from shapely.geometry import box, mapping
 
 from trid3nt_server.inputs.bound_domain import Domain as Bound, bind_domain, reset_domain
@@ -125,7 +127,9 @@ def test_off_a_river_run_no_gauge_is_tested(asked):
 
 
 def test_a_site_named_off_the_water_is_left_out_of_the_ranking():
-    found = observation(str(_GAUGES), near=_ETOWAH_RELEASE, field="discharge_cfs", at="2026-09-21T23:00:00Z",
+    flow = {"value": Member(field="discharge_cfs", unit="ft3/s"),
+            "series": Member(field="time_series_csv", unit="ft3/s")}
+    found = observation(str(_GAUGES), near=_ETOWAH_RELEASE, fields=flow, at="2026-09-21T23:00:00Z",
                         off={"02395000": "is not this reach's"})
     assert found.site_id != "02395000"
 

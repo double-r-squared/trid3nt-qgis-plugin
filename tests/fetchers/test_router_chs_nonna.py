@@ -148,10 +148,8 @@ def test_the_row_counts_its_bed_from_a_zero_the_offset_service_converts(row):
     assert row.datum in served_frames()
 
 
-def test_the_row_states_the_products_own_posting_and_its_one_value_column(row):
+def test_the_row_states_the_products_own_posting(row):
     assert row.resolution_m == 10.0
-    assert row.value_column == "elevation"
-    assert row.units == {"elevation": "m"}
 
 
 def test_the_layer_is_stamped_in_the_unit_the_row_publishes(spec):

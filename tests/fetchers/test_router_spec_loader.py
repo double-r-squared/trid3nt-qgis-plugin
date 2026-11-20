@@ -246,8 +246,6 @@ def _coverage(**over) -> dict:
                               [-125.0, 50.0]]]},
         "window": {"series": False},
         "resolution_m": 10.0,
-        "units": {"elevation": "m"},
-        "value_column": "elevation",
     }
     row.update(over)
     return row
@@ -258,7 +256,6 @@ def test_a_row_loads_onto_its_declaration():
     assert len(spec.coverage) == 1
     row = spec.coverage[0]
     assert row.data_class == "terrain"
-    assert row.value_column == "elevation"
     assert row.extent.covers(-122.6, 45.5)
     assert not row.extent.covers(2.3, 48.9)
 
@@ -275,10 +272,10 @@ def test_two_rows_of_one_class_are_refused():
         load_spec({**raster_spec(), "coverage": [_coverage(), _coverage()]})
 
 
-def test_a_column_the_row_states_no_unit_for_is_refused():
+def test_a_numeric_member_the_row_states_no_unit_for_is_refused():
     with pytest.raises(SpecLoadError):
         load_spec({**raster_spec(),
-                   "coverage": [_coverage(value_column="depth")]})
+                   "coverage": [_coverage(fields={"value": {"field": "depth"}})]})
 
 
 def test_a_row_naming_a_class_outside_the_vocabulary_is_refused():

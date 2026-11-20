@@ -116,8 +116,7 @@ def test_the_slot_reads_the_class_the_station_networks_publish():
     assert WEATHER.classes == frozenset({"weather forcing"})
     assert WEATHER.ingest is weather
     found = ingest_slot(WEATHER, _fc([_raws(hour) for hour in range(24)]),
-                        label="weather", near=_SEED, window_s=20.0 * _HOUR,
-                        column_units={"tmpf": "F"})
+                        label="weather", near=_SEED, window_s=20.0 * _HOUR)
     assert found.site_id == "SCOC1"
 
 

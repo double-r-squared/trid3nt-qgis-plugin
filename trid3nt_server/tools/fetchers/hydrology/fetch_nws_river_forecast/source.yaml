@@ -132,6 +132,8 @@ payload_estimate:
   features_per_sq_deg: 15.0
   kb_per_feature: 0.4096
   floor_mb: 0.001
+fields:
+  time: {field: fcst_valid_time}
 coverage:
 - data_class: water level series
   kind: predicted
@@ -152,14 +154,10 @@ coverage:
     cadence: 15-min observed samples, 6-hour forecast cycles
     series_param: include_series
   datum: null
-  units:
-    fcst_stage_ft: ft
-    fcst_stage_series: ft
-    gauge_datum_ft: ft
-  value_column: fcst_stage_ft
-  series_column: fcst_stage_series
-  above_column: gauge_datum_ft
-  stamp_column: fcst_valid_time
+  fields:
+    value: {field: fcst_stage_ft, unit: ft}
+    series: {field: fcst_stage_series, unit: ft}
+    above: {field: gauge_datum_ft, unit: ft}
 - data_class: discharge series
   kind: predicted
   reach_km: 25
@@ -179,12 +177,9 @@ coverage:
     cadence: 15-min observed samples, 6-hour forecast cycles
     series_param: include_series
   datum: null
-  units:
-    fcst_flow_kcfs: kcfs
-    fcst_flow_series: kcfs
-  value_column: fcst_flow_kcfs
-  series_column: fcst_flow_series
-  stamp_column: fcst_valid_time
+  fields:
+    value: {field: fcst_flow_kcfs, unit: kcfs}
+    series: {field: fcst_flow_series, unit: kcfs}
 
 caveats:
 - "a stage is a height above the gauge's own zero: ``gauge_datum_ft`` is that zero's elevation and ``vertical_datum`` the frame it is counted from (NGVD29 or NAVD88), both off the gauge's NWPS detail record and stated only when the record lists one frame; the NWPS API schema gives the value no unit, and the NWPS Product and Users Guide v2.1 (weather.gov/media/owp/operations/nwps_user_guide.pdf, p.8) gives absolute elevation on NAVD 88 or NGVD 29 in feet, which is the unit stated here"

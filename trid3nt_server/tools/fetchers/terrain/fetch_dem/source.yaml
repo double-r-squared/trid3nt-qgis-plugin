@@ -81,9 +81,6 @@ coverage:
       latest: '2024-01-01'
     resolution_m: 10.0
     datum: NAVD88
-    units:
-      elevation: m
-    value_column: elevation
 
 caveats:
 - 'USGS 3DEP US lidar (1-10 m) via the py3dep library-delegate (the library owns discovery + the socket).

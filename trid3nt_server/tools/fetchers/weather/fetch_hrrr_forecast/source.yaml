@@ -139,13 +139,6 @@ coverage:
       cycles; 1-18 h on the others)
   resolution_m: 3000.0
   datum: null
-  units:
-    2m_temperature: K
-    10m_u_wind: m s-1
-    10m_v_wind: m s-1
-    surface_precip_1hr: kg m-2
-    10m_wind_speed: m s-1
-  value_column: ""
 
 docstring: |-
   NOAA HRRR 3 km short-term weather forecast -- Tier-1 fetcher.

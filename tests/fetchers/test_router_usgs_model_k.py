@@ -126,8 +126,6 @@ def test_usgs_model_k_spec_identity():
     assert row.kind == "modelled"
     assert _SPEC.normalize.quantity == "aquifer_hydraulic_conductivity"
     assert _SPEC.normalize.units == "m/day"
-    assert row.value_column == "hydraulic_conductivity"
-    assert row.units["hydraulic_conductivity"] == "m/day"
     assert "modelled" in (_SPEC.output.display_name or "").lower()
 
 

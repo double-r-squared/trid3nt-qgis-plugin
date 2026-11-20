@@ -84,6 +84,9 @@ payload_estimate:
   overhead_kb: 30.0
   floor_mb: 0.03
 
+fields:
+  value: {field: forebay_elevation_ft, unit: ft}
+  series: {field: time_series_csv, unit: ft}
 coverage:
 -   data_class: water level series
     kind: measured
@@ -101,11 +104,6 @@ coverage:
       max_span_days: 1830.0
       cadence: daily samples
     datum: record
-    units:
-      forebay_elevation_ft: ft
-      time_series_csv: ft
-    value_column: forebay_elevation_ft
-    series_column: time_series_csv
 
 caveats:
   - "the PN CGI (usbr.gov/pn-bin/daily.pl) answers an upstream failure with HTTP 200 and an HTML body and states no coordinates or datum; this fetch uses RISE (data.usbr.gov/rise/api) instead, which serves the byte-identical record with a location, a per-station vertical datum and every Reclamation region through one endpoint form"

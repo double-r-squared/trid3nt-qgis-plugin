@@ -108,20 +108,6 @@ coverage:
     cadence: daily (lags ~3 days from real time)
   resolution_m: 4000.0
   datum: null
-  units:
-    fm100: Percent
-    fm1000: Percent
-    pet: mm
-    pdsi: unitless
-    tmmn: K
-    tmmx: K
-    vpd: kPa
-    vs: "m s-1"
-    rmin: Percent
-    rmax: Percent
-    pr: mm
-    srad: "W m-2"
-  value_column: ""
 
 # --- honesty: caveats + fallback -----------------------------------------
 caveats:

@@ -466,9 +466,17 @@ def _spec_of(fetcher: str) -> Any:
     return get_spec(fetcher)
 
 
+def _source_of(row: Any) -> str:
+    """The registered source a coverage row belongs to, "" for a row no source states."""
+    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+
+    return next((name for name in sorted(registered_spec_names())
+                 if any(stated is row for stated in getattr(_spec_of(name), "coverage", ()))), "")
+
+
 def _handed_row(decl: Input, handed_in: Any) -> Any:
-    """The row of the fetch a handed-in layer came from, for the class an observation slot asks; ``None`` otherwise."""
-    if decl.slot is None or decl.slot.ingestion != "observation" or not isinstance(handed_in, str):
+    """The row of the fetch a handed-in layer came from, for the class a record slot asks; ``None`` otherwise."""
+    if decl.slot is None or not decl.slot.record or not isinstance(handed_in, str):
         return None
     from trid3nt_server.render import uri_registry
 
@@ -950,11 +958,9 @@ def _what_the_record_reports(env: _Env, decl: Input,
         return {}
     told: dict[str, Any] = {"window_s": _window(env, decl)}
     if row is not None:
-        # A SLOT THAT STATED A NEED names no column: which column carries the
-        # reading, the window and the zero is the source's own statement.
-        told.update(column_units=dict(row.units), field=row.value_column,
-                    series_field=row.series_column, above_field=row.above_column,
-                    stamp_field=row.stamp_column)
+        # A SLOT THAT STATED A NEED names no field: which field carries the reading,
+        # the window, the moment and the zero is the source's own map.
+        told.update(fields=dict(row.fields), producer=_source_of(row))
     # HOW THE RECORD MOVES IN TIME is the source's own class where the row that
     # answered states one, else the slot's role: a flow is a per-time total and a
     # level is read at an instant. No author states it.

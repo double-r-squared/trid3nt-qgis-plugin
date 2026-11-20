@@ -105,9 +105,6 @@ coverage:
     max_span_days: 10.0
   resolution_m: 375.0
   datum: null
-  units:
-    brightness: K
-    frp: MW
 caveats:
 - NASA FIRMS Tier-2 satellite active-fire / thermal-anomaly detections as points, keyed
   (the person's MAP_KEY, carried IN the URL path). No key

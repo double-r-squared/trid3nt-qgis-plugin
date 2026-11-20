@@ -70,9 +70,6 @@ coverage:
       latest: '2023-01-01'
     resolution_m: 3.0
     datum: NAVD88
-    units:
-      elevation: m
-    value_column: elevation
 
 caveats:
 - The 1/9 arc-second tiles are the only CUDEM product integrating BOTH bathymetry and

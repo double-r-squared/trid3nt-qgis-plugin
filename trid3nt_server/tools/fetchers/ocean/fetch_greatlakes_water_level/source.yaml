@@ -64,6 +64,9 @@ payload_estimate:
   overhead_kb: 0.5
   stations_per_sq_deg: 2.0
   floor_mb: 0.01
+fields:
+  value: {field: water_level, unit: m}
+  series: {field: time_series_csv, unit: m}
 coverage:
 -   data_class: water level series
     kind: measured
@@ -88,11 +91,6 @@ coverage:
     # point. The bathymetry row states the same frame, because a level and a bed
     # are read together only when their zeros are one statement.
     datum: LWD_IGLD85
-    units:
-      water_level: m
-      time_series_csv: m
-    value_column: water_level
-    series_column: time_series_csv
 
 caveats:
 - A bbox holding no Great Lakes gauge returns GREATLAKES_WATER_LEVEL_EMPTY (retryable=false) rather

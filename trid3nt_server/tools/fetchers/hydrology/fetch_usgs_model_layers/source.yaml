@@ -78,9 +78,6 @@ coverage:
   # The COARSER of the two grids (Cape Cod 400 ft = 121.92 m).
   resolution_m: 121.92
   datum: NAVD88
-  units:
-    elevation: m
-  value_column: elevation
 
 caveats:
   - "Two published calibrated USGS MODFLOW model grids, nothing more: Cape Cod JBCC (2019 release, 32 layers) and Des Moines MF6 (2024 release, 6 layers). A bbox outside both raises USGS_MODEL_LAYERS_INPUT_INVALID naming them; there is no third grid and nothing is interpolated between grids."

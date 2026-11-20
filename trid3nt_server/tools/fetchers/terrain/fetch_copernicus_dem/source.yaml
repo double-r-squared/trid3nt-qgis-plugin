@@ -84,9 +84,6 @@ coverage:
       latest: '2021-01-01'
     resolution_m: 30.0
     datum: EGM2008
-    units:
-      elevation: m
-    value_column: elevation
 
 caveats:
   - "GLO-30 is a SURFACE model (ocean reads ~0 m; no bathymetry); an off-globe / all-nodata window -> COPERNICUS_DEM_NO_COVERAGE (never a fabricated layer)"

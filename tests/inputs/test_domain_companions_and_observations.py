@@ -11,6 +11,11 @@ from __future__ import annotations
 
 import pytest
 
+from trid3nt_contracts.coverage import UnitField, Member
+
+#: A sample layer's map: the reading under ``value`` in the unit its ``unit`` field states, dated by ``result_date``.
+_DATED = {"value": Member(field="value", unit=UnitField(field="unit")), "time": Member(field="result_date")}
+
 from trid3nt_server.inputs.boundary import OPEN_TYPES, RATING, RUN_TYPES, boundary_runs
 from trid3nt_server.inputs.boundary import roles_from_runs
 from trid3nt_server.inputs.domain import domain
@@ -105,7 +110,7 @@ _SITES = {"type": "FeatureCollection", "features": [
 
 def test_the_nearest_site_the_unit_and_the_age_are_the_slots_own_ingestion():
     found = observation(_SITES, near=(-122.65, 45.53), to_units="degC",
-                        stamp_field="result_date", caption="a water temperature")
+                        fields=_DATED, caption="a water temperature")
     assert found.site_id == "NEAR"
     assert found.value == pytest.approx(10.0)
     assert found.units == "degC"
