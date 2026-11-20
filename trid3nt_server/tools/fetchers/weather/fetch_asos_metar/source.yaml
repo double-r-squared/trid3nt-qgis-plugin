@@ -42,25 +42,6 @@ hooks:
   resolve_parse: asos_metar.resolve_parse
   build_request: asos_metar.build_request
   parse_response: asos_metar.parse_response
-ingest:
-  properties:
-  - station
-  - valid
-  - lon
-  - lat
-  - elevation
-  - tmpf
-  - dwpf
-  - sknt
-  - drct
-  - gust
-  - alti
-  - mslp
-  - p01i
-  - vsby
-  - wxcodes
-  - skyc1
-  - skyl1
 normalize:
   crs: EPSG:4326
   units: mixed
@@ -77,8 +58,23 @@ cache:
 payload_estimate:
   model: per_feature
   features_per_sq_deg: 36.0
-  kb_per_feature: 0.2
+  kb_per_feature: 0.7
   floor_mb: 0.001
+fields:
+  site: {field: station}
+  time: {field: valid}
+  air_temperature: {field: tmpf, unit: degF}
+  dew_point: {field: dwpf, unit: degF}
+  relative_humidity: {field: relh, unit: "%"}
+  wind_speed: {field: sknt, unit: kt}
+  wind_from: {field: drct, unit: degree}
+  pressure: {field: mslp, unit: hPa}
+  cloud_cover:
+    field: skyc1
+    table: {CLR: 0.0, SKC: 0.0, NCD: 0.0, NSC: 0.0, FEW: 2.0, SCT: 4.0, BKN: 6.0, OVC: 8.0, VV: 8.0}
+    unit: octa
+    cite: "Federal Meteorological Handbook No. 1 (OFCM FCM-H1) sky cover contractions: CLR/SKC no cloud, FEW over 0 to 2 eighths, SCT 3 to 4, BKN 5 to 7, OVC 8, VV an obscured sky read as covered. Where a class spans eighths the value is the one this table has always carried (FEW 2, SCT 4, BKN 6), which the handbook does not state."
+  rain: {field: p01i, unit: in}
 coverage:
 - data_class: weather forcing
   kind: measured
@@ -160,17 +156,21 @@ docstring: |-
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
       ``s3://trid3nt-cache/cache/dynamic-1h/asos_metar/<key>.fgb``
       - ``layer_type="vector"``, ``role="context"``, ``units="mixed"``
-        (temperature in  degF, wind in knots, pressure in inHg/hPa,
+        (temperature in degF, wind in knots, pressure in inHg/hPa,
         visibility in miles -- standard ASOS/METAR units).
       - Geometry: Point at each ASOS station's coordinates, EPSG:4326.
-      - Properties per observation: ``station`` (ICAO/FAA id),
-        ``valid`` (UTC observation time ISO-8601), ``lon``, ``lat``,
-        ``elevation`` (ft), ``tmpf`` ( degF), ``dwpf`` ( degF), ``sknt``
-        (wind kt), ``drct`` (wind dir  deg), ``gust`` (gust kt), ``alti``
-        (altimeter inHg), ``mslp`` (MSLP hPa), ``p01i`` (precipitation
-        in the past hour, inches), ``vsby`` (visibility mi),
-        ``wxcodes`` (present weather), ``skyc1`` (sky cover), ``skyl1``
-        (sky layer height ft). Missing values are ``null``.
+      - Properties per observation: every column the IEM service holds,
+        under its own name: ``station`` (ICAO/FAA id), ``valid`` (UTC
+        observation time), ``lon``, ``lat``, ``elevation`` (m), ``tmpf``
+        (degF), ``dwpf`` (degF), ``relh`` (%), ``sknt`` (wind kt), ``drct``
+        (wind dir deg), ``gust`` (gust kt), ``alti`` (altimeter inHg),
+        ``mslp`` (MSLP hPa), ``p01i`` (precipitation in the past hour,
+        inches; a trace is null), ``vsby`` (visibility mi), ``wxcodes``
+        (present weather), ``skyc1``..``skyc4`` and ``skyl1``..``skyl4``
+        (sky cover and layer height ft), ``feel`` (apparent temperature
+        degF), ``peak_wind_gust`` / ``peak_wind_drct`` / ``peak_wind_time``,
+        ``ice_accretion_1hr``/``3hr``/``6hr``, ``snowdepth``, and ``metar``
+        (the raw report text). Missing values are ``null``.
 
   Cache: ``dynamic-1h`` -- identical ``(bbox-4dp, start_time, end_time)`` calls
   within the same UTC hour reuse the cached FlatGeobuf.

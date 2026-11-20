@@ -1,0 +1,80 @@
+[
+{
+"stationTriplet": "302:OR:SNTL",
+"stationId": "302",
+"stateCode": "OR",
+"networkCode": "SNTL",
+"name": "Aneroid Lake #2",
+"dcoCode": "OR",
+"countyName": "Wallowa",
+"huc": "170601050101",
+"elevation": 7430.0,
+"latitude": 45.21332,
+"longitude": -117.19255,
+"dataTimeZone": -8.0,
+"shefId": "ANRO3",
+"operator": "NRCS",
+"beginDate": "1980-10-01 00:00",
+"endDate": "2100-01-01 00:00",
+"associatedHucs": [
+"170601020101",
+"170601020301",
+"170601020401",
+"170601050102",
+"170601050109"
+]
+},
+{
+"stationTriplet": "1000:OR:SNTL",
+"stationId": "1000",
+"stateCode": "OR",
+"networkCode": "SNTL",
+"name": "Annie Springs",
+"dcoCode": "OR",
+"countyName": "Klamath",
+"huc": "180102030101",
+"elevation": 6020.0,
+"latitude": 42.87007,
+"longitude": -122.16518,
+"dataTimeZone": -8.0,
+"pedonCode": "31218",
+"shefId": "ANSO3",
+"operator": "NRCS",
+"beginDate": "2000-09-01 00:00",
+"endDate": "2100-01-01 00:00",
+"associatedHucs": [
+"171003070106",
+"171003070108",
+"171003070109",
+"171003070204",
+"180102010501",
+"180102030102",
+"180102030105"
+]
+},
+{
+"stationTriplet": "526:OR:SNTL",
+"stationId": "526",
+"stateCode": "OR",
+"networkCode": "SNTL",
+"name": "Hogg Pass",
+"dcoCode": "OR",
+"countyName": "Linn",
+"huc": "170900040201",
+"elevation": 4800.0,
+"latitude": 44.42042,
+"longitude": -121.85655,
+"dataTimeZone": -8.0,
+"shefId": "HOPO3",
+"operator": "NRCS",
+"beginDate": "1978-10-01 00:00",
+"endDate": "2100-01-01 00:00",
+"associatedHucs": [
+"170703010903",
+"170703010905",
+"170703010907",
+"170900040204",
+"170900050201"
+]
+}
+]

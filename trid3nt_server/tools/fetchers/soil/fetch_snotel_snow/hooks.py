@@ -2,7 +2,8 @@
 
 The MAIN FETCH is the station catalog, bbox-filtered into station Points, raising the
 typed no-stations error when the bbox holds none. PHASE E is ONE batched data GET for
-every triplet, folding the latest non-null readings in null-tolerantly."""
+every triplet, folding each element's latest non-null reading in null-tolerantly; a station
+keeps every field the catalog and the data service state for it."""
 
 # The chained mode's best-effort per-ref survival IS the degrade-to-locations fallback:
 # a failed batch keeps every station with null readings rather than losing the stations.
@@ -32,7 +33,6 @@ _ELEM_DEPTH = "SNWD"
 _LATEST_WINDOW_DAYS = 10
 _NODATA_FLOOR = -999990.0
 
-_COLUMNS = ("triplet", "name", "state", "network", "elevation_ft", "swe_in", "snow_depth_in", "date")
 
 
 def _headers(spec: SourceSpec) -> dict[str, str]:
@@ -80,21 +80,10 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
                 continue
             if not (west <= lon <= east and south <= lat <= north):
                 continue
-            try:
-                elev: float | None = float(s.get("elevation"))
-                if not math.isfinite(elev):
-                    elev = None
-            except (TypeError, ValueError):
-                elev = None
             feats.append({
                 "type": "Feature",
                 "geometry": {"type": "Point", "coordinates": [lon, lat]},
-                "properties": {
-                    "triplet": trip, "name": str(s.get("name") or "").strip(),
-                    "state": str(s.get("stateCode") or "").strip(), "network": net,
-                    "elevation_ft": elev,
-                    "swe_in": None, "snow_depth_in": None, "date": None,
-                },
+                "properties": dict(s),
             })
     if not feats:
         raise router_empty_error(
@@ -113,7 +102,7 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
 @_hooks.register_hook("snotel_snow.enrich_plan")
 def enrich_plan(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]]) -> list[tuple[str, "_hooks.RequestPlan"]]:
     """ONE batched data ref for every station triplet over the trailing window."""
-    triplets = [(f.get("properties") or {}).get("triplet") for f in features]
+    triplets = [(f.get("properties") or {}).get("stationTriplet") for f in features]
     triplets = [t for t in triplets if t]
     if not triplets:
         return []
@@ -129,7 +118,7 @@ def enrich_plan(spec: SourceSpec, params: dict[str, Any], features: list[dict[st
 
 
 def _parse_data(raw: bytes) -> dict[str, dict[str, Any]]:
-    """{triplet: {swe_in, snow_depth_in, date}} from the AWDB data body (latest non-null)."""
+    """{triplet: {element code: {the latest reading's own fields, "stationElement": the element's record}}} from the AWDB data body."""
     if not raw:
         return {}
     try:
@@ -145,13 +134,13 @@ def _parse_data(raw: bytes) -> dict[str, dict[str, Any]]:
         trip = str(block.get("stationTriplet") or "").strip()
         if not trip:
             continue
-        rec = readings.setdefault(trip, {"swe_in": None, "snow_depth_in": None, "date": None})
+        rec = readings.setdefault(trip, {})
         for el in block.get("data") or []:
-            code = str((el.get("stationElement") or {}).get("elementCode") or "").strip().upper()
+            element = el.get("stationElement") or {}
+            code = str(element.get("elementCode") or "").strip().upper()
             if code not in (_ELEM_SWE, _ELEM_DEPTH):
                 continue
-            latest_val: float | None = None
-            latest_dt: str | None = None
+            latest: dict[str, Any] = {}
             for sample in el.get("values") or []:
                 v = sample.get("value")
                 if v is None:
@@ -162,18 +151,8 @@ def _parse_data(raw: bytes) -> dict[str, dict[str, Any]]:
                     continue
                 if not math.isfinite(fv) or fv <= _NODATA_FLOOR:
                     continue
-                latest_val = fv
-                latest_dt = str(sample.get("date") or "").strip() or latest_dt
-            if latest_val is None:
-                continue
-            if code == _ELEM_SWE:
-                rec["swe_in"] = latest_val
-                if latest_dt:
-                    rec["date"] = latest_dt
-            else:
-                rec["snow_depth_in"] = latest_val
-                if rec["date"] is None and latest_dt:
-                    rec["date"] = latest_dt
+                latest = {**sample, "value": fv}
+            rec[code] = {**latest, "stationElement": element}
     return readings
 
 
@@ -186,10 +165,9 @@ def enrich_merge(spec: SourceSpec, params: dict[str, Any], features: list[dict[s
     out: list[dict[str, Any]] = []
     for feat in features:
         props = dict(feat.get("properties") or {})
-        r = readings.get(props.get("triplet"), {})
-        props["swe_in"] = r.get("swe_in")
-        props["snow_depth_in"] = r.get("snow_depth_in")
-        props["date"] = r.get("date")
-        out.append({"type": "Feature", "geometry": feat.get("geometry"),
-                    "properties": {c: props.get(c) for c in _COLUMNS}})
+        read = readings.get(props.get("stationTriplet"), {})
+        for code in (_ELEM_SWE, _ELEM_DEPTH):
+            # An element with no reading still states its columns, null.
+            props[code] = {"date": None, "value": None, **read.get(code, {})}
+        out.append({"type": "Feature", "geometry": feat.get("geometry"), "properties": props})
     return out

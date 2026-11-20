@@ -79,7 +79,11 @@ def read_geometry_doc(source: Any) -> dict[str, Any]:
 
     with tempfile.TemporaryDirectory(prefix="trid3nt_geom_") as tmpdir:
         path = _stage_uri_local(text, tmpdir, "geometry")
-        return json.loads(gpd.read_file(path).to_crs(4326).to_json())
+        frame = gpd.read_file(path).to_crs(4326)
+        # A date-typed column is no JSON: it reads back as the ISO 8601 text of its instant, never dropped.
+        for column in frame.columns[frame.dtypes.astype(str).str.startswith("datetime")]:
+            frame[column] = frame[column].map(lambda t: None if t is None or t != t else t.isoformat())
+        return json.loads(frame.to_json())
 
 
 def flatten_features(doc: Any) -> list[tuple[dict[str, Any], dict[str, Any]]]:

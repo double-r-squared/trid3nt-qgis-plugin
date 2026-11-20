@@ -29,15 +29,6 @@ hooks:
   enrich_plan: snotel_snow.enrich_plan
   enrich_merge: snotel_snow.enrich_merge
 ingest:
-  properties:
-  - triplet
-  - name
-  - state
-  - network
-  - elevation_ft
-  - swe_in
-  - snow_depth_in
-  - date
   chained:
     max_detail_fetches: 4
 normalize:
@@ -58,8 +49,11 @@ cache:
 payload_estimate:
   model: per_feature
   features_per_sq_deg: 10.0
-  kb_per_feature: 0.18
+  kb_per_feature: 1.0
   floor_mb: 0.001
+fields:
+  site: {field: stationTriplet}
+  site_name: {field: name}
 caveats:
 - "model-callable, not matched: snow water equivalent is not a precipitation series, so it carries no coverage row"
 - NRCS SNOTEL/SCAN observed snow stations (AWDB REST); single catalog GET bbox-filtered client-side then
@@ -105,18 +99,24 @@ docstring: |-
   Returns:
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
       ``s3://trid3nt-cache/cache/dynamic-1h/snotel_snow/<key>.fgb``
-      - ``layer_type="vector"``, ``role="primary"``,
-   ``units="in (SWE / snow depth)"``.
+      - ``layer_type="vector"``, ``role="primary"``.
       - Geometry: Point at each station's coordinates, EPSG:4326.
       - ``bbox`` is set to the stations' extent so the client camera
         auto-zooms (the layer renders via the inline-GeoJSON vector path).
-      - Properties per station: ``triplet`` (NRCS station triplet, e.g.
-        ``"335:CO:SNTL"``), ``name``, ``state`` (2-letter), ``network``
-        (``SNTL`` or ``SCAN``), ``elevation_ft``, ``swe_in`` (latest WTEQ snow
-        water equivalent, inches; null if not reported; 0.0 in the off-season
-        is a HONEST reading, not a gap), ``snow_depth_in`` (latest SNWD snow
-        depth, inches; null if not reported), ``date`` (ISO date of the latest
-        reading; null when only locations are available).
+      - Properties per station: every field the AWDB catalog states for
+        it, under its own name: ``stationTriplet`` (NRCS station triplet, e.g.
+        ``"335:CO:SNTL"``), ``stationId``, ``name``, ``stateCode``,
+        ``networkCode`` (``SNTL`` or ``SCAN``), ``elevation`` (ft), ``latitude``,
+        ``longitude``, ``countyName``, ``huc``, ``shefId``, ``beginDate``,
+        ``endDate``, ... (a list as JSON text); and, for each of the two
+        elements ``WTEQ`` (snow water equivalent) and ``SNWD`` (snow depth),
+        the latest reading the data service holds in the trailing ten days:
+        ``WTEQ.value`` / ``SNWD.value`` (null if not reported; 0.0 in the
+        off-season is a HONEST reading, not a gap), ``WTEQ.date`` /
+        ``SNWD.date`` (ISO date of that reading), and the element's own record
+        as ``WTEQ.stationElement.*`` (``storedUnitCode`` - the unit the value
+        is in, ``dataPrecision``, ``durationName``, ``beginDate``, ...).
+        Values and dates are null when only locations are available.
 
   Fallback behaviour (data-source fallback norm -> honest typed error): the
   stations metadata fetch is the spatial primary. If zero SNTL/SCAN stations

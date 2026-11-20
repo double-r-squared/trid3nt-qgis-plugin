@@ -24,16 +24,11 @@ _IEM_NETWORK_GEOJSON = "https://mesonet.agron.iastate.edu/geojson/network/{state
 
 _MAX_STATIONS = 100
 
-_DEFAULT_DATA_FIELDS = (
-    "tmpf", "dwpf", "sknt", "drct", "gust", "alti", "mslp", "p01i",
-    "vsby", "wxcodes", "skyc1", "skyl1",
-)
+# The service's own name for every variable it holds.
+_ALL_DATA_FIELDS = ("all",)
 
-_FGB_COLUMNS = (
-    "station", "valid", "lon", "lat", "elevation",
-    "tmpf", "dwpf", "sknt", "drct", "gust", "alti", "mslp", "p01i",
-    "vsby", "wxcodes", "skyc1", "skyl1",
-)
+# The columns the service states as text; every other column is a number where all its readings parse as one.
+_TEXT_COLUMNS = frozenset({"station", "valid", "metar", "wxcodes", "peak_wind_time"})
 
 _IEM_ASOS_STATES = (
     "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
@@ -175,7 +170,7 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
     end_dt = _parse_dt(sc, str(params["end_time"]), "end_time")
     q: dict[str, Any] = {
         "station": list(ids),
-        "data": list(_DEFAULT_DATA_FIELDS),
+        "data": list(_ALL_DATA_FIELDS),
         "year1": str(start_dt.year), "month1": str(start_dt.month), "day1": str(start_dt.day),
         "hour1": str(start_dt.hour), "minute1": str(start_dt.minute),
         "year2": str(end_dt.year), "month2": str(end_dt.month), "day2": str(end_dt.day),
@@ -190,7 +185,7 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
 
 @_hooks.register_hook("asos_metar.parse_response")
 def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> list[dict[str, Any]]:
-    """Decode the IEM ASOS comma-CSV into one point feature per observation row."""
+    """Decode the IEM ASOS comma-CSV into one point feature per observation row, every column kept."""
     sc = spec.error_code_prefix
     import pandas as pd  # type: ignore[import-not-found]
 
@@ -220,21 +215,25 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
     df = df[df["lon"].between(-180.0, 180.0) & df["lat"].between(-90.0, 90.0)].copy()
     if df.empty:
         raise router_empty_error(sc, "All ASOS observation rows have out-of-range coordinates", spec.empty_error_suffix)
-    for col in ("elevation", "tmpf", "dwpf", "sknt", "drct", "gust", "alti", "mslp", "p01i", "vsby", "skyl1"):
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-    keep = [c for c in _FGB_COLUMNS if c in df.columns]
+    for col in df.columns:
+        if col in _TEXT_COLUMNS:
+            continue
+        # IEM writes a trace of rain as T, which is no depth.
+        stated = df[col].where(df[col] != "T")
+        found = pd.to_numeric(stated, errors="coerce")
+        if found.notna().sum() == stated.notna().sum():
+            df[col] = found
     lons = df["lon"].tolist()
     lats = df["lat"].tolist()
-    col_vals = {c: df[c].tolist() for c in keep}
+    col_vals = {c: df[c].tolist() for c in df.columns}
     out: list[dict[str, Any]] = []
     for i in range(len(df)):
         lon, lat = float(lons[i]), float(lats[i])
         if not (math.isfinite(lon) and math.isfinite(lat)):
             continue
         props = {}
-        for c in keep:
-            v = col_vals[c][i]
+        for c, values in col_vals.items():
+            v = values[i]
             if isinstance(v, float) and math.isnan(v):
                 v = None
             props[c] = v

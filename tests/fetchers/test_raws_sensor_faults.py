@@ -26,14 +26,13 @@ def _station():
     return [{"type": "Feature", "geometry": {"type": "Point",
                                              "coordinates": [-122.1, 45.6]},
              "properties": {"sid": "TRKW1", "sname": "Three Corner Rock",
-                            "lon": -122.1, "lat": 45.6, "elevation": 885.0,
-                            "state": "WA"}}]
+                            "elevation": 885.0, "state": "WA", "network": "WA_DCP"}}]
 
 
 def _observation(hour: int, **over):
     return {"utc_valid": f"2024-01-14T{hour:02d}:00:00Z", "tmpf": 20.0,
-            "dwpf": 14.0, "URHRGZZ": 78.0, "sknt": 4.0, "drct": 90.0,
-            "VBIRGZZ": 8.0, "XRIRGZZ": 0.0, "PCIRGZZ": 863.0, **over}
+            "dwpf": 14.0, "XRIRGZZ": 78.0, "sknt": 4.0, "drct": 90.0,
+            "VBIRGZZ": 8.0, "URHRGZZ": 90.0, "PCIRGZZ": 863.0, **over}
 
 
 def _merged(spec, observations):
@@ -44,8 +43,8 @@ def _merged(spec, observations):
 
 
 def test_a_humidity_over_saturation_is_a_sensor_fault_rather_than_an_instant(spec):
-    kept = _merged(spec, [_observation(0), _observation(1, URHRGZZ=332.0)])
-    assert [row["properties"]["utc_valid"] for row in kept] == [
+    kept = _merged(spec, [_observation(0), _observation(1, XRIRGZZ=332.0)])
+    assert [row["produced"]["utc_valid"] for row in kept] == [
         "2024-01-14T00:00:00Z"]
 
 
@@ -56,7 +55,7 @@ def test_a_dew_point_above_the_air_it_was_measured_in_is_dropped(spec):
 
 def test_what_the_record_lost_to_faults_is_said_on_the_run_journal(spec, caplog):
     with caplog.at_level("WARNING"):
-        _merged(spec, [_observation(0), _observation(1, URHRGZZ=332.0),
+        _merged(spec, [_observation(0), _observation(1, XRIRGZZ=332.0),
                        _observation(2, dwpf=26.0)])
     assert "2 readings were dropped as sensor faults" in caplog.text
 
@@ -65,4 +64,11 @@ def test_a_record_that_is_all_faults_refuses_rather_than_returning_nothing(spec)
     from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError
 
     with pytest.raises(RouterEmptyError):
-        _merged(spec, [_observation(0, URHRGZZ=332.0)])
+        _merged(spec, [_observation(0, XRIRGZZ=332.0)])
+
+
+def test_a_peak_wind_direction_over_a_hundred_is_a_wind_not_a_humidity(spec):
+    """SHEF's UR element is the direction of the peak wind and VB the battery's volts, so a 287 in the first and a
+    13.1 in the second are readings, and only XR (relative humidity) is tested against saturation."""
+    kept = _merged(spec, [_observation(0, URHRGZZ=287.0, VBIRGZZ=13.1)])
+    assert kept[0]["produced"]["URHRGZZ"] == 287.0 and kept[0]["produced"]["VBIRGZZ"] == 13.1

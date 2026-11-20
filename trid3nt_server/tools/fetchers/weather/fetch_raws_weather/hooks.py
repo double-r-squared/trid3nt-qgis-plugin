@@ -37,10 +37,8 @@ _MAX_STATIONS = 50
 _MAX_DATE_RANGE_DAYS = 14
 _RAWS_NAME_MARKER = "RAWS"
 
-_FGB_COLUMNS = (
-    "station", "station_name", "state", "utc_valid", "lon", "lat", "elevation",
-    "tmpf", "dwpf", "relh", "sknt", "drct", "gust", "solar_rad", "precip_in",
-)
+# The two stamps of an observation row that are text; every other field of one is a number.
+_STAMPS = ("utc_valid", "local_valid")
 
 _IEM_DCP_STATES = (
     "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
@@ -164,8 +162,7 @@ def resolve_parse(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes])
                 continue
             seen.add(str(sid))
             stations.append({
-                "sid": str(sid), "lon": lon, "lat": lat, "sname": sname,
-                "state": state, "elevation": props.get("elevation"),
+                "sid": str(sid), "lon": lon, "lat": lat, "record": props,
                 "distance_km": round(_km_from_bbox(asked, lon, lat), 3),
             })
     stations.sort(key=lambda st: st["distance_km"])
@@ -203,8 +200,7 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
         feats.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [st["lon"], st["lat"]]},
-            "properties": {"sid": st["sid"], "sname": st.get("sname", ""), "state": st.get("state", ""),
-                           "elevation": st.get("elevation"), "lon": st["lon"], "lat": st["lat"]},
+            "properties": dict(st["record"]),
         })
     return feats
 
@@ -225,10 +221,8 @@ def enrich_plan(spec: SourceSpec, params: dict[str, Any], features: list[dict[st
     for feat in features:
         props = feat.get("properties") or {}
         sid = props.get("sid")
-        state = props.get("state") or ""
-        network = f"{state}_DCP"
         for d in dates:
-            q = {"station": sid, "network": network, "date": d}
+            q = {"station": sid, "network": props.get("network"), "date": d}
             plans.append((f"{sid}:{d}", _hooks.RequestPlan(url=_IEM_OBHISTORY_URL, params=q, headers=_headers(spec))))
     return plans
 
@@ -243,7 +237,7 @@ def enrich_merge(spec: SourceSpec, params: dict[str, Any], features: list[dict[s
     for feat in features:
         props = feat.get("properties") or {}
         sid = props.get("sid")
-        lon, lat = props.get("lon"), props.get("lat")
+        geometry = feat.get("geometry")
         for d in dates:
             res = results.get(f"{sid}:{d}")
             body = getattr(res, "body", None) if res is not None else None
@@ -254,24 +248,12 @@ def enrich_merge(spec: SourceSpec, params: dict[str, Any], features: list[dict[s
             except (json.JSONDecodeError, UnicodeDecodeError):
                 continue
             for obs in obs_list:
-                if lon is None or lat is None:
-                    continue
-                row = {
-                    "station": sid, "station_name": props.get("sname", ""), "state": props.get("state", ""),
-                    "utc_valid": obs.get("utc_valid"), "lon": lon, "lat": lat,
-                    "elevation": _num(props.get("elevation")),
-                    "tmpf": _num(obs.get("tmpf")), "dwpf": _num(obs.get("dwpf")),
-                    "relh": _num(obs.get("URHRGZZ")), "sknt": _num(obs.get("sknt")), "drct": _num(obs.get("drct")),
-                    "gust": _num(obs.get("VBIRGZZ")), "solar_rad": _num(obs.get("XRIRGZZ")), "precip_in": _num(obs.get("PCIRGZZ")),
-                }
+                row = {k: (v if k in _STAMPS else _num(v)) for k, v in obs.items()}
                 if _faulty(row):
                     faults += 1
                     continue
-                out.append({
-                    "type": "Feature",
-                    "geometry": {"type": "Point", "coordinates": [float(lon), float(lat)]},
-                    "properties": {c: row.get(c) for c in _FGB_COLUMNS},
-                })
+                out.append({"type": "Feature", "geometry": geometry, "properties": props,
+                            "produced": row})
     if faults:
         _note_faults(faults, len(out))
     if not out:
@@ -282,10 +264,10 @@ def enrich_merge(spec: SourceSpec, params: dict[str, Any], features: list[dict[s
 def _faulty(row: dict[str, Any]) -> bool:
     """Is this reading outside what the atmosphere can do?
 
-    A relative humidity over saturation and a dew point above the air it was
+    A relative humidity (the SHEF XR element) over saturation and a dew point above the air it was
     measured in are both instrument faults rather than weather, and a reading
     that reports one is not a measurement of anything."""
-    relh, dwpf, tmpf = row.get("relh"), row.get("dwpf"), row.get("tmpf")
+    relh, dwpf, tmpf = row.get("XRIRGZZ"), row.get("dwpf"), row.get("tmpf")
     if relh is not None and relh > 100.0:
         return True
     return dwpf is not None and tmpf is not None and dwpf > tmpf

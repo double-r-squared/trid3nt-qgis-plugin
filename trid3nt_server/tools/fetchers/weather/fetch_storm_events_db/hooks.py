@@ -26,11 +26,8 @@ __all__ = ["resolve_build", "resolve_parse", "build_request", "parse_response"]
 _INDEX_URL = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/"
 _FILE_RE = re.compile(r"StormEvents_details-ftp_v1\.0_d(\d{4})_c(\d{8})\.csv\.gz")
 
-_RETAINED_COLUMNS = (
-    "EVENT_ID", "EVENT_TYPE", "STATE", "BEGIN_DATE_TIME", "END_DATE_TIME",
-    "INJURIES_DIRECT", "DEATHS_DIRECT", "DEATHS_INDIRECT", "DAMAGE_PROPERTY",
-    "MAGNITUDE", "EPISODE_NARRATIVE",
-)
+# The four columns of an event that are coordinates; every other column stays the text NCEI publishes.
+_COORDINATE_COLUMNS = ("BEGIN_LAT", "BEGIN_LON", "END_LAT", "END_LON")
 
 #: ISO 2-letter -> NOAA full state name (the STATE column spelling, uppercase).
 _ISO_TO_STATE_NAME: dict[str, str] = {
@@ -169,7 +166,7 @@ def _derive_begin_datetime(df: Any, pd: Any) -> Any:
 
 @_hooks.register_hook("storm_events_db.parse_response")
 def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> list[dict[str, Any]]:
-    """Decompress each gzip CSV, concat, filter (state/event_types/bbox/window), synthesize points."""
+    """Decompress each gzip CSV, concat, filter (state/event_types/bbox/window), synthesize points, every column kept."""
     sc = spec.error_code_prefix
     import pandas as pd  # type: ignore[import-not-found]
 
@@ -215,8 +212,9 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
         keep &= begin_dt.notna()
         df = df[keep].copy()
 
-    df["BEGIN_LAT"] = pd.to_numeric(df["BEGIN_LAT"], errors="coerce")
-    df["BEGIN_LON"] = pd.to_numeric(df["BEGIN_LON"], errors="coerce")
+    for column in _COORDINATE_COLUMNS:
+        if column in df.columns:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
     df = df.dropna(subset=["BEGIN_LAT", "BEGIN_LON"]).copy()
     df = df[(df["BEGIN_LAT"].between(-90.0, 90.0)) & (df["BEGIN_LON"].between(-180.0, 180.0))].copy()
     if bbox is not None:
@@ -230,10 +228,9 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
             f"bbox={bbox!r} begin_date={begin_date!r} end_date={end_date!r} after filtering",
         )
 
-    keep_cols = [c for c in _RETAINED_COLUMNS if c in df.columns]
     lons = df["BEGIN_LON"].tolist()
     lats = df["BEGIN_LAT"].tolist()
-    col_vals = {c: df[c].tolist() for c in keep_cols}
+    col_vals = {c: df[c].tolist() for c in df.columns}
     out: list[dict[str, Any]] = []
     for i in range(len(df)):
         lon, lat = float(lons[i]), float(lats[i])
@@ -242,6 +239,7 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
         out.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [lon, lat]},
-            "properties": {c: col_vals[c][i] for c in keep_cols},
+            "properties": {c: (None if isinstance(v[i], float) and math.isnan(v[i]) else v[i])
+                           for c, v in col_vals.items()},
         })
     return out

@@ -33,44 +33,6 @@ params:
 hooks:
   build_request: airnow_air_quality.build_request
   parse_response: airnow_air_quality.parse_response
-ingest:
-  column_map:
-    Latitude: {from: Latitude}
-    Longitude: {from: Longitude}
-    UTC: {from: UTC}
-    Parameter: {from: Parameter}
-    Unit: {from: Unit}
-    Value: {from: Value}
-    RawConcentration: {from: RawConcentration}
-    AQI: {from: AQI}
-    Category: {from: Category}
-    SiteName: {from: SiteName}
-    AgencyName: {from: AgencyName}
-    FullAQSCode: {from: FullAQSCode}
-    IntlAQSCode: {from: IntlAQSCode}
-    ParameterName:
-      from: Parameter
-      kind: lookup
-      table:
-        PM25: PM2.5 (fine particulate matter)
-        PM10: PM10 (coarse particulate matter)
-        OZONE: Ozone
-        NO2: Nitrogen dioxide
-        SO2: Sulfur dioxide
-        CO: Carbon monoxide
-      default_template: '{key}'
-    AQICategoryName:
-      from: Category
-      kind: lookup
-      table:
-        1: Good
-        2: Moderate
-        3: Unhealthy for Sensitive Groups
-        4: Unhealthy
-        5: Very Unhealthy
-        6: Hazardous
-        7: Unavailable
-      default: Unavailable
 normalize:
   crs: EPSG:4326
   units: AQI
@@ -87,8 +49,14 @@ cache:
 payload_estimate:
   model: per_feature
   features_per_sq_deg: 5.13
-  kb_per_feature: 0.41
+  kb_per_feature: 0.5
   floor_mb: 0.001
+fields:
+  site: {field: FullAQSCode}
+  site_name: {field: SiteName}
+  time: {field: UTC}
+  quantity: {field: Parameter}
+  value: {field: Value, unit: {field: Unit}}
 caveats:
 - 'EPA AirNow current-hour AQI monitor observations (keyed: the person''s AirNow key). One point per
   monitor-parameter (latest in a 3h window). US/Canada/Mexico. No key -> KEY_REQUIRED before the network,
@@ -150,10 +118,13 @@ docstring: |-
       A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket
       ``s3://<cache>/cache/dynamic-1h/airnow_air_quality/<key>.fgb``
       containing ``Point`` geometries (EPSG:4326), ONE per
-      monitor-parameter (latest reading in the window), with columns
-      ``Parameter`` / ``ParameterName``, ``AQI``, ``Category`` /
-      ``AQICategoryName``, ``Value`` / ``RawConcentration`` / ``Unit``,
-      ``SiteName`` / ``AgencyName`` / ``FullAQSCode``. ``layer_type="vector"``,
+      monitor-parameter (latest reading in the window), with every field
+      AirNow returns: ``Latitude``, ``Longitude``, ``UTC``, ``Parameter``,
+      ``Unit``, ``Value``, ``RawConcentration``, ``AQI``, ``Category``,
+      ``SiteName``, ``AgencyName``, ``FullAQSCode``, ``IntlAQSCode``, and
+      beside them ``ParameterName`` and ``AQICategoryName`` (the names of
+      ``Parameter`` and ``Category``). AirNow states no per-reading
+      accuracy. ``layer_type="vector"``,
       ``role="primary"``, ``units="AQI"``.
 
   Cross-tool dependencies:

@@ -30,11 +30,6 @@ _DEFAULT_PARAMETERS = ("pm25", "pm10", "no2", "o3", "so2", "co")
 _LOCATIONS_PAGE_SIZE = 200
 _MAX_LOCATIONS = 2000
 
-_PRESERVED_PROPERTIES = (
-    "location_id", "location_name", "country", "parameter", "display_name",
-    "value", "unit", "datetime_utc", "datetime_local", "sensor_id",
-)
-
 
 def _validate_parameters(sc: str, raw: Any) -> list[str]:
     if raw is None:
@@ -101,7 +96,7 @@ def next_page(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> 
 
 @_hooks.register_hook("openaq_measurements.parse_response")
 def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> list[dict[str, Any]]:
-    """Collect stations (id + coords + sensors) as intermediate features for enrich."""
+    """Collect stations (the service's own record, sensors included) as intermediate features for enrich."""
     stations: list[dict[str, Any]] = []
     for b in bodies:
         for st in _results(b):
@@ -132,26 +127,15 @@ def enrich_plan(spec: SourceSpec, params: dict[str, Any], features: list[dict[st
     return plans
 
 
-def _sensor_param_map(station: dict[str, Any]) -> dict[int, dict[str, str]]:
-    out: dict[int, dict[str, str]] = {}
-    for sensor in station.get("sensors") or []:
-        if not isinstance(sensor, dict):
-            continue
-        sid = sensor.get("id")
-        if not isinstance(sid, int):
-            continue
-        param = sensor.get("parameter") if isinstance(sensor.get("parameter"), dict) else {}
-        out[sid] = {
-            "parameter": str(param.get("name") or ""),
-            "display_name": str(param.get("displayName") or param.get("name") or ""),
-            "unit": str(param.get("units") or ""),
-        }
-    return out
+def _sensors_by_id(station: dict[str, Any]) -> dict[int, dict[str, Any]]:
+    """The station's sensors, each the service's own record, by sensor id."""
+    return {sensor["id"]: sensor for sensor in station.get("sensors") or []
+            if isinstance(sensor, dict) and isinstance(sensor.get("id"), int)}
 
 
 @_hooks.register_hook("openaq_measurements.enrich_merge")
 def enrich_merge(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]], results: dict[str, Any]) -> list[dict[str, Any]]:
-    """Join latest values to sensor params, bbox-filter, expand to one point per (station, param)."""
+    """Join latest values to their sensors, bbox-filter, expand to one point per (station, param): the station's record, the latest reading and its sensor, each whole."""
     sc = spec.error_code_prefix
     west, south, east, north = (float(v) for v in params["bbox"])
     param_set = set(_validate_parameters(sc, params.get("parameters")))
@@ -162,20 +146,18 @@ def enrich_merge(spec: SourceSpec, params: dict[str, Any], features: list[dict[s
         res = results.get(f"loc:{loc_id}") if isinstance(loc_id, int) else None
         body = getattr(res, "body", None) if res is not None else None
         latest_records = _results(body) if body else []  # failed ref -> no measurements (best-effort)
-        loc_name = str(station.get("name") or "")
-        c_obj = station.get("country") or {}
-        country = str(c_obj.get("code") or c_obj.get("name") or "") if isinstance(c_obj, dict) else ""
         st_coords = station.get("coordinates") or {}
         st_lon = st_coords.get("longitude") if isinstance(st_coords, dict) else None
         st_lat = st_coords.get("latitude") if isinstance(st_coords, dict) else None
-        smap = _sensor_param_map(station)
+        sensors = _sensors_by_id(station)
         for rec in latest_records:
             if not isinstance(rec, dict):
                 continue
-            meta = smap.get(rec.get("sensorsId")) if isinstance(rec.get("sensorsId"), int) else None
-            if meta is None or not meta.get("parameter"):
+            sensor = sensors.get(rec.get("sensorsId")) if isinstance(rec.get("sensorsId"), int) else None
+            parameter = (sensor or {}).get("parameter")
+            if not isinstance(parameter, dict) or not parameter.get("name"):
                 continue
-            pname = meta["parameter"].lower()
+            pname = str(parameter["name"]).lower()
             if pname not in param_set:
                 continue
             rc = rec.get("coordinates") or {}
@@ -191,19 +173,6 @@ def enrich_merge(spec: SourceSpec, params: dict[str, Any], features: list[dict[s
                 continue
             if not (west <= lon_f <= east and south <= lat_f <= north):
                 continue
-            v_raw = rec.get("value")
-            try:
-                v_f = float(v_raw) if v_raw is not None else None
-            except (TypeError, ValueError):
-                v_f = None
-            dt = rec.get("datetime") if isinstance(rec.get("datetime"), dict) else {}
-            props = {
-                "location_id": int(loc_id) if isinstance(loc_id, int) else -1,
-                "location_name": loc_name, "country": country, "parameter": pname,
-                "display_name": meta["display_name"], "value": v_f, "unit": meta["unit"],
-                "datetime_utc": str(dt.get("utc") or ""), "datetime_local": str(dt.get("local") or ""),
-                "sensor_id": int(rec["sensorsId"]) if isinstance(rec.get("sensorsId"), int) else -1,
-            }
             out.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon_f, lat_f]},
-                        "properties": {c: props.get(c) for c in _PRESERVED_PROPERTIES}})
+                        "properties": {**station, "latest": rec, "sensor": sensor}})
     return out

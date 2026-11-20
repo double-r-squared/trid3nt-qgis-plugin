@@ -107,13 +107,14 @@ def test_raws_enrich_expands_and_best_effort_survives():
     spec = _spec("fetch_raws_weather")
     geo = json.dumps({"features": [
         {"id": "CISC1", "geometry": {"coordinates": [-120.3, 38.9]},
-         "properties": {"sname": "CALDOR RAWS", "elevation": 1800}},
+         "properties": {"sid": "CISC1", "sname": "CALDOR RAWS", "elevation": 1800, "state": "CA",
+                        "network": "CA_DCP"}},
     ]}).encode()
     day = json.dumps({"data": [
-        {"utc_valid": "2024-09-01T00:00Z", "tmpf": "70", "URHRGZZ": "30", "sknt": "5", "drct": "280",
-         "VBIRGZZ": "9", "XRIRGZZ": "600", "PCIRGZZ": "0"},
-        {"utc_valid": "2024-09-01T01:00Z", "tmpf": "68", "URHRGZZ": "32", "sknt": "4", "drct": "290",
-         "VBIRGZZ": "8", "XRIRGZZ": "0", "PCIRGZZ": "0"},
+        {"utc_valid": "2024-09-01T00:00Z", "tmpf": "70", "XRIRGZZ": "30", "sknt": "5", "drct": "280",
+         "VBIRGZZ": "9", "URHRGZZ": "600", "PCIRGZZ": "0"},
+        {"utc_valid": "2024-09-01T01:00Z", "tmpf": "68", "XRIRGZZ": "32", "sknt": "4", "drct": "290",
+         "VBIRGZZ": "8", "URHRGZZ": "0", "PCIRGZZ": "0"},
     ]}).encode()
 
     def fake_get(spec_, plan):
@@ -132,8 +133,8 @@ def test_raws_enrich_expands_and_best_effort_survives():
         g = _gdf(cr.execute(spec, params))
     # 1 station x 1 good day x 2 obs = 2 rows (the failed 2nd day is skipped, station survives)
     assert len(g) == 2
-    assert set(g["station"]) == {"CISC1"}
-    assert list(g.columns[:4]) == ["station", "station_name", "state", "utc_valid"]
+    assert set(g["sid"]) == {"CISC1"}
+    assert {"sname", "elevation", "network", "utc_valid", "tmpf", "VBIRGZZ"} <= set(g.columns)
 
 
 def test_raws_no_stations_raises_empty():
@@ -178,9 +179,9 @@ def test_snotel_merge_and_degrade_to_locations():
         g = _gdf(cr.execute(spec, params))
     assert len(g) == 1  # only the in-bbox station
     row = g.iloc[0]
-    assert row["triplet"] == "335:CO:SNTL"
-    assert float(row["swe_in"]) == 12.5  # latest non-null (off-season 0.0 preserved earlier, latest wins)
-    assert float(row["snow_depth_in"]) == 48.0
+    assert row["stationTriplet"] == "335:CO:SNTL"
+    assert float(row["WTEQ.value"]) == 12.5  # latest non-null (off-season 0.0 preserved earlier, latest wins)
+    assert float(row["SNWD.value"]) == 48.0
 
     # DATA failure -> degrade to locations (station survives with null readings).
     def fail_data(spec_, plan):
@@ -192,7 +193,7 @@ def test_snotel_merge_and_degrade_to_locations():
     with patch.object(cr, "_get", fail_data), patch.object(http_json, "_get", fail_data):
         g2 = _gdf(cr.execute(spec, params))
     assert len(g2) == 1
-    assert g2.iloc[0]["swe_in"] is None or str(g2.iloc[0]["swe_in"]) in ("nan", "None")
+    assert g2.iloc[0]["WTEQ.value"] is None or str(g2.iloc[0]["WTEQ.value"]) in ("nan", "None")
 
 
 def test_snotel_no_stations_raises():
@@ -232,9 +233,10 @@ def test_openaq_paging_and_sensor_join(monkeypatch):
     with patch.object(cr, "_get", fake_get), patch.object(http_json, "_get", fake_get):
         g = _gdf(cr.execute(spec, params))
     assert len(g) == 1
-    assert g.iloc[0]["parameter"] == "pm25"
-    assert float(g.iloc[0]["value"]) == 88.5
-    assert g.iloc[0]["unit"] == "ug/m3"
+    assert g.iloc[0]["sensor.parameter.name"] == "pm25"
+    assert float(g.iloc[0]["latest.value"]) == 88.5
+    assert g.iloc[0]["sensor.parameter.units"] == "ug/m3"
+    assert g.iloc[0]["id"] == 101 and g.iloc[0]["country.code"] == "IN"
 
 
 

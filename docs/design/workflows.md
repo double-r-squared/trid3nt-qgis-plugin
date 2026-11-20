@@ -352,8 +352,13 @@ itself - a drawn geometry is taken whole.
 `WEATHER`, `RAIN` and `WAVE` are ingested as WHAT WAS MEASURED, in words no
 engine owns. The weather is one station - the nearest whose record brackets the
 run's window, ranked from the point the row names or else the middle of the
-domain - with a series per quantity its network reports and the reason beside
-any it is short of; the rain is the depth per interval at the record's own
+domain - with a series per quantity its source maps (`air_temperature`, `dew_point`,
+`relative_humidity`, `wind_speed`, `wind_from`, `solar_radiation`, `pressure`,
+`cloud_cover`, `rain`, each in the unit its member states, a sky-cover code through
+a cited table) and the reason beside any it is short of; vapour pressure, relative
+humidity and dew point are closed from whichever of the last two the source maps;
+a quantity a source does not map is one it does not report, and the engine reads
+its own constant for it; the rain is the depth per interval at the record's own
 cadence - the median gap between its stamps - and a gap of one and a half
 cadences or more is a hole the slot refuses, naming the stamps either side; the
 sea state is a height, a period and the bearing the waves come
@@ -412,8 +417,10 @@ value read); every form but a plain field carries the `cite` it was read from, a
 every numeric member states its `unit`, literal or `{field: ...}` off the record.
 The vocabulary is closed (`MEMBERS`): `value`, `series`, `time`, `above`,
 `above_accuracy`, `accuracy`, what reported (`site`, `site_name`), what the value is
-(`quantity`) and is counted from (`datum`), a well's `depth`, and the sea state's
-`height`, `period`, `from_direction`, each naming the window it is reported over. A
+(`quantity`) and is counted from (`datum`), a well's `depth`, the sea state's
+`height`, `period`, `from_direction`, each naming the window it is reported over, and
+the air's `air_temperature`, `dew_point`, `relative_humidity`, `wind_speed`,
+`wind_from`, `solar_radiation`, `pressure`, `cloud_cover` and `rain`. A
 window member holding JSON names the reading's keys (`time_key`, `value_key`). A coverage row
 restates only the members that differ for its class and, once loaded, carries its
 source's map with its own over it.
@@ -430,7 +437,8 @@ observation reads `accuracy` only where its slot asks. A source maps no member i
 guessed field. A layer no registered source produced reads by its ingestion's stated
 convention (observation: `value` and `time_series_csv` in the record's `unit`, and
 `site_id`, `site_name`, `quantity`, `vertical_datum`, `depth`; rain: `times` and
-`precip_mm`); the
+`precip_mm`; weather: `station`, `time` and a column per quantity named as the weather
+names it, `air_temp_c` ... `rain_mm`, in its unit); the
 bed reads a fetched layer's `value` member through `produced_by`, the producer the
 uri registry recorded.
 

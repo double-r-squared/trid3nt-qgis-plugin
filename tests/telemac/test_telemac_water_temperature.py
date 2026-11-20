@@ -14,6 +14,7 @@ import inspect
 
 import pytest
 
+from trid3nt_contracts.coverage import Member
 from trid3nt_server.inputs.weather import weather
 from trid3nt_server.inputs.observation import Observation, ObservationError
 from trid3nt_server.workflows.telemac.authoring.atmosphere import (
@@ -124,6 +125,17 @@ def test_the_granularity_row_states_no_default_and_refuses_no_edge():
 
 # -- the deck the template states ---------------------------------------------- #
 
+#: The row names the hand-made fire-network observations below use, mapped as a source would state them.
+_FIRE = {
+    "site": Member(field="station"), "time": Member(field="utc_valid"),
+    "air_temperature": Member(field="tmpf", unit="degF"),
+    "dew_point": Member(field="dwpf", unit="degF"),
+    "relative_humidity": Member(field="relh", unit="%"),
+    "wind_speed": Member(field="sknt", unit="kt"),
+    "wind_from": Member(field="drct", unit="degree"),
+    "solar_radiation": Member(field="solar_rad", unit="W/m2")}
+
+
 def _observation(hour: int):
     stamp = _dt.datetime(2026, 9, 1, tzinfo=_dt.timezone.utc) + _dt.timedelta(hours=hour)
     return {"type": "Feature",
@@ -140,7 +152,7 @@ def _sheet(monkeypatch, **floor):
     record = weather(
         {"type": "FeatureCollection",
          "features": [_observation(hour) for hour in range(_WEEK_HOURS)]},
-        near=_STATION, at=_OPENS, window_s=floor.get("DURATION", 604800.0))
+        fields=_FIRE, near=_STATION, at=_OPENS, window_s=floor.get("DURATION", 604800.0))
     return fill(template.STEERING, **floor,
                 params={"event_time": _OPENS}, settled={
         "TITLE": "DOMAIN", "TIME_STEP": 5.0, "INITIAL_CONDITIONS": "CONSTANT DEPTH",

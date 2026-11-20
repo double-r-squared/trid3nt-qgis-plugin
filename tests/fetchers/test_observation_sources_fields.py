@@ -207,3 +207,28 @@ def test_reading_keys_are_both_named_and_belong_to_a_window_member():
         Coverage.model_validate({**base, "fields": {"series": {"field": "s", "time_key": "t", "unit": "m"}}})
     with pytest.raises(ValueError):
         Coverage.model_validate({**base, "fields": {"value": {"field": "s", "time_key": "t", "value_key": "v", "unit": "m"}}})
+
+
+def test_a_fetched_layer_holding_date_typed_columns_reads_back_with_their_instants_as_iso_text(monkeypatch, tmp_path):
+    """B1's WQP layer carries the portal's ActivityStartDateTime as a date-typed column; every slot's reader must not
+    fail on it nor drop it."""
+    from trid3nt_server.inputs.geometry import read_geometry_doc
+    from trid3nt_server.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
+    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality import hooks
+
+    header = next(__import__("csv").reader((_FIXTURES / "wqp_result_header.csv").open()))
+    result = {name: None for name in header}
+    result.update({"MonitoringLocationIdentifier": "USGS-413800070330001", "ResultMeasureValue": "4.2",
+                   "ActivityStartDate": "2024-01-10", "ActivityStartDateTime": pd.Timestamp("2024-01-10T15:30:00Z"),
+                   "ActivityEndDateTime": pd.Timestamp("2024-01-10T15:45:00Z")})
+    sites = pd.DataFrame([{"MonitoringLocationIdentifier": "USGS-413800070330001", "LongitudeMeasure": -70.55,
+                           "LatitudeMeasure": 41.63}])
+    answers = iter([(sites, None), (pd.DataFrame([result]), None)])
+    monkeypatch.setattr(hooks, "retrieve", lambda *a, **k: next(answers))
+    spec = registration.get_spec("fetch_usgs_water_quality")
+    feats = hooks.features(spec, {"bbox": [-70.6, 41.6, -70.5, 41.7], "characteristic": "Boron"}, timeout_s=5.0)
+    path = tmp_path / "wqp.fgb"
+    path.write_bytes(features_to_fgb_bytes(feats, spec))
+    props = read_geometry_doc(str(path))["features"][0]["properties"]
+    assert props["result.ActivityStartDateTime"].startswith("2024-01-10T15:30:00")
+    assert props["result.ActivityEndDateTime"].startswith("2024-01-10T15:45:00")

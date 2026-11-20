@@ -28,16 +28,6 @@ hooks:
   enrich_plan: climate_normals.enrich_plan
   enrich_merge: climate_normals.enrich_merge
 
-ingest:
-  properties:
-    - station_id
-    - name
-    - elevation_m
-    - normal_temp_f
-    - normal_tmin_f
-    - normal_tmax_f
-    - normal_precip_in
-
 normalize:
   crs: "EPSG:4326"
   units: mixed
@@ -55,9 +45,13 @@ cache:
 payload_estimate:
   model: per_station
   stations_per_sq_deg: 6.0
-  kb_per_station_per_day: 0.1465
+  kb_per_station_per_day: 14.5
+  overhead_kb: 112.0
   floor_mb: 0.001
 
+fields:
+  site: {field: STATION}
+  site_name: {field: NAME}
 caveats:
   - "NOAA NCEI 1991-2020 U.S. Climate Normals (annual avg temperature deg F + total precipitation inches) as station points; U.S. + territories only. No station in the bbox / none with a usable annual normal -> a typed CLIMATE_NORMALS_EMPTY error, never a fabricated layer."
   - "model-callable, not matched: a 1991-2020 normal answers no run window, so it carries no coverage row"
@@ -105,13 +99,18 @@ docstring: |-
       - ``layer_type="vector"``, ``role="context"``, ``units="mixed"``
         (temperature in deg F, precipitation in inches).
       - Geometry: Point at each station's coordinates, EPSG:4326.
-      - Properties per station: ``station_id`` (GHCN id), ``name``,
-        ``elevation_m``, ``normal_temp_f`` (annual average temperature,
-        deg F), ``normal_tmin_f`` (annual avg daily minimum, deg F),
-        ``normal_tmax_f`` (annual avg daily maximum, deg F),
-        ``normal_precip_in`` (annual total precipitation, inches). A station
-        that is precipitation-only (e.g. CoCoRaHS) reports
-        ``normal_temp_f=None``; missing values are ``null``.
+      - Properties per station: every column of the station's annual access
+        row under NCEI's own name (about 700): ``STATION`` (GHCN id), ``NAME``,
+        ``LATITUDE``, ``LONGITUDE``, ``ELEVATION`` (m), then per normal its
+        value and its flags, e.g. ``ANN-TAVG-NORMAL`` (annual average
+        temperature, deg F) with ``meas_flag_ANN-TAVG-NORMAL``,
+        ``comp_flag_ANN-TAVG-NORMAL`` and ``years_ANN-TAVG-NORMAL``,
+        ``ANN-TMIN-NORMAL`` and ``ANN-TMAX-NORMAL`` (annual average daily
+        minimum and maximum, deg F), ``ANN-PRCP-NORMAL`` (annual total
+        precipitation, inches), and the threshold, probability and growing
+        season normals (``ANN-TMIN-AVGNDS-LSTH032``, ``ANN-TMIN-PRBFST-T32FP50``,
+        ...). A station that is precipitation-only (e.g. CoCoRaHS) reports
+        ``ANN-TAVG-NORMAL`` null; NCEI's -9999 gap is null.
 
   Cache: ``static-30d`` -- the 1991-2020 Normals are a fixed published
   product; identical ``bbox`` (rounded to 4 dp) reuses the cached FlatGeobuf.

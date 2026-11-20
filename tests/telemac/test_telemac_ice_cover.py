@@ -15,6 +15,7 @@ import inspect
 import pytest
 
 from trid3nt_server.inputs.weather import weather
+from trid3nt_server.tools.fetchers._router.registration import get_spec
 from trid3nt_server.inputs.observation import Observation, ObservationError
 from trid3nt_server.workflows.telemac.authoring.atmosphere import (
     ATMOSPHERE_FILENAME,
@@ -148,7 +149,7 @@ def _sheet(monkeypatch, **floor):
     record = weather(
         {"type": "FeatureCollection",
          "features": [_observation(hour) for hour in range(_WEEK_HOURS)]},
-        near=_STATION, at=_OPENS, window_s=floor.get("DURATION", 604800.0))
+        fields=get_spec("fetch_asos_metar").fields, near=_STATION, at=_OPENS, window_s=floor.get("DURATION", 604800.0))
     return fill(template.STEERING, **floor,
                 params={"event_time": _OPENS}, settled={
         "TITLE": "DOMAIN", "TIME_STEP": 5.0, "INITIAL_CONDITIONS": "CONSTANT DEPTH",

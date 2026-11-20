@@ -22,13 +22,7 @@ _INVENTORY_URL = "https://www.ncei.noaa.gov/data/normals-annualseasonal/1991-202
 _ACCESS_URL = "https://www.ncei.noaa.gov/data/normals-annualseasonal/1991-2020/access/{sid}.csv"
 _MISSING_SENTINEL = -9999.0
 _COL_TAVG = "ANN-TAVG-NORMAL"
-_COL_TMIN = "ANN-TMIN-NORMAL"
-_COL_TMAX = "ANN-TMAX-NORMAL"
 _COL_PRCP = "ANN-PRCP-NORMAL"
-_COLUMNS = (
-    "station_id", "name", "elevation_m",
-    "normal_temp_f", "normal_tmin_f", "normal_tmax_f", "normal_precip_in",
-)
 
 
 def _num(value: Any) -> float | None:
@@ -86,10 +80,7 @@ def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
             feats.append({
                 "type": "Feature",
                 "geometry": {"type": "Point", "coordinates": [st["lon"], st["lat"]]},
-                "properties": {
-                    "sid": st["sid"], "station_id": st["sid"], "name": st["name"],
-                    "elevation_m": st["elev"], "inv_lat": st["lat"], "inv_lon": st["lon"],
-                },
+                "properties": {"sid": st["sid"], "inv_lat": st["lat"], "inv_lon": st["lon"]},
             })
             if len(feats) >= cap:
                 break
@@ -116,8 +107,20 @@ def enrich_plan(spec: SourceSpec, params: dict[str, Any], features: list[dict[st
     return out
 
 
+def _cell(text: Any) -> Any:
+    """One access-CSV cell as published: a number where it is one, text where it is not, ``None`` where it is empty or NCEI's -9999 gap."""
+    stated = str(text).strip()
+    if not stated:
+        return None
+    try:
+        found = float(stated)
+    except ValueError:
+        return stated
+    return None if found <= _MISSING_SENTINEL else found
+
+
 def _parse_station_csv(raw: bytes | None) -> dict[str, Any] | None:
-    """Parse one station's annual access CSV into a normals dict (None if unusable)."""
+    """One station's annual access CSV row, every column under its own name (None if unusable)."""
     if not raw:
         return None
     text = raw.decode("utf-8", errors="replace")
@@ -128,18 +131,12 @@ def _parse_station_csv(raw: bytes | None) -> dict[str, Any] | None:
         row = next(reader)
     except StopIteration:
         return None
-    return {
-        "tavg": _num(row.get(_COL_TAVG)), "tmin": _num(row.get(_COL_TMIN)),
-        "tmax": _num(row.get(_COL_TMAX)), "prcp": _num(row.get(_COL_PRCP)),
-        "name": (row.get("NAME") or "").strip(),
-        "lat": _num(row.get("LATITUDE")), "lon": _num(row.get("LONGITUDE")),
-        "elev": _num(row.get("ELEVATION")),
-    }
+    return {key: _cell(value) for key, value in row.items() if key}
 
 
 @_hooks.register_hook("climate_normals.enrich_merge")
 def enrich_merge(spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]], results: dict[str, Any]) -> list[dict[str, Any]]:
-    """Fold each station's annual normals in; DROP stations with no usable normal; EMPTY if none."""
+    """Fold each station's annual normals in, the row whole; DROP stations with no usable normal; EMPTY if none."""
     sc = spec.error_code_prefix
     out: list[dict[str, Any]] = []
     for feat in features:
@@ -150,26 +147,16 @@ def enrich_merge(spec: SourceSpec, params: dict[str, Any], features: list[dict[s
         norm = _parse_station_csv(body)
         if norm is None:
             continue
-        if norm["tavg"] is None and norm["prcp"] is None:
+        if norm.get(_COL_TAVG) is None and norm.get(_COL_PRCP) is None:
             continue
-        lat = norm["lat"] if norm["lat"] is not None else props.get("inv_lat")
-        lon = norm["lon"] if norm["lon"] is not None else props.get("inv_lon")
+        lat = norm["LATITUDE"] if isinstance(norm.get("LATITUDE"), float) else props.get("inv_lat")
+        lon = norm["LONGITUDE"] if isinstance(norm.get("LONGITUDE"), float) else props.get("inv_lon")
         if lat is None or lon is None:
             continue
         if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
             continue
-        row = {
-            "station_id": props.get("station_id"),
-            "name": norm["name"] or props.get("name"),
-            "elevation_m": norm["elev"] if norm["elev"] is not None else props.get("elevation_m"),
-            "normal_temp_f": norm["tavg"], "normal_tmin_f": norm["tmin"],
-            "normal_tmax_f": norm["tmax"], "normal_precip_in": norm["prcp"],
-        }
-        out.append({
-            "type": "Feature",
-            "geometry": {"type": "Point", "coordinates": [lon, lat]},
-            "properties": {c: row.get(c) for c in _COLUMNS},
-        })
+        out.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                    "properties": norm})
     if not out:
         raise router_empty_error(
             sc,

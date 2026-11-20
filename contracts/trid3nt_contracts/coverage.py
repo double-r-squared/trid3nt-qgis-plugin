@@ -226,11 +226,14 @@ def _in_ring(ring: list[tuple[float, float]], lon: float, lat: float) -> bool:
 #: The names code reads a fetched record by. A source maps each it publishes onto its own field or a cited
 #: number; a member it does not map is one it does not report, and a read of it refuses.
 MEMBERS = ("value", "series", "time", "above", "above_accuracy", "accuracy",
-           "height", "period", "from_direction", "site", "site_name", "quantity", "depth", "datum")
+           "height", "period", "from_direction", "site", "site_name", "quantity", "depth", "datum",
+           "air_temperature", "dew_point", "relative_humidity", "wind_speed", "wind_from",
+           "solar_radiation", "pressure", "cloud_cover", "rain")
 
 MemberName = Literal["value", "series", "time", "above", "above_accuracy", "accuracy",
                      "height", "period", "from_direction", "site", "site_name", "quantity", "depth",
-                     "datum"]
+                     "datum", "air_temperature", "dew_point", "relative_humidity", "wind_speed",
+                     "wind_from", "solar_radiation", "pressure", "cloud_cover", "rain"]
 
 #: Members holding a number (a series holds numbers), so each states the unit it is counted in.
 NUMERIC_MEMBERS = frozenset(MEMBERS) - {"time", "site", "site_name", "quantity", "datum"}

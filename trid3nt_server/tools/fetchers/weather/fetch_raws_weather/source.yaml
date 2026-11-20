@@ -42,22 +42,6 @@ hooks:
   enrich_plan: raws_weather.enrich_plan
   enrich_merge: raws_weather.enrich_merge
 ingest:
-  properties:
-  - station
-  - station_name
-  - state
-  - utc_valid
-  - lon
-  - lat
-  - elevation
-  - tmpf
-  - dwpf
-  - relh
-  - sknt
-  - drct
-  - gust
-  - solar_rad
-  - precip_in
   chained:
     max_detail_fetches: 700
 normalize:
@@ -76,8 +60,17 @@ cache:
 payload_estimate:
   model: per_feature
   features_per_sq_deg: 24.0
-  kb_per_feature: 0.175
+  kb_per_feature: 0.65
   floor_mb: 0.001
+fields:
+  site: {field: sid}
+  site_name: {field: sname}
+  time: {field: utc_valid}
+  air_temperature: {field: tmpf, unit: degF}
+  dew_point: {field: dwpf, unit: degF}
+  relative_humidity: {field: XRIRGZZ, unit: "%"}
+  wind_speed: {field: sknt, unit: kt}
+  wind_from: {field: drct, unit: degree}
 coverage:
 - data_class: weather forcing
   kind: measured
@@ -117,8 +110,8 @@ docstring: |-
   from the Iowa State University Iowa Environmental Mesonet (IEM) DCP network
   archive. RAWS are sited specifically at fire-prone ridges, canyons, and
   forest margins and report the fire-weather parameters most relevant to
-  fire behavior: temperature, relative humidity, wind speed/direction, solar
-  radiation, and precipitation. Returns a FlatGeobuf point layer with one
+  fire behavior: temperature, relative humidity, wind speed/direction, fuel
+  moisture and precipitation accumulation. Returns a FlatGeobuf point layer with one
   feature per observation per station. Tier-1 free, no API key.
 
   **When to use:**
@@ -175,16 +168,23 @@ docstring: |-
 
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
       ``s3://trid3nt-cache/cache/dynamic-1h/raws_weather/<key>.fgb``
-      - ``layer_type="vector"``, ``role="context"``, ``units="mixed"``
-        (temperature in  degF, wind in knots, RH in %, solar in W/m2,
-        precip in inches -- standard RAWS/NFDRS units).
+      - ``layer_type="vector"``, ``role="context"``, ``units="mixed"``.
       - Geometry: Point at each RAWS station's coordinates, EPSG:4326.
-      - Properties per observation: ``station`` (NWSLI/IEM ID),
-        ``station_name``, ``state``, ``utc_valid`` (ISO-8601),
-        ``lon``, ``lat``, ``elevation`` (m), ``tmpf`` ( degF), ``dwpf`` ( degF),
-        ``relh`` (RH %), ``sknt`` (wind speed kt), ``drct`` (wind dir  deg),
-        ``gust`` (wind resultant kt), ``solar_rad`` (W/m2),
-        ``precip_in`` (in). Missing values are ``null``.
+      - Properties per observation: every field the IEM network record of
+        the station states (``sid``, ``sname``, ``state``, ``network``,
+        ``elevation`` (m), ``archive_begin``, ``wfo``, ``county``, ...,
+        nested ones as dotted names) and every field of the station-day
+        observation row under IEM's own names: ``utc_valid`` and
+        ``local_valid``, ``tmpf`` (degF), ``dwpf`` (degF), ``sknt`` (wind
+        speed, kt), ``drct`` (wind direction, deg), and the station's SHEF
+        elements as served: ``TAIRGZZ`` air temperature, ``XRIRGZZ``
+        relative humidity (%), ``USIRGZZ`` / ``UDIRGZZ`` wind speed (mph) and
+        direction, ``UPHRGZZ`` / ``URHRGZZ`` peak wind speed and its
+        direction, ``VBIRGZZ`` battery volts, ``PCIRGZZ`` precipitation
+        accumulator (in), ``MMIRGZZ`` / ``MTIRGZZ`` fuel moisture and fuel
+        temperature. Which elements a station reports varies; a missing
+        value is ``null``. A reading with a relative humidity over 100 or a
+        dew point above the air temperature is dropped as a sensor fault.
 
   Cache: ``dynamic-1h`` -- identical ``(bbox-4dp, search_radius_km, start_date,
   end_date)`` calls within the same UTC hour reuse the cached FlatGeobuf.

@@ -75,9 +75,9 @@ def test_climate_normals_enrich_merge_and_drop():
     feats = _hook("climate_normals.parse_response")(spec, params, [inv])
     csv = b"STATION,NAME,LATITUDE,LONGITUDE,ELEVATION,ANN-TAVG-NORMAL,ANN-PRCP-NORMAL\nUSW00093230,SF,37.62,-122.36,2.0,58.3,23.6\n"
     merged = _hook("climate_normals.enrich_merge")(spec, params, feats, {"USW00093230": _Res(csv)})
-    assert merged[0]["properties"]["normal_temp_f"] == 58.3
-    assert merged[0]["properties"]["normal_precip_in"] == 23.6
-    assert set(merged[0]["properties"]) == {"station_id", "name", "elevation_m", "normal_temp_f", "normal_tmin_f", "normal_tmax_f", "normal_precip_in"}
+    assert merged[0]["properties"]["ANN-TAVG-NORMAL"] == 58.3
+    assert merged[0]["properties"]["ANN-PRCP-NORMAL"] == 23.6
+    assert set(merged[0]["properties"]) == {"STATION", "NAME", "LATITUDE", "LONGITUDE", "ELEVATION", "ANN-TAVG-NORMAL", "ANN-PRCP-NORMAL"}
     # a station whose CSV carries no annual normal is DROPPED -> all-drop is EMPTY.
     drop = _err(_hook("climate_normals.enrich_merge"), spec, params, feats, {"USW00093230": _Res(b"STATION,NAME\nX,Y\n")})
     assert drop.error_code == "CLIMATE_NORMALS_EMPTY"

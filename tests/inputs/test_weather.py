@@ -10,12 +10,23 @@ from __future__ import annotations
 
 import pytest
 
+from trid3nt_contracts.coverage import Member
 from trid3nt_server.inputs.observation import ObservationError
 from trid3nt_server.inputs.slots import WEATHER, ingest_slot
 from trid3nt_server.inputs.weather import UNITS, weather
 
 _HOUR = 3600.0
 _SEED = {"lon": -124.1, "lat": 40.48}
+
+#: The row names the hand-made observations below use, mapped as a source would state them.
+_FIELDS = {
+    "site": Member(field="station"), "time": Member(field="utc_valid"),
+    "air_temperature": Member(field="tmpf", unit="degF"),
+    "dew_point": Member(field="dwpf", unit="degF"),
+    "relative_humidity": Member(field="relh", unit="%"),
+    "wind_speed": Member(field="sknt", unit="kt"),
+    "wind_from": Member(field="drct", unit="degree"),
+    "solar_radiation": Member(field="solar_rad", unit="W/m2")}
 
 
 def _raws(hour: int, station: str = "SCOC1", **overrides):
@@ -38,7 +49,7 @@ def _both(near_rows, far_rows):
 
 
 def test_every_quantity_the_network_reports_is_kept_in_the_unit_its_name_states():
-    found = weather(_fc([_raws(hour) for hour in range(24)]), near=_SEED)
+    found = weather(_fc([_raws(hour) for hour in range(24)]), fields=_FIELDS, near=_SEED)
     assert set(found.columns) == {
         "air_temp_c", "wind_speed_mps", "wind_from_deg", "solar_radiation_wm2",
         "vapour_pressure_pa", "relative_humidity_pct", "dew_point_c"}
@@ -52,7 +63,7 @@ def test_every_quantity_the_network_reports_is_kept_in_the_unit_its_name_states(
 
 
 def test_every_series_reads_zero_at_the_moment_the_run_opens_at():
-    found = weather(_fc([_raws(hour) for hour in range(11, 20)]), near=_SEED,
+    found = weather(_fc([_raws(hour) for hour in range(11, 20)]), fields=_FIELDS, near=_SEED,
                     at="2026-09-01T12:00:00Z", window_s=6.0 * _HOUR)
     assert found.opens.isoformat() == "2026-09-01T12:00:00+00:00"
     assert found.columns["air_temp_c"].times_s == tuple(
@@ -63,7 +74,7 @@ def test_the_nearest_station_bracketing_the_window_is_the_one_taken():
     """A nearer station whose record stops inside the run speaks for none of it."""
     found = weather(_both([_raws(hour, "NEAR") for hour in range(0, 6)],
                           [_raws(hour, "FAR") for hour in range(0, 24)]),
-                    near=_SEED, window_s=20.0 * _HOUR)
+                    fields=_FIELDS, near=_SEED, window_s=20.0 * _HOUR)
     assert found.site_id == "FAR"
 
 
@@ -73,7 +84,7 @@ def test_a_bracketing_station_short_of_one_quantity_is_still_the_station():
     near = [_raws(hour, "NEAR", solar_rad=None if hour >= 6 else 400.0)
             for hour in range(0, 24)]
     found = weather(_both(near, [_raws(hour, "FAR") for hour in range(0, 24)]),
-                    near=_SEED, window_s=20.0 * _HOUR)
+                    fields=_FIELDS, near=_SEED, window_s=20.0 * _HOUR)
     assert found.site_id == "NEAR"
     assert "solar_radiation_wm2" not in found.columns
     assert "after the close" in found.short["solar_radiation_wm2"]
@@ -82,20 +93,20 @@ def test_a_bracketing_station_short_of_one_quantity_is_still_the_station():
 
 def test_a_reading_one_instrument_missed_leaves_the_other_series_whole():
     rows = [_raws(hour, tmpf=None if hour == 3 else 68.0) for hour in range(24)]
-    found = weather(_fc(rows), near=_SEED)
+    found = weather(_fc(rows), fields=_FIELDS, near=_SEED)
     assert len(found.columns["air_temp_c"]) == 23
     assert len(found.columns["wind_speed_mps"]) == 24
 
 
 def test_a_record_opening_after_the_run_does_refuses_naming_the_opening():
     with pytest.raises(ObservationError, match="no observation at or before the opening"):
-        weather(_fc([_raws(hour) for hour in range(13, 20)]), near=_SEED,
+        weather(_fc([_raws(hour) for hour in range(13, 20)]), fields=_FIELDS, near=_SEED,
                 at="2026-09-01T12:00:00Z", window_s=6.0 * _HOUR)
 
 
 def test_a_record_shorter_than_the_run_refuses_rather_than_extrapolating():
     with pytest.raises(ObservationError, match="the record runs") as refused:
-        weather(_fc([_raws(hour) for hour in range(0, 12)]), near=_SEED,
+        weather(_fc([_raws(hour) for hour in range(0, 12)]), fields=_FIELDS, near=_SEED,
                 window_s=20.0 * _HOUR)
     assert refused.value.error_code == "WEATHER_INVALID"
 
@@ -103,20 +114,20 @@ def test_a_record_shorter_than_the_run_refuses_rather_than_extrapolating():
 def test_a_record_ending_on_the_close_refuses_naming_the_close():
     """A solve can step just past its close, so the closing reading is strictly after it."""
     with pytest.raises(ObservationError, match="no observation after the close"):
-        weather(_fc([_raws(hour) for hour in range(12, 19)]), near=_SEED,
+        weather(_fc([_raws(hour) for hour in range(12, 19)]), fields=_FIELDS, near=_SEED,
                 at="2026-09-01T12:00:00Z", window_s=6.0 * _HOUR)
 
 
 def test_a_record_holding_no_station_refuses():
     with pytest.raises(ObservationError, match="no station observation"):
-        weather(_fc([]), near=_SEED)
+        weather(_fc([]), fields=_FIELDS, near=_SEED)
 
 
 def test_the_slot_reads_the_class_the_station_networks_publish():
     assert WEATHER.classes == frozenset({"weather forcing"})
     assert WEATHER.ingest is weather
     found = ingest_slot(WEATHER, _fc([_raws(hour) for hour in range(24)]),
-                        label="weather", near=_SEED, window_s=20.0 * _HOUR)
+                        label="weather", fields=_FIELDS, near=_SEED, window_s=20.0 * _HOUR)
     assert found.site_id == "SCOC1"
 
 
@@ -127,7 +138,7 @@ def test_a_row_naming_no_point_ranks_from_the_middle_of_the_run_s_domain():
                 [_raws(hour, "FAR") for hour in range(24)])
     token = bind_domain(Domain(bbox=(-124.55, 40.75, -124.45, 40.85)))
     try:
-        assert weather(doc).site_id == "FAR"
+        assert weather(doc, fields=_FIELDS).site_id == "FAR"
     finally:
         reset_domain(token)
 

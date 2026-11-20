@@ -48,19 +48,8 @@ hooks:
   resolve_parse: storm_events_db.resolve_parse
   build_request: storm_events_db.build_request
   parse_response: storm_events_db.parse_response
-ingest:
-  properties:
-  - EVENT_ID
-  - EVENT_TYPE
-  - STATE
-  - BEGIN_DATE_TIME
-  - END_DATE_TIME
-  - INJURIES_DIRECT
-  - DEATHS_DIRECT
-  - DEATHS_INDIRECT
-  - DAMAGE_PROPERTY
-  - MAGNITUDE
-  - EPISODE_NARRATIVE
+fields:
+  site: {field: EVENT_ID}
 normalize:
   crs: EPSG:4326
 output:
@@ -76,7 +65,7 @@ cache:
 payload_estimate:
   model: per_feature
   features_per_sq_deg: 49.0
-  kb_per_feature: 0.6
+  kb_per_feature: 1.5
   floor_mb: 0.001
 caveats:
 - NOAA Storm Events DB annual bulk gzip CSV from NCEI, resolved via the directory-index newest-processed-date
@@ -134,9 +123,16 @@ docstring: |-
 
   **Returns:**
   ``LayerURI(layer_type="vector", role="context", units=None)`` pointing at a
-  FlatGeobuf with fields: ``EVENT_ID``, ``EVENT_TYPE``, ``STATE``,
-  ``BEGIN_DATE_TIME``, ``END_DATE_TIME``, ``INJURIES_DIRECT``,
-  ``DEATHS_DIRECT``, ``DEATHS_INDIRECT``, ``DAMAGE_PROPERTY``, ``MAGNITUDE``,
-  ``EPISODE_NARRATIVE``. One point per event at ``BEGIN_LAT``/``BEGIN_LON``,
-  EPSG:4326.
+  FlatGeobuf with every column of NCEI's details file under its own name:
+  ``EVENT_ID``, ``EPISODE_ID``, ``EVENT_TYPE``, ``STATE``, ``STATE_FIPS``,
+  ``CZ_TYPE``, ``CZ_NAME``, ``WFO``, ``BEGIN_DATE_TIME``, ``END_DATE_TIME``,
+  ``CZ_TIMEZONE`` (the zone the two times are written in), ``INJURIES_DIRECT``,
+  ``INJURIES_INDIRECT``, ``DEATHS_DIRECT``, ``DEATHS_INDIRECT``,
+  ``DAMAGE_PROPERTY``, ``DAMAGE_CROPS`` (text such as ``"10.00K"``),
+  ``SOURCE``, ``MAGNITUDE``, ``MAGNITUDE_TYPE``, ``FLOOD_CAUSE``, ``CATEGORY``,
+  the ``TOR_*`` tornado columns, ``BEGIN_*`` and ``END_*`` range, azimuth,
+  location, latitude and longitude, ``EPISODE_NARRATIVE``, ``EVENT_NARRATIVE``
+  and ``DATA_SOURCE``. All but the four coordinates are the text NCEI
+  publishes; an empty cell is null. One point per event at
+  ``BEGIN_LAT``/``BEGIN_LON``, EPSG:4326.
 

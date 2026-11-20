@@ -13,7 +13,9 @@ import math
 
 import pytest
 
+from trid3nt_contracts.coverage import Member
 from trid3nt_server.inputs.weather import weather
+from trid3nt_server.tools.fetchers._router.registration import get_spec
 from trid3nt_server.workflows.telemac.authoring.atmosphere import (
     ATMOSPHERE_FILENAME,
     TELEMAC2D_COLUMNS as _T2D_COLUMNS,
@@ -31,6 +33,16 @@ _HOUR = 3600.0
 _HOURS = [0.0, _HOUR, 2.0 * _HOUR]
 
 _SEED = {"lon": -124.1, "lat": 40.48}
+
+#: The row names the hand-made fire-network observations below use, mapped as a source would state them.
+_FIRE = {
+    "site": Member(field="station"), "time": Member(field="utc_valid"),
+    "air_temperature": Member(field="tmpf", unit="degF"),
+    "dew_point": Member(field="dwpf", unit="degF"),
+    "relative_humidity": Member(field="relh", unit="%"),
+    "wind_speed": Member(field="sknt", unit="kt"),
+    "wind_from": Member(field="drct", unit="degree"),
+    "solar_radiation": Member(field="solar_rad", unit="W/m2")}
 
 
 def _weather(**overrides):
@@ -155,10 +167,10 @@ def _rows(hours=range(0, 24), **overrides):
 
 
 def _observed(rows, *, duration_s=20.0 * _HOUR, event_time=None,
-              columns=_T2D_COLUMNS, **overrides):
+              columns=_T2D_COLUMNS, fields=None, **overrides):
     """The table written from ``rows`` as the weather slot ingests them."""
     record = weather({"type": "FeatureCollection", "features": rows},
-                     near=_SEED, at=event_time, window_s=duration_s)
+                     fields=fields or _FIRE, near=_SEED, at=event_time, window_s=duration_s)
     return atmospheric_data_file(Atmosphere(observed=record, **overrides),
                                  columns)
 
@@ -275,7 +287,7 @@ def test_the_airport_record_carries_every_column_an_ice_run_reads():
     """The dew point is measured rather than inverted out of a humidity, the sky
     cover is an observer's code, and neither is a column the fire network has."""
     text = _observed([_feature(_airport(hour)) for hour in range(0, 24)],
-                     columns=_ice_columns())
+                     columns=_ice_columns(), fields=get_spec("fetch_asos_metar").fields)
     assert text.splitlines()[1].split() == ["T", "TAIR", "TDEW", "WINDS",
                                             "CLDC", "RAINI"]
     assert _column(text, "TAIR")[0] == pytest.approx(-6.111, abs=1e-3)
@@ -288,7 +300,8 @@ def test_a_station_short_of_a_column_the_run_does_not_read_still_drives_it():
     """A column no reader of this run takes is not asked of the record, so a
     station reporting no pressure still drives a module that reads none."""
     text = _observed([_feature(_airport(hour, mslp=None))
-                      for hour in range(0, 24)], columns=_ice_columns())
+                      for hour in range(0, 24)], columns=_ice_columns(),
+                     fields=get_spec("fetch_asos_metar").fields)
     assert len(text.splitlines()) == 3 + 22
 
 
