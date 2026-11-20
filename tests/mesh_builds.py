@@ -1,5 +1,5 @@
-"""The builds the mesh-child tests hand ``_in_child``: a spawned child imports its build by name, so a
-build lives at module level in a module on the path, never inside a test."""
+"""The builds the mesh-child tests hand ``_in_child``: the child imports its build by name, so a build
+lives at module level in a module on the path, never inside a test."""
 
 from __future__ import annotations
 
@@ -52,6 +52,19 @@ def reports_context(key_name):
     from trid3nt_server.tools.mesh.inputs import _rasters_dir
 
     raise MeshToolError("SEEN", f"{_rasters_dir()} {stored_value(key_name)}")
+
+
+def reports_parent(_recipe):
+    raise MeshToolError("SEEN", f"parent {os.getppid()}")
+
+
+def reports_late(_recipe):
+    raise MeshToolError("SEEN", f"parent {os.getppid()} {os.environ['TRID3NT_TEST_LATE']} "
+                                f"{len(os.sched_getaffinity(0))} {os.environ['OMP_NUM_THREADS']}")
+
+
+def reports_cpus(_recipe):
+    raise MeshToolError("SEEN", f"parent {os.getppid()} cpus {sorted(os.sched_getaffinity(0))}")
 
 
 def a_second_per_node(nodes, edge_m):

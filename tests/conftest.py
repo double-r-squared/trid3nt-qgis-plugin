@@ -23,7 +23,7 @@ from trid3nt_server import tools as agent_tools
 def user_settings(monkeypatch, tmp_path_factory):
     """The user settings file of every test is its own: ``user_settings(NAME=value)`` writes it, so a run on this box never reads the developer's.
 
-    The config home moves by its environment variable, which a spawned mesh child inherits; a patched reader would not cross."""
+    The config home moves by its environment variable, which reaches the mesh child; a patched reader would not cross."""
     import json
 
     home = tmp_path_factory.mktemp("trid3nt_home")

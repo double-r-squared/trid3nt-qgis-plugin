@@ -344,13 +344,19 @@ def _build(mesher: Mesher, recipe: MeshRecipe) -> Mesh:
         return _in_child(mesher.build, recipe)
 
 
-def _in_child(fn: Any, recipe: MeshRecipe) -> Mesh:
-    """Run ``fn(recipe)`` in a spawned child and return its mesh, or raise what it raised.
+#: What the forkserver imports once at its start, so a build's child starts without importing the registry.
+_PRELOAD = ["trid3nt_server.tools"]
 
-    Spawned, never forked: a fork of the threaded daemon copies every lock another thread holds at that
-    instant (a log file's buffer lock among them) and the child waits on it forever. The child leads its
-    own process group, so ending it ends every solver or mesher program it started."""
-    context = multiprocessing.get_context("spawn")
+
+def _in_child(fn: Any, recipe: MeshRecipe) -> Mesh:
+    """Run ``fn(recipe)`` in a child forked from the forkserver and return its mesh, or raise what it raised.
+
+    Never a fork of the threaded daemon, which copies every lock another thread holds at that instant (a log
+    file's buffer lock among them): the forkserver is a fresh single-threaded interpreter, started again by
+    the next build when it has died. The child leads its own process group, so ending it ends every solver
+    or mesher program it started."""
+    context = multiprocessing.get_context("forkserver")
+    context.set_forkserver_preload(_PRELOAD)
     receive, send = context.Pipe(duplex=False)
     child = context.Process(target=_child, args=(send, fn, recipe, _context()), daemon=True)
     child.start()
@@ -398,8 +404,9 @@ def _end(child: Any) -> None:
 
 def _context() -> dict[str, Any]:
     """What a build reads off the thread that runs it: every bound context variable whose value can cross,
-    the run's stated settings, and the bound session's keys. A live handle (an emitter, a stop flag) stays;
-    a mesh input that cannot cross refuses, since the build would read it unset."""
+    the run's stated settings, the bound session's keys, and the environment and cores as they are now -
+    the forkserver holds its own from its start. A live handle (an emitter, a stop flag) stays; a mesh
+    input that cannot cross refuses, since the build would read it unset."""
     from trid3nt_server.model.credentials import resolver
     from trid3nt_server.settings import run_stated
 
@@ -422,7 +429,9 @@ def _context() -> dict[str, Any]:
                         "read it unset; state it as a module-level function or a plain value.")
     session = resolver.bound_session()
     keys = {name: resolver.stored_value(name) for name in resolver.session_provider_ids(session)}
-    return {"bound": bound, "settings": run_stated(), "session": session, "keys": keys}
+    return {"bound": bound, "settings": run_stated(), "session": session, "keys": keys,
+            "environ": dict(os.environ),
+            "cpus": sorted(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None}
 
 
 def _enter(carried: Mapping[str, Any]) -> None:
@@ -431,6 +440,10 @@ def _enter(carried: Mapping[str, Any]) -> None:
     from trid3nt_server.model.credentials import resolver
     from trid3nt_server.settings import bind_run
 
+    os.environ.clear()
+    os.environ.update(carried["environ"])
+    if carried["cpus"] is not None:
+        os.sched_setaffinity(0, carried["cpus"])
     for name, attr, value in carried["bound"]:
         getattr(importlib.import_module(name), attr).set(value)
     bind_run(carried["settings"])

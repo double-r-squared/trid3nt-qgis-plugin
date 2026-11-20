@@ -1,12 +1,16 @@
-"""A mesh builds in a child process: a cancelled turn ends it, a finished build returns its mesh, a lock
-another thread holds is not the child's, and the run's context reaches it."""
+"""A mesh builds in a child forked from the preloaded forkserver: a cancelled turn ends it, a finished build
+returns its mesh, a lock another thread holds is not the child's, the run's context - its environment and
+cores as they are at the build, not at the server's start - reaches it, and a dead server starts again."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import signal
 import threading
 import time
+from multiprocessing import forkserver
 
 import mesh_builds
 import pytest
@@ -98,3 +102,59 @@ def test_a_mesh_input_that_cannot_reach_the_child_refuses_by_name():
     with solve_estimated_by(lambda nodes, edge: 1.0), pytest.raises(MeshToolError) as refused:
         _in_child(mesh_builds.finished, None)
     assert refused.value.error_code == "MESH_BUILD_INPUT_UNCROSSABLE" and "_SOLVE" in str(refused.value)
+
+
+def _started() -> int:
+    _in_child(mesh_builds.finished, None)
+    return forkserver._forkserver._forkserver_pid
+
+
+def _seen(build) -> str:
+    with pytest.raises(MeshToolError) as seen:
+        _in_child(build, None)
+    return str(seen.value)
+
+
+def test_a_build_forks_from_the_server_that_preloaded_the_registry():
+    server = _started()
+    assert "trid3nt_server.tools" in forkserver._forkserver._preload_modules
+    assert _seen(mesh_builds.reports_parent).endswith(f"parent {server}")
+
+
+def test_the_environment_stated_after_the_server_started_reaches_the_child(monkeypatch, tmp_path):
+    server = _started()
+    (tmp_path / "settings.json").write_text(json.dumps({"LOCAL_CORES": 1}))
+    monkeypatch.setenv("TRID3NT_HOME", str(tmp_path))
+    monkeypatch.setenv("TRID3NT_TEST_LATE", "late")
+    assert _seen(mesh_builds.reports_late).endswith(f"parent {server} late 1 1")
+
+
+def test_the_cores_the_build_thread_holds_after_the_server_started_bound_the_child():
+    server = _started()
+    mine = os.sched_getaffinity(0)
+    one = {min(mine)}
+    os.sched_setaffinity(0, one)
+    try:
+        seen = _seen(mesh_builds.reports_cpus)
+    finally:
+        os.sched_setaffinity(0, mine)
+    assert seen.endswith(f"parent {server} cpus {sorted(one)}")
+
+
+def _zombie(pid: int, within_s: float = 5.0) -> bool:
+    deadline = time.monotonic() + within_s
+    while time.monotonic() < deadline:
+        with open(f"/proc/{pid}/stat") as stat:
+            if stat.read().rsplit(")", 1)[1].split()[0] == "Z":
+                return True
+        time.sleep(0.05)
+    return False
+
+
+def test_a_dead_server_is_started_again_by_the_next_build():
+    old = _started()
+    os.kill(old, signal.SIGKILL)
+    assert _zombie(old), "the killed forkserver did not end"
+    seen = _seen(mesh_builds.reports_parent)
+    new = forkserver._forkserver._forkserver_pid
+    assert new != old and seen.endswith(f"parent {new}")

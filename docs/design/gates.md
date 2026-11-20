@@ -72,10 +72,14 @@ size word, the recipe ops (read-only - `mesh_op` writes one), the revert and a
 hand-edited layer to adopt. Proceed accepts the mesh, a revision rebuilds and
 re-presents, cancel refuses the run.
 
-A mesh builds in a spawned child process (`session.py`), never a fork of the
-threaded daemon, which would copy any lock another thread held and could wait on
-it forever; the child is handed the run's context - its bound context variables
-that pickle, stated settings and session keys - and a mesh input that cannot
+A mesh builds in a child forked from multiprocessing's forkserver (`session.py`),
+never a fork of the threaded daemon, which would copy any lock another thread held
+and could wait on it forever. The forkserver is a fresh single-threaded interpreter
+that imports the tool registry once, so a build starts without re-importing it, and
+the next build starts it again when it has died. It keeps the environment and cores
+of its own start, so each child is handed the run's context as it is at the build -
+its bound context variables that pickle, stated settings, session keys, environment
+and CPU affinity, which `LOCAL_CORES` then bounds - and a mesh input that cannot
 cross refuses `MESH_BUILD_INPUT_UNCROSSABLE`. A cancelled turn kills the child's
 process group and keeps nothing. In AUTO and user-gated
 alike, a build whose estimated node count (the domain's area over one
