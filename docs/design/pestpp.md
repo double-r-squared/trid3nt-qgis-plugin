@@ -98,12 +98,14 @@ read from; unstated bounds refuse), how many of them to tune (`tune`), the momen
 1. The run's staged deck is fetched from where it was staged (`authoring/modflow.py`). Each parameter is a
    multiplier written into its array's own control record through a PEST template - into the FACTOR of an
    INTERNAL record (PEST's scale the factor the run stated), or the CONSTANT itself (its scale the run's
-   constant) - so the array's values are never rewritten and the trial runs `mf6` alone. The multiplier starts
+   constant) - so the array's values are never rewritten and the trial writes nothing else before `mf6`. The multiplier starts
    at 1 and is log-transformed. An array read from its own file, or stated per layer with different factors,
    refuses. A column of a list package's PACKAGEDATA (SFR's rlen, rwid, rgrd, rtp, rbth, rhk, man) is tuned the
    same way, the template writing the multiplier into that column of every row and PEST's scale the one value the
    rows state (rows stating different values refuse). Bounds in the run's own unit are divided by that scale, and
    refuse over an INTERNAL array (whose FACTOR is not its values) and where the run's own value lies outside them.
+   An array stated with `pilot_points` is laid by pilot points instead (Pilot points, below), and a trial runs
+   `workers/pestpp/modflow_trial.py`, which lays each such array and then execs `mf6`.
 2. Each well's reading is a head target at its cell (the point contract: a site no cell holds is left out and
    said): a depth below the land surface is the cell's top less the depth, an elevation counts only on the run's
    own frame, and a site is held once, at the first of its readings that is a head. Each well weighs one over its
@@ -146,12 +148,46 @@ Over a TELEMAC run (`authoring/telemac.py`), a TELEMAC-2D deck (another module r
    TELEMAC solver and published as TELEMAC publishes a run. A finished run whose record says it ended UNSTEADY is not
    calibrated (`PESTPP_RUN_UNSTEADY`).
 
+## Pilot points
+
+A MODFLOW array of a one-layer run may be laid by pilot points rather than one multiplier: `{"NPF_K": {"lower": 0.1,
+"upper": 10, "source": "...", "pilot_points": {}}}`. Each point is a log-transformed multiplier starting at 1 inside the
+parameter's factor bounds (bounds in the run's own unit refuse: the run's values vary by cell); a cell's value is the
+run's own times 10 ** (its ordinary kriging factors over the log10 of the points), as pyEMU's fac2real lays a
+log-transformed field. The array moves from its INTERNAL record into a file of its own (`<package file>.<array>.dat`,
+OPEN/CLOSE, FACTOR 1), which the trial writes before mf6 runs and the calibrated deck carries; a multiplier over another
+array of the same file is templated over the file the points leave. An array read from its own file, a list column,
+or a run of more than one layer refuses; so does a TELEMAC parameter (its friction is one coefficient of the steering
+file; a field of it would be a per-node friction in the geometry file, which no trial writes).
+
+The numerics are pyEMU 1.7.0's (`helpers/geostat.py`), matched to what pyEMU itself computes over the Des Moines grid
+(a recorded fixture): the points placed as `get_zoned_ppoints_for_vertexgrid` places them (an even grid over the cell
+centres' extent, ceil(extent / spacing) points a side, kept where the cells buffered by one spacing cover them), the
+factors as `OrdinaryKrige.calc_factors` (the 20 nearest points, one within 1e-7 taken alone, negative factors dropped
+and the rest renormalised), the variogram exponential (pyEMU's `ExpVario`, contribution 1, nugget 0: exp(-h / a)).
+Unstated, the spacing is pyEMU PstFrom's default of every 10th cell, counted in the run's mesh size
+(`server_facts.mesh_size_m`; a run stating none refuses `PESTPP_PILOT_POINTS_UNSTATED`), and the range a is that spacing
+(PstFrom's a = pp_space x the cell size). `spacing` and `variogram` `{"a": A, "source": "..."}` are stated in metres of the
+run's grid; another variogram type refuses `PESTPP_VARIOGRAM_UNKNOWN`, a member not read `PESTPP_PILOT_POINTS_UNREAD`.
+
+The prior: every parameter's mean is its starting value and its standard deviation the one its bounds imply, as PEST++
+reads them (par_sigma_range standard deviations between the bounds, 4 unstated; of log10 where log-transformed). Where a
+study holds pilot points it states that prior to PEST++ as `parcov` (`study_prior.unc`: a STANDARD_DEVIATION block for
+every other parameter and one COVARIANCE_MATRIX, `study_prior.cov`, for the points), each group's points correlated by
+their variogram and scaled to that variance as pyEMU's `geostatistical_draws` scales it (sqrt(v_i v_j) off the
+diagonal); pestpp-ies draws its initial ensemble from it, and pestpp-glm reads it for its FOSM. A run stating its own
+parcov beside pilot points refuses `PESTPP_OPTION_CONFLICT`. The review card states each parameter's prior (mean, sd,
+its source) and each field (spacing, range and their sources); the study record states, per parameter group, the prior
+(mean, bounds, transform, sd and its source, the variogram, the points' count and spacing with their sources) and, for
+an ensemble study, the mean and spread across the prior ensemble PEST++ drew and the last one, and each point's site.
+
 ## Weights
 
 `weights.py`. Each target's sigma is the accuracy its record cites (the observation ingestion carries it as
 `Observation.accuracy`, read off the source's `accuracy` member with its cite, or the refusal code saying why none
 is), moved onto the run's unit; where the value is lifted onto a gauge zero (the record maps `above`), the zero's
-accuracy (`above_accuracy`, NWIS `alt_acy_va`) joins it in quadrature. The weight written is one over sigma; no
+accuracy (`above_accuracy`, NWIS `alt_acy_va`) joins it in quadrature - except on a TELEMAC study, where a zero that
+cites its accuracy is a parameter of its own (Datums, below) and leaves sigma, so it is counted once. The weight written is one over sigma; no
 `standard_deviation` column is written, so pestpp-ies keeps its own no-noise default unless the run states
 `ies_no_noise`. Cited targets are in the piece's group (`heads`, `levels`). A target whose reading or zero cites
 none still runs, in group `not_cited`, with the warning `ACCURACY_NOT_CITED`: its sigma starts at the widest its
@@ -176,7 +212,25 @@ parameter's bounds, source and calibrated value, phi, the method (`tool`) and th
 each iteration (glm), whether it was balanced, the widening (phi before and after, each group's count, phi and
 factor), and each observation's target, group, sigma, weight, basis, parts (member, sigma, cite) and widened sigma.
 
+## Datums and supplied inputs
+
+An uncertain input is a parameter whose prior sd is its stated accuracy, never a widened sigma. On a TELEMAC study each
+gauge target whose zero cites its accuracy holds a datum parameter (`datum_<k>`, its own group, transform none): the
+trial (`telemac_trial.py`) solves through the launcher, then writes each point's free surface less its datum
+(`study_levels.txt`, off `study_datums.dat`, which PEST writes), and the instruction reads that. The datum's prior is
+mean 0, sd the zero's cited accuracy, stated to PEST++ in parcov's STANDARD_DEVIATION block; its bounds are 2 sd either
+side (PEST++'s own par_sigma_range of 4, so the bounds imply the same sd), held by PEST 10 bound-widths above zero with
+the offset taking that back (a zero-valued parameter cannot be factor-limited). A zero citing no accuracy stays in
+sigma (its floor or unit start) and is no parameter. The card states each datum's sd and cite; the record each
+observation's datum (sd, cite) and each datum's calibrated `written` value. The calibrated run is solved with the tuned
+friction only: a datum moves where the gauge stands, not the river.
+
+The run's supplied inputs - its bed, its boundary levels (a derived outflow level, or a gauge's stage), its stated
+values - carry no accuracy on its record, so none is a parameter; the study says so on every run.
+
 ## What is not built yet
 
-Multipliers on stress-period lists (recharge or drain rows) and on per-row values of a list column; a run of several layers or time steps; progress on the
+Multipliers on stress-period lists (recharge or drain rows) and on per-row values of a list column; zones; pilot points on
+a TELEMAC friction field; a measured outflow level or a bed survey offset as a parameter (their accuracy is not on the
+run's record); a run of several layers or time steps; progress on the
 Sim card (PEST++'s run-manager lines are not parsed); a diagnostics parser.

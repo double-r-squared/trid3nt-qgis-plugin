@@ -18,8 +18,8 @@ from typing import Any, Mapping, Sequence
 from ..authoring.control import Observed, Parameter
 from ..errors import PestppError
 
-__all__ = ["Deck", "LEVELS", "OBSERVED", "OBS_OUTPUT", "OWN", "PLACE", "ROW", "SITE", "TRIAL", "TUNABLE",
-           "calibrated", "command", "deck", "interface", "multiplier", "observe_levels", "outflow_levels",
+__all__ = ["DATUMS", "DATUM_SHIFT", "Deck", "HELD", "LEVELS", "OBSERVED", "OBS_OUTPUT", "OWN", "PLACE", "ROW", "SITE", "TRIAL", "TUNABLE",
+           "calibrated", "command", "datums", "deck", "fields", "interface", "multiplier", "observe_levels", "outflow_levels",
            "published", "targets"]
 
 #: The study's row the targets are read off: the gauges, each a water level on the run's own frame.
@@ -41,6 +41,12 @@ _HEADING = "FREE SURFACE"
 
 #: Every field a template writes a multiplier into is this wide, delimiters included.
 _FIELD = 24
+
+#: Each gauge's datum as PEST writes it, and the free surface less it that the trial writes for the instruction.
+DATUMS, HELD = "study_datums.dat", "study_levels.txt"
+#: A datum's bounds, in its prior sd: PEST++'s own par_sigma_range (4) over 2, so the bounds imply the cited sd. PEST
+#: holds it at DATUM_SHIFT bound-widths above zero, its offset taking that back, so a datum never crosses PEST's zero.
+_DATUM_SDS, DATUM_SHIFT = 2.0, 10.0
 
 #: Keywords the study writes into the trial's steering file, which the run's own must not already state.
 _OWN_KEYWORDS = ("LIST OF POINTS", "NAMES OF POINTS", "VARIABLES TO BE PRINTED", "FORMATTED RESULTS FILE")
@@ -112,6 +118,15 @@ def deck(directory: Path, finished: Any) -> Deck:
     return Deck(steering=steering, stated=stated, module=module, result=str(results[0]),
                 utm_epsg=int(case["server_facts"]["utm_epsg"]),
                 reach_length_m=case["server_facts"].get("reach_length_m"))
+
+
+def fields(spatial: Mapping[str, Any], the_deck: Deck) -> dict[str, dict[str, Any]]:
+    """No TELEMAC parameter is laid by pilot points: the run states one FRICTION COEFFICIENT, and a field of it would be
+    a per-node friction in the geometry file the trial does not write. Any stated refuses naming it."""
+    if spatial:
+        raise PestppError(f"{', '.join(spatial)} is stated with pilot points, and a TELEMAC-2D study tunes the one "
+                          "FRICTION COEFFICIENT its steering file states", error_code="PESTPP_PARAMETER_UNPLACED")
+    return {}
 
 
 def _templated(text: str, identifier: str, field: str) -> tuple[str, float]:
@@ -193,8 +208,8 @@ def targets(gauges: Sequence[Any], *, the_deck: Deck, finished: Any, frame: str
             continue
         node = solved.node_at(_point(gauge))
         held.add(site)
-        out.append((observed(f"level_{len(out) + 1}", value, gauge, group="levels", to_run=lambda sigma, gauge=gauge: (
-            convert_units(sigma, str(gauge.units), "m"))), node + 1))
+        out.append((observed(f"level_{len(out) + 1}", value, gauge, group="levels", datum=True,
+                             to_run=lambda sigma, gauge=gauge: convert_units(sigma, str(gauge.units), "m")), node + 1))
     return out, left
 
 
@@ -218,10 +233,12 @@ def observe_levels(directory: Path, targets: Sequence[tuple[Observed, int]], *, 
 
 
 def interface(source: Path, dest: Path, chosen: Sequence[tuple[str, float, float, bool]], *, the_deck: Deck,
-              targets: Sequence[tuple[Observed, int]]
+              targets: Sequence[tuple[Observed, int]], spatial: Mapping[str, Any] = {}
               ) -> tuple[list[Parameter], list[tuple[str, str]], list[tuple[str, str]]]:
     """A study directory: the deck at ``source`` copied to ``dest`` with its gauges printed and a multiplier
-    template over each chosen ``(identifier, lower, upper, absolute)`` -> ``(parameters, templates, instructions)``."""
+    template over each chosen ``(identifier, lower, upper, absolute)`` -> ``(parameters, templates, instructions)``.
+    Pilot points refuse (``fields``)."""
+    fields(spatial, the_deck)
     shutil.copytree(source, dest)
     instructions = [observe_levels(dest, targets, the_deck=the_deck)]
     parameters, templates = [], []
@@ -232,7 +249,37 @@ def interface(source: Path, dest: Path, chosen: Sequence[tuple[str, float, float
         if pair not in templates:
             templates.append(pair)
     outflow_levels(dest, the_deck=the_deck, parameters=parameters)
+    held = datums(dest, targets)
+    if held:
+        parameters += held
+        templates.append((f"{DATUMS}.tpl", DATUMS))
+        instructions = [(f"{HELD}.ins", HELD)]
     return parameters, templates, instructions
+
+
+def datums(directory: Path, targets: Sequence[tuple[Observed, int]]) -> list[Parameter]:
+    """Each gauge whose zero is a parameter of its own (its ``datum``) given one, prior sd the zero's cited accuracy,
+    and the files the trial reads them through: every point's datum (0 where the zero is no parameter) and the
+    instruction reading each point's free surface less it -> the datum parameters; none where no zero is one."""
+    found = [(rank, target) for rank, (target, _node) in enumerate(targets, start=1) if target.datum is not None]
+    if not found:
+        return []
+    parameters = []
+    for rank, target in found:
+        sd, cite = target.datum
+        width = _DATUM_SDS * sd
+        parameters.append(Parameter(name=f"datum_{rank}", value=DATUM_SHIFT * width,
+                                    lower=(DATUM_SHIFT - 1.0) * width, upper=(DATUM_SHIFT + 1.0) * width,
+                                    group=f"datum_{rank}", transform="none", offset=-DATUM_SHIFT * width, sd=sd,
+                                    sd_source=f"the gauge zero's cited accuracy ({cite})"))
+    named = {rank: f"datum_{rank}" for rank, _target in found}
+    lines = [(f"OBS_{rank}", named.get(rank)) for rank in range(1, len(targets) + 1)]
+    (directory / DATUMS).write_text("".join(f"{point} 0.0\n" for point, _name in lines))
+    (directory / f"{DATUMS}.tpl").write_text("ptf ~\n" + "".join(
+        f"{point} " + (f"~{name.ljust(_FIELD - 2)}~" if name else "0.0") + "\n" for point, name in lines))
+    (directory / f"{HELD}.ins").write_text("pif ~\n" + "".join(
+        f"l1 w !{target.name}!\n" for target, _node in targets))
+    return parameters
 
 
 def _nodes(directory: Path, the_deck: Deck) -> tuple[Any, Any]:
@@ -326,7 +373,7 @@ async def calibrated(*, finished: Any, study_dir: Path, the_deck: Deck, paramete
     deck_dir = study_dir.parent / "deck"
     await asyncio.to_thread(shutil.copytree, deck_dir, rundir, dirs_exist_ok=True)
     values = {parameter.name.upper().replace("_", " "): best[parameter.name] * parameter.scale + parameter.offset
-              for parameter in parameters}
+              for parameter in parameters if parameter.name.upper() in TUNABLE}
     values.update(await asyncio.to_thread(_level_at, rundir, the_deck, values.get("FRICTION COEFFICIENT")))
     await asyncio.to_thread(restate, rundir, the_deck.steering, the_deck.module, values)
     case = finished.case

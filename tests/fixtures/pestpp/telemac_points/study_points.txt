@@ -1,0 +1,54 @@
+  
+  
+  
+ VELOCITY U      
+  
+ OBS_1                            :  -0.25097867873414104     
+  
+  
+  
+ VELOCITY V      
+  
+ OBS_1                            :  -0.78757933694299698     
+  
+  
+  
+ WATER DEPTH     
+  
+ OBS_1                            :    3.4675045981860868     
+  
+  
+  
+ FREE SURFACE    
+  
+ OBS_1                            :    293.20018153964372     
+  
+  
+  
+ BOTTOM          
+  
+ OBS_1                            :    289.73242199999999     
+  
+  
+  
+ FROUDE NUMBER   
+  
+ OBS_1                            :    1.8510848137362217E-003
+  
+  
+  
+ SCALAR FLOWRATE 
+  
+ OBS_1                            :    4247.6497779140591     
+  
+  
+  
+ SCALAR VELOCITY 
+  
+ OBS_1                            :   0.82666986299702394     
+  
+  
+  
+ DYE             
+  
+ OBS_1                            :    4.3579035714315755E-007

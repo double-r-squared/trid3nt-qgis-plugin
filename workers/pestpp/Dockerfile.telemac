@@ -66,7 +66,8 @@ assert shutil.which('telemac2d.py'), 'telemac2d.py not on PATH';\
 assert shutil.which('pestpp-ies'), 'pestpp-ies not on PATH';\
 import cas, telemac_trial as T;\
 assert T.level_at({'coefficients': [20.0, 40.0], 'stages': [292.0, 291.0]}, 30.0) == 291.5;\
-print('pestpp-telemac worker OK: parser', E._PARSER_VERSION, 'trial', T.LEVELS)"
+assert T.free_surface('FREE SURFACE\\nOBS_1 : 1.5', ['OBS_1']) == [1.5];\
+print('pestpp-telemac worker OK: parser', E._PARSER_VERSION, 'trial', T.LEVELS, T.DATUMS)"
 RUN (python -c "\
 import sys;\
 sys.path.insert(0, '/opt/trid3nt/workers/pestpp');\

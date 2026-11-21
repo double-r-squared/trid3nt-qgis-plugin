@@ -19,7 +19,8 @@
 #     trials run.
 #   * pyEMU 1.7.0 and its two runtime requirements, numpy and pandas, pinned:
 #     a PstFrom interface's forward_run.py imports pyemu in every trial to
-#     apply its multipliers before the model runs.
+#     apply its multipliers before the model runs. A MODFLOW study's trial,
+#     modflow_trial.py, lays its pilot-point arrays with numpy, then runs mf6.
 # A version skew here is a deliberate, IaC-visible bump.
 #
 # Build context = THIS worker dir, not the repo root:
@@ -66,7 +67,7 @@ RUN pip install --no-cache-dir pyemu==1.7.0 numpy==2.3.1 pandas==2.3.3 \
     && python -c "import pyemu; assert pyemu.__version__ == '1.7.0', pyemu.__version__"
 
 # --- the worker package ------------------------------------------------------
-COPY --chown=root:root entrypoint.py /opt/trid3nt/workers/pestpp/entrypoint.py
+COPY --chown=root:root entrypoint.py modflow_trial.py /opt/trid3nt/workers/pestpp/
 
 ENV PYTHONUNBUFFERED=1 \
     TRID3NT_PESTPP_DATA_DIR=/data
@@ -84,7 +85,9 @@ import entrypoint as E;\
 assert E._PARSER_VERSION == 'pestpp-case-1', E._PARSER_VERSION;\
 assert sorted(E._DISPATCH) == ['case'];\
 assert E._completed(__import__('pathlib').Path('/tmp')) is False;\
-print('pestpp worker OK: parser', E._PARSER_VERSION, '| one case dispatch present')"
+import modflow_trial as T;\
+assert T.lay('/tmp') == [];\
+print('pestpp worker OK: parser', E._PARSER_VERSION, '| one case dispatch present | modflow trial imports')"
 RUN (python -c "\
 import sys;\
 sys.path.insert(0, '/opt/trid3nt/workers/pestpp');\

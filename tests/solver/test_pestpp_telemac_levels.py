@@ -125,3 +125,16 @@ def _trial_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_the_trial_writes_each_point_s_free_surface_less_its_datum(tmp_path):
+    points = Path(__file__).resolve().parents[1] / "fixtures" / "pestpp" / "telemac_points" / "study_points.txt"
+    trial = Path(__file__).resolve().parents[2] / "workers" / "pestpp" / "telemac_trial.py"
+    spec = importlib.util.spec_from_file_location("telemac_trial_under_test", trial)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    shutil.copy2(points, tmp_path / module.POINTS)
+    (tmp_path / module.DATUMS).write_text("OBS_1 0.05\n")
+    assert module.free_surface(points.read_text(), ["OBS_1"]) == [293.20018153964372]
+    assert module.held_levels(str(tmp_path)) == [f"OBS_1 {293.20018153964372 - 0.05!r}"]
+    assert (tmp_path / module.HELD).read_text() == f"OBS_1 {293.20018153964372 - 0.05!r}\n"

@@ -16,12 +16,13 @@ from ..errors import PestppError
 from ..modules import LOCKED, PESTPP
 from ...runtime.module import UNSET
 
-__all__ = ["Observed", "Parameter", "TABLES", "substitute", "write_control"]
+__all__ = ["Observed", "Parameter", "TABLES", "prior", "sigma_range", "substitute", "write_control"]
 
 #: The tables the control file names, each written beside it.
 TABLES = {"parameter groups": "study_groups.csv", "parameter data": "study_parameters.csv",
           "observation data": "study_observations.csv", "model input": "study_templates.csv",
-          "model output": "study_instructions.csv", "phi factors": "study_phi_factors.csv"}
+          "model output": "study_instructions.csv", "phi factors": "study_phi_factors.csv",
+          "prior": "study_prior.unc", "prior covariance": "study_prior.cov"}
 
 #: The group table's columns, all of which the binary requires once the table exists.
 _GROUP_COLUMNS = ("inctyp", "derinc", "derinclb", "forcen", "derincmul", "dermthd")
@@ -34,7 +35,9 @@ _DERMTHD = "parabolic"
 @dataclass(frozen=True)
 class Parameter:
     """One adjustable parameter: its starting value, bounds and group, and the scale and offset PEST++
-    writes it through (the value written is ``value * scale + offset``)."""
+    writes it through (the value written is ``value * scale + offset``). A pilot point carries its ``site`` and its
+    variogram's range (``correlation``), which correlate it with its group's other points in the prior; a parameter
+    whose prior is a stated accuracy carries it as ``sd``, with where it is cited (``sd_source``)."""
 
     name: str
     value: float
@@ -44,12 +47,17 @@ class Parameter:
     transform: str = "log"
     scale: float = 1.0
     offset: float = 0.0
+    site: tuple[float, float] | None = None
+    correlation: float | None = None
+    sd: float | None = None
+    sd_source: str | None = None
 
 
 @dataclass(frozen=True)
 class Observed:
     """One observation: its target value and group, and its sigma in the run's unit - the weight is one over it -
-    with how the sigma was reached and each part of it as ``(member, sigma, cite)``."""
+    with how the sigma was reached and each part of it as ``(member, sigma, cite)``. A target held against a gauge
+    zero that is a parameter of its own carries that zero's ``(sd, cite)`` as its ``datum``, outside sigma."""
 
     name: str
     value: float
@@ -57,6 +65,7 @@ class Observed:
     sigma: float
     basis: str
     parts: tuple[tuple[str, float, str], ...] = ()
+    datum: tuple[float, str] | None = None
 
     @property
     def weight(self) -> float:
@@ -78,6 +87,74 @@ def _table(path: Path, header: Sequence[str], rows: Sequence[Sequence[Any]]) -> 
         writer.writerows(rows)
 
 
+def sigma_range(stated: Mapping[str, Any]) -> float:
+    """How many standard deviations a parameter's bounds span, as PEST++ reads them: par_sigma_range as the run
+    states it, the binary's own unstated."""
+    value = stated.get("PAR_SIGMA_RANGE")
+    return float(PESTPP.MODULE_INPUT["PAR_SIGMA_RANGE"].engine_default if value is None else value)
+
+
+def _sd(p: Parameter, transform: str, span: float) -> float:
+    import math
+
+    if p.sd is not None:
+        return p.sd
+    return ((math.log10(p.upper) - math.log10(p.lower)) if transform == "log" else (p.upper - p.lower)) / span
+
+
+def prior(parameters: Sequence[Parameter], stated: Mapping[str, Any] = {}) -> dict[str, dict[str, Any]]:
+    """Each parameter group's prior as the study states it to PEST++ -> ``{group: prior}``: the mean (the starting
+    value) and the bounds in the parameter's own terms (a multiplier's 1, an offset's 0: PEST's value with its offset
+    over its scale), the transform, the standard deviation - stated, or the one the bounds imply, of log10 where
+    log-transformed - and its source, and, for pilot points, their count and the variogram correlating them."""
+    span = sigma_range(stated)
+    transform = str(dict(stated).get("PARTRANS") or "")
+    held: dict[str, dict[str, Any]] = {}
+    for p in parameters:
+        kind = transform or p.transform
+        group = held.setdefault(p.group, {
+            "parameters": 0, "mean": p.value + p.offset / p.scale, "lower": p.lower + p.offset / p.scale,
+            "upper": p.upper + p.offset / p.scale, "transform": kind,
+            "sd": _sd(p, kind, span), "sd_of": "log10" if kind == "log" else "value",
+            "sd_source": p.sd_source or f"the bounds read as {span:g} standard deviations (PEST++ par_sigma_range)"})
+        group["parameters"] += 1
+        if p.site is not None:
+            group["correlated"] = {"variogram": "exponential", "a": p.correlation, "contribution": 1.0, "nugget": 0.0}
+    return held
+
+
+def _covariance(directory: Path, parameters: Sequence[Parameter], transform: str, span: float) -> str | None:
+    """The prior PEST++ draws from, where any parameter is a pilot point or states its own sd: each group of points
+    correlated by its variogram, every other parameter alone at its stated sd or the one its bounds imply -> the
+    uncertainty file's name, else None."""
+    import numpy as np
+
+    from ..helpers.geostat import covariance
+
+    sited = [p for p in parameters if p.site is not None]
+    if not sited and all(p.sd is None for p in parameters):
+        return None
+    matrix = np.zeros((len(sited), len(sited)))
+    at = 0
+    for group in dict.fromkeys(p.group for p in sited):
+        members = [p for p in sited if p.group == group]
+        variance = np.array([_sd(p, transform or p.transform, span) ** 2 for p in members])
+        matrix[at:at + len(members), at:at + len(members)] = covariance(
+            np.array([p.site for p in members]), float(members[0].correlation), variance)
+        at += len(members)
+    if sited:
+        (directory / TABLES["prior covariance"]).write_text(
+            f"{len(sited)} {len(sited)} 1\n" + "".join(" ".join(repr(float(v)) for v in row) + "\n" for row in matrix)
+            + "* row and column names\n" + "".join(f"{p.name}\n" for p in sited))
+    alone = [p for p in parameters if p.site is None]
+    blocks = ["START STANDARD_DEVIATION", *(f"{p.name} {_sd(p, transform or p.transform, span)!r}" for p in alone),
+              "END STANDARD_DEVIATION"] if alone else []
+    if sited:
+        blocks += ["START COVARIANCE_MATRIX", f"file {TABLES['prior covariance']}", "END COVARIANCE_MATRIX"]
+    (directory / TABLES["prior"]).write_text("\n".join(blocks) + "\n")
+    return TABLES["prior"]
+
+
 def write_control(directory: Path, *, name: str, parameters: Sequence[Parameter],
                   observations: Sequence[Observed], templates: Sequence[tuple[str, str]],
                   instructions: Sequence[tuple[str, str]], command: str,
@@ -88,7 +165,8 @@ def write_control(directory: Path, *, name: str, parameters: Sequence[Parameter]
     need, by name. A stated locked option, or one the dictionary does not have, refuses. A parameter-group
     variable writes the group table (every other column the dictionary's default), a parameter column
     replaces that column for every parameter, and any other option is a keyword line. ``balanced`` gives each
-    observation group an equal share of phi through PEST++'s own phi factor file."""
+    observation group an equal share of phi through PEST++'s own phi factor file. Where a parameter is a pilot point
+    the prior PEST++ draws from is written as its parcov."""
     options: dict[str, Any] = {}
     sectioned: dict[str, dict[str, Any]] = {"parameter groups": {}, "parameter data": {}}
     for identifier, value in stated.items():
@@ -109,6 +187,12 @@ def write_control(directory: Path, *, name: str, parameters: Sequence[Parameter]
         raise PestppError("a study adjusts at least one parameter against at least one observation",
                           error_code="PESTPP_STUDY_EMPTY")
     changes = sectioned["parameter data"]
+    drawn = _covariance(directory, parameters, str(changes.get("partrans") or ""), sigma_range(stated))
+    if drawn is not None:
+        if "parcov" in options:
+            raise PestppError("the study's pilot points state the prior PEST++ draws from (parcov), and the run "
+                              "states another", error_code="PESTPP_OPTION_CONFLICT")
+        options["parcov"] = drawn
     for p in parameters:
         if changes.get("partrans", p.transform) == "log" and changes.get("parchglim") == "relative":
             raise PestppError(f"{p.name} is log-transformed and a log-transformed parameter takes a factor change "

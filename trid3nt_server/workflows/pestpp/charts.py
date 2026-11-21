@@ -76,13 +76,25 @@ def residual_chart(residuals: Sequence[Mapping[str, Any]], *, caption: str) -> d
 def parameter_chart(ensemble: Mapping[str, Mapping[str, float]], parameters: Sequence[Any], *,
                     caption: str) -> dict[str, Any]:
     """Each parameter's multiplier across the last ensemble, or a glm study's iterations - its range and the
-    calibrated value under ``base`` - against the bounds it was tuned inside."""
-    rows = []
+    calibrated value under ``base`` - against the bounds it was tuned inside. The caption states a group of several
+    parameters (pilot points) once: its count, its range and its calibrated values' range."""
+    rows, groups = [], {}
     for parameter in parameters:
         values = [float(real[parameter.name]) for real in ensemble.values()]
         rows.append({"parameter": parameter.name, "lowest": min(values), "highest": max(values),
                      "base": float(ensemble["base"][parameter.name]) if "base" in ensemble else None,
                      "lower_bound": parameter.lower, "upper_bound": parameter.upper})
+        groups.setdefault(getattr(parameter, "group", parameter.name), []).append(rows[-1])
+
+    def said(group: str, held: list[dict[str, Any]]) -> str:
+        if len(held) == 1:
+            (row,) = held
+            return (f"{row['parameter']} {row['lowest']:.3g} to {row['highest']:.3g} (base {row['base']:.3g}) inside "
+                    f"{row['lower_bound']:g} to {row['upper_bound']:g}")
+        bases = [row["base"] for row in held if row["base"] is not None]
+        return (f"{group} {len(held)} pilot points {min(r['lowest'] for r in held):.3g} to "
+                f"{max(r['highest'] for r in held):.3g} (base {min(bases):.3g} to {max(bases):.3g}) inside "
+                f"{held[0]['lower_bound']:g} to {held[0]['upper_bound']:g}")
     return build_chart_payload(
         vega_lite_spec={"data": {"values": rows}, "layer": [
             {"mark": "rule", "encoding": {"x": {"field": "parameter", "type": "nominal", "title": "Parameter"},
@@ -93,6 +105,4 @@ def parameter_chart(ensemble: Mapping[str, Mapping[str, float]], parameters: Seq
              "encoding": {"x": {"field": "parameter", "type": "nominal"},
                           "y": {"field": "base", "type": "quantitative"}}}]},
         title=_title(caption),
-        caption=f"The {caption}: " + "; ".join(
-            f"{row['parameter']} {row['lowest']:.3g} to {row['highest']:.3g} (base {row['base']:.3g}) inside "
-            f"{row['lower_bound']:g} to {row['upper_bound']:g}" for row in rows) + ".")
+        caption=f"The {caption}: " + "; ".join(said(group, held) for group, held in groups.items()) + ".")

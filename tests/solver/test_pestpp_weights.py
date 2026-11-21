@@ -182,3 +182,52 @@ def test_the_weight_written_is_one_over_sigma_and_balancing_is_off_unless_asked(
     balanced = _write(tmp_path / "balanced", observations, balanced=True)
     assert f"ies_phi_factor_file {TABLES['phi factors']}" in balanced.read_text().splitlines()
     assert (balanced.parent / TABLES["phi factors"]).read_text() == "heads,0.5\nnot_cited,0.5\n"
+
+
+def test_a_cited_gauge_zero_is_a_datum_parameter_and_leaves_sigma_counted_once(hwy_370, tmp_path):
+    from trid3nt_server.workflows.pestpp.authoring import telemac
+    from trid3nt_server.workflows.pestpp.authoring.control import prior
+
+    found = observation(hwy_370, fields=_row(_NWIS, "water level series").fields, producer=_NWIS)
+    both = weights.observed("level_1", found.value * _FT, found, to_run=_to_m(found), group="levels")
+    held = weights.observed("level_1", found.value * _FT, found, to_run=_to_m(found), group="levels", datum=True)
+    reading = max(0.01, 0.002 * (found.value - 936.34)) * _FT
+    assert (held.group, held.basis) == ("levels", weights.CITED)
+    assert held.sigma == pytest.approx(reading) and [m for m, _s, _c in held.parts] == ["accuracy"]
+    assert held.datum == (pytest.approx(0.08 * _FT), f"{_NWIS} field alt_acy_va")
+    # the zero is counted once: out of sigma by exactly what the datum's prior holds
+    assert held.sigma ** 2 + held.datum[0] ** 2 == pytest.approx(both.sigma ** 2)
+    assert both.datum is None
+    parameters = telemac.datums(tmp_path, [(held, 412)])
+    (datum,) = parameters
+    assert (datum.name, datum.group, datum.transform, datum.sd) == ("datum_1", "datum_1", "none", held.datum[0])
+    assert datum.value * datum.scale + datum.offset == 0.0 and datum.lower > 0.0
+    stated = prior(parameters)["datum_1"]
+    assert stated["mean"] == pytest.approx(0.0) and stated["sd"] == held.datum[0]
+    assert (stated["lower"], stated["upper"]) == (pytest.approx(-2.0 * held.datum[0]), pytest.approx(2.0 * held.datum[0]))
+    assert "alt_acy_va" in stated["sd_source"]
+    assert (tmp_path / telemac.DATUMS).read_text() == "OBS_1 0.0\n"
+    assert (tmp_path / f"{telemac.HELD}.ins").read_text() == "pif ~\nl1 w !level_1!\n"
+    control = write_control(tmp_path, name="pestpp.pst", parameters=parameters, observations=[held],
+                            templates=[(f"{telemac.DATUMS}.tpl", telemac.DATUMS)],
+                            instructions=[(f"{telemac.HELD}.ins", telemac.HELD)], command="python trial")
+    assert "parcov study_prior.unc" in control.read_text()
+    assert (tmp_path / "study_prior.unc").read_text().splitlines() == [
+        "START STANDARD_DEVIATION", f"datum_1 {held.datum[0]!r}", "END STANDARD_DEVIATION"]
+    assert not (tmp_path / "study_prior.cov").exists()
+    with (tmp_path / TABLES["observation data"]).open() as fh:
+        assert float(next(csv.DictReader(fh))["weight"]) == pytest.approx(1.0 / reading)
+
+
+def test_a_gauge_zero_citing_no_accuracy_stays_in_sigma_and_is_no_parameter(hwy_370, tmp_path):
+    from trid3nt_server.workflows.pestpp.authoring import telemac
+
+    stated = hwy_370["features"][0]
+    unstated = {**stated, "properties": {**stated["properties"], "site_no": "06610671", "alt_acy_va": None}}
+    found = observation({"type": "FeatureCollection", "features": [stated, unstated]},
+                        fields=_row(_NWIS, "water level series").fields, producer=_NWIS, every=True)
+    short = next(one for one in found if one.site_id == "06610671")
+    target = weights.observed("level_2", 0.0, short, to_run=_to_m(short), group="levels", datum=True)
+    assert target.datum is None and target.basis == weights.FLOOR
+    assert target.sigma == pytest.approx(math.hypot(short.accuracy.value, 0.08) * _FT)
+    assert telemac.datums(tmp_path, [(target, 7)]) == [] and not (tmp_path / telemac.DATUMS).exists()

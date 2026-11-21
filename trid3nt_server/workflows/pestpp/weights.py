@@ -28,14 +28,19 @@ def _quadrature(parts: Sequence[tuple[str, float, str]]) -> float:
     return math.sqrt(sum(sigma ** 2 for _member, sigma, _cite in parts))
 
 
-def observed(name: str, value: float, found: Any, *, to_run: Callable[[float], float], group: str) -> Observed:
+def observed(name: str, value: float, found: Any, *, to_run: Callable[[float], float], group: str,
+             datum: bool = False) -> Observed:
     """One target weighed off its reading's accuracy and, where a gauge zero lifts it, that zero's; each in the
-    reading's unit moved onto the run's by ``to_run``. A record citing either part not is weighed in NOT_CITED."""
-    parts, floors, short = [], [], False
+    reading's unit moved onto the run's by ``to_run``. A record citing either part not is weighed in NOT_CITED.
+    With ``datum``, a zero whose accuracy is cited leaves sigma and is the target's datum, a parameter whose prior
+    sd it is; a zero citing none stays in sigma as before."""
+    parts, floors, short, zero = [], [], False, None
     for member, accuracy in (("accuracy", found.accuracy), ("above_accuracy", found.zero_accuracy)):
         if member == "above_accuracy" and accuracy is None:
             continue
-        if accuracy is not None and accuracy.value is not None:
+        if datum and member == "above_accuracy" and accuracy.value is not None:
+            zero = (abs(to_run(accuracy.value)), accuracy.cite)
+        elif accuracy is not None and accuracy.value is not None:
             parts.append((member, abs(to_run(accuracy.value)), accuracy.cite))
         elif accuracy is not None and accuracy.widest is not None:
             floors.append((member, abs(to_run(accuracy.widest)), accuracy.cite))
@@ -50,7 +55,8 @@ def observed(name: str, value: float, found: Any, *, to_run: Callable[[float], f
     if not sigma > 0.0:
         raise PestppError(f"{name}'s cited accuracy is 0, and a sigma of 0 weighs a reading without bound",
                           error_code="PESTPP_SIGMA_ZERO")
-    return Observed(name=name, value=value, group=group_of, sigma=sigma, basis=basis, parts=tuple(parts + floors))
+    return Observed(name=name, value=value, group=group_of, sigma=sigma, basis=basis, parts=tuple(parts + floors),
+                    datum=zero)
 
 
 def restated(targets: Sequence[tuple[Observed, Any]], stated: Any) -> list[tuple[Observed, Any]]:
