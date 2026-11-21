@@ -6,7 +6,7 @@ importing any workflows module registers the TELEMAC solver and would close an i
 
 from __future__ import annotations
 
-__all__ = ["ACCURACY_NOT_CITED", "READINGS_UNTABLED", "CLOUD_COVER_FROM_ASOS", "DeclarationError", "DeclarativeError", "GateRefusedError",
+__all__ = ["ACCURACY_NOT_CITED", "ACCURACY_UNIT_START", "unit_start_warning", "READINGS_UNTABLED", "CLOUD_COVER_FROM_ASOS", "DeclarationError", "DeclarativeError", "GateRefusedError",
            "INPUT_NOT_USED", "accuracy_not_cited_warning", "cloud_cover_from_asos_warning", "unused_input_warning",
            "untabled_readings_note"]
 
@@ -59,6 +59,18 @@ def accuracy_not_cited_warning(*, count: int) -> str:
             "own group, not_cited, starting at the widest accuracy their source cites elsewhere (a floor), or at 1 in "
             "the run's unit where the source cites none; the widening after the fit sets their sigma. State sigma for "
             "not_cited, or use a source that cites its accuracy.")
+
+
+#: The warning code for a group starting at sigma 1 in the run's unit beside groups weighed otherwise.
+ACCURACY_UNIT_START = "ACCURACY_UNIT_START"
+
+
+def unit_start_warning(*, count: int) -> str:
+    """The run note for ``count`` targets started at sigma 1 in the run's unit in a study whose other targets are
+    weighed by a cited accuracy, a floor or a stated sigma; names only the count."""
+    return (f"{ACCURACY_UNIT_START}: {count} targets start at sigma 1 in the run's unit, and beside targets weighed "
+            "otherwise that start sets their relative weight in the fit. State sigma for not_cited, or use a source "
+            "that cites its accuracy.")
 
 
 class DeclarativeError(RuntimeError):

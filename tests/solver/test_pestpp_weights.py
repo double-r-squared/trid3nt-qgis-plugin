@@ -122,6 +122,30 @@ def test_the_sigma_the_user_states_for_a_group_wins_and_an_unknown_group_refuses
         assert refused.value.error_code == code
 
 
+def _unit_and(basis: str) -> list[Observed]:
+    return [Observed("head_1", 1.0, "heads" if basis == weights.CITED else weights.NOT_CITED, 0.003, basis),
+            Observed("head_2", 2.0, weights.NOT_CITED, 1.0, weights.UNIT)]
+
+
+@pytest.mark.parametrize("basis", [weights.CITED, weights.FLOOR])
+def test_a_unit_start_group_beside_a_cited_or_floor_group_states_the_warning(basis):
+    from trid3nt_server.errors import ACCURACY_UNIT_START, unit_start_warning
+
+    assert weights.unit_started(_unit_and(basis)) == 1
+    note = unit_start_warning(count=1)
+    assert note.startswith(ACCURACY_UNIT_START) and "1 targets" in note
+
+
+def test_a_study_of_unit_start_groups_only_states_no_unit_start_warning():
+    assert weights.unit_started([Observed("a", 1.0, weights.NOT_CITED, 1.0, weights.UNIT)]) == 0
+
+
+def test_a_unit_start_group_the_user_states_sigma_for_states_no_unit_start_warning():
+    targets = [(t, i) for i, t in enumerate(_unit_and(weights.CITED))]
+    stated = weights.restated(targets, {"not_cited": 0.5})
+    assert weights.unit_started([t for t, _ in stated]) == 0
+
+
 def test_the_widening_brings_each_group_s_phi_to_its_count_and_never_narrows_a_cited_sigma():
     residuals = outputs.read_residuals(_GLM, tool="glm")
     observed = [Observed(row["name"], row["measured"], row["group"], 1.0 / row["weight"], weights.CITED)

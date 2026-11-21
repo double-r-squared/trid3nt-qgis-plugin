@@ -201,7 +201,7 @@ class PestppWorkflow(Workflow):
         from trid3nt_server.render.pipeline_emitter import begin_substeps, current_emitter, substep
         from trid3nt_server.workflows.runtime.fill import call, production, read
 
-        from trid3nt_server.errors import accuracy_not_cited_warning
+        from trid3nt_server.errors import accuracy_not_cited_warning, unit_start_warning
 
         from . import engine, outputs, staging, weights
         from .authoring.control import write_control
@@ -258,6 +258,8 @@ class PestppWorkflow(Workflow):
             uncited = sum(target.group == weights.NOT_CITED for target in observed)
             if uncited:
                 journal_note(accuracy_not_cited_warning(count=uncited))
+            if started := weights.unit_started(observed):
+                journal_note(unit_start_warning(count=started))
             journal_note(f"each {study.SITE} weighs one over its sigma in phi: " + "; ".join(
                 f"{group} {len(held)} at sigma {min(held):.3g} to {max(held):.3g} in the run's unit"
                 for group, held in _sigmas(observed).items()))

@@ -15,7 +15,7 @@ from typing import Any, Callable, Mapping, Sequence
 from .authoring.control import Observed
 from .errors import PestppError
 
-__all__ = ["CITED", "FLOOR", "NOT_CITED", "UNIT", "USER", "observed", "restated", "widened"]
+__all__ = ["CITED", "FLOOR", "NOT_CITED", "UNIT", "USER", "observed", "restated", "unit_started", "widened"]
 
 #: How an observation's sigma was reached.
 CITED, FLOOR, UNIT, USER = "cited", "floor", "unit start", "stated by the user"
@@ -68,6 +68,13 @@ def restated(targets: Sequence[tuple[Observed, Any]], stated: Any) -> list[tuple
     return [(replace(target, sigma=float(stated[target.group]), basis=USER,
                      parts=(("stated", float(stated[target.group]), USER),))
              if target.group in stated else target, where) for target, where in targets]
+
+
+def unit_started(observed: Sequence[Observed]) -> int:
+    """The count of targets started at sigma 1 in the run's unit when any other target is weighed otherwise
+    (cited, floor or stated), the case where that start sets the fit's relative weight; 0 otherwise."""
+    started = sum(o.basis == UNIT for o in observed)
+    return started if started < len(observed) else 0
 
 
 def widened(observed: Sequence[Observed], residuals: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
