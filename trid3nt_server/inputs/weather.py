@@ -17,6 +17,7 @@ from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts.coverage import Member
+from trid3nt_server.errors import untabled_readings_note
 
 from .bound_domain import current_domain
 from .fields import FieldError, Record
@@ -121,7 +122,7 @@ def weather(source: Any, *, fields: Mapping[str, Member] | None = None, producer
         how_far = (f"{station} ({distance_km:.0f} km)" if math.isfinite(distance_km)
                    else station)
         try:
-            columns, short, opens = _series(observations, read, at, window_s)
+            columns, short, opens, untabled = _series(observations, read, at, window_s)
         except ValueError as why:
             refusals.append(f"{how_far}: {why}")
             continue
@@ -129,6 +130,8 @@ def weather(source: Any, *, fields: Mapping[str, Member] | None = None, producer
             f"{label} is the station {how_far}, read from "
             f"{opens:%Y-%m-%d %H:%M} UTC: it carries {', '.join(columns) or 'nothing'}"
             + (f" and is short of {', '.join(short)}." if short else "."))
+        if untabled:
+            journal_note(untabled_readings_note(untabled))
         return Weather(columns=columns, short=short, opens=opens, site_id=station,
                        distance_km=distance_km if math.isfinite(distance_km)
                        else None)
@@ -152,8 +155,8 @@ class _Reader:
     def moment(self, rec: Record) -> _dt.datetime | None:
         return _moment(rec.stated("time"))
 
-    def values(self, rec: Record) -> dict[str, float]:
-        """One observation -> every quantity it carries a readable value of."""
+    def values(self, rec: Record, untabled: dict[str, int]) -> dict[str, float]:
+        """One observation -> every quantity it carries a readable value of; a code its table lacks gives none, counted."""
         read: dict[str, float] = {}
         for name, member in _MEMBER.items():
             if member not in self.fields:
@@ -162,6 +165,9 @@ class _Reader:
                 found = rec.read(member)
             except FieldError as why:
                 if why.error_code in ("FIELD_EMPTY", "FIELD_NOT_A_NUMBER"):
+                    continue
+                if why.error_code == "FIELD_UNTABLED":
+                    untabled[member] = untabled.get(member, 0) + 1
                     continue
                 raise
             read[name] = self._carry(name, found.value, found.unit)
@@ -208,20 +214,21 @@ def _by_station(rows: Sequence[Mapping[str, Any]], near: Any, read: _Reader
 
 
 def _series(observations: Sequence[Record], read: _Reader, at: Any, window_s: Any
-            ) -> tuple[dict[str, Series], dict[str, str], _dt.datetime]:
+            ) -> tuple[dict[str, Series], dict[str, str], _dt.datetime, dict[str, int]]:
     """One station's observations -> a series per quantity, on the run's clock from zero.
 
     t = 0 is the moment the run opens at, and each series is read between its last reading at or
     before it and its first after the close. With no moment, the first observation is the origin.
     """
     kept: dict[str, dict[_dt.datetime, float]] = {}
+    untabled: dict[str, int] = {}
     stamped: set[_dt.datetime] = set()
     for rec in observations:
         stamp = read.moment(rec)
         if stamp is None:
             continue
         stamped.add(stamp)
-        for name, value in read.values(rec).items():
+        for name, value in read.values(rec, untabled).items():
             kept.setdefault(name, {})[stamp] = value
     stamps = sorted(stamped)
     if len(stamps) < _MIN_INSTANTS:
@@ -242,7 +249,7 @@ def _series(observations: Sequence[Record], read: _Reader, at: Any, window_s: An
                 units=UNITS[name], at=opens)
         except (ValueError, TemporalShapeError) as why:
             short[name] = str(why)
-    return columns, short, opens
+    return columns, short, opens, untabled
 
 
 def _bracketing(stamps: Sequence[_dt.datetime], opens: _dt.datetime,

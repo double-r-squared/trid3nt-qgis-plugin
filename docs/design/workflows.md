@@ -380,8 +380,9 @@ every clear hour); the counts of the other pixels stay on the record,
 and a box with no counted pixel has no cloud reading, never a clear one. The satellite is the one whose projection is
 centred nearer the point (GOES-19 at 75 W, GOES-18 at 137 W) and a window before its bucket's first hour refuses. ASOS
 sky cover is the fallback: each category reads as the midpoint of the ASOS User's Guide Table 3 percent-of-sky
-range in octas with half the range as `cloud_cover_accuracy`, a code outside the table (SKC, NCD, NSC, VV) refuses
-`FIELD_UNTABLED`, and the run states `CLOUD_COVER_FROM_ASOS` (the swap, and the ceilometer's 12,000 ft limit).
+range in octas with half the range as `cloud_cover_accuracy`, a code outside the table (SKC, NCD, NSC, VV) gives no cloud reading at its hour, counted on the run
+by member under `READINGS_UNTABLED` (the record and its other quantities stand; a window with no cloud reading at all
+refuses the cloud need by name), and the run states `CLOUD_COVER_FROM_ASOS` (the swap, and the ceilometer's 12,000 ft limit).
 No GOES and no ASOS refuses `DATA_NEED_UNMATCHED`.
 
 `.need` names a CLASS of the coverage vocabulary, never a fetcher; `geometry=`

@@ -6,8 +6,9 @@ importing any workflows module registers the TELEMAC solver and would close an i
 
 from __future__ import annotations
 
-__all__ = ["ACCURACY_NOT_CITED", "CLOUD_COVER_FROM_ASOS", "DeclarationError", "DeclarativeError", "GateRefusedError",
-           "INPUT_NOT_USED", "accuracy_not_cited_warning", "cloud_cover_from_asos_warning", "unused_input_warning"]
+__all__ = ["ACCURACY_NOT_CITED", "READINGS_UNTABLED", "CLOUD_COVER_FROM_ASOS", "DeclarationError", "DeclarativeError", "GateRefusedError",
+           "INPUT_NOT_USED", "accuracy_not_cited_warning", "cloud_cover_from_asos_warning", "unused_input_warning",
+           "untabled_readings_note"]
 
 #: The warning code for a handed input the engine's chosen option does not read; a warning is a run note that opens with its code.
 INPUT_NOT_USED = "INPUT_NOT_USED"
@@ -33,6 +34,17 @@ def cloud_cover_from_asos_warning() -> str:
             "nothing for this point and window. The ASOS ceilometer reports no cloud above 12,000 ft, so its clear "
             "sky can hide high cloud, and each value is the midpoint of a reported percent-of-sky range. Use a "
             "window and point GOES covers, or state the cloud cover.")
+
+
+#: The warning code for readings whose code the source's table holds no row for: they give no value, the record stands.
+READINGS_UNTABLED = "READINGS_UNTABLED"
+
+
+def untabled_readings_note(counts: dict[str, int]) -> str:
+    """The run note counting, by member, the readings a record's table holds no row for; it states no code the record carried."""
+    held = ", ".join(f"{name} {count}" for name, count in sorted(counts.items()))
+    return (f"{READINGS_UNTABLED}: readings whose code the source's table holds no row for give no value at their "
+            f"hour, and the record is read without them (by member: {held}).")
 
 
 #: The warning code for calibration targets whose records cite no measurement accuracy.

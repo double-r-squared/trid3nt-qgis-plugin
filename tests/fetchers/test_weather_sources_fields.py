@@ -19,6 +19,8 @@ from types import SimpleNamespace
 import pyogrio
 import pytest
 
+from trid3nt_server.errors import untabled_readings_note
+from trid3nt_server.inputs import run_notes
 from trid3nt_server.inputs.fields import FieldError, Measured, records
 from trid3nt_server.inputs.observation import ObservationError
 from trid3nt_server.inputs.weather import weather
@@ -120,13 +122,27 @@ def test_asos_weather_is_read_through_the_members_its_source_states():
     assert found.columns["cloud_octas"].values[0] == 3.0 and found.columns["rain_mm"].values[0] == 0.0
 
 
-def test_a_sky_cover_code_the_table_does_not_hold_refuses_naming_it():
+def test_a_sky_cover_hour_the_table_does_not_hold_gives_no_cloud_that_hour_and_the_record_keeps_the_rest():
     spec, feats = _asos()
-    feats[0]["properties"]["skyc1"] = "ZZZ"
+    feats[2]["properties"]["skyc1"] = "VV"
     layer, _ = _layer(spec, feats)
-    with pytest.raises(FieldError, match="ZZZ") as refused:
-        weather(layer, fields=spec.fields, near={"lon": -122.6, "lat": 45.59})
-    assert refused.value.error_code == "FIELD_UNTABLED"
+    token = run_notes.bind_notes()
+    try:
+        found = weather(layer, fields=spec.fields, near={"lon": -122.6, "lat": 45.59})
+    finally:
+        notes = run_notes.drain_notes(token)
+    assert found.site_id == "PDX" and "air_temp_c" in found.columns and "rain_mm" in found.columns
+    assert len(found.columns["cloud_octas"].values) == len(found.columns["air_temp_c"].values) - 1
+    assert untabled_readings_note({"cloud_cover": 1}) in notes and "VV" not in notes[-1]
+
+
+def test_a_station_whose_every_sky_cover_is_untabled_keeps_its_weather_and_is_short_of_cloud():
+    spec, feats = _asos()
+    for feat in feats:
+        feat["properties"]["skyc1"] = "ZZZ"
+    layer, _ = _layer(spec, feats)
+    found = weather(layer, fields=spec.fields, near={"lon": -122.6, "lat": 45.59})
+    assert "cloud_octas" not in found.columns and "cloud_octas" in found.short and "air_temp_c" in found.columns
 
 
 def test_the_sky_cover_table_cites_where_its_codes_come_from():
