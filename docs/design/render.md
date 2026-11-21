@@ -87,8 +87,9 @@ row, journaled with the sentence the legend ends up saying.
 ## A run's outputs
 
 There is ONE registry. `formats.publish` writes every layer it emitted onto the
-run in progress, and `journal.build_record` carries that list into the run's
-journal line as its `outputs` field. `store/journal.run_outputs(run_id)`
+run in progress, whole as a reader loads it (its CRS, dataset files, clock and
+style row; the legend is resolved at emission), and `journal.build_record` carries
+that list into the run's journal line as its `outputs` field. `store/journal.run_outputs(run_id)`
 reads it there and nowhere else - the artifacts a row points at are
 delete-on-whim and the session that saw the layers ends, while the record
 outlives both.

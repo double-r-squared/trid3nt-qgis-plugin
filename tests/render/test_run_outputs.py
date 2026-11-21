@@ -79,8 +79,26 @@ def test_the_publish_stage_writes_the_field() -> None:
                                  uri="s3://runs/R/m.slf", quantity="water_depth",
                                  units="m")])
     written = journal.drain_outputs(token)
-    assert written == [{"layer_id": "a", "name": "Peak depth", "layer_type": "mesh",
-                        "uri": "s3://runs/R/m.slf", "quantity": "water_depth",
-                        "tracer": None, "units": "m"}]
+    assert len(written) == 1
+    assert {key: written[0][key] for key in ("layer_id", "name", "layer_type", "uri", "quantity", "tracer", "units")} \
+        == {"layer_id": "a", "name": "Peak depth", "layer_type": "mesh", "uri": "s3://runs/R/m.slf",
+            "quantity": "water_depth", "tracer": None, "units": "m"}
+
+
+def test_the_record_keeps_each_layer_as_a_reader_loads_it() -> None:
+    """A layer is loaded back off the record alone: its CRS, its dataset files, its clock and its style row ride
+    with it; the legend the emission seam resolves, and the notes and inputs the record keeps elsewhere, do not."""
+    from trid3nt_contracts.execution import LayerURI
+    from trid3nt.render.formats import record_run_outputs
+
+    layer = LayerURI(layer_id="a", name="Dye", layer_type="mesh", uri="s3://runs/R/r2d.slf", quantity="dye",
+                     tracer=1, units="mg/L", role="primary", crs_authid="EPSG:32610",
+                     dataset_uris=["s3://runs/R/r2d.slf"], reference_time="2026-11-21T00:00:00+00:00",
+                     style={"kind": "mesh"}, notes=["a note"])
+    token = journal.bind_outputs()
+    record_run_outputs([layer])
+    written, = journal.drain_outputs(token)
+    assert LayerURI.model_validate(written) == layer.model_copy(update={"notes": []})
+    assert not {"legend", "notes", "synthetic_inputs"} & set(written)
 
 

@@ -181,6 +181,10 @@ class Workflow:
             raise WireArgsError(f"{name!r} is not an input of {self.name}.")
         return found
 
+    def bodies(self) -> tuple[str, ...]:
+        """The module word each body of this run is qualified by in a keyword's name; the skeleton runs no body."""
+        return ()
+
     def check(self) -> None:
         """Refuse at import what this template's declarations cannot run; the
         skeleton runs nothing of its own, so it refuses nothing."""
@@ -325,14 +329,22 @@ class Workflow:
         return asked
 
 
-    async def run(self, wire: Mapping[str, Any]) -> Any:
-        """The absorbed tool body: fill every input, then launch when READY."""
+    async def filled(self, wire: Mapping[str, Any], *,
+                     model: Mapping[str, str] | None = None) -> Fill:
+        """Every input ``wire`` states answered -> the fill; ``model`` names the SDK model it is a fill of, for the record."""
         from .fill import Fill, fill
 
         # Each call starts from no domain: a domain bound by an earlier call of the same turn is not this run's place.
         token = bind_domain(None)
         try:
-            state = await fill(Fill(workflow=self), wire)
+            return await fill(Fill(workflow=self, model=model), wire)
+        finally:
+            reset_domain(token)
+
+    async def run(self, wire: Mapping[str, Any]) -> Any:
+        """The absorbed tool body: fill every input, then launch when READY."""
+        try:
+            state = await self.filled(wire)
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001
@@ -340,8 +352,6 @@ class Workflow:
                 raise
             logger.exception("%s fill failed", self.name)
             return self._error(f"{self.error_prefix}_INTERNAL_ERROR", exc)
-        finally:
-            reset_domain(token)
         if not state.ready:
             code, sentence = state.refusal()
             logger.warning("%s %s: %s", self.name, code, sentence)
@@ -356,7 +366,7 @@ class Workflow:
             run = await self._launched(state)
         except Stopped as stop:
             await asyncio.to_thread(self._journal_stop, stop, time.monotonic() - started,
-                                    dict(state.env.supplied))
+                                    dict(state.env.supplied), state.model)
             raise
         except asyncio.CancelledError:
             raise
@@ -372,7 +382,7 @@ class Workflow:
         run.notes[:0] = [*state.notes, *state.moved]
         run.settings = {**state.settings_read, **run.settings}
         return await self._publish(run, time.monotonic() - started,
-                                   supplied=dict(state.env.supplied))
+                                   supplied=dict(state.env.supplied), model=state.model)
 
     async def _launched(self, state: Fill) -> RunResult:
         """Launch under the run's own domain and collectors; notes ride out on the run or on the failure.
@@ -433,11 +443,12 @@ class Workflow:
             journal_note(f"{why}; nothing of what it wrote was published: {said(exc)}")
         raise Stopped(RunResult(value=value, results=dict(run)), value, why)
 
-    def _journal_stop(self, stop: Stopped, wall_seconds: float, supplied: Mapping[str, Any]) -> None:
+    def _journal_stop(self, stop: Stopped, wall_seconds: float, supplied: Mapping[str, Any],
+                      model: Mapping[str, str] | None = None) -> None:
         """The record of a stopped run: what it published and what it was asked, labelled partial."""
         run = stop.run
         self._journal(self._run_id(stop.value, run), run, stop.value, wall_seconds, [*run.notes, stop.why],
-                      self._inputs(run, supplied), stopped=stop.why)
+                      self._inputs(run, supplied), stopped=stop.why, model=model)
 
     def _error(self, code: str, exc: BaseException) -> dict[str, Any]:
         """The failure, plus whatever auxiliary outputs the run also lost on the way."""
@@ -448,7 +459,8 @@ class Workflow:
 
 
     async def _publish(self, run: RunResult, wall_seconds: float = 0.0, *,
-                       supplied: Mapping[str, Any] | None = None) -> Any:
+                       supplied: Mapping[str, Any] | None = None,
+                       model: Mapping[str, str] | None = None) -> Any:
         result = run.value
         inputs = self._inputs(run, supplied or {})
         notes = list(run.notes) + [n for n in self.checks(run, inputs) if n]
@@ -465,7 +477,7 @@ class Workflow:
         run_id = self._run_id(result, run)
         # The journal takes the MERGED notes: a label only on the layer would vanish with it.
         await asyncio.to_thread(self._journal, run_id, run, result,
-                                wall_seconds, notes, inputs)
+                                wall_seconds, notes, inputs, model=model)
         logger.info("%s complete layer_id=%s stages=%s notes=%s",
                     self.name, getattr(result, "layer_id", None),
                     list(run.results), notes)
@@ -530,12 +542,15 @@ class Workflow:
 
     def _journal(self, run_id: str | None, run: RunResult, result: Any,
                  wall_seconds: float, notes: Sequence[str],
-                 inputs: Mapping[str, Mapping[str, Any]], *, stopped: str | None = None) -> None:
-        """Append this run to the run journal, from publish where the inputs and wall time are both in hand."""
-        from trid3nt.render.emission import current_emitter
+                 inputs: Mapping[str, Mapping[str, Any]], *, stopped: str | None = None,
+                 model: Mapping[str, str] | None = None) -> None:
+        """Append this run to the run journal, from publish where the inputs and wall time are both in hand.
+        ``model`` is the SDK model the run was filled from, its name and version; a call carries none."""
+        from trid3nt.render.emission import current_emitter, current_turn_case
 
         journal.append_record(journal.build_record(
-            run_id=run_id, engine=self.recorded_engine(run),
+            run_id=run_id, engine=self.recorded_engine(run), template=self.name,
+            case=current_turn_case(), model=(model or {}).get("name"), version=(model or {}).get("version"),
             module=self._module(run), inputs=inputs,
             correct_end=self._correct_end(run),
             result=result, wall_seconds=round(wall_seconds, 3),

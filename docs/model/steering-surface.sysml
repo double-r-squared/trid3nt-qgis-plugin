@@ -189,8 +189,9 @@ package SteeringSurface {
         ONE map of its inputs by name - a stated value, a keyword of the solved
         deck, a supplied or matched row, an absent optional value the run
         derived - each with its value, its origin and its source, and the line
-        records an input nowhere else. The template is not a field of the line; it survives as the
-        source of the keywords it stated.
+        records an input nowhere else. The line also names the template that ran, the case it
+        ran in, and - for a run of an SDK model - that model and the hash of its stated values;
+        the template is still the source of the keywords it stated.
         */
     }
 
@@ -1567,7 +1568,7 @@ package SteeringSurface {
     verify requirement ModuleIsTheUnit by
         "tests/telemac/test_telemac_run_identity.py::test_every_template_is_values_over_a_module_of_the_one_engine";
     verify requirement ModuleIsTheUnit by
-        "tests/telemac/test_telemac_run_identity.py::test_the_run_record_carries_the_engine_and_the_module_and_no_template";
+        "tests/telemac/test_telemac_run_identity.py::test_the_run_record_carries_the_engine_and_the_module_and_the_template_it_is_handed";
     verify requirement ModuleIsTheUnit by
         "tests/runtime/test_run_journal.py::test_the_record_carries_one_map_of_inputs_by_name";
     verify requirement ModuleIsTheUnit by

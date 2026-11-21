@@ -16,7 +16,7 @@ import math
 from dataclasses import dataclass, field
 from datetime import timedelta
 from functools import partial
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts.common import Origin
 from trid3nt_contracts.coverage import CoverageExtent, SourceChoice
@@ -46,6 +46,38 @@ from trid3nt.settings import bind_run, reset_run, split_keywords
 from trid3nt.inputs.temporal import RATE, STATE
 
 logger = logging.getLogger("trid3nt.workflows.runtime.fill")
+
+#: Whether an input the run leaves unstated takes its ranked list's top survivor, and the next where that held
+#: nothing; a host registers it. With none the fill takes only a source the run names, and an input left unstated
+#: refuses naming the ranked candidates.
+_RANKED: dict[str, Callable[[SourceChoice], bool]] = {}
+
+#: The code of a sourced input the run left unstated where nothing takes a ranked source for it.
+_UNSTATED = "DATA_SOURCE_UNSTATED"
+
+
+def register_rank_pick(takes: Callable[[SourceChoice], bool]) -> None:
+    """Install what says whether an unstated sourced input takes its ranked list's top survivor; a later one replaces it."""
+    _RANKED["takes"] = takes
+
+
+def _takes(choice: SourceChoice, named: str) -> bool:
+    """Is the list's top survivor asked next: the source the run names while it survives, else the registered pick's say."""
+    if not choice.picked:
+        return False
+    if named and choice.picked == named:
+        return True
+    takes = _RANKED.get("takes")
+    return takes is not None and takes(choice)
+
+
+def _unstated(name: str, named: str = "") -> StepFailedError:
+    """The refusal of a sourced input no source was taken for: the ranked candidates ride its verdict's remedies."""
+    held = (f"{named} held nothing here, and the fill takes no other source off the ranked list" if named
+            else "the run states no value or source for it, and the fill takes none off the ranked list")
+    return StepFailedError(
+        f"{name}: {held}. State {name} as a value or a layer, or name one of the ranked sources as its source.",
+        error_code=_UNSTATED, step=_data_step_label(name))
 
 async def read(env: "_Env", name: str) -> Any:
     """One input of the run's mapping by its plain name: a declared row nothing
@@ -211,6 +243,8 @@ async def _matched(env: _Env, decl: Input) -> Any:
             f"none was stated: state {near} on the water this run is about, or "
             f"draw or supply {decl.name} itself.",
             error_code="DATA_NEED_UNPLACED", step=_data_step_label(decl.name))
+    if "takes" not in _RANKED and not _pick(env, decl, decl.data_class):
+        raise _unstated(decl.name)
     await _somewhere_to_ask(env)
     if decl.slot is BED:
         return await _bed_surface(env, decl, lambda laid: _ingested(env, decl, laid))
@@ -418,14 +452,16 @@ async def _probe(env: _Env, decl: Input, data_class: str, label: str, *,
 
     A source holding nothing over this domain is dropped and the next takes its turn;
     ``read`` is the slot's own reading, so an unreadable record drops out like an empty one;
-    ``skip`` names the sources already laid, which are not asked again."""
+    ``skip`` names the sources already laid, which are not asked again. A survivor the
+    fill may not take refuses the input, naming none of them as taken."""
+    named = _pick(env, decl, data_class)
     choice = match(await _need(env, decl, data_class, label),
                    sources_with_coverage())
     for laid in skip:
         choice = dropped_from(choice, laid, "already laid")
     if skip and not choice.picked:
         return choice, None
-    while choice.picked:
+    while _takes(choice, named):
         row = _runtime_row(env, f"{label.replace(' ', '_')}_{choice.picked}",
                            choice.picked,
                            await _ask_for(env, choice, decl))
@@ -447,6 +483,8 @@ async def _probe(env: _Env, decl: Input, data_class: str, label: str, *,
         journal_note(choice.sentence)
         env.sources[decl.name] = choice.picked
         return choice, value
+    if choice.picked:
+        raise _unstated(decl.name, named if named and named != choice.picked else "")
     slot_choice(choice)
     journal_note(choice.sentence)
     return choice, None
@@ -1186,6 +1224,8 @@ class Fill:
     #: The settings the run states in its keywords, by identifier, and the ones the fill has read: the launch binds the first and carries the second onto the journal.
     settings: dict[str, Any] = field(default_factory=dict)
     settings_read: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: The SDK model this is a fill of, by ``name`` and ``version``, which the run's record names; none on a call.
+    model: Mapping[str, str] | None = None
 
     @property
     def ready(self) -> bool:
@@ -1433,7 +1473,7 @@ async def _answer(state: Fill, name: str, held: Any, value: Any) -> None:
             REJECTED, value, code=code,
             reason=str(exc) if value is not None or not row
             else f"{name!r} could not be produced: {exc}",
-            remedies=await _instead(state.env, held, picked) if picked
+            remedies=await _instead(state.env, held, picked or "") if picked or code == _UNSTATED
             else (f"a value between {held.bounds[0]} and {held.bounds[1]}",)
             if getattr(held, "bounds", None)
             else await _otherwise(held, value) if row and code != _WAITS else ())
@@ -1533,10 +1573,11 @@ async def _place_first(state: Fill, env: _Env, decl: Input) -> None:
             except Exception as exc:  # noqa: BLE001 - the refusal is the place's verdict
                 if getattr(exc, "retryable", False):
                     raise
+                code = _refusal_code(exc, row.name)
                 state.inputs[row.name] = Verdict(
-                    REJECTED, None, code=_refusal_code(exc, row.name),
+                    REJECTED, None, code=code,
                     reason=f"{row.name!r} could not be produced: {exc}",
-                    remedies=await _otherwise(row, None))
+                    remedies=await (_instead(env, row, "") if code == _UNSTATED else _otherwise(row, None)))
         raise StepFailedError(
             f"{decl.name} stands on the run's {row.name}, which was refused.",
             error_code=_WAITS)
@@ -1554,7 +1595,7 @@ async def _otherwise(decl: Input, value: Any) -> tuple[str, ...]:
     return (*(f"the Case layer {layer_id} ({label})" if label != layer_id
               else f"the Case layer {layer_id}" for layer_id, label in taken),
             *((f"leave {decl.name} unstated and the run matches a source of "
-               f"{decl.data_class}",) if decl.data_class and value is not None else ()))
+               f"{decl.data_class}",) if decl.data_class and value is not None and "takes" in _RANKED else ()))
 
 
 async def _instead(env: _Env, decl: Input, picked: str) -> tuple[str, ...]:

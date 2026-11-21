@@ -155,13 +155,11 @@ async def publish(*, run_id: str, engine: str, name: str,
 
 
 def record_run_outputs(layers: Sequence[LayerURI]) -> None:
-    """Write every published layer onto the run in progress, for the record."""
+    """Write every published layer onto the run in progress, for the record: whole, as a reader loads it.
+    The legend is the emission seam's to resolve, and the notes and inputs are the record's own fields."""
     from trid3nt.workflows.runtime.journal import journal_outputs
 
-    journal_outputs([layer.model_dump(mode="json",
-                                      include={"layer_id", "name", "layer_type",
-                                               "uri", "quantity", "tracer",
-                                               "units"})
+    journal_outputs([layer.model_dump(mode="json", exclude={"legend", "notes", "synthetic_inputs"})
                      for layer in layers])
 
 

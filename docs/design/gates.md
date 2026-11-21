@@ -35,7 +35,10 @@ user-gated parks the turn on the card, and with no live session to present on it
 refuses by name rather than runs. A gate that must always ask (`set_config`, the key ask,
 the inputs card) forces `user_gated` over the setting. A workflow says that refusal at its fill
 (`NO_SESSION` on `AUTO`), before any unstated row is fetched or a mesh built; the
-gate's own is what a tool with no workflow gets.
+gate's own is what a tool with no workflow gets. A caller with no person to ask - the
+SDK's model - holds its run `unattended` (`review.py`): every gate proceeds with its
+inputs labeled, nothing is drawn, nothing refuses `NO_SESSION`, and the AUTO setting is
+never read.
 
 ## The inputs card
 

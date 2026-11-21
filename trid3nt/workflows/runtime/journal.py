@@ -129,6 +129,10 @@ def append_record(record: Mapping[str, Any]) -> Path | None:
 
 def build_record(*, run_id: str | None, engine: str | None,
                  module: str | None,
+                 template: str | None = None,
+                 case: str | None = None,
+                 model: str | None = None,
+                 version: str | None = None,
                  inputs: Mapping[str, Mapping[str, Any]],
                  result: Any,
                  wall_seconds: float | None, origin: str,
@@ -143,12 +147,18 @@ def build_record(*, run_id: str | None, engine: str | None,
     """One run record, from what the publish stage already holds.
     ``stopped`` is the sentence of a run the user stopped, whose outputs are partial; none on a run that ended.
     ``check_steps`` is the step count a check run stopped its solve at; none on a full-length run.
-    ``study`` names the study whose best parameters the run was solved with, and keeps its last ensemble or its iterations; none on any other run."""
+    ``study`` names the study whose best parameters the run was solved with, and keeps its last ensemble or its iterations; none on any other run.
+    ``template`` is the workflow that ran, ``case`` the case it ran in; ``model`` and ``version`` name the SDK model it was
+    filled from and the hash of that model's stated values, none on a call."""
     return {
         "run_id": run_id,
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "engine": engine,
         "module": module,
+        "template": template,
+        "case": case,
+        "model": model,
+        "version": version,
         "origin": origin,
         # THE ONE MAP: every input of the run by name - a stated value, a keyword of the solved deck, a supplied or
         # matched row, an absent optional one the run derived - with who stated it and the source that names it.

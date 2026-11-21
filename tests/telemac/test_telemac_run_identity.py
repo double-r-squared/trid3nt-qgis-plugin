@@ -82,10 +82,10 @@ def test_a_card_names_the_origin_of_every_set_row_and_of_no_other(
             assert row.origin is None, row.name
 
 
-def test_the_run_record_carries_the_engine_and_the_module_and_no_template():
-    """A run is recorded under the engine and the module that ran it. The template
-    is not a field of the line; it survives as the provenance of the slots it
-    filled, which is how a reader - and the template pages - find its runs."""
+def test_the_run_record_carries_the_engine_and_the_module_and_the_template_it_is_handed():
+    """A run is recorded under the engine and the module that ran it, and the template the
+    publish stage names; a record built naming none carries none, and the template still
+    survives as the provenance of the slots it filled."""
     from trid3nt.workflows.runtime import journal
 
     record = journal.build_record(
@@ -97,7 +97,7 @@ def test_the_run_record_carries_the_engine_and_the_module_and_no_template():
         result=None,
         wall_seconds=1.0, origin="session", notes=())
     assert record["engine"] == "telemac" and record["module"] == "telemac2d"
-    assert "template" not in record
+    assert record["template"] is None and record["model"] is None and record["version"] is None
     assert record["inputs"]["DURATION"] == {
         "value": 3600.0, "origin": "template", "source": "telemac_dye_release"}
 

@@ -2,12 +2,15 @@
 
 The SDK never asks a person itself: a host registers the gate that does (``register_gate``). With
 none registered, nothing asks: ``auto`` proceeds with every input labeled, and a ``user_gated``
-review refuses ``NO_SESSION`` naming the run, as it does with no live session to present on.
+review refuses ``NO_SESSION`` naming the run, as it does with no live session to present on. A caller
+with no person to ask holds its run ``unattended``: nothing asks and the person's AUTO setting is not read.
 """
 from __future__ import annotations
 
+import contextvars
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Literal
+from typing import Any, Awaitable, Callable, Iterator, Literal
 
 from trid3nt_contracts.common import ORIGIN_LABELS, Origin, SyntheticInput
 from trid3nt_contracts.payload_warning import ParamSheet
@@ -25,17 +28,35 @@ __all__ = [
     "register_gate",
     "render_input_review_lines",
     "resolve_input_gate_mode",
+    "unattended",
 ]
 
 #: Run-mode lever for every gated thing. ``auto``
 #: proceeds immediately with labeled inputs; ``user_gated`` pauses for review.
 InputGateMode = Literal["auto", "user_gated"]
 
+#: Set while a caller with no person to ask holds the run; per task, so a session's own turn is never unattended.
+_UNATTENDED: contextvars.ContextVar[bool] = contextvars.ContextVar("trid3nt_unattended", default=False)
+
+
+@contextmanager
+def unattended() -> Iterator[None]:
+    """Hold what runs inside as a caller with no person to ask: every gate proceeds with its inputs labeled, nothing
+    is drawn, and the person's AUTO setting is never read. What no source states still refuses where it is read."""
+    token = _UNATTENDED.set(True)
+    try:
+        yield
+    finally:
+        _UNATTENDED.reset(token)
+
 
 def resolve_input_gate_mode(forced: InputGateMode | None = None) -> InputGateMode:
-    """The mode in force: ``forced`` where a gate must always ask, else ``auto`` where the person's AUTO setting is on.
+    """The mode in force: ``auto`` while unattended, ``forced`` where a gate must always ask, else ``auto`` where the
+    person's AUTO setting is on.
 
     The setting is the person's alone - no call and no run states it - so a ready run launches on an act the person chose to skip."""
+    if _UNATTENDED.get():
+        return "auto"
     return forced or ("auto" if setting("AUTO") else "user_gated")
 
 
@@ -145,8 +166,8 @@ async def gate_input_review(*, tool_name: str, entries: list[SyntheticInput],
     """Present what is under review before it runs, and ask, through the registered gate.
 
     The gate takes ``max_rounds``, ``ttl_seconds``, ``param_sheet``, ``present``, ``apply_revision``,
-    ``blocked`` and ``emitter`` as stated. With none registered nothing asks (the module's stance)."""
-    ask = _ASK.get("review")
+    ``blocked`` and ``emitter`` as stated. With none registered, or unattended, nothing asks (the module's stance)."""
+    ask = None if _UNATTENDED.get() else _ASK.get("review")
     if ask is not None:
         return await ask(tool_name=tool_name, entries=entries, params=params, mode=mode, **card)
     if resolve_input_gate_mode(mode) == "auto":
@@ -158,8 +179,8 @@ async def gate_input_review(*, tool_name: str, entries: list[SyntheticInput],
 
 async def gate_draw_input(*, tool_name: str, param: str, geometry: str, prompt: str,
                           purpose: str | None = None, ttl_seconds: int | None = None) -> DrawOutcome:
-    """Ask the registered gate for ONE param's value drawn on the canvas; with none, nothing is drawn."""
-    ask = _ASK.get("draw")
+    """Ask the registered gate for ONE param's value drawn on the canvas; with none, or unattended, nothing is drawn."""
+    ask = None if _UNATTENDED.get() else _ASK.get("draw")
     if ask is None:
         return DrawOutcome(reason="there is no live map session to draw on")
     return await ask(tool_name=tool_name, param=param, geometry=geometry, prompt=prompt,

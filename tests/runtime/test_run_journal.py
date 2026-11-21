@@ -45,10 +45,10 @@ def _record(**overrides):
 def test_a_run_record_carries_the_run_its_engine_and_where_it_came_from():
     rec = _record()
     assert rec["run_id"] == "RUN9"
-    # The engine and the MODULE of it that ran are the run's identity; the
-    # template it started in is not on the line at all.
+    # The engine and the MODULE of it that ran are the run's identity; a record built naming no template,
+    # case, model or version carries none of them.
     assert rec["engine"] == "telemac" and rec["module"] == "telemac2d"
-    assert "template" not in rec
+    assert (rec["template"], rec["case"], rec["model"], rec["version"]) == (None, None, None, None)
     assert rec["origin"] == "session"
     assert rec["recorded_at"].endswith("+00:00")
 
@@ -281,7 +281,7 @@ def test_the_run_journals_the_mesh_its_mesh_step_returned(monkeypatch):
 
     lines: list = []
     monkeypatch.setattr(journal, "append_record", lines.append)
-    skeleton = SimpleNamespace(engine="telemac", _module=lambda run: None,
+    skeleton = SimpleNamespace(engine="telemac", name="telemac_dye_release", _module=lambda run: None,
                                _correct_end=lambda run: None, recorded_engine=lambda run: "telemac")
     run = RunResult(value=None, results={"mesh": {"key": "5f4d1a42f53e",
                                                   "built_by": "RUN1"}})

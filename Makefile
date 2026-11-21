@@ -30,7 +30,7 @@ PYTEST = env -u TRID3NT_CACHE_BUCKET venvs/agent/bin/python -m pytest \
 
 test-fetchers:      ; $(PYTEST) tests/fetchers
 test-spatial:       ; $(PYTEST) tests/derive tests/render tests/mesh
-test-engines:       ; $(PYTEST) tests/telemac tests/runtime tests/solver tests/search
+test-engines:       ; $(PYTEST) tests/telemac tests/runtime tests/solver tests/search tests/sdk
 test-server:        ; $(PYTEST) tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts
 test-model-surface: ; $(PYTEST) tests/adapters tests/tools
 test-packages:      ; $(PYTEST) tests/contracts tests/plugin

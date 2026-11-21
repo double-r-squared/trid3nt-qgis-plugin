@@ -10,7 +10,7 @@ with nothing registered nothing is emitted and nothing asks.
 
 | file | what it is |
 | --- | --- |
-| `__init__.py` | The package door. |
+| `__init__.py` | The package door: `case`, loaded on first use. |
 | `errors.py` | `DeclarativeError` - the base every typed failure carries its `error_code` on, below both the input layer and the template runtime. |
 
 ## Subfolders
@@ -19,6 +19,7 @@ with nothing registered nothing is emitted and nothing asks.
 | --- | --- |
 | `credentials/` | The connect handshake, and the resolver over the credential each row declares. |
 | `inputs/` | Every input into the system as a typed value: a Point, an Extent and a Shape, each with one ingestion from every form a user hands it in, and the user's own file adopted as a layer. |
+| `sdk/` | The SDK's own front: `case(name)` and a Model over one template, set by attribute, filled and run in-process, unattended. |
 | `render/` | The format set a product reaches the map in - a COG raster, a GeoJSON vector, an MDAL mesh, a chart payload - and everything it passes through on the way. |
 | `session/` | The requests a live QGIS session answers - a processing run, a provider layer - and the replies they park on; with no session bound each refuses. |
 | `settings/` | The changeable judgments: one keyword dictionary, three levels (default, the user's file, the run), and the one reader every module calls. |

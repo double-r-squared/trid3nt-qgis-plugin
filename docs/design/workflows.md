@@ -395,7 +395,11 @@ against the mesh (a row that states no cell ranks after every row that does),
 on recency and on the native datum, and calls the survivors in rank order. A
 survivor whose answer holds nothing - a call that raised, or a vector layer the
 slot's ingestion finds carrying zero features - is dropped and the next ranked
-row takes its turn, in the one walk every need shares (`fill.py::_probe`); the
+row takes its turn, in the one walk every need shares (`fill.py::_probe`). The walk is
+the harness's to take: it registers it at import (`register_rank_pick`), and with none
+registered a row the run leaves unstated refuses `DATA_SOURCE_UNSTATED` naming the ranked
+sources as its remedies, and a named source that held nothing refuses naming the rest
+(`docs/design/sdk.md`); the
 run note names the rows that held nothing and the one that filled the slot, and
 when every askable row held nothing the single `DATA_NEED_UNMATCHED` refusal
 names each row and what it returned. A refusal of the ask itself (a malformed

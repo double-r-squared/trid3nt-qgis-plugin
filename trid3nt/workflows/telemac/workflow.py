@@ -447,6 +447,10 @@ class TelemacWorkflow(Workflow):
         body, identifier = identify_on(run_bodies(self.steering), name)
         return Keyword(body, identifier, body is self.steering)
 
+    def bodies(self) -> tuple[str, ...]:
+        """The carrier's module word, then each coupled module's, in deck order."""
+        return tuple(body.MODULE for body in run_bodies(self.steering))
+
     @property
     def steering(self) -> type:
         """The STEERING body: the module wrapper, the slots this question asserts
