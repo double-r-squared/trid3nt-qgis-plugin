@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("trid3nt_server.workflows.pestpp.workflow")
 
-__all__ = ["ENGINES", "METHODS", "PestppWorkflow", "piece", "ranked"]
+__all__ = ["ENGINES", "LOCALIZED", "METHODS", "PestppWorkflow", "localized", "piece", "ranked"]
 
 #: The engines a study calibrates, each by its piece ``authoring/<engine>.py``: the parameter writer, the
 #: observation reader, the trial's command, and the calibrated run's solve and publish.
@@ -48,6 +48,12 @@ METHODS = {"ies": "ensemble", "glm": "regression"}
 
 #: The study's observation rows; each piece reads one, and a stated row its piece does not read refuses.
 _ROWS = ("observe", "gauges")
+
+#: An ensemble study over pilot points localizes, unstated, by PEST++'s own automatic adaptive localization: many
+#: correlated points against few observations is the case its spurious correlations are filtered for.
+LOCALIZED = ("IES_AUTOADALOC", True,
+             "PEST++ 5.2.27 users manual 9.1.11 Localization: automatic adaptive localization (Luo et al. 2018), "
+             "activated by ies_autoadaloc")
 
 
 def piece(engine: str) -> ModuleType:
@@ -62,6 +68,15 @@ def piece(engine: str) -> ModuleType:
 def ranked(sensitivity: Sequence[Mapping[str, Any]]) -> list[str]:
     """The parameters of a Morris summary, most sensitive first: by the mean absolute elementary effect."""
     return [row["parameter"] for row in sorted(sensitivity, key=lambda row: -float(row["sen_mean_abs"]))]
+
+
+def localized(options: Mapping[str, Any], method: str, fields: Mapping[str, Any]) -> tuple[dict[str, Any], bool]:
+    """The options with an ies study over pilot points localized by PEST++'s automatic adaptive localization where the
+    run does not state ies_autoadaloc -> the options and whether the study turned it on."""
+    identifier, value, _source = LOCALIZED
+    if method != "ies" or not fields or identifier in options:
+        return dict(options), False
+    return {**options, identifier: value}, True
 
 
 def _method(stated: Any) -> str:
@@ -129,7 +144,7 @@ def _priors(parameters: Sequence[Any], options: Mapping[str, Any], fields: Mappi
     import statistics
 
     from . import outputs
-    from .authoring.control import prior
+    from .authoring.control import at_bounds, prior
 
     held = prior(parameters, options)
     for identifier, field in fields.items():
@@ -143,8 +158,11 @@ def _priors(parameters: Sequence[Any], options: Mapping[str, Any], fields: Mappi
             members = [p for p in parameters if p.group == group]
             rows = [[math.log10(real[p.name]) if stated["transform"] == "log" else real[p.name] + p.offset / p.scale
                      for real in ensemble.values()] for p in members]
+            stuck = sum(c["lower"] + c["upper"] for real in ensemble.values()
+                        for c in at_bounds(members, real, stated["transform"]).values())
             stated[label] = {"mean": statistics.fmean(v for row in rows for v in row),
-                             "sd": statistics.fmean(statistics.pstdev(row) for row in rows), "of": stated["sd_of"]}
+                             "sd": statistics.fmean(statistics.pstdev(row) for row in rows), "of": stated["sd_of"],
+                             "at_bounds": stuck, "values": len(members) * len(ensemble)}
     return held
 
 
@@ -228,10 +246,10 @@ class PestppWorkflow(Workflow):
         from trid3nt_server.render.pipeline_emitter import begin_substeps, current_emitter, substep
         from trid3nt_server.workflows.runtime.fill import call, production, read
 
-        from trid3nt_server.errors import accuracy_not_cited_warning, unit_start_warning
+        from trid3nt_server.errors import accuracy_not_cited_warning, parameters_at_bounds_warning, unit_start_warning
 
         from . import engine, outputs, staging, weights
-        from .authoring.control import write_control
+        from .authoring.control import at_bounds, write_control
 
         env = production(state)
         run = env.run
@@ -290,9 +308,9 @@ class PestppWorkflow(Workflow):
                 journal_note(accuracy_not_cited_warning(count=uncited))
             if started := weights.unit_started(observed):
                 journal_note(unit_start_warning(count=started))
-            journal_note("the run's supplied inputs (its bed, boundary levels and stated values) carry no accuracy on "
-                         "its record, so none is a parameter of the study: an input becomes one only with a stated "
-                         "accuracy, its prior sd")
+            offsets, said = study.supplied(the_deck)
+            for line in said:
+                journal_note(line)
             if held := sum(target.datum is not None for target in observed):
                 journal_note(f"{held} {study.SITE} zeros cite their accuracy, so each is a datum parameter of its own "
                              "whose prior sd that accuracy is, and leaves the target's sigma")
@@ -320,11 +338,17 @@ class PestppWorkflow(Workflow):
             if ranking:
                 kept = await self._ranked(studied, chosen, options, int(tune))
                 chosen = [row for row in chosen if row[0].lower() in kept]
+            options, localizing = localized(options, method, {k: v for k, v in fields.items()
+                                                               if k in {row[0] for row in chosen}})
             await self._reviewed(chosen, sources, observed, options, method,
-                                 stated=env.supplied.get("method") is not None, fields=fields)
+                                 stated=env.supplied.get("method") is not None, fields=fields, localizing=localizing,
+                                 offsets=offsets)
             handle, files, parameters, templates = await studied(method, chosen, options)
             read_off = await asyncio.to_thread(_calibration, method, files)
             best = read_off["best"]
+            stuck = at_bounds(parameters, best, str(options.get("PARTRANS") or ""))
+            if stuck:
+                journal_note(parameters_at_bounds_warning(groups=stuck))
             widening = weights.widened(observed, read_off["residuals"])
             journal_note(f"the widening after the fit (the discrepancy rule) scales each group's sigma so its phi is "
                          f"its count, the calibrated parameters unchanged: phi {widening['phi']:.4g} over "
@@ -341,7 +365,10 @@ class PestppWorkflow(Workflow):
                                          **({"site": list(p.site)} if p.site else {})}
                                 for p in parameters},
                             "prior": _priors(parameters, options, fields, files, method),
-                            "phi": read_off["phi"], **read_off["kept"], "balanced": balanced,
+                            "phi": read_off["phi"], **read_off["kept"], "balanced": balanced, "at_bounds": stuck,
+                            **({"localization": {"ies_autoadaloc": options[LOCALIZED[0]],
+                                                 "source": LOCALIZED[2] if localizing else "stated by the user"}}
+                               if LOCALIZED[0] in options else {}),
                             "widening": {k: v for k, v in widening.items() if k != "sigma"},
                             "observations": [{"name": o.name, "target": o.value, "group": o.group, "sigma": o.sigma,
                                               "weight": o.weight, "basis": o.basis,
@@ -384,7 +411,8 @@ class PestppWorkflow(Workflow):
 
     async def _reviewed(self, chosen: Sequence[tuple[str, float, float, bool]], sources: Mapping[str, str],
                         observed: list, options: Mapping[str, Any], method: str, *, stated: bool,
-                        fields: Mapping[str, Mapping[str, Any]] = {}) -> None:
+                        fields: Mapping[str, Mapping[str, Any]] = {}, localizing: bool = False,
+                        offsets: Sequence[tuple[str, float, str]] = ()) -> None:
         """The study before it runs, on the one review card where a person reviews; a decline ends the run."""
         from trid3nt_server.inputs.gate.input_review import gate_input_review
 
@@ -410,6 +438,13 @@ class PestppWorkflow(Workflow):
         bounds += [SyntheticInput(param=f"datum {o.name}", value=f"sd {o.datum[0]:.3g} in the run's unit about the "
                                   "zero the gauge states: a parameter, outside sigma", basis=Origin.PRODUCER,
                                   real_source_if_any=o.datum[1]) for o in observed if o.datum is not None]
+        bounds += [SyntheticInput(param=name, value=f"offset, mean 0 and sd {sd:.3g} in the run's unit: a parameter, "
+                                  "bounded 2 sd either side", basis=Origin.PRODUCER, real_source_if_any=cite)
+                   for name, sd, cite in offsets]
+        if localizing:
+            bounds.append(SyntheticInput(param="localization", value="automatic adaptive (ies_autoadaloc true): the "
+                                         "study's own over pilot points; state ies_autoadaloc false to turn it off",
+                                         basis=Origin.TEMPLATE, real_source_if_any=LOCALIZED[2]))
         sigmas = [SyntheticInput(param=f"sigma {group}", value=f"{min(held):.3g} to {max(held):.3g} in the run's unit",
                                  basis=Origin.USER if any(o.basis == USER for o in observed if o.group == group)
                                  else Origin.PRODUCER) for group, held in _sigmas(observed).items()]

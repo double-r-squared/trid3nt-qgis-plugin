@@ -15,12 +15,12 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
-from ..authoring.control import Observed, Parameter
+from ..authoring.control import Observed, Parameter, unheld_note
 from ..errors import PestppError
 
-__all__ = ["DATUMS", "DATUM_SHIFT", "Deck", "HELD", "LEVELS", "OBSERVED", "OBS_OUTPUT", "OWN", "PLACE", "ROW", "SITE", "TRIAL", "TUNABLE",
-           "calibrated", "command", "datums", "deck", "fields", "interface", "multiplier", "observe_levels", "outflow_levels",
-           "published", "targets"]
+__all__ = ["DATUMS", "DATUM_SHIFT", "Deck", "HELD", "LEVELS", "OBSERVED", "OBS_OUTPUT", "OUTFLOW", "OWN", "PLACE", "ROW",
+           "SITE", "TRIAL", "TUNABLE", "calibrated", "command", "datums", "deck", "fields", "interface", "multiplier",
+           "observe_levels", "outflow_levels", "outflow_offset", "published", "supplied", "targets"]
 
 #: The study's row the targets are read off: the gauges, each a water level on the run's own frame.
 ROW = "gauges"
@@ -64,6 +64,12 @@ _LEVEL_POINTS = 81
 #: A stated level that equals the derivation at the run's own coefficient within this is the derived one.
 _SAME_LEVEL_M = 1.0e-3
 
+#: The measured outflow level's offset as PEST writes it, where that level's accuracy is cited and so a parameter.
+OUTFLOW = "study_outflow.dat"
+_OUTFLOW = "outflow_level"
+#: The suffix of the liquid boundaries file as the run wrote it, which each trial moves its own copy from.
+_UNMOVED = ".unmoved"
+
 
 @dataclass(frozen=True)
 class Deck:
@@ -78,6 +84,11 @@ class Deck:
     utm_epsg: int
     #: The length the run measured its friction slope over, along its walked line; None for a run that held none.
     reach_length_m: float | None = None
+    #: The outflow level a gauge measured, where its record cites its accuracy: the PRESCRIBED ELEVATIONS entry it holds,
+    #: the liquid boundaries file's column carrying its window (None for one reading), its sd and cite; None otherwise.
+    level: Mapping[str, Any] | None = None
+    #: Why the run's outflow level is no parameter, where it is not: a code the study's note names.
+    unheld: str = ""
 
 
 def command(the_deck: Deck) -> str:
@@ -115,9 +126,64 @@ def deck(directory: Path, finished: Any) -> Deck:
         raise PestppError(f"the run's steering file already states {', '.join(held)}, which the study writes to "
                           "print its gauges", error_code="PESTPP_OBSERVATION_UNPLACED")
     results = list(case.get("results") or finished.outputs)
+    level, unheld = _measured_level(directory, stated, finished)
     return Deck(steering=steering, stated=stated, module=module, result=str(results[0]),
                 utm_epsg=int(case["server_facts"]["utm_epsg"]),
-                reach_length_m=case["server_facts"].get("reach_length_m"))
+                reach_length_m=case["server_facts"].get("reach_length_m"), level=level, unheld=unheld)
+
+
+def _measured_level(directory: Path, stated: Mapping[str, list[str]], finished: Any
+                    ) -> tuple[dict[str, Any] | None, str]:
+    """The outflow level a gauge measured as the run's record and deck hold it -> (its entry, column, value, sd and
+    cite; or None) and the code saying why it is none: a level the record cites no accuracy for (the reading's, and
+    the gauge zero's where one lifts it), or one the deck does not hold at one boundary, is no parameter."""
+    import math
+
+    from trid3nt_server.inputs.slots import LEVEL
+
+    row = ((getattr(finished, "record", None) or {}).get("inputs") or {}).get(LEVEL.name) or {}
+    parts = [row.get(k) for k in ("accuracy", "zero_accuracy") if row.get(k) is not None]
+    if not parts:
+        return None, "unmeasured"
+    if any(part.get("value") is None for part in parts):
+        return None, "uncited"
+    elevations = [float(v) for v in stated.get("PRESCRIBED ELEVATIONS") or ()]
+    column, at = None, None
+    file = (stated.get("LIQUID BOUNDARIES FILE") or [None])[0]
+    if file and (directory / file).is_file():
+        header = next((line.split() for line in (directory / file).read_text().splitlines()
+                       if line.strip() and not line.startswith("#")), [])
+        held = [name for name in header if name.startswith("SL(")]
+        if len(held) == 1:
+            column, at = held[0], int(held[0][3:-1]) - 1
+    if at is None:
+        flows = [float(v) for v in stated.get("PRESCRIBED FLOWRATES") or ()]
+        # The deck writes 0.0 in a list at every boundary the other list prescribes.
+        held_at = [k for k, z in enumerate(elevations) if z != 0.0 and (k >= len(flows) or flows[k] == 0.0)]
+        at = held_at[0] if len(held_at) == 1 else None
+    if at is None or at >= len(elevations):
+        return None, "unplaced"
+    initial = (stated.get("INITIAL ELEVATION") or [None])[0]
+    return {"boundary": at, "column": column, "file": file if column else None, "value": elevations[at],
+            "elevations": elevations,
+            "initial": initial is not None and abs(float(initial) - elevations[at]) <= _SAME_LEVEL_M,
+            "sd": math.sqrt(sum(float(part["value"]) ** 2 for part in parts)),
+            "cite": "; ".join(str(part.get("cite") or "") for part in parts)}, ""
+
+
+def supplied(the_deck: Deck) -> tuple[list[tuple[str, float, str]], list[str]]:
+    """The run's supplied inputs a study holds as parameters -> ``[(name, sd, cite)]``, and the study's notes: which
+    carry no accuracy on its record, and the measured outflow level as a parameter, or why it is none."""
+    if the_deck.level is not None:
+        return [(_OUTFLOW, the_deck.level["sd"], the_deck.level["cite"])], [
+            unheld_note("its bed and stated values"),
+            "the outflow level a gauge measured cites its accuracy, so it is an offset parameter of its own whose prior "
+            "sd that accuracy is, each trial moving the level the outflow holds by it"]
+    notes = [unheld_note("its bed, boundary levels and stated values")]
+    if the_deck.unheld == "unplaced":
+        notes.append("the outflow level a gauge measured cites its accuracy, and the deck holds it at no one boundary "
+                     "the study can place, so it is no parameter")
+    return [], notes
 
 
 def fields(spatial: Mapping[str, Any], the_deck: Deck) -> dict[str, dict[str, Any]]:
@@ -248,7 +314,9 @@ def interface(source: Path, dest: Path, chosen: Sequence[tuple[str, float, float
         parameters.append(parameter)
         if pair not in templates:
             templates.append(pair)
-    outflow_levels(dest, the_deck=the_deck, parameters=parameters)
+    if outflow_levels(dest, the_deck=the_deck, parameters=parameters) is None and the_deck.level is not None:
+        parameters.append(outflow_offset(dest, the_deck=the_deck))
+        templates.append((f"{OUTFLOW}.tpl", OUTFLOW))
     held = datums(dest, targets)
     if held:
         parameters += held
@@ -355,6 +423,47 @@ def outflow_levels(directory: Path, *, the_deck: Deck, parameters: Sequence[Para
     return table
 
 
+def outflow_offset(directory: Path, *, the_deck: Deck) -> Parameter:
+    """The measured outflow level's offset as a parameter, prior mean 0 and sd the level's cited accuracy, bounds 2 sd
+    either side as a datum's; and the files the trial reads it through: the offset PEST writes and LEVELS, the level
+    the trial adds it to (its steering entry, its window's column and a flat opening stated at it)."""
+    import json
+
+    held = the_deck.level
+    width = _DATUM_SDS * held["sd"]
+    if held["column"]:
+        shutil.copy2(directory / held["file"], directory / f"{held['file']}{_UNMOVED}")
+    (directory / OUTFLOW).write_text("OUTFLOW 0.0\n")
+    (directory / f"{OUTFLOW}.tpl").write_text(f"ptf ~\nOUTFLOW ~{_OUTFLOW.ljust(_FIELD - 2)}~\n")
+    (directory / LEVELS).write_text(json.dumps({
+        "module": the_deck.module, "steering": the_deck.steering, "boundary": held["boundary"],
+        "elevations": held["elevations"], "level": held["value"], "column": held["column"], "file": held["file"],
+        "unmoved": held["file"] and f"{held['file']}{_UNMOVED}", "initial": held["initial"]}, indent=1))
+    return Parameter(name=_OUTFLOW, value=DATUM_SHIFT * width, lower=(DATUM_SHIFT - 1.0) * width,
+                     upper=(DATUM_SHIFT + 1.0) * width, group=_OUTFLOW, transform="none", offset=-DATUM_SHIFT * width,
+                     sd=held["sd"], sd_source=f"the measured outflow level's cited accuracy ({held['cite']})")
+
+
+def _offset_level(directory: Path, the_deck: Deck, offset: float) -> dict[str, Any]:
+    """The measured outflow level moved by ``offset``: its window's column rewritten in place, and the steering values
+    that hold it -> those values."""
+    held = the_deck.level
+    if held["column"]:
+        path = directory / held["file"]
+        lines = path.read_text().splitlines()
+        rows = [k for k, line in enumerate(lines) if line.strip() and not line.startswith("#")]
+        at = lines[rows[0]].split().index(held["column"])
+        for k in rows[2:]:
+            cells = lines[k].split()
+            cells[at] = f"{float(cells[at]) + offset:.9g}"
+            lines[k] = " ".join(cells)
+        path.write_text("\n".join(lines) + "\n")
+    elevations = list(held["elevations"])
+    elevations[held["boundary"]] = round(held["value"] + offset, 4)
+    return {"PRESCRIBED ELEVATIONS": elevations,
+            **({"INITIAL ELEVATION": elevations[held["boundary"]]} if held["initial"] else {})}
+
+
 async def calibrated(*, finished: Any, study_dir: Path, the_deck: Deck, parameters: list,
                      templates: list, best: Mapping[str, float], frame: str) -> dict[str, Any]:
     """The finished run's deck with the best parameters written into its own steering file, staged and solved as
@@ -375,6 +484,9 @@ async def calibrated(*, finished: Any, study_dir: Path, the_deck: Deck, paramete
     values = {parameter.name.upper().replace("_", " "): best[parameter.name] * parameter.scale + parameter.offset
               for parameter in parameters if parameter.name.upper() in TUNABLE}
     values.update(await asyncio.to_thread(_level_at, rundir, the_deck, values.get("FRICTION COEFFICIENT")))
+    offset = next((best[p.name] * p.scale + p.offset for p in parameters if p.name == _OUTFLOW), None)
+    if offset is not None:
+        values.update(await asyncio.to_thread(_offset_level, rundir, the_deck, offset))
     await asyncio.to_thread(restate, rundir, the_deck.steering, the_deck.module, values)
     case = finished.case
     results = list(case.get("results") or [])

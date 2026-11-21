@@ -16,7 +16,7 @@ from ..errors import PestppError
 from ..modules import LOCKED, PESTPP
 from ...runtime.module import UNSET
 
-__all__ = ["Observed", "Parameter", "TABLES", "prior", "sigma_range", "substitute", "write_control"]
+__all__ = ["Observed", "Parameter", "TABLES", "at_bounds", "prior", "sigma_range", "substitute", "unheld_note", "write_control"]
 
 #: The tables the control file names, each written beside it.
 TABLES = {"parameter groups": "study_groups.csv", "parameter data": "study_parameters.csv",
@@ -72,6 +72,12 @@ class Observed:
         return 1.0 / self.sigma
 
 
+def unheld_note(inputs: str) -> str:
+    """The study's note for the run's supplied ``inputs`` that carry no accuracy on its record and so are no parameter."""
+    return (f"the run's supplied inputs ({inputs}) carry no accuracy on its record, so none is a parameter of the study: "
+            "an input becomes one only with a stated accuracy, its prior sd")
+
+
 def _spelled(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -100,6 +106,29 @@ def _sd(p: Parameter, transform: str, span: float) -> float:
     if p.sd is not None:
         return p.sd
     return ((math.log10(p.upper) - math.log10(p.lower)) if transform == "log" else (p.upper - p.lower)) / span
+
+
+def _at(value: float, bound: float, log: bool) -> bool:
+    # pestpp-ies clips a log-transformed parameter at log10 of its bound, and 10 ** that is the bound to within an ulp.
+    import math
+
+    return value == bound or (log and value == 10.0 ** math.log10(bound))
+
+
+def at_bounds(parameters: Sequence[Parameter], values: Mapping[str, float], transform: str = ""
+              ) -> dict[str, dict[str, int]]:
+    """Each parameter group holding a parameter at or past a bound -> ``{group: {"lower", "upper", "of"}}``: PEST++'s
+    own rule (Pest::get_pars_at_near_bounds, tolerance 0), on PEST's value as the study's tool wrote it."""
+    held: dict[str, dict[str, int]] = {}
+    for p in parameters:
+        group = held.setdefault(p.group, {"lower": 0, "upper": 0, "of": 0})
+        group["of"] += 1
+        value, log = float(values[p.name]), (transform or p.transform) == "log"
+        if value <= p.lower or _at(value, p.lower, log):
+            group["lower"] += 1
+        elif value >= p.upper or _at(value, p.upper, log):
+            group["upper"] += 1
+    return {group: counts for group, counts in held.items() if counts["lower"] or counts["upper"]}
 
 
 def prior(parameters: Sequence[Parameter], stated: Mapping[str, Any] = {}) -> dict[str, dict[str, Any]]:

@@ -18,12 +18,12 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping, Sequence
 
-from ..authoring.control import Observed, Parameter, substitute
+from ..authoring.control import Observed, Parameter, substitute, unheld_note
 from ..errors import PestppError
 
 __all__ = ["Deck", "OBSERVED", "OBS_FILE", "OBS_OUTPUT", "OWN", "PILOT_POINTS", "PLACE", "ROW", "SITE", "TRIAL", "calibrated",
            "command", "copy_deck", "deck", "deck_sheet", "fields", "head_targets", "interface", "lay", "multiplier",
-           "observe_heads", "pilot_points", "published", "substitute", "targets"]
+           "observe_heads", "pilot_points", "published", "substitute", "supplied", "targets"]
 
 #: The study's row the targets are read off: the wells.
 ROW = "observe"
@@ -48,7 +48,7 @@ PILOT_POINTS = "study_pilot_points.json"
 #: that spacing (a = pp_space x the cell size), an exponential structure of contribution 1.
 _EVERY = 10
 _PYEMU = ("pyEMU 1.7.0 PstFrom default: a pilot point every 10th cell, an exponential variogram (contribution 1) whose "
-          "range is that spacing; here the cell is the run's mesh size")
+          "range is that spacing; here a cell is the median edge of the run's grid")
 
 #: Every field a template writes a multiplier into is this wide, delimiters included: room for PEST's
 #: own exponent form at full precision.
@@ -75,7 +75,8 @@ class Deck:
     top: tuple[float, ...]
     length_units: str
     steps: int
-    #: The run's mesh size, the cell a pilot point's default spacing is counted in; None where the run states none.
+    #: The median edge of the grid's cells, the cell a pilot point's default spacing is counted in: pyEMU counts its
+    #: ten cells in a structured cell's side, and a DISV cell's side is its edge.
     cell_size: float | None = None
 
 
@@ -113,11 +114,29 @@ def deck(directory: Path, finished: Any = None) -> Deck:
         raise PestppError("the run's flow model is not on a DISV grid, which is the grid a study places wells on",
                           error_code="PESTPP_DECK_UNREAD")
     steps = sum(int(row[1]) for row in sim.tdis.perioddata.array)
-    size = ((getattr(finished, "case", None) or {}).get("server_facts") or {}).get("mesh_size_m")
     return Deck(model=model, name_file=name_file, packages=packages, ncpl=int(dis.ncpl.array),
                 nlay=int(dis.nlay.array), top=tuple(float(v) for v in dis.top.array),
                 length_units=str(dis.length_units.array or "unknown").lower(), steps=steps,
-                cell_size=None if size is None else float(size))
+                cell_size=_median_edge(dis))
+
+
+def _median_edge(dis: Any) -> float:
+    """The median length of the DISV grid's edges, each edge counted once."""
+    import numpy as np
+
+    xy = np.array([(float(row[1]), float(row[2])) for row in dis.vertices.array])
+    edges = set()
+    for row in dis.cell2d.array:
+        ids = [int(i) for i in list(row)[4:4 + int(row[3])]]
+        edges.update((min(a, b), max(a, b)) for a, b in zip(ids, ids[1:] + ids[:1]) if a != b)
+    pairs = np.array(sorted(edges))
+    return float(np.median(np.hypot(*(xy[pairs[:, 0]] - xy[pairs[:, 1]]).T)))
+
+
+def supplied(the_deck: Deck) -> tuple[list[tuple[str, float, str]], list[str]]:
+    """No supplied input of a MODFLOW run carries an accuracy on its record, so none is a parameter -> ``([], the
+    study's note saying so)``."""
+    return [], [unheld_note("its bed, boundary levels and stated values")]
 
 
 def multiplier(directory: Path, identifier: str, *, lower: float, upper: float, the_deck: Deck,
@@ -226,7 +245,7 @@ def fields(spatial: Mapping[str, Any], the_deck: Deck) -> dict[str, dict[str, An
     spacing between its points and its exponential variogram's range, in metres of the run's grid, each with its source.
 
     ``spatial`` is ``{identifier: {"spacing": S, "source": "...", "variogram": {"a": A, "source": "..."}}}``, any part
-    left out. Unstated, the spacing is 10 of the run's cells and the range that spacing (pyEMU's rule); a range left
+    left out. Unstated, the spacing is 10 of the grid's median edges and the range that spacing (pyEMU's rule); a range left
     out of a stated spacing is that spacing. A variogram of another type, or a member not read, refuses."""
     out: dict[str, dict[str, Any]] = {}
     for identifier, stated in spatial.items():
@@ -242,12 +261,8 @@ def fields(spatial: Mapping[str, Any], the_deck: Deck) -> dict[str, dict[str, An
                               "one", error_code="PESTPP_VARIOGRAM_UNKNOWN")
         if stated.get("spacing") is not None:
             spacing, spacing_source = float(stated["spacing"]), str(stated.get("source") or "stated by the user")
-        elif the_deck.cell_size:
-            spacing, spacing_source = _EVERY * the_deck.cell_size, _PYEMU
         else:
-            raise PestppError(f"{identifier}'s pilot points state no spacing, and the run states no mesh size to count "
-                              "pyEMU's ten cells in: state pilot_points {\"spacing\": S} in metres",
-                              error_code="PESTPP_PILOT_POINTS_UNSTATED")
+            spacing, spacing_source = _EVERY * float(the_deck.cell_size or 0.0), _PYEMU
         if variogram.get("a") is not None:
             a, a_source = float(variogram["a"]), str(variogram.get("source") or "stated by the user")
         else:

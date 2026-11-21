@@ -10,7 +10,7 @@ import asyncio
 import inspect
 import logging
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Collection, Mapping, NoReturn, Sequence
 
@@ -86,6 +86,16 @@ class RunResult:
     choices: list[SourceChoice] = field(default_factory=list)
     #: The settings the run read, by name, with the value in force and the level it resolved at.
     settings: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+
+def _accuracies(value: Any) -> dict[str, Any]:
+    """An ingested reading's published accuracy and its gauge zero's, as the observation carries them; none otherwise."""
+    from trid3nt_server.inputs.observation import Observation
+
+    if not isinstance(value, Observation):
+        return {}
+    return {name: asdict(getattr(value, name)) for name in ("accuracy", "zero_accuracy")
+            if getattr(value, name) is not None}
 
 
 class Workflow:
@@ -502,7 +512,8 @@ class Workflow:
             inputs[name] = {
                 "value": (supplied.get(name) if getattr(held, "is_row", False)
                           else verdict.value),
-                "origin": verdict.origin.value, "source": verdict.source or None}
+                "origin": verdict.origin.value, "source": verdict.source or None,
+                **_accuracies(verdict.value)}
         return inputs
 
     def recorded_engine(self, run: RunResult) -> str | None:

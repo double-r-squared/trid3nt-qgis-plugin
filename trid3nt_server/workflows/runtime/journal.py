@@ -153,9 +153,11 @@ def build_record(*, run_id: str | None, engine: str | None,
         # THE ONE MAP: every input of the run by name - a stated value, a keyword of the solved deck, a supplied or
         # matched row, an absent optional one the run derived - with who stated it and the source that names it.
         # A reproduction reads the arguments here.
+        # An ingested reading also keeps its published accuracy and its gauge zero's, where the observation carries them.
         "inputs": {name: {"value": _small(row.get("value")),
                           "origin": row.get("origin"),
-                          "source": row.get("source")}
+                          "source": row.get("source"),
+                          **{k: dict(row[k]) for k in ("accuracy", "zero_accuracy") if row.get(k)}}
                    for name, row in inputs.items()},
         "correct_end": correct_end,
         "stopped": stopped,

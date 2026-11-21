@@ -141,8 +141,9 @@ Over a TELEMAC run (`authoring/telemac.py`), a TELEMAC-2D deck (another module r
    the faces where the domain holds no line). The trial reads
    its own coefficient, takes its level off the table and restates `PRESCRIBED ELEVATIONS` and `INITIAL ELEVATION`
    through TelemacCas before solving, so no trial is bounded by a level another friction set. A level a gauge held
-   stays as stated, and so does the sloped opening a measured outflow level opens on (`INITIAL CONDITIONS 'SPECIAL'`
-   and its user Fortran, copied with the deck).
+   stays as stated - moved only by its own offset parameter where its accuracy is cited (Datums and supplied inputs,
+   below) - and so does the sloped opening a measured outflow level opens on (`INITIAL CONDITIONS 'SPECIAL'` and its
+   user Fortran, copied with the deck).
 4. The calibrated run is the finished deck with the best coefficient - and, where derived, the outflow level and flat
    opening re-derived at it - written into its steering file, staged with TELEMAC's staged check, solved by the
    TELEMAC solver and published as TELEMAC publishes a run. A finished run whose record says it ended UNSTEADY is not
@@ -165,9 +166,9 @@ The numerics are pyEMU 1.7.0's (`helpers/geostat.py`), matched to what pyEMU its
 centres' extent, ceil(extent / spacing) points a side, kept where the cells buffered by one spacing cover them), the
 factors as `OrdinaryKrige.calc_factors` (the 20 nearest points, one within 1e-7 taken alone, negative factors dropped
 and the rest renormalised), the variogram exponential (pyEMU's `ExpVario`, contribution 1, nugget 0: exp(-h / a)).
-Unstated, the spacing is pyEMU PstFrom's default of every 10th cell, counted in the run's mesh size
-(`server_facts.mesh_size_m`; a run stating none refuses `PESTPP_PILOT_POINTS_UNSTATED`), and the range a is that spacing
-(PstFrom's a = pp_space x the cell size). `spacing` and `variogram` `{"a": A, "source": "..."}` are stated in metres of the
+Unstated, the spacing is pyEMU PstFrom's default of every 10th cell, a cell counted as the median edge of the deck's own
+DISV grid (each edge once: pyEMU counts its cells in a structured cell's side; 122.9 m on the Des Moines deck, so 1229 m
+and 63 points), and the range a is that spacing (PstFrom's a = pp_space x the cell size). `spacing` and `variogram` `{"a": A, "source": "..."}` are stated in metres of the
 run's grid; another variogram type refuses `PESTPP_VARIOGRAM_UNKNOWN`, a member not read `PESTPP_PILOT_POINTS_UNREAD`.
 
 The prior: every parameter's mean is its starting value and its standard deviation the one its bounds imply, as PEST++
@@ -179,7 +180,21 @@ diagonal); pestpp-ies draws its initial ensemble from it, and pestpp-glm reads i
 parcov beside pilot points refuses `PESTPP_OPTION_CONFLICT`. The review card states each parameter's prior (mean, sd,
 its source) and each field (spacing, range and their sources); the study record states, per parameter group, the prior
 (mean, bounds, transform, sd and its source, the variogram, the points' count and spacing with their sources) and, for
-an ensemble study, the mean and spread across the prior ensemble PEST++ drew and the last one, and each point's site.
+an ensemble study, the mean and spread across the prior ensemble PEST++ drew and the last one with how many of their
+values stand at a bound, and each point's site.
+
+An ensemble study over pilot points localizes: unstated, it states `ies_autoadaloc` true, PEST++'s own automatic adaptive
+localization (users manual 9.1.11 Localization; PEST++'s default is false), which keeps only the parameter-observation
+correlations an ensemble of this size can tell from noise. The run states `ies_autoadaloc` by name to choose otherwise.
+The card shows it, the record states it (`localization`) with its source.
+
+## Bounds after the fit
+
+After the fit, the calibrated parameters (the base realization's last, glm's best set) at a bound are counted per
+parameter group, by PEST++'s own rule (`Pest::get_pars_at_near_bounds` at its tolerance 0: at or past the bound, a
+log-transformed value also at 10 ** the log10 of the bound pestpp-ies clips it to), and stated as the warning
+`PARAMETERS_AT_BOUNDS` (each group's identifier, how many at the lower and at the upper bound, of how many); the record
+keeps them as `at_bounds`. The study does not stop on it.
 
 ## Weights
 
@@ -225,12 +240,25 @@ sigma (its floor or unit start) and is no parameter. The card states each datum'
 observation's datum (sd, cite) and each datum's calibrated `written` value. The calibrated run is solved with the tuned
 friction only: a datum moves where the gauge stands, not the river.
 
-The run's supplied inputs - its bed, its boundary levels (a derived outflow level, or a gauge's stage), its stated
-values - carry no accuracy on its record, so none is a parameter; the study says so on every run.
+A finished run's record keeps, beside each input's value, origin and source, the accuracy an ingested reading carries
+(`accuracy`, and `zero_accuracy` where a gauge zero lifts it: value and cite, or the code saying why none). On a TELEMAC
+study, a measured outflow level (the record's `level` input) whose reading and gauge zero both cite a value is an offset
+parameter, `outflow_level`: mean 0, sd the two in quadrature, bounds 2 sd either side as a datum's, held the same way
+above PEST's zero. It is placed at the deck's own boundary - the liquid boundaries file's one `SL(n)` column (a fetched
+window), else the one `PRESCRIBED ELEVATIONS` entry the deck writes at an elevation boundary - and each trial moves that
+entry, a flat opening's `INITIAL ELEVATION` stated at the level, and every instant of the column (off its `.unmoved` copy)
+by the offset PEST writes (`study_outflow.dat`); a sloped opening's routine is an initial state and stays. The calibrated
+run is solved at the calibrated offset beside the friction. A level whose record cites no accuracy, or that the deck
+holds at no one boundary, is no parameter, and the study says which.
+
+The rest - the bed, a derived outflow level (re-derived per trial from the friction instead), stated values - carry no
+accuracy on the record, so none is a parameter; the study says so on every run. The eHydro packages publish their
+vertical accuracy as free text only (FGDC `vertaccr`: "15 cm", "Bar Test, 0.5 Foot, Bar Check"), no value with a unit a
+member reads, so a bed offset waits on a source that states one.
 
 ## What is not built yet
 
 Multipliers on stress-period lists (recharge or drain rows) and on per-row values of a list column; zones; pilot points on
-a TELEMAC friction field; a measured outflow level or a bed survey offset as a parameter (their accuracy is not on the
-run's record); a run of several layers or time steps; progress on the
+a TELEMAC friction field; a bed survey offset as a parameter (no bed source states its accuracy as a value); a run of
+several layers or time steps; progress on the
 Sim card (PEST++'s run-manager lines are not parsed); a diagnostics parser.

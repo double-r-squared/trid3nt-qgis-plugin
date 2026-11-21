@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import csv
 import datetime as dt
+import importlib.util
+import json
 import math
 from pathlib import Path
 from types import SimpleNamespace
@@ -27,6 +29,7 @@ from trid3nt_server.workflows.pestpp.errors import PestppError
 
 _FIELDS = Path(__file__).resolve().parents[1] / "fixtures" / "fetcher_fields"
 _GLM = Path(__file__).resolve().parents[1] / "fixtures" / "pestpp" / "glm"
+_TRIAL = Path(__file__).resolve().parents[2] / "workers" / "pestpp" / "telemac_trial.py"
 _NWIS, _GW = "fetch_usgs_nwis_gauges", "fetch_usgs_groundwater_levels"
 _FT = 0.3048
 
@@ -231,3 +234,109 @@ def test_a_gauge_zero_citing_no_accuracy_stays_in_sigma_and_is_no_parameter(hwy_
     assert target.datum is None and target.basis == weights.FLOOR
     assert target.sigma == pytest.approx(math.hypot(short.accuracy.value, 0.08) * _FT)
     assert telemac.datums(tmp_path, [(target, 7)]) == [] and not (tmp_path / telemac.DATUMS).exists()
+
+
+def _hwy_370_window():
+    """Hwy 370's recorded day of gage height (15 min, CST), on its NAVD88 zero 936.34 ft, in metres on a clock from its
+    first reading."""
+    from trid3nt_server.inputs.temporal import Series
+
+    rows = [line.split("\t") for line in (_FIELDS / "nwis_iv_06610670.rdb").read_text().splitlines()
+            if line.startswith("USGS\t")]
+    stamps = [dt.datetime.fromisoformat(row[2]) for row in rows]
+    return Series([(t - stamps[0]).total_seconds() for t in stamps],
+                  [(float(row[4]) + 936.34) * _FT for row in rows], units="m")
+
+
+def _missouri_held_at(directory, found, *, zero=True):
+    """The Missouri reach's recorded steering file, its outflow held at Hwy 370's measured window: the level the slot
+    ingested (on metres) as the deck's PRESCRIBED ELEVATIONS entry and its window as the liquid boundaries file's SL(1)
+    column, written by the product's own writer; and the finished run's record of that level input."""
+    import shutil
+
+    from trid3nt_server.workflows.runtime.journal import build_record
+    from trid3nt_server.workflows.runtime.workflow import _accuracies
+    from trid3nt_server.workflows.telemac.authoring.boundaries import liquid_boundaries_file
+    from trid3nt_server.workflows.telemac.authoring.staged_check import read_steering
+
+    missouri = Path(__file__).resolve().parents[1] / "fixtures" / "telemac_missouri"
+    steering = "telemac2d_telemac_dye_release.cas"
+    shutil.copy(missouri / steering, directory / steering)
+    window = _hwy_370_window()
+    (directory / "river_boundaries.txt").write_text(liquid_boundaries_file(
+        [("SL(1)", "m", window)], start_s=window.times_s[0], until_s=window.times_s[-1], tail_s=60.0))
+    stated = {**read_steering(directory / steering), "LIQUID BOUNDARIES FILE": ["river_boundaries.txt"],
+              "PRESCRIBED ELEVATIONS": [f"{found.value:.3f}", "0.0"], "INITIAL ELEVATION": [f"{found.value:.3f}"]}
+    accuracies = _accuracies(found)
+    if not zero:
+        accuracies["zero_accuracy"] = {**accuracies["zero_accuracy"], "value": None, "unread": "FIELD_EMPTY"}
+    record = build_record(run_id="r", engine="telemac", module="telemac2d", result=None, wall_seconds=1.0,
+                          origin="telemac_dye_release", notes=[], inputs={"level": {
+                              "value": "$outflow_stage", "origin": "user", "source": _NWIS, **accuracies}})
+    return stated, SimpleNamespace(record=record)
+
+
+def test_the_run_records_the_measured_level_s_accuracy_and_its_gauge_zero_s(hwy_370):
+    from trid3nt_server.workflows.runtime.workflow import _accuracies
+
+    found = observation(hwy_370, fields=_row(_NWIS, "water level series").fields, producer=_NWIS, to_units="m")
+    held = _accuracies(found)
+    assert held["accuracy"]["value"] == pytest.approx(max(0.01, 0.002 * (found.value / _FT - 936.34)) * _FT)
+    assert "TM 3-A7" in held["accuracy"]["cite"]
+    assert held["zero_accuracy"] == {"value": pytest.approx(0.08 * _FT), "cite": f"{_NWIS} field alt_acy_va",
+                                     "unread": "", "widest": None}
+    assert _accuracies(4.2) == {} and _accuracies(Observation(value=4.2)) == {}
+
+
+def test_a_measured_outflow_level_citing_its_accuracy_is_an_offset_parameter(hwy_370, tmp_path):
+    from trid3nt_server.workflows.pestpp.authoring import telemac
+    from trid3nt_server.workflows.pestpp.authoring.control import prior
+
+    found = observation(hwy_370, fields=_row(_NWIS, "water level series").fields, producer=_NWIS, to_units="m")
+    stated, finished = _missouri_held_at(tmp_path, found)
+    assert set(finished.record["inputs"]["level"]) == {"value", "origin", "source", "accuracy", "zero_accuracy"}
+    level, unheld = telemac._measured_level(tmp_path, stated, finished)
+    sd = math.hypot(finished.record["inputs"]["level"]["accuracy"]["value"], 0.08 * _FT)
+    assert unheld == "" and (level["boundary"], level["column"], level["initial"]) == (0, "SL(1)", True)
+    assert level["sd"] == pytest.approx(sd) and "TM 3-A7" in level["cite"] and "alt_acy_va" in level["cite"]
+    the_deck = telemac.Deck(steering="telemac2d_telemac_dye_release.cas", stated=stated, module="telemac2d",
+                            result="r2d.slf", utm_epsg=32615, level=level)
+    held, notes = telemac.supplied(the_deck)
+    assert held == [("outflow_level", level["sd"], level["cite"])] and "its bed and stated values" in notes[0]
+    parameter = telemac.outflow_offset(tmp_path, the_deck=the_deck)
+    assert (parameter.name, parameter.transform, parameter.sd) == ("outflow_level", "none", level["sd"])
+    assert parameter.value * parameter.scale + parameter.offset == 0.0 and parameter.lower > 0.0
+    stated_prior = prior([parameter])["outflow_level"]
+    assert stated_prior["mean"] == pytest.approx(0.0)
+    assert (stated_prior["lower"], stated_prior["upper"]) == (pytest.approx(-2.0 * sd), pytest.approx(2.0 * sd))
+    assert (tmp_path / telemac.OUTFLOW).read_text() == "OUTFLOW 0.0\n"
+    assert "~outflow_level" in (tmp_path / f"{telemac.OUTFLOW}.tpl").read_text()
+    table = json.loads((tmp_path / telemac.LEVELS).read_text())
+    assert (table["level"], table["column"], table["unmoved"]) == (level["value"], "SL(1)", "river_boundaries.txt.unmoved")
+    # the calibrated run and a trial move the level the same: the steering entry, the opening and every instant
+    before = (tmp_path / "river_boundaries.txt").read_text()
+    values = telemac._offset_level(tmp_path, the_deck, 0.02)
+    assert values == {"PRESCRIBED ELEVATIONS": [round(level["value"] + 0.02, 4), 0.0],
+                      "INITIAL ELEVATION": round(level["value"] + 0.02, 4)}
+    moved = (tmp_path / "river_boundaries.txt").read_text()
+    spec = importlib.util.spec_from_file_location("telemac_trial", _TRIAL)
+    trial = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(trial)
+    trial.shift_column(str(tmp_path / table["unmoved"]), str(tmp_path / "trial.txt"), "SL(1)", 0.02)
+    assert (tmp_path / "trial.txt").read_text() == moved
+    rows = [line.split() for line in before.splitlines()[3:]]
+    after = [line.split() for line in moved.splitlines()[3:]]
+    assert len(rows) == len(_hwy_370_window().values) + 1
+    assert all(float(b[1]) == pytest.approx(float(a[1]) + 0.02, abs=1e-6) and b[0] == a[0] for a, b in zip(rows, after))
+
+
+def test_a_measured_outflow_level_whose_zero_cites_none_is_no_parameter(hwy_370, tmp_path):
+    from trid3nt_server.workflows.pestpp.authoring import telemac
+
+    found = observation(hwy_370, fields=_row(_NWIS, "water level series").fields, producer=_NWIS, to_units="m")
+    stated, finished = _missouri_held_at(tmp_path, found, zero=False)
+    assert telemac._measured_level(tmp_path, stated, finished) == (None, "uncited")
+    assert telemac._measured_level(tmp_path, stated, SimpleNamespace(record={"inputs": {}})) == (None, "unmeasured")
+    the_deck = telemac.Deck(steering="s.cas", stated=stated, module="telemac2d", result="r", utm_epsg=32615)
+    held, notes = telemac.supplied(the_deck)
+    assert held == [] and "its bed, boundary levels and stated values" in notes[0]

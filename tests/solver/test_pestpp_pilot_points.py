@@ -81,10 +81,60 @@ def test_unstated_pilot_points_are_pyemus_ten_cells_and_a_range_of_that_spacing(
     assert (ranged["spacing"], ranged["a"], ranged["a_source"]) == (1000.0, 2500.0, "a variogram fitted elsewhere")
 
 
+def test_unstated_pilot_points_count_ten_of_the_grid_s_median_edges(deck_dir):
+    """The deck's own grid: 12,880 triangles of the 100 m mesh, edges 64.0 to 215.4 m, median 122.94 m; pyEMU's ten
+    cells are ten of those edges, 1229.4 m, which lays 63 points (the minimum edge's 640 m laid 221)."""
+    own = piece.deck(deck_dir)
+    assert own.cell_size == pytest.approx(122.944, abs=1e-3)
+    field = _field(own)
+    assert field["spacing"] == pytest.approx(1229.44, abs=1e-2) and field["a"] == field["spacing"]
+    assert "median edge" in field["spacing_source"]
+    centres, cells = piece._grid(deck_dir, own)
+    assert len(piece._placed(centres, cells, field["spacing"])) == 63
+    assert _field(own, spacing=1000.0, source="a reader's choice")["spacing"] == 1000.0
+
+
+def test_an_ensemble_study_over_pilot_points_localizes_unless_the_run_states_otherwise():
+    from trid3nt_server.workflows.pestpp.workflow import LOCALIZED, localized
+
+    field = {"NPF_K": {"spacing": 1000.0}}
+    assert localized({"NOPTMAX": 3}, "ies", field) == ({"NOPTMAX": 3, "IES_AUTOADALOC": True}, True)
+    assert "9.1.11 Localization" in LOCALIZED[2]
+    assert localized({"IES_AUTOADALOC": False}, "ies", field) == ({"IES_AUTOADALOC": False}, False)
+    assert localized({}, "glm", field) == ({}, False)
+    assert localized({}, "ies", {}) == ({}, False)
+
+
+def test_the_calibrated_points_at_their_bounds_are_counted_per_group_as_pest_holds_them():
+    """The recorded pilot-point study (221 points at the minimum edge's spacing, 19 realizations): its prior ensemble
+    holds 208 of 4218 values at a bound (PEST++ truncates its draws there), its last 1559, and the base realization
+    pins 37 points low, 51 high and SFR_RHK high."""
+    from trid3nt_server.errors import PARAMETERS_AT_BOUNDS, parameters_at_bounds_warning
+    from trid3nt_server.workflows.pestpp import outputs
+    from trid3nt_server.workflows.pestpp.authoring.control import at_bounds
+
+    recorded = _DECK.parent / "pilot_points"
+    counts = {}
+    for label, iteration in (("prior", 0), ("last", None)):
+        ensemble = outputs.read_parameter_ensemble(recorded, iteration)
+        parameters = [Parameter(n, 1.0, 0.1, 10.0, "npf_k") if n.startswith("npf_k_pp")
+                      else Parameter(n, 1.0, 0.0006096, 60.96, "sfr_rhk", scale=0.5) for n in ensemble["base"]]
+        counts[label] = sum(c["lower"] + c["upper"] for real in ensemble.values()
+                            for c in at_bounds(parameters, real).values())
+        base = at_bounds(parameters, ensemble["base"])
+    assert counts == {"prior": 208, "last": 1559}
+    assert base == {"npf_k": {"lower": 37, "upper": 51, "of": 221}, "sfr_rhk": {"lower": 0, "upper": 1, "of": 1}}
+    note = parameters_at_bounds_warning(groups=base)
+    assert note.startswith(PARAMETERS_AT_BOUNDS) and "npf_k 37 at the lower and 51 at the upper of 221" in note
+    # 5 is no float's log10 round trip: a value pestpp-ies clipped at log10(5) reads back an ulp off, and is at it
+    import math
+    clipped = 10.0 ** math.log10(5.0)
+    assert clipped != 5.0
+    assert at_bounds([Parameter("p", 1.0, 0.2, 5.0, "g")], {"p": clipped}) == {"g": {"lower": 0, "upper": 1, "of": 1}}
+    assert at_bounds([Parameter("p", 1.0, 0.2, 5.0, "g")], {"p": 4.99}) == {}
+
+
 def test_pilot_points_refuse_what_they_cannot_lay(the_deck):
-    with pytest.raises(PestppError) as unsized:
-        piece.fields({"NPF_K": {}}, dataclasses.replace(the_deck, cell_size=None))
-    assert unsized.value.error_code == "PESTPP_PILOT_POINTS_UNSTATED"
     with pytest.raises(PestppError) as typed:
         _field(the_deck, variogram={"type": "gaussian"})
     assert typed.value.error_code == "PESTPP_VARIOGRAM_UNKNOWN"

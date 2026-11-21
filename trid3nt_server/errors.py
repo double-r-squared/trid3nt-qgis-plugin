@@ -6,7 +6,10 @@ importing any workflows module registers the TELEMAC solver and would close an i
 
 from __future__ import annotations
 
-__all__ = ["ACCURACY_NOT_CITED", "ACCURACY_UNIT_START", "unit_start_warning", "READINGS_UNTABLED", "CLOUD_COVER_FROM_ASOS", "DeclarationError", "DeclarativeError", "GateRefusedError",
+from typing import Mapping
+
+__all__ = ["ACCURACY_NOT_CITED", "ACCURACY_UNIT_START", "PARAMETERS_AT_BOUNDS", "parameters_at_bounds_warning",
+           "unit_start_warning", "READINGS_UNTABLED", "CLOUD_COVER_FROM_ASOS", "DeclarationError", "DeclarativeError", "GateRefusedError",
            "INPUT_NOT_USED", "accuracy_not_cited_warning", "cloud_cover_from_asos_warning", "unused_input_warning",
            "untabled_readings_note"]
 
@@ -71,6 +74,19 @@ def unit_start_warning(*, count: int) -> str:
     return (f"{ACCURACY_UNIT_START}: {count} targets start at sigma 1 in the run's unit, and beside targets weighed "
             "otherwise that start sets their relative weight in the fit. State sigma for not_cited, or use a source "
             "that cites its accuracy.")
+
+
+#: The warning code for calibrated parameters left at a bound, a symptom of a structural error or of too many parameters.
+PARAMETERS_AT_BOUNDS = "PARAMETERS_AT_BOUNDS"
+
+
+def parameters_at_bounds_warning(*, groups: Mapping[str, Mapping[str, int]]) -> str:
+    """The run note for the calibrated parameters at a bound, per parameter group: its identifier and counts only."""
+    counts = "; ".join(f"{group} {held['lower']} at the lower and {held['upper']} at the upper of {held['of']}"
+                       for group, held in groups.items())
+    return (f"{PARAMETERS_AT_BOUNDS}: the calibrated parameters stand at a bound ({counts}). A parameter held at its "
+            "bound may be fitting something the model does not represent, or the study may tune more than its "
+            "observations inform: check the model, tune fewer parameters, or widen the bound with a source.")
 
 
 class DeclarativeError(RuntimeError):
