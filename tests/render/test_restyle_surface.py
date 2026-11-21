@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from trid3nt_contracts import new_ulid
 
-from trid3nt_server.render import pipeline_emitter as emitter_module
+from trid3nt.render import emission as emitter_module
 from trid3nt.render import publish as publish_module
 from trid3nt.render import restyle as restyle_module
 from trid3nt_server.render.pipeline_emitter import PipelineEmitter

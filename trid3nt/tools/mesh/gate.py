@@ -10,7 +10,7 @@ import logging
 import math
 from typing import Any, Mapping, Sequence
 
-from trid3nt_harness.inputs.gate.input_review import GateCard, gate_input_review
+from trid3nt.inputs.review import GateCard, gate_input_review
 from trid3nt.tools.mesh.artifact import MeshArtifact
 from trid3nt.tools.mesh.inputs import MeshTooLarge
 from trid3nt.tools.mesh.meshers import MeshToolError
@@ -53,8 +53,8 @@ async def present_mesh(session: MeshSession) -> dict[str, Any]:
     """Put the mesh on the map and read it -> the layer, the probes, the recipe.
 
     The display face is an MDAL mesh layer, which is what makes it editable."""
-    from trid3nt_server.render.layer_uri_emit import publish_input_layer
-    from trid3nt_server.render.pipeline_emitter import current_emitter
+    from trid3nt.render.layer_uri_emit import publish_input_layer
+    from trid3nt.render.emission import current_emitter
 
     layer = await to_build_thread(session.snapshot)
     emitter = current_emitter()

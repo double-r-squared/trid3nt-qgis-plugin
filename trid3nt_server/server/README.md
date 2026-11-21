@@ -12,7 +12,6 @@ where its results go.
 | `__init__.py` | The core's door; the subpackages below hold the working parts. |
 | `config.py` | Environment-knob readers, each a pure `env -> value` read taken live. |
 | `errors.py` | `ToolNotFoundError`, the dispatch path's refusal of a name nothing registered. |
-| `processing.py` | The session request seam: a `processing-request` emitted for the user's QGIS session, the bounded wait, and the typed refusals for no session, no answer and an error answer. |
 | `spatial.py` | The zoom-to helpers: the bbox the camera snaps to for a result, deduped against this turn. |
 
 ## Subfolders

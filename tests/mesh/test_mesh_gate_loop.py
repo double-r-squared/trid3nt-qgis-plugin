@@ -13,7 +13,7 @@ import mesh_builds
 import pytest
 
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
-from trid3nt_server.render import pipeline_emitter as pe
+from trid3nt.render import emission as pe
 from trid3nt_harness.inputs.gate import pending
 from trid3nt.tools import TOOL_REGISTRY
 from trid3nt.tools.mesh import gate as mesh_gate

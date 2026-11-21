@@ -1,6 +1,6 @@
-"""Solver-confirm, granularity and fetch-resolution confirm-card builders.
+"""The fetch-resolution gate's providers: the card a heavy raster fetch is confirmed on, and the pin.
 
-Pure envelope and suggestion builders: no websocket, no session state.
+Pure envelope and suggestion builders the router's GateSpec names: no websocket, no session state.
 """
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ from typing import Any
 
 from trid3nt_contracts import new_ulid
 
-from .estimate import CardEstimate
+from trid3nt.tools.card_estimate import CardEstimate
 
-logger = logging.getLogger("trid3nt_harness.inputs.gate.cards.fetch_resolution")
+logger = logging.getLogger("trid3nt.tools.fetchers._router.fetch_resolution")
 
 
 #: hard px-grid ceiling for the fetch-resolution gate: finest_allowed_m is floored at
@@ -193,30 +193,6 @@ async def _build_fetch_resolution_envelope(
         cap=int(max_fetch_px) ** 2,
     )
     return envelope, fetch_suggestion
-
-
-def _gate_memory_key(tool_name: str, params: dict[str, Any]) -> tuple[str, str]:
-    """Turn-memory key for the solver-confirm / fetch-resolution gate.
-
-    The rounded bbox with the tool name, or the FULL normalized args when there is no bbox."""
-    # The bbox rounds to ~6 decimal degrees, the same quantization the fetch tools use
-    # for cache-key stability, so a retry of the SAME tool over the SAME AOI with a
-    # corrected non-bbox arg reuses the earlier decision instead of re-gating. Without a
-    # bbox the full-args key is the conservative default: any arg change gates fresh.
-    bbox = params.get("bbox")
-    if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
-        try:
-            bbox_key = tuple(round(float(v), 6) for v in bbox)
-            return (tool_name, repr(bbox_key))
-        except (TypeError, ValueError):
-            pass
-    import json as _json
-
-    try:
-        normalized = _json.dumps(params, sort_keys=True, default=str)
-    except TypeError:
-        normalized = repr(sorted(params.items(), key=lambda kv: kv[0]))
-    return (tool_name, normalized)
 
 
 async def estimate_fetch_resolution(

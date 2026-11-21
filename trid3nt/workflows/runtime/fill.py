@@ -23,7 +23,7 @@ from trid3nt_contracts.coverage import CoverageExtent, SourceChoice
 
 from trid3nt.inputs.geometry import METRES_PER_DEGREE
 from trid3nt.inputs.instant import NO_MOMENT_WORD
-from trid3nt_server.render.pipeline_emitter import current_emitter, substep
+from trid3nt.render.emission import current_emitter, substep
 from trid3nt.render.uri_registry import lookup_uri_for_handle
 from trid3nt.tools.search.match import (
     AROUND_PLACE_DEG, HELD_NOTHING, Need, dropped_from, filled, instant, match, sources_with_coverage)
@@ -303,7 +303,7 @@ async def _reach_length_asked(env: _Env, decl: Input) -> None:
     from trid3nt_contracts.common import Origin
     from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
-    from trid3nt_harness.inputs.gate.input_review import GateCard, gate_input_review, resolve_input_gate_mode
+    from trid3nt.inputs.review import GateCard, gate_input_review, resolve_input_gate_mode
     from .workflow import REACH_LENGTH
 
     controls = (f"the {decl.name} stands on a river, so it is the reach walked downstream from the point it is found "

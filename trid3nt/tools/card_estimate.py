@@ -1,7 +1,7 @@
 """The runtime half of the confirm-card contract: estimates and provider lookup.
 
-A :class:`CardEstimate` carries a LIVE envelope, so it lives server-side; providers are
-named by dotted path, so the contract carries no server import.
+A :class:`CardEstimate` carries a LIVE envelope, so it lives beside the registry rather than in
+the contract; providers are named by dotted path, so the contract imports none of them.
 """
 from __future__ import annotations
 

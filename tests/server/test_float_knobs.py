@@ -8,7 +8,7 @@ from trid3nt_harness.inputs.gate.confirm import _code_exec_approval_timeout_s
 from trid3nt.workflows.runtime.module import SlotRefused
 from trid3nt_server.server.config import _tool_choice_timeout_s
 from trid3nt.settings import setting
-from trid3nt_server.server.processing import _timeout_s
+from trid3nt.session.processing import _timeout_s
 
 SETTING_WAITS = [
     ("CODE_EXEC_APPROVAL_TIMEOUT_S", _code_exec_approval_timeout_s, 180.0),

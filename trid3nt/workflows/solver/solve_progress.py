@@ -15,7 +15,7 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from trid3nt_server.render.pipeline_emitter import dispatched_tool_name
+from trid3nt.render.emission import dispatched_tool_name
 
 logger = logging.getLogger("trid3nt.workflows.solver.solve_progress")
 

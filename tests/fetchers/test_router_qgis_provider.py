@@ -113,9 +113,9 @@ def loop_thread():
 
 
 def _bind(monkeypatch, session) -> None:
-    from trid3nt_server.render import pipeline_emitter
+    from trid3nt.render import emission
 
-    monkeypatch.setattr(pipeline_emitter, "current_emitter", lambda: session)
+    monkeypatch.setattr(emission, "current_emitter", lambda: session)
 
 
 def _gpkg_bytes() -> bytes:
@@ -160,10 +160,10 @@ def test_mode_open_on_a_layer_row_refuses_rather_than_publish_a_packet_row() -> 
 
 
 def test_no_session_bound_refuses_by_name(monkeypatch) -> None:
-    from trid3nt_server.server.processing import SessionUnavailableError
-    from trid3nt_server.render import pipeline_emitter
+    from trid3nt.session.processing import SessionUnavailableError
+    from trid3nt.render import emission
 
-    monkeypatch.setattr(pipeline_emitter, "current_emitter", lambda: None)
+    monkeypatch.setattr(emission, "current_emitter", lambda: None)
     with pytest.raises(SessionUnavailableError, match="live QGIS session"):
         qgis_provider.execute(_open_spec(), {"bbox": _BBOX, "date": None})
 
@@ -273,10 +273,10 @@ def test_the_drought_monitor_is_a_provider_row_in_mode_open() -> None:
 
 
 def test_the_drought_monitor_refuses_by_name_with_no_session(monkeypatch) -> None:
-    from trid3nt_server.render import pipeline_emitter
-    from trid3nt_server.server.processing import SessionUnavailableError
+    from trid3nt.render import emission
+    from trid3nt.session.processing import SessionUnavailableError
     from trid3nt.tools import TOOL_REGISTRY
 
-    monkeypatch.setattr(pipeline_emitter, "current_emitter", lambda: None)
+    monkeypatch.setattr(emission, "current_emitter", lambda: None)
     with pytest.raises(SessionUnavailableError, match="us_drought_monitor"):
         TOOL_REGISTRY["fetch_us_drought_monitor"].fn(bbox=_BBOX)

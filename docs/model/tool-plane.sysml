@@ -292,7 +292,7 @@ package ToolPlane {
 
     part sessionRequest : SessionRequest {
         doc /*
-        code: trid3nt_server/server/processing.py
+        code: trid3nt/session/processing.py
         */
         port askIn : AskIn;
         port requestOut : RequestOut;
@@ -434,7 +434,7 @@ package ToolPlane {
 
         forbid: trid3nt.tools.derive.run_pyqgis -> subprocess
         forbid: trid3nt.tools.derive.run_qgis_algorithm -> subprocess
-        forbid: trid3nt_server.server.processing -> subprocess
+        forbid: trid3nt.session.processing -> subprocess
         */
     }
 

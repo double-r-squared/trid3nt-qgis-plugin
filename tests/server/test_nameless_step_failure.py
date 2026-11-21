@@ -13,10 +13,7 @@ from typing import Any
 import pytest
 from trid3nt_contracts import new_ulid
 
-from trid3nt_server.render.pipeline_emitter import (
-    NamelessFailureError,
-    PipelineEmitter,
-)
+from trid3nt_server.render.pipeline_emitter import NamelessFailureError, PipelineEmitter
 
 
 class _Sink:

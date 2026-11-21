@@ -16,8 +16,8 @@ import yaml
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
 
-from trid3nt_server.render import pipeline_emitter as pe
-from trid3nt_server.server import processing
+from trid3nt.render import emission as pe
+from trid3nt.session import processing
 from trid3nt.tools import TOOL_REGISTRY
 from trid3nt.tools.derive.run_pyqgis.run_pyqgis import (
     CodeExecConfirmationRequired,
@@ -213,7 +213,7 @@ async def test_an_output_is_a_case_layer_carrying_what_its_input_carried(
     the zero, the shift and the quantity of the layer it was computed from."""
     from trid3nt_contracts.execution import LayerURI
 
-    from trid3nt_server.render.layer_uri_emit import emit_layer_uri
+    from trid3nt.render.layer_uri_emit import emit_layer_uri
     from trid3nt.render.uri_registry import (
         activate_registry, deactivate_registry, lookup_layer_for_handle)
 

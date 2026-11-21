@@ -281,7 +281,7 @@ def test_the_emission_seam_stamps_the_resolved_row_on_a_vector_it_passes() -> No
     """The seam every client-bound layer crosses is where a non-raster row is
     resolved, so a vector reaches the canvas styled without a second seam."""
     from trid3nt_contracts.execution import LayerURI
-    from trid3nt_server.render.layer_uri_emit import emit_layer_uri
+    from trid3nt.render.layer_uri_emit import emit_layer_uri
 
     layer = LayerURI(
         layer_id="input-river-1", name="Input: river geometry",
@@ -297,7 +297,7 @@ def test_the_emission_seam_leaves_a_raster_to_the_publish_that_read_its_bytes() 
     """A raster's row was already resolved against the COG itself; resolving it
     again here would be a second read and a second range."""
     from trid3nt_contracts.execution import LayerURI
-    from trid3nt_server.render.layer_uri_emit import emit_layer_uri
+    from trid3nt.render.layer_uri_emit import emit_layer_uri
 
     layer = LayerURI(
         layer_id="peak-1", name="Max water depth", layer_type="raster",

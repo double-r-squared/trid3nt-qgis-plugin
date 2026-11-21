@@ -11,7 +11,7 @@ from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.case import CaseChatMessage, ToolCardRecord
 from trid3nt_contracts.ws import AgentMessageChunkPayload, ErrorCode, ToolIoPayload
 from trid3nt_server.server.session.case_state import _touch_session_record, _turn_case_id
-from trid3nt_server.server.session.persistence_ref import get_persistence
+from trid3nt.store.persistence_ref import get_persistence
 from trid3nt_server.server.session.state import SessionState
 from trid3nt_server.server.turn.wire import _new_envelope, _session_safe_send
 from typing import Any, get_args

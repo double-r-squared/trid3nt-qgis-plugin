@@ -470,7 +470,7 @@ class GeoclawWorkflow(Workflow):
 
     async def launch(self, state: Fill) -> RunResult:
         """The run, in order: the grid, the rows, the data, the sheet written and staged under its review, the solve, the outputs."""
-        from trid3nt_server.render.pipeline_emitter import begin_substeps, current_emitter, substep
+        from trid3nt.render.emission import begin_substeps, current_emitter, substep
         from trid3nt.tools.mesh.step import build_declared_mesh, keep_mesh
         from trid3nt.workflows.runtime.fill import anchors_of, call, production, read
 

@@ -12,7 +12,7 @@ import logging
 import pytest
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.render.layer_uri_emit import emit_layer_uri
+from trid3nt.render.layer_uri_emit import emit_layer_uri
 
 
 def _layer(layer_type: str, uri: str, layer_id: str = "L1") -> LayerURI:
@@ -113,7 +113,7 @@ def test_vsigs_and_local_raster_pass_through() -> None:
 def test_warning_logged_on_drop(caplog: pytest.LogCaptureFixture) -> None:
     """The drop path logs a WARNING (so the audit/telemetry can see leaks were
     refused) — not silent."""
-    with caplog.at_level(logging.WARNING, logger="trid3nt_server.render.layer_uri_emit"):
+    with caplog.at_level(logging.WARNING, logger="trid3nt.render.layer_uri_emit"):
         emit_layer_uri(_layer("raster", "gs://b/flood.tif", layer_id="flood_9"))
     msgs = "\n".join(r.getMessage() for r in caplog.records)
     assert "DROPPING" in msgs

@@ -148,7 +148,7 @@ def reset_run(token: contextvars.Token) -> None:
 
 
 def _session_id() -> str | None:
-    from trid3nt_server.render.pipeline_emitter import current_emitter
+    from trid3nt.render.emission import current_emitter
 
     emitter = current_emitter()
     return getattr(emitter, "session_id", None) if emitter is not None else None

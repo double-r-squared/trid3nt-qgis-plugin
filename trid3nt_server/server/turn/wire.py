@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.ws import Envelope, ErrorPayload
 
-from trid3nt_server.render.pipeline_emitter import current_turn_case
+from trid3nt.render.emission import current_turn_case
 from trid3nt_server.server.protocol.connections import _SESSION_WS_CONNECTIONS
 from trid3nt.settings import setting
 
@@ -135,6 +135,14 @@ async def _session_safe_send(
         session_id,
     )
     return False
+
+
+async def _send_envelope(
+    websocket: "ServerConnection | None", session_id: str, message_type: str, payload: Any
+) -> bool:
+    """One typed envelope onto the session's wire through the session-aware safe send; the gate's way out."""
+    return await _session_safe_send(
+        websocket, session_id, _new_envelope(message_type, session_id, payload))
 
 
 async def _send_loop_exhausted(

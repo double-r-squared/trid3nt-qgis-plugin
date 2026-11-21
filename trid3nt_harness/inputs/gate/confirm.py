@@ -12,20 +12,42 @@ from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.gate_spec import GateSpec
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload, PayloadWarningEnvelopePayload
 from trid3nt_contracts.processing_contracts import CodeExecRequestPayload
-from trid3nt_contracts.ws import SpatialInputResponsePayload
+from trid3nt_contracts.ws import ErrorPayload, SpatialInputResponsePayload
 from trid3nt.tools import TOOL_REGISTRY
-from trid3nt_harness.inputs.gate.cards import _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
-from trid3nt_harness.inputs.gate.cards.estimate import call_provider
+from trid3nt_harness.inputs.gate.cards import _build_spatial_input_request_payload, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
+from trid3nt.tools.card_estimate import call_provider
 from trid3nt_harness.inputs.gate.pending import _PENDING_CONFIRMATIONS, _PENDING_SPATIAL_INPUTS
 from trid3nt_harness.inputs.gate.spatial_input_tool import SPATIAL_INPUT_SENTINEL_KEY
 from trid3nt.settings import setting
 from trid3nt_harness.inputs.gate.errors import GateConfirmationTimeoutError, SpatialInputInvalidResponseError
-from trid3nt_server.server.session.state import SessionState
-from trid3nt_server.server.turn.wire import _new_envelope, _send_error, _session_safe_send
-from typing import Any
+from typing import Any, Awaitable, Callable
 from websockets.asyncio.server import ServerConnection
 
 logger = logging.getLogger("trid3nt_server.server")
+
+#: The daemon's send onto a session's wire (the captured socket, then any live sibling), keyed "send";
+#: registered at its start-up. Unregistered there is no wire, and a card is dropped as a dead socket's is.
+_WIRE: dict[str, Callable[..., Awaitable[bool]]] = {}
+
+
+def register_wire(send: Callable[..., Awaitable[bool]]) -> None:
+    """Install ``send(websocket, session_id, message_type, payload) -> bool``, the one way a card goes out."""
+    _WIRE["send"] = send
+
+
+async def _send(websocket: Any, session_id: str, message_type: str, payload: Any) -> bool:
+    send = _WIRE.get("send")
+    if send is None:
+        logger.debug("gate send: no wire registered; %s for session=%s dropped", message_type, session_id)
+        return False
+    return await send(websocket, session_id, message_type, payload)
+
+
+async def _send_error(websocket: Any, session_id: str, code: str, message: str, *,
+                      retryable: bool = False) -> None:
+    await _send(websocket, session_id, "error",
+                ErrorPayload(error_code=code, message=message, retryable=retryable))
+
 
 def _code_exec_approval_timeout_s() -> float:
     """The code-exec gate's approval window, the CODE_EXEC_APPROVAL_TIMEOUT_S setting.
@@ -36,6 +58,30 @@ def _code_exec_approval_timeout_s() -> float:
 # Gate membership is DERIVED: a tool's ``GateSpec`` on its ``AtomicToolMetadata`` is the
 # one signal, and ``kind`` ('solver' | 'fetch') splits the two lanes: a solver strips a
 # model-supplied ``confirmed`` before gating and injects it only on an explicit proceed.
+
+
+def _gate_memory_key(tool_name: str, params: dict[str, Any]) -> tuple[str, str]:
+    """Turn-memory key for the solver-confirm / fetch-resolution gate.
+
+    The rounded bbox with the tool name, or the FULL normalized args when there is no bbox."""
+    # The bbox rounds to ~6 decimal degrees, the same quantization the fetch tools use
+    # for cache-key stability, so a retry of the SAME tool over the SAME AOI with a
+    # corrected non-bbox arg reuses the earlier decision instead of re-gating. Without a
+    # bbox the full-args key is the conservative default: any arg change gates fresh.
+    bbox = params.get("bbox")
+    if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+        try:
+            bbox_key = tuple(round(float(v), 6) for v in bbox)
+            return (tool_name, repr(bbox_key))
+        except (TypeError, ValueError):
+            pass
+    import json as _json
+
+    try:
+        normalized = _json.dumps(params, sort_keys=True, default=str)
+    except TypeError:
+        normalized = repr(sorted(params.items(), key=lambda kv: kv[0]))
+    return (tool_name, normalized)
 
 
 def _gate_spec_for(tool_name: str) -> "GateSpec | None":
@@ -74,7 +120,7 @@ def _gate_wait_timeout() -> float:
 
 async def _gate_on_confirm(
     websocket: ServerConnection,
-    state: SessionState,
+    state: Any,
     tool_name: str,
     params: dict,
     gate_spec: GateSpec,
@@ -131,8 +177,8 @@ async def _gate_on_confirm(
         decision_payload: PayloadConfirmationEnvelopePayload = (
             await _PENDING_CONFIRMATIONS.park(
                 state.session_id, warning_id,
-                lambda: _session_safe_send(websocket, state.session_id, _new_envelope(
-                    "tool-payload-warning", state.session_id, envelope)),
+                lambda: _send(websocket, state.session_id,
+                    "tool-payload-warning", envelope),
                 wait_s))
     except asyncio.TimeoutError:
         logger.warning(
@@ -216,7 +262,7 @@ async def _gate_on_confirm(
 
 async def _gate_on_solver_confirm(
     websocket: ServerConnection,
-    state: SessionState,
+    state: Any,
     tool_name: str,
     params: dict,
     _warning_id_out: dict[str, str] | None = None,
@@ -232,7 +278,7 @@ async def _gate_on_solver_confirm(
 
 async def _gate_with_turn_memory(
     websocket: ServerConnection,
-    state: SessionState,
+    state: Any,
     tool_name: str,
     params: dict,
 ) -> tuple[bool, dict]:
@@ -281,7 +327,7 @@ async def _gate_with_turn_memory(
 
 async def _maybe_gate_on_payload_warning(
     websocket: ServerConnection,
-    state: SessionState,
+    state: Any,
     tool_name: str,
     params: dict,
 ) -> tuple[bool, dict]:
@@ -383,8 +429,8 @@ async def _maybe_gate_on_payload_warning(
         decision_payload: PayloadConfirmationEnvelopePayload = (
             await _PENDING_CONFIRMATIONS.park(
                 state.session_id, warning_id,
-                lambda: _session_safe_send(websocket, state.session_id, _new_envelope(
-                    "tool-payload-warning", state.session_id, warning_payload)),
+                lambda: _send(websocket, state.session_id,
+                    "tool-payload-warning", warning_payload),
                 wait_s))
     except asyncio.TimeoutError:
         audit_entry["decision"] = "timeout"
@@ -445,7 +491,7 @@ async def _maybe_gate_on_payload_warning(
 
 async def _gate_on_code_exec(
     websocket: ServerConnection,
-    state: SessionState,
+    state: Any,
     params: dict,
 ) -> tuple[bool, dict]:
     """Confirm gate for ``run_pyqgis`` -- MANDATORY, fail-closed.
@@ -483,8 +529,8 @@ async def _gate_on_code_exec(
         decision_payload: PayloadConfirmationEnvelopePayload = (
             await _PENDING_CONFIRMATIONS.park(
                 state.session_id, code_exec_id,
-                lambda: _session_safe_send(websocket, state.session_id, _new_envelope(
-                    "code-exec-request", state.session_id, request_payload)),
+                lambda: _send(websocket, state.session_id,
+                    "code-exec-request", request_payload),
                 approval_timeout_s))
     except asyncio.TimeoutError:
         logger.warning(
@@ -538,7 +584,7 @@ async def _gate_on_code_exec(
 
 async def _emit_spatial_input_and_wait(
     websocket: ServerConnection,
-    state: SessionState,
+    state: Any,
     payload: "SpatialInputRequestPayload",
 ) -> "SpatialInputResponsePayload | None":
     """Emit a ``spatial-input-request`` and await ``spatial-input-response``.
@@ -556,8 +602,8 @@ async def _emit_spatial_input_and_wait(
         # double-mount or a reconnect still resolves it.
         response: SpatialInputResponsePayload = await _PENDING_SPATIAL_INPUTS.park(
             state.session_id, payload.request_id,
-            lambda: _session_safe_send(websocket, state.session_id, _new_envelope(
-                "spatial-input-request", state.session_id, payload)),
+            lambda: _send(websocket, state.session_id,
+                "spatial-input-request", payload),
             _gate_wait_timeout())
     except asyncio.TimeoutError:
         logger.info(
@@ -591,7 +637,7 @@ async def _emit_spatial_input_and_wait(
 
 async def _handle_request_spatial_input(
     websocket: ServerConnection,
-    state: SessionState,
+    state: Any,
     call_args: dict[str, Any],
 ) -> dict[str, Any]:
     """Drive one ``request_spatial_input`` turn-pause and return the LLM result.

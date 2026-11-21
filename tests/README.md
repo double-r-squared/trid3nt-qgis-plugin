@@ -11,7 +11,7 @@ rest and make up the sixth slice.
 | `_fakes/` | shared doubles: the MCP client, the websocket, the case summary, the reach chain, the read-through injector | - | - |
 | `fixtures/` | data the tests read; no code | - | - |
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 23 | 274 |
-| `contracts/` | the typed wire and registry contracts, the schema mirror and its drift, the one-way package imports | 17 | 366 |
+| `contracts/` | the typed wire and registry contracts, the schema mirror and its drift, the one-way package imports | 17 | 367 |
 | `credentials/` | credential resolution, the access-token gate and the connect handshake | 4 | 50 |
 | `derive/` | the derive tools, the two session tools | 4 | 58 |
 | `render/` | the emitter, the uri registry, publication, the format set, charts | 35 | 431 |
@@ -21,7 +21,7 @@ rest and make up the sixth slice.
 | `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes, the runs that prescribe a role and the shoreline the domain's own edge is | 11 | 294 |
 | `model/` | the SysML model conformance check | 1 | 23 |
 | `plugin/` | the QGIS dock: the client, the Qt bridge, the cards, the render seams; the Qt-wiring subset runs in a subprocess harness | 40 | 409 |
-| `runtime/` | the template runtime, its engine-neutral slots and dictionary marks, the run journal, the optional need | 19 | 242 |
+| `runtime/` | the template runtime, its engine-neutral slots and dictionary marks, the run journal, the optional need | 19 | 332 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 12 | 178 |
 | `search/` | dataset and tool retrieval, the OGC adapter, the keyword dictionary read | 15 | 310 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence | 29 | 261 |

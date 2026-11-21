@@ -434,7 +434,7 @@ def test_the_published_order_is_the_table_order_across_host_and_coupled(
         monkeypatch, fake_s3, telemac_result):
     """Nothing leads: every layer is surfaced, the host's table first and each
     coupled module's behind it, and the run returns its own record."""
-    from trid3nt_server.render import layer_uri_emit
+    from trid3nt.render import layer_uri_emit
     from trid3nt.workflows.telemac import workflow as door
 
     surfaced: list[str] = []

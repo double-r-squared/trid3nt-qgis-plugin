@@ -10,7 +10,7 @@ import sys as _sys
 from types import ModuleType as _ModuleType
 
 from .session import case_state as _session_case_state
-from .session import persistence_ref as _session_persistence_ref
+from trid3nt.store import persistence_ref as _store_persistence_ref
 from .session import state as _session_state
 from .turn import cases as _turn_cases
 from .turn import engine as _turn_engine
@@ -32,13 +32,16 @@ from . import spatial as _spatial
 from trid3nt_harness.inputs.gate import confirm as _gates_confirm
 from trid3nt_harness.inputs.gate import pending as _gates_pending
 from trid3nt_harness.inputs.gate import errors as _gates_errors
-from trid3nt_harness.inputs.gate.cards import fetch_resolution as _gates_cards_confirm
+from trid3nt.tools.fetchers._router import fetch_resolution as _gates_cards_confirm
+
+# The gate's cards go out on this daemon's wire.
+_gates_confirm.register_wire(_turn_wire._send_envelope)
 
 # Facade read order; monkeypatch writes propagate to EVERY leaf already binding
 # the name (so a leaf reading it as its own global sees the patch).
 _LEAF_MODULES = (
     _session_state,
-    _session_persistence_ref,
+    _store_persistence_ref,
     _session_case_state,
     _turn_wire,
     _turn_live_turn,

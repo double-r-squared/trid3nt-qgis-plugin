@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.server.processing import SessionUnavailableError
+from trid3nt.session.processing import SessionUnavailableError
 from trid3nt.tools import TOOL_REGISTRY, fetchers
 from trid3nt.tools.fetchers._router.executors import qgis_provider
 from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
@@ -33,7 +33,7 @@ def _assert_open_row(name: str) -> None:
 
 
 def _assert_refuses_with_no_session(name: str, **params) -> None:
-    import trid3nt_server.render.pipeline_emitter as pe_mod
+    import trid3nt.render.emission as pe_mod
 
     orig = pe_mod.current_emitter
     pe_mod.current_emitter = lambda: None

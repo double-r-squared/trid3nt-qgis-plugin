@@ -16,7 +16,6 @@ from typing import Final
 
 from trid3nt_contracts.secrets import LANGUAGE_MODEL_CREDENTIAL
 from trid3nt_contracts.source_spec import CredentialSpec, SourceSpec
-from trid3nt.tools.fetchers._fetch_common import KeyRequiredError
 
 logger = logging.getLogger("trid3nt.credentials.resolver")
 
@@ -74,6 +73,9 @@ def credential_value(spec: SourceSpec) -> str:
         raise ValueError(f"row {spec.name!r} declares no credential")
     value = stored_value(credential.name, credential.env_var)
     if value is None:
+        # Function-local: the fetchers package registers every row on import, and a row's hook imports this module.
+        from trid3nt.tools.fetchers._fetch_common import KeyRequiredError
+
         raise KeyRequiredError(spec.name, credential.name, credential.label)
     return value
 

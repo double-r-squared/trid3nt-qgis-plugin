@@ -1188,7 +1188,7 @@ def _card_run(monkeypatch, *replies, spent=(), seat=None,
               write=None, rate=6.0, user=()):
     import asyncio
 
-    from trid3nt_server.render import pipeline_emitter as pe
+    from trid3nt.render import emission as pe
     from trid3nt.workflows.telemac.workflow import fill_sheet
 
     emitter = _Emitter()
@@ -1331,7 +1331,7 @@ def test_an_unstated_mode_with_no_session_refuses_and_fills_nothing(monkeypatch)
     import asyncio
 
     from trid3nt.errors import DeclarativeError
-    from trid3nt_server.render import pipeline_emitter as pe
+    from trid3nt.render import emission as pe
     from trid3nt.workflows.telemac.workflow import fill_sheet
 
     monkeypatch.setattr(pe, "current_emitter", lambda: None)

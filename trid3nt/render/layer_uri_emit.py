@@ -9,20 +9,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from trid3nt_contracts.collections import ProjectLayerSummary
 from trid3nt_contracts.execution import LayerURI
 
-if TYPE_CHECKING:  # pragma: no cover - typing-only import (no runtime cycle)
-    from .pipeline_emitter import PipelineEmitter
-
-logger = logging.getLogger("trid3nt_server.render.layer_uri_emit")
+logger = logging.getLogger("trid3nt.render.layer_uri_emit")
 
 __all__ = [
     "emit_layer_uri",
     "publish_for_emission",
     "publish_input_layer",
     "publish_raster_input_cog",
+    "summary_of",
 ]
 
 
@@ -133,7 +132,7 @@ def _resolve_non_raster_legend(layer: LayerURI) -> LayerURI:
 
 
 async def publish_input_layer(
-    emitter: "PipelineEmitter | None",
+    emitter: Any,
     layer_uri: LayerURI | None,
     *,
     role: str = "input",
@@ -186,7 +185,7 @@ def _cog_object_exists(cog_uri: str) -> bool:
 
 
 async def publish_raster_input_cog(
-    emitter: "PipelineEmitter | None",
+    emitter: Any,
     *,
     cog_uri: str | None,
     layer_id: str,
@@ -260,3 +259,47 @@ async def publish_raster_input_cog(
         notes=list(notes or []),
     )
     return await publish_input_layer(emitter, layer, role=role)
+
+
+def summary_of(layer: LayerURI) -> ProjectLayerSummary:
+    """THE mint: one client-bound ``LayerURI`` as the row a case and a session
+    both carry. A layer reaches a case through this function whether a turn
+    emitted it or a cold route registered it, so the two views cannot diverge."""
+    return ProjectLayerSummary(
+        layer_id=layer.layer_id,
+        name=layer.name,
+        layer_type=layer.layer_type,
+        uri=layer.uri,
+        visible=True,
+        role=layer.role,
+        origin=getattr(layer, "origin", None),
+        temporal=layer.valid_from is not None,
+        # Resolved style carry-over: the layer's own legend, else lifted from the stash by uri; None reaches the map unstyled.
+        legend=getattr(layer, "legend", None) or _legend_for_layer_uri(layer.uri),
+        # The quantity travels with the layer: matching a still to its animation by prose title ships two scales for one quantity.
+        quantity=getattr(layer, "quantity", None),
+        # And which tracer: position stays askable when a named release renames it.
+        tracer=getattr(layer, "tracer", None),
+        # Mesh CRS: an MDAL mesh reports an empty native crs(). None for raster/vector.
+        crs_authid=getattr(layer, "crs_authid", None),
+        # The dataset files a mesh row's derived groups were written to, and which group this row paints.
+        dataset_uris=list(getattr(layer, "dataset_uris", None) or ()),
+        dataset_group=(getattr(layer, "style", None) or {}).get("dataset_group"),
+        # The instant the mesh's seconds are counted from.
+        reference_time=getattr(layer, "reference_time", None),
+        # One frame states its own validity window so the map stamps a fixed temporal range.
+        valid_from=getattr(layer, "valid_from", None),
+        valid_to=getattr(layer, "valid_to", None),
+    )
+
+
+def _legend_for_layer_uri(uri: str | None) -> Any:
+    """Lift the stashed legend for a layer's uri; fail-open, an error leaves the layer unstyled rather than absent."""
+    if not uri:
+        return None
+    try:
+        from trid3nt.render.publish import pop_legend_for_uri
+
+        return pop_legend_for_uri(uri)
+    except Exception:  # noqa: BLE001 - legend lift is best-effort, never fatal
+        return None

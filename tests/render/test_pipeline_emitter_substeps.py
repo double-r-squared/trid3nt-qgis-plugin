@@ -13,11 +13,8 @@ from typing import Any
 import pytest
 from trid3nt_contracts import new_ulid
 
-from trid3nt_server.render.pipeline_emitter import (
-    PipelineEmitter,
-    begin_substeps,
-    substep,
-)
+from trid3nt.render.emission import begin_substeps, substep
+from trid3nt_server.render.pipeline_emitter import PipelineEmitter
 
 
 

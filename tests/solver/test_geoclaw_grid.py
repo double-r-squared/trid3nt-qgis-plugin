@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from trid3nt_harness.inputs.gate import pending
-from trid3nt_server.render import pipeline_emitter as pe
+from trid3nt.render import emission as pe
 from trid3nt.tools.mesh import gate as mesh_gate
 from trid3nt.tools.mesh.meshers import MeshToolError
 from trid3nt.tools.mesh.session import MeshSession

@@ -407,7 +407,7 @@ package RenderSeam {
 
     part emissionSeamPoint : EmissionSeamPoint {
         doc /*
-        code: trid3nt_server/render/layer_uri_emit.py
+        code: trid3nt/render/layer_uri_emit.py
         */
         port layerIn : LayerIn;
         port layerOut : LayerOut;
@@ -458,6 +458,10 @@ package RenderSeam {
 
     part pipelineEmitter : PipelineEmitter {
         doc /*
+        The row a layer becomes is minted by the emission seam's own
+        summary_of, the one mint a case and a session share, so the emitter
+        hands each layer and its stashed legend through whole.
+
         code: trid3nt_server/render/pipeline_emitter.py
         */
         port layerIn : LayerIn;
@@ -514,16 +518,28 @@ package RenderSeam {
         connect fetcherRouter.layerOut to emissionSeamPoint.layerIn;
 
     interface layerTracked : EmittedLayer
-        connect emissionSeamPoint.layerOut to pipelineEmitter.layerIn;
+        connect emissionSeamPoint.layerOut to pipelineEmitter.layerIn {
+        doc /*
+        pass-through: pipelineEmitter
+        */
+    }
 
     interface solvedLayerEmitted : EmittedLayer
-        connect outputsSeamPoint.layerOut to pipelineEmitter.layerIn;
+        connect outputsSeamPoint.layerOut to pipelineEmitter.layerIn {
+        doc /*
+        pass-through: pipelineEmitter
+        */
+    }
 
     interface styleResolved : PresetResolution
         connect presetFamily.resolvedOut to publishPath.resolvedIn;
 
     interface legendStashedByUri : LegendStash
-        connect publishPath.stashOut to pipelineEmitter.stashIn;
+        connect publishPath.stashOut to pipelineEmitter.stashIn {
+        doc /*
+        pass-through: pipelineEmitter
+        */
+    }
 
     interface legendReachesTheCanvas : ResolvedStyle
         connect pipelineEmitter.resolvedOut to layerMaterializer.resolvedIn {
@@ -533,7 +549,11 @@ package RenderSeam {
     }
 
     interface layerOnTheCanvas : SessionLayerRow
-        connect pipelineEmitter.wireOut to layerMaterializer.wireIn;
+        connect pipelineEmitter.wireOut to layerMaterializer.wireIn {
+        doc /*
+        pass-through: pipelineEmitter
+        */
+    }
 
     interface recordFromPublish : LayerRecordEntry
         connect publishPath.recordOut to layerRecord.recordIn;
@@ -621,6 +641,13 @@ package RenderSeam {
         The un-emit is the same surface running the other way: a visibility
         flip on a row the canvas already holds, not a second emission verb.
         A layer nobody published refuses rather than being quietly created.
+
+        The SDK emits through a hook of its own that the daemon binds around
+        each call: with nothing bound a product is still written and recorded
+        and reaches no map, so nothing in the SDK imports the daemon that
+        receives what it emits.
+
+        forbid: trid3nt -> trid3nt_server
         */
     }
 

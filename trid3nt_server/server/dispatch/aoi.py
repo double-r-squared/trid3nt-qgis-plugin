@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from trid3nt_contracts import now_utc
 from trid3nt.inputs.extent import bbox_equivalent
-from trid3nt_server.server.session.persistence_ref import get_persistence
+from trid3nt.store.persistence_ref import get_persistence
 from trid3nt_server.server.session.state import SessionState
 from trid3nt.inputs.extent import as_bbox
 from typing import Any

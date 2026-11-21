@@ -243,7 +243,7 @@ class PestppWorkflow(Workflow):
         """The run, in order: the deck, the study's files, its review, the ranking where one is asked for, the
         calibration by the study's method, then the calibrated deck solved and published."""
         from trid3nt.inputs.run_notes import journal_note
-        from trid3nt_server.render.pipeline_emitter import begin_substeps, current_emitter, substep
+        from trid3nt.render.emission import begin_substeps, current_emitter, substep
         from trid3nt.workflows.runtime.fill import call, production, read
 
         from trid3nt.errors import accuracy_not_cited_warning, parameters_at_bounds_warning, unit_start_warning
@@ -386,7 +386,7 @@ class PestppWorkflow(Workflow):
                       options: Mapping[str, Any], tune: int) -> list[str]:
         """A Morris pass over every named parameter, ranked; the top ``tune`` confirmed on a card where a
         person reviews, taken as ranked otherwise and said."""
-        from trid3nt_harness.inputs.gate.input_review import gate_input_review
+        from trid3nt.inputs.review import gate_input_review
         from trid3nt.inputs.run_notes import journal_note
 
         from . import outputs
@@ -414,7 +414,7 @@ class PestppWorkflow(Workflow):
                         fields: Mapping[str, Mapping[str, Any]] = {}, localizing: bool = False,
                         offsets: Sequence[tuple[str, float, str]] = ()) -> None:
         """The study before it runs, on the one review card where a person reviews; a decline ends the run."""
-        from trid3nt_harness.inputs.gate.input_review import gate_input_review
+        from trid3nt.inputs.review import gate_input_review
 
         from .authoring.control import sigma_range
         from .weights import USER

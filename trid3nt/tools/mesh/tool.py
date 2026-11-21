@@ -126,7 +126,7 @@ async def build_mesh(
     """
     import asyncio
 
-    from trid3nt_server.render.pipeline_emitter import current_turn_case
+    from trid3nt.render.emission import current_turn_case
     from trid3nt.tools import TOOL_REGISTRY
     from trid3nt.tools.mesh.gate import gate_mesh_build
     from trid3nt.tools.mesh.session import MeshSession

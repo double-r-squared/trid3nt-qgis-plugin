@@ -14,7 +14,7 @@ from typing import Any
 from trid3nt_contracts.ws import LayerRequestPayload, LayerResponsePayload
 from trid3nt_contracts.source_spec import SourceSpec
 
-from trid3nt_harness.inputs.gate.pending import _PENDING_LAYER
+from trid3nt.session.pending import _PENDING_LAYER
 
 from ..errors import router_empty_error, router_input_error, router_upstream_error
 from .vector_fgb import build_where, resolve_endpoints
@@ -93,7 +93,7 @@ def row_key(spec: SourceSpec, params: dict[str, Any]) -> str:
 
 
 async def _ask(emitter: Any, payload: LayerRequestPayload, timeout_s: float):
-    from trid3nt_server.server.processing import SessionProcessingTimeoutError
+    from trid3nt.session.processing import SessionProcessingTimeoutError
 
     loop = asyncio.get_running_loop()
     fut: asyncio.Future = loop.create_future()
@@ -119,8 +119,8 @@ def ask_session_for_layer(payload: LayerRequestPayload) -> LayerResponsePayload:
 
     The body runs off-loop, so the coroutine is driven onto the emitter's bound loop; on the
     loop thread itself a blocking wait would deadlock, so that refuses."""
-    from trid3nt_server.render.pipeline_emitter import current_emitter
-    from trid3nt_server.server.processing import (
+    from trid3nt.render.emission import current_emitter
+    from trid3nt.session.processing import (
         SessionUnavailableError,
         _timeout_s,
     )

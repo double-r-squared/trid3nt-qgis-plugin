@@ -224,7 +224,7 @@ def test_the_soil_ingestion_composes_the_derive_over_recorded_soilgrids(tmp_path
 @pytest.fixture()
 def card(monkeypatch, ros_run):
     """The ask's gate: the cards it drew, answered by ``held['answer']``; the mode is ``held['mode']``."""
-    import trid3nt_harness.inputs.gate.input_review as review_mod
+    import trid3nt.inputs.review as review_mod
 
     held = {"mode": "user_gated", "answer": {}, "cards": []}
 

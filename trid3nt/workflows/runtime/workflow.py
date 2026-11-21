@@ -194,7 +194,7 @@ class Workflow:
     def judged(self, state: Fill) -> dict[str, Any]:
         """What refuses the whole run before any stage of it, as a verdict under the name it is said by.
         An engine's run waits on a person, so one with no session to wait on refuses here; an engine adds its own."""
-        from trid3nt_harness.inputs.gate.input_review import no_session
+        from trid3nt.inputs.review import no_session
         from .fill import REJECTED, Verdict
 
         sentence = no_session(self.name) if self.engine else None
@@ -532,7 +532,7 @@ class Workflow:
                  wall_seconds: float, notes: Sequence[str],
                  inputs: Mapping[str, Mapping[str, Any]], *, stopped: str | None = None) -> None:
         """Append this run to the run journal, from publish where the inputs and wall time are both in hand."""
-        from trid3nt_server.render.pipeline_emitter import current_emitter
+        from trid3nt.render.emission import current_emitter
 
         journal.append_record(journal.build_record(
             run_id=run_id, engine=self.recorded_engine(run),

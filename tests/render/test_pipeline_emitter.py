@@ -15,9 +15,7 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.render.pipeline_emitter import (
-    PipelineEmitter,
-)
+from trid3nt_server.render.pipeline_emitter import PipelineEmitter
 
 
 class _CapturingSink:
@@ -1182,7 +1180,7 @@ async def test_mint_cards_name_the_case_not_the_shared_solver_id(
     Every TELEMAC template dispatches the ``telemac_dye_release`` solver, so the
     solver id cannot name the card without labelling every sibling after one leg.
     """
-    from trid3nt_server.render import pipeline_emitter as pe
+    from trid3nt.render import emission as pe
     from trid3nt.workflows.solver import solve_progress
 
     handle = type("H", (), {"workflows_execution_id": "j", "workflow_name": "local-docker"})()

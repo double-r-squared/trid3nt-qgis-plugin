@@ -91,14 +91,14 @@ def test_a_value_of_no_readable_shape_refuses_under_the_callers_code(bad):
 # -- the pick-or-wire coercion ---------------------------------------------------- #
 
 def test_the_coercion_reads_the_wire_value_and_never_asks_in_auto(monkeypatch, user_settings):
-    from trid3nt_harness.inputs.gate import draw_input
+    from trid3nt.inputs import review
 
     user_settings(AUTO=True)
 
     async def _never(**_kw):
         raise AssertionError("auto mode asks nobody")
 
-    monkeypatch.setattr(draw_input, "gate_draw_input", _never)
+    monkeypatch.setattr(review, "gate_draw_input", _never)
     coerce = point_arg("release", tool="t", prompt="click")
     out = asyncio.run(coerce({"release": [-114.31, 42.58]}))
     assert out == {"release": Point(-114.31, 42.58)}
@@ -106,18 +106,18 @@ def test_the_coercion_reads_the_wire_value_and_never_asks_in_auto(monkeypatch, u
 
 
 def test_the_coercion_asks_the_canvas_only_when_gated_live_and_empty(monkeypatch):
-    from trid3nt_server.render import pipeline_emitter
-    from trid3nt_harness.inputs.gate import draw_input
+    from trid3nt.render import emission
+    from trid3nt.inputs import review
 
     asked: list[tuple[str, str]] = []
 
     async def _gate(*, tool_name, param, geometry, prompt, **_kw):
         asked.append((tool_name, param))
         assert geometry == "point" and prompt == "click"
-        return draw_input.DrawOutcome(value=Point(-114.31, 42.58, "point-1"))
+        return review.DrawOutcome(value=Point(-114.31, 42.58, "point-1"))
 
-    monkeypatch.setattr(draw_input, "gate_draw_input", _gate)
-    monkeypatch.setattr(pipeline_emitter, "current_emitter", lambda: object())
+    monkeypatch.setattr(review, "gate_draw_input", _gate)
+    monkeypatch.setattr(emission, "current_emitter", lambda: object())
     coerce = point_arg("release", tool="telemac_dye_release", prompt="click")
     out = asyncio.run(coerce({}))
     assert out == {"release": Point(-114.31, 42.58, "point-1")}
@@ -157,14 +157,14 @@ def test_a_point_with_no_prompt_is_read_and_never_asked_for(monkeypatch):
 
 
 def test_a_declined_pick_leaves_the_slot_empty(monkeypatch):
-    from trid3nt_server.render import pipeline_emitter
-    from trid3nt_harness.inputs.gate import draw_input
+    from trid3nt.render import emission
+    from trid3nt.inputs import review
 
     async def _gate(**_kw):
-        return draw_input.DrawOutcome(reason="the drawing was cancelled")
+        return review.DrawOutcome(reason="the drawing was cancelled")
 
-    monkeypatch.setattr(draw_input, "gate_draw_input", _gate)
-    monkeypatch.setattr(pipeline_emitter, "current_emitter", lambda: object())
+    monkeypatch.setattr(review, "gate_draw_input", _gate)
+    monkeypatch.setattr(emission, "current_emitter", lambda: object())
     coerce = point_arg("release", tool="t", prompt="click")
     assert asyncio.run(coerce({})) == {"release": None}
 

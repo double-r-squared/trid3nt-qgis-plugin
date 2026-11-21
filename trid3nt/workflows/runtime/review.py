@@ -94,7 +94,7 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
     """Show the filled sheet and HOLD -> the sheet the person proceeded on.
 
     An edit re-fills its input and redraws the card, or refuses by name."""
-    from trid3nt_harness.inputs.gate.input_review import (
+    from trid3nt.inputs.review import (
         GateCard,
         gate_input_review,
         render_input_review_lines,
@@ -162,7 +162,7 @@ async def ask_unstated(*, steering: type, produced: Mapping[str, Any], stated: M
 
     A keyword the input also fills is offered that value, labelled derived; an answer equal to the offer leaves it derived. AUTO takes each offer
     and says so on the run, and a keyword with no offer is left to refuse by name where the deck reads it."""
-    from trid3nt_harness.inputs.gate.input_review import (
+    from trid3nt.inputs.review import (
         GateCard,
         gate_input_review,
         render_input_review_lines,

@@ -12,11 +12,8 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.render.pipeline_emitter import (
-    PipelineEmitter,
-    bind_turn_case,
-    current_turn_case,
-)
+from trid3nt.render.emission import bind_turn_case, current_turn_case
+from trid3nt_server.render.pipeline_emitter import PipelineEmitter
 from trid3nt_contracts.common import new_ulid
 
 

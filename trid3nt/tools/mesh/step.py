@@ -44,7 +44,7 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
     One KEPT under this recipe's content key is reused unless ``fresh``;
     otherwise one is built, gated unless AUTO is on. ``solve_estimate`` is the engine's wall-second estimate of its
     solve, which SOLVE_BUDGET_S holds the edge to."""
-    from trid3nt_server.render.pipeline_emitter import current_turn_case
+    from trid3nt.render.emission import current_turn_case
     from trid3nt.tools.mesh.gate import gate_mesh_build
     from trid3nt.tools.mesh.session import MeshSession
     from trid3nt.tools.mesh.tool import recipe_from_plan_value

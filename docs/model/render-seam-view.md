@@ -8,7 +8,7 @@ Plane: **workflow**. System: **fetcher -> products -> the user plane's canvas**.
 
 ```mermaid
 flowchart LR
-    emissionSeamPoint["EmissionSeamPoint<br/>trid3nt_server/render/layer_uri_emit.py"]
+    emissionSeamPoint["EmissionSeamPoint<br/>trid3nt/render/layer_uri_emit.py"]
     fetcherRouter["FetcherRouter<br/>trid3nt/tools/fetchers/_router/router.py"]
     layerMaterializer["LayerMaterializer<br/>plugin/render/layers.py"]
     layerRecord["LayerRecord<br/>trid3nt/render/uri_registry.py"]
@@ -21,18 +21,18 @@ flowchart LR
     styleDeclaration["StyleDeclaration<br/>trid3nt/tools/fetchers/weather/fetch_mrms_qpe/source.yaml"]
     styleRowSchema["StyleRowSchema<br/>contracts/trid3nt_contracts/source_spec.py"]
     styleRowSchema -- "PresetKindVocabulary" --> presetFamily
-    pipelineEmitter -- "SessionLayerRow" --> layerMaterializer
+    pipelineEmitter -- "SessionLayerRow (pipelineEmitter pass through)" --> layerMaterializer
     fetcherRouter -- "EmittedLayer" --> emissionSeamPoint
-    emissionSeamPoint -- "EmittedLayer" --> pipelineEmitter
+    emissionSeamPoint -- "EmittedLayer (pipelineEmitter pass through)" --> pipelineEmitter
     pipelineEmitter -- "ResolvedStyle (pipelineEmitter pass through)" --> layerMaterializer
-    publishPath -- "LegendStash" --> pipelineEmitter
+    publishPath -- "LegendStash (pipelineEmitter pass through)" --> pipelineEmitter
     pipelineEmitter -- "LayerRecordEntry" --> layerRecord
     publishPath -- "LayerRecordEntry" --> layerRecord
     outputsSeamPoint -- "LayerRecordEntry" --> layerRecord
     restyleTool -- "RestyleAsk" --> restyleSurface
     restyleSurface -- "DeclaredStyleRow" --> publishPath
     publishPath -- "DeclaredStyleRow" --> presetFamily
-    outputsSeamPoint -- "EmittedLayer" --> pipelineEmitter
+    outputsSeamPoint -- "EmittedLayer (pipelineEmitter pass through)" --> pipelineEmitter
     styleDeclaration -- "DeclaredStyleRow (fetcherRouter pass through)" --> fetcherRouter
     emissionSeamPoint -- "DeclaredStyleRow (emissionSeamPoint pass through)" --> publishPath
     presetFamily -- "PresetResolution" --> publishPath
@@ -175,7 +175,7 @@ One row of the session's layer state, which is what the canvas is rebuilt from o
 ## What each requirement says
 
 - **AFailedStepNamesWhyItFailed** - A step that ends red states a typed code and a sentence. A run that stops in silence leaves the reader a failed card and nothing to read off it, which is the same fault as a bed that paints in silence: the machinery cannot say what stopped the run, so nobody can act on it. Both seams refuse rather than record: the transition that marks a step failed, and the verdict stated over the steps afterwards. Where the cause is an upstream service the name says so, and where the raised exception says nothing at all its type is the sentence.
-- **EmissionIsAutomatic** - A produced layer appears. There is no verb for showing one, on either arm - a fetch emits what it fetched, a solve emits every product its outputs list names - and there is no opt-out, so an intermediate is a layer too and the reader hides what they did not want to see. This is why there is no way to produce a layer and forget to display it: the display is not a second step somebody has to remember. The un-emit is the same surface running the other way: a visibility flip on a row the canvas already holds, not a second emission verb. A layer nobody published refuses rather than being quietly created.
+- **EmissionIsAutomatic** - A produced layer appears. There is no verb for showing one, on either arm - a fetch emits what it fetched, a solve emits every product its outputs list names - and there is no opt-out, so an intermediate is a layer too and the reader hides what they did not want to see. This is why there is no way to produce a layer and forget to display it: the display is not a second step somebody has to remember. The un-emit is the same surface running the other way: a visibility flip on a row the canvas already holds, not a second emission verb. A layer nobody published refuses rather than being quietly created. The SDK emits through a hook of its own that the daemon binds around each call: with nothing bound a product is still written and recorded and reaches no map, so nothing in the SDK imports the daemon that receives what it emits.
 - **OneScalePerQuantity** - A quantity is read on ONE scale for the length of a packet. The range is resolved once, over the whole run, and every frame, plane and legend uses that one range - resolved per frame, the same colour means a different number in the next one, and an animation of a receding flood looks identical to an advancing one. A comparison set is the same rule across layers instead of across time: several layers a reader asked to compare resolve their range TOGETHER, and the legend says a shared range produced it rather than naming percentiles nobody read. The legend states the policy as well as the range, because a fixed domain scale and one read off this run's own values look the same on the canvas and mean different things.
 - **PresentationNeverInDeclarations** - A workflow declaration carries no presentation. A ramp, a range, a title and a visibility change nothing a solver computes, so a declaration that stated them would be describing the picture instead of the run - and the picture would then be frozen at authoring time, where the reader who wants it different is not. A DATASET declaring how it draws is the opposite case and is allowed for the same reason: that a curve number is classed and an elevation is a ramp over metres is a fact about the DATA, true before any run, and it belongs beside the source's endpoints and units rather than in a mapping table somebody has to keep in step. The ad hoc case lives at runtime on the restyle surface, where it costs nothing and can be undone. The preset family knowing nothing about workflows is the structural half: a style writer that could reach the declaration machinery is one import away from a declaration that styles.
 - **StyleIsDeclaredOrKindDefault** - Every emitted layer ships styled - by the row its data declared, or by its kind's bare default. There is no third case and no unstyled one: an unknown quantity gets ONE ramp over its own range, never the colours of a quantity somebody assumed it was. The kind vocabulary is closed at registration, so a row naming a fifth shape is a refused source rather than a layer that reaches the canvas with nothing to draw it. The document that paints it is QGIS's own format, written by us and validated by QGIS: the canvas loads it and does not compute colours of its own, which is what keeps one style writer instead of two that disagree.

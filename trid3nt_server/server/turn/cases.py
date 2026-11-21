@@ -10,7 +10,7 @@ from trid3nt_harness.model.adapters.adapter import REHYDRATE_HISTORY_CAP, rehydr
 from trid3nt.render.uri_registry import get_uri_registry
 from trid3nt_server.server.dispatch.emitter import _ensure_emitter
 from trid3nt_server.server.session.case_state import _AUTONAMED_CASES, _SESSION_CASE_LIST_HASH, _cache_case_bbox_from_session_state, _case_list_digest, _derive_case_title, _persist_session_active_case, _seed_registry_for_case, _touch_session_record
-from trid3nt_server.server.session.persistence_ref import get_persistence
+from trid3nt.store.persistence_ref import get_persistence
 from trid3nt_server.server.session.state import SessionState
 from trid3nt.inputs.extent import as_bbox
 from trid3nt_server.server.turn.live_turn import _rebind_live_turns

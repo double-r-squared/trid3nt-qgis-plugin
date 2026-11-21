@@ -9,7 +9,7 @@ import logging
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.ws import AgentMessageChunkPayload, SessionStatePayload
 from trid3nt.tools import TOOL_REGISTRY
-from trid3nt_server.render.pipeline_emitter import current_turn_case
+from trid3nt.render.emission import current_turn_case
 from trid3nt.settings import setting
 from trid3nt_server.server.config import _tool_choice_timeout_s
 from trid3nt.inputs.extent import bbox_overlaps

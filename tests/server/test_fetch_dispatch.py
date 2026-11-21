@@ -59,7 +59,7 @@ def world(monkeypatch):
     monkeypatch.setattr(confirm, "_maybe_gate_on_payload_warning", payload)
     monkeypatch.setattr(confirm, "_gate_with_turn_memory", gate)
     monkeypatch.setattr(emitter, "_reusable_fetch_layer", reuse)
-    from trid3nt_server.render import layer_uri_emit
+    from trid3nt.render import layer_uri_emit
 
     published = layer_uri_emit.publish_input_layer
 

@@ -11,7 +11,7 @@ from trid3nt import settings
 from trid3nt.settings import reader
 from trid3nt_harness.inputs.gate import pending
 from trid3nt_harness.inputs.gate.input_review import GateCard
-from trid3nt_server.render import pipeline_emitter as pe
+from trid3nt.render import emission as pe
 from trid3nt.tools import TOOL_REGISTRY
 from trid3nt.tools.meta.set_config.set_config import SettingDeclinedError, set_config
 from trid3nt.workflows.runtime.module import SlotRefused

@@ -2,14 +2,15 @@
 
 What decides and asks: the LLM provider adapters and the guards over a model
 turn, the tool surfacing a model reads, and the gate a turn waits on a person
-at. It imports `trid3nt` only; the edges that still reach the daemon are listed
-in the import-graph test's allow-list.
+at. It imports `trid3nt` only. Importing it registers the gate the SDK's review
+and draw ask and the tools only the model calls; it reaches the daemon's wire
+through the send the daemon registers on the confirm engine.
 
 ## Files
 
 | file | what it is |
 | --- | --- |
-| `__init__.py` | The package door. |
+| `__init__.py` | The package door, and the registrations it makes into the SDK. |
 
 ## Subfolders
 

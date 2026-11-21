@@ -1,76 +1,24 @@
 """Imports run one way: trid3nt imports neither other package, trid3nt_harness imports trid3nt only.
 
 Every import statement in the three packages is read off the source, a relative one resolved against
-its own package, and an edge that reaches a higher package fails unless ALLOWED names it. ALLOWED is
-the set of known upward edges (importing file -> imported module); an entry that no longer matches an
-edge fails too, so the list only ever shrinks.
+its own package, and so is every string that names a module of a higher package by its dotted path
+(an importlib target, a provider reference): none may reach up. The SDK also imports whole in a
+fresh interpreter where neither higher package can be imported at all.
 """
 
 from __future__ import annotations
 
 import ast
+import re
+import subprocess
+import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 LAYERS = {"trid3nt": 0, "trid3nt_harness": 1, "trid3nt_server": 2}
 
-ALLOWED: frozenset[tuple[str, str]] = frozenset({
-    ("trid3nt/inputs/point.py", "trid3nt_server.render.layer_uri_emit"),
-    ("trid3nt/inputs/run.py", "trid3nt_harness.inputs.gate.input_review"),
-    ("trid3nt/inputs/slots.py", "trid3nt_harness.inputs.gate.draw_input"),
-    ("trid3nt/inputs/slots.py", "trid3nt_harness.inputs.gate.input_review"),
-    ("trid3nt/inputs/slots.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/inputs/user_layer.py", "trid3nt_server.render.layer_uri_emit"),
-    ("trid3nt/inputs/user_layer.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/inputs/user_layer.py", "trid3nt_server.server.protocol.connections"),
-    ("trid3nt/inputs/user_layer.py", "trid3nt_server.server.session.persistence_ref"),
-    ("trid3nt/inputs/user_layer.py", "trid3nt_server.server.session.state"),
-    ("trid3nt/inputs/user_layer.py", "trid3nt_server.server.turn.wire"),
-    ("trid3nt/render/formats.py", "trid3nt_server.render.layer_uri_emit"),
-    ("trid3nt/render/formats.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/render/restyle.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/settings/reader.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/tools/__init__.py", "trid3nt_harness.inputs.gate.spatial_input_tool"),
-    ("trid3nt/tools/__init__.py", "trid3nt_harness.tools.search.fetch.fetch"),
-    ("trid3nt/tools/__init__.py", "trid3nt_harness.tools.search.find_sources.find_sources"),
-    ("trid3nt/tools/__init__.py", "trid3nt_harness.tools.search.search_tools.search_tools"),
-    ("trid3nt/tools/derive/probe_point/probe_point.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/tools/derive/probe_point/probe_point.py", "trid3nt_server.server.session.persistence_ref"),
-    ("trid3nt/tools/derive/run_pyqgis/run_pyqgis.py", "trid3nt_server.server.processing"),
-    ("trid3nt/tools/derive/run_qgis_algorithm/run_qgis_algorithm.py", "trid3nt_server.server.processing"),
-    ("trid3nt/tools/fetchers/_router/emit_on_fetch.py", "trid3nt_server.render.layer_uri_emit"),
-    ("trid3nt/tools/fetchers/_router/emit_on_fetch.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/tools/fetchers/_router/executors/qgis_provider.py", "trid3nt_harness.inputs.gate.pending"),
-    ("trid3nt/tools/fetchers/_router/executors/qgis_provider.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/tools/fetchers/_router/executors/qgis_provider.py", "trid3nt_server.server.processing"),
-    ("trid3nt/tools/fetchers/socioeconomic/geocode_location/geocode_location.py", "trid3nt_harness.inputs.gate.input_review"),
-    ("trid3nt/tools/mesh/gate.py", "trid3nt_harness.inputs.gate.input_review"),
-    ("trid3nt/tools/mesh/gate.py", "trid3nt_server.render.layer_uri_emit"),
-    ("trid3nt/tools/mesh/gate.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/tools/mesh/step.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/tools/mesh/tool.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/tools/meta/set_config/set_config.py", "trid3nt_harness.inputs.gate.errors"),
-    ("trid3nt/tools/meta/set_config/set_config.py", "trid3nt_harness.inputs.gate.input_review"),
-    ("trid3nt/tools/meta/set_config/set_config.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/workflows/geoclaw/workflow.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/workflows/modflow/workflow.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/workflows/pestpp/workflow.py", "trid3nt_harness.inputs.gate.input_review"),
-    ("trid3nt/workflows/pestpp/workflow.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/workflows/runtime/fill.py", "trid3nt_harness.inputs.gate.input_review"),
-    ("trid3nt/workflows/runtime/fill.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/workflows/runtime/review.py", "trid3nt_harness.inputs.gate.input_review"),
-    ("trid3nt/workflows/runtime/workflow.py", "trid3nt_harness.inputs.gate.input_review"),
-    ("trid3nt/workflows/runtime/workflow.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/workflows/solver/solve_progress.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/workflows/solver/solver.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/workflows/telemac/authoring/release_point.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt/workflows/telemac/workflow.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt_harness/inputs/gate/confirm.py", "trid3nt_server.server.session.state"),
-    ("trid3nt_harness/inputs/gate/confirm.py", "trid3nt_server.server.turn.wire"),
-    ("trid3nt_harness/inputs/gate/draw_input.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt_harness/inputs/gate/input_review.py", "trid3nt_server.render.pipeline_emitter"),
-    ("trid3nt_harness/tools/search/tool_retrieval.py", "trid3nt_server.main"),
-})
+#: A whole string that is a dotted module path, optionally ``:attr`` (the provider-reference form).
+_MODULE_STRING = re.compile(r"(?P<module>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)(?::[A-Za-z_]\w*)?")
 
 
 def _is_module(dotted: str) -> bool:
@@ -78,11 +26,31 @@ def _is_module(dotted: str) -> bool:
     return path.with_suffix(".py").is_file() or (path / "__init__.py").is_file()
 
 
+def _named_module(text: str) -> str | None:
+    """The module a string names whole by its dotted path, or its attribute's module; else None."""
+    match = _MODULE_STRING.fullmatch(text)
+    if match is None or match["module"].split(".")[0] not in LAYERS:
+        return None
+    module = match["module"]
+    while module and not _is_module(module):
+        module = module.rpartition(".")[0]
+    return module or None
+
+
+def _logger_names(tree: ast.AST) -> set[int]:
+    # A logger's name is a log stream's label, not a module reference.
+    return {id(node.args[0]) for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and node.args
+            and getattr(node.func, "attr", getattr(node.func, "id", None)) == "getLogger"}
+
+
 def _imported(path: Path) -> set[str]:
     rel = path.relative_to(REPO).with_suffix("")
     package = list(rel.parts[:-1])
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    loggers = _logger_names(tree)
     found: set[str] = set()
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+    for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             found.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
@@ -91,6 +59,11 @@ def _imported(path: Path) -> set[str]:
             for alias in node.names:
                 sub = f"{module}.{alias.name}"
                 found.add(sub if _is_module(sub) else module)
+        elif (isinstance(node, ast.Constant) and isinstance(node.value, str)
+              and id(node) not in loggers):
+            named = _named_module(node.value)
+            if named is not None:
+                found.add(named)
     return found
 
 
@@ -106,11 +79,47 @@ def upward_edges() -> set[tuple[str, str]]:
     return edges
 
 
-def test_no_import_reaches_a_higher_package_unless_allowed() -> None:
-    unlisted = sorted(upward_edges() - ALLOWED)
-    assert not unlisted, f"upward imports not in ALLOWED: {unlisted}"
+def test_no_import_reaches_a_higher_package() -> None:
+    upward = sorted(upward_edges())
+    assert not upward, f"imports reaching a higher package: {upward}"
 
 
-def test_every_allowed_edge_is_still_an_import() -> None:
-    stale = sorted(ALLOWED - upward_edges())
-    assert not stale, f"ALLOWED entries no longer imported (delete them): {stale}"
+def test_a_string_naming_a_higher_module_is_an_edge() -> None:
+    tree = ast.parse('x = "trid3nt_harness.inputs.gate.pending:PendingReplies"\n'
+                     'import logging\nlog = logging.getLogger("trid3nt_server.server")\n'
+                     '"""It imports neither trid3nt_harness nor trid3nt_server."""\n')
+    strings = [node for node in ast.walk(tree)
+               if isinstance(node, ast.Constant) and isinstance(node.value, str)]
+    loggers = _logger_names(tree)
+    named = {_named_module(node.value) for node in strings if id(node) not in loggers}
+    assert named == {"trid3nt_harness.inputs.gate.pending", None}
+
+
+_STANDALONE = r"""
+import importlib, pkgutil, sys, traceback
+sys.modules["trid3nt_harness"] = None
+sys.modules["trid3nt_server"] = None
+import trid3nt
+failed = []
+def _seen(name):
+    failed.append((name, traceback.format_exc().strip().splitlines()[-1]))
+for info in pkgutil.walk_packages(trid3nt.__path__, "trid3nt.", onerror=_seen):
+    if info.name.endswith("__main__"):
+        continue
+    try:
+        importlib.import_module(info.name)
+    except BaseException:
+        _seen(info.name)
+for name, why in failed:
+    print(name, "|", why)
+print("imported", len(sys.modules), "failed", len(failed))
+sys.exit(1 if failed else 0)
+"""
+
+
+def test_the_sdk_imports_whole_with_neither_higher_package_importable() -> None:
+    done = subprocess.run([sys.executable, "-c", _STANDALONE], cwd=REPO,
+                          capture_output=True, text=True, timeout=600)
+    assert done.returncode == 0, done.stdout[-4000:] + done.stderr[-4000:]
+    # A registration that swallows an import error logs its traceback and imports on, short of a row.
+    assert "Traceback" not in done.stderr, done.stderr[-4000:]

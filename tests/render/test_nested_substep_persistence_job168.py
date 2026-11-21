@@ -12,7 +12,7 @@ import pytest
 from trid3nt_server import server
 from trid3nt import tools as agent_tools
 from trid3nt.store.cases import make_file_persistence
-from trid3nt_server.render.pipeline_emitter import current_emitter, substep, begin_substeps
+from trid3nt.render.emission import current_emitter, substep, begin_substeps
 from trid3nt.tools import RegisteredTool
 from trid3nt_contracts.case import (
     CaseCommandEnvelopePayload,

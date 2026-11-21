@@ -265,7 +265,7 @@ async def publish_point(emitter: Any, pt: Point, *, label: str, basis: str,
         from trid3nt_contracts import new_ulid
         from trid3nt_contracts.execution import LayerURI
 
-        from trid3nt_server.render.layer_uri_emit import publish_input_layer
+        from trid3nt.render.layer_uri_emit import publish_input_layer
 
         title = f"{label} {pt.name!r}" if pt.name else label
         layer = LayerURI(

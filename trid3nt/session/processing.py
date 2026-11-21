@@ -12,13 +12,13 @@ from typing import TYPE_CHECKING
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.processing_contracts import ProcessingRequestPayload
 
-from trid3nt_harness.inputs.gate.pending import _PENDING_PROCESSING
+from trid3nt.session.pending import _PENDING_PROCESSING
 from trid3nt.settings import setting
 
 if TYPE_CHECKING:
     from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
 
-logger = logging.getLogger("trid3nt_server.server.processing")
+logger = logging.getLogger("trid3nt.session.processing")
 
 __all__ = [
     "SessionProcessingError",
@@ -69,7 +69,7 @@ async def run_in_session(
 ) -> "ProcessingResponsePayload":
     """Emit one ``processing-request`` on the turn's session and WAIT for its
     response; an ``error`` response is raised as the session's own message."""
-    from trid3nt_server.render.pipeline_emitter import current_emitter
+    from trid3nt.render.emission import current_emitter
 
     emitter = current_emitter()
     if emitter is None:

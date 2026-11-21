@@ -13,7 +13,7 @@ from typing import Any
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.server.processing import SessionProcessingFailedError, run_in_session
+from trid3nt.session.processing import SessionProcessingFailedError, run_in_session
 from trid3nt.tools import register_tool
 
 __all__ = ["run_pyqgis", "CodeExecConfirmationRequired"]

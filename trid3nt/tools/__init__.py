@@ -172,12 +172,8 @@ from .derive.run_qgis_algorithm import run_qgis_algorithm  # noqa: E402,F401
 from trid3nt.workflows.solver.diagnostics import read_run_diagnostics  # noqa: E402,F401
 from trid3nt.workflows.solver import solver  # noqa: E402,F401
 
-from trid3nt_harness.tools.search.search_tools import search_tools  # noqa: E402,F401
-from trid3nt_harness.tools.search.find_sources import find_sources  # noqa: E402,F401
-from trid3nt_harness.tools.search.fetch import fetch  # noqa: E402,F401
 from .search.describe_keywords.describe_keywords import describe_keywords  # noqa: E402,F401
 from .meta.set_config.set_config import set_config  # noqa: E402,F401
-from trid3nt_harness.inputs.gate import spatial_input_tool  # noqa: E402,F401
 
 from trid3nt.workflows.telemac.templates.dye_release.dye_release import telemac_dye_release as _telemac_dye_release  # noqa: E402,F401
 from trid3nt.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag as _telemac_do_sag  # noqa: E402,F401

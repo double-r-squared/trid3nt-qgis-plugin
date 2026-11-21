@@ -79,10 +79,7 @@ def maybe_emit_input_on_fetch(
         # visualize=False suppresses a PROBE fetch of otherwise visualizable data.
         if visualize is False:
             return
-        from trid3nt_server.render.pipeline_emitter import (
-            current_emitter,
-            dispatched_tool_name,
-        )
+        from trid3nt.render.emission import current_emitter, dispatched_tool_name
 
         emitter = current_emitter()
         if emitter is None:
@@ -106,7 +103,7 @@ def maybe_emit_input_on_fetch(
         name = input_layer_name(spec, params, purpose)
         layer_id = f"input-{spec.source_class}-{_short_hash(uri)}"
 
-        from trid3nt_server.render.layer_uri_emit import (
+        from trid3nt.render.layer_uri_emit import (
             publish_input_layer,
             publish_raster_input_cog,
         )

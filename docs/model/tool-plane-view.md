@@ -21,7 +21,7 @@ flowchart LR
     runPyqgis["SessionCodeTool<br/>trid3nt/tools/derive/run_pyqgis/run_pyqgis.py"]
     runQgisAlgorithm["SessionAlgorithmTool<br/>trid3nt/tools/derive/run_qgis_algorithm/run_qgis_algorithm.py"]
     sessionExecutor["SessionExecutor<br/>plugin/render/processing.py"]
-    sessionRequest["SessionRequest<br/>trid3nt_server/server/processing.py"]
+    sessionRequest["SessionRequest<br/>trid3nt/session/processing.py"]
     toolDispatch["ToolDispatch<br/>trid3nt_server/server/dispatch/emitter.py"]
     runQgisAlgorithm -- "SessionAsk" --> sessionRequest
     codeExecGate -- "GrantedApproval" --> runPyqgis

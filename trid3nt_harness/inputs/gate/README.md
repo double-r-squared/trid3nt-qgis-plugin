@@ -14,7 +14,7 @@ user said.
 | `errors.py` | The typed gate refusals - a declined card, an expired card, an invalid draw reply - each with an `error_code` and a `retryable` flag. |
 | `draw_input.py` | The DRAW gate: one declared param's value asked for on the canvas. |
 | `input_review.py` | The two-mode review gate - `auto` proceeds at once, `user_gated` presents the card. |
-| `pending.py` | The owner-checked pending-reply registry: one per kind of reply (confirmation, draw, tool choice, processing, layer), each refusing a reply from another session. |
+| `pending.py` | The gate's owner-checked pending-reply registries: one per kind of card reply (confirmation, draw, tool choice), each refusing a reply from another session. |
 | `spatial_input_tool.py` | The draw gate's tool face: `request_spatial_input`, the registered tool that raises the gate. |
 | `spatial_roles.py` | The drawn-geometry role vocabulary and its parser - structural only. |
 
@@ -22,4 +22,4 @@ user said.
 
 | subfolder | what lives there |
 | --- | --- |
-| `cards/` | One builder per card the client renders: estimate, payload warning, solver confirm, spatial input, the key card a keyed source asks its key on, and the inputs card a direct run of a tool no workflow stands behind opens for what its call left out or what refused - the input review's own card, each dropdown filled by the input's accept rule, its proceed the launch once nothing is refused and nothing required is missing. |
+| `cards/` | One builder per card the client renders: payload warning, spatial input, the key card a keyed source asks its key on, and the inputs card a direct run of a tool no workflow stands behind opens for what its call left out or what refused - the input review's own card, each dropdown filled by the input's accept rule, its proceed the launch once nothing is refused and nothing required is missing. |

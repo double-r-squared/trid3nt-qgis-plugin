@@ -14,7 +14,7 @@ import pyogrio
 import pytest
 
 from trid3nt_contracts.ws import LayerResponsePayload
-from trid3nt_server.server.processing import SessionUnavailableError
+from trid3nt.session.processing import SessionUnavailableError
 from trid3nt.tools import TOOL_REGISTRY, fetchers
 from trid3nt.tools.fetchers._router import router
 from trid3nt.tools.fetchers._router.errors import RouterError
@@ -83,9 +83,9 @@ def test_a_level_the_row_does_not_serve_is_a_typed_error() -> None:
 
 
 def test_it_refuses_by_name_with_no_session(monkeypatch) -> None:
-    from trid3nt_server.render import pipeline_emitter
+    from trid3nt.render import emission
 
-    monkeypatch.setattr(pipeline_emitter, "current_emitter", lambda: None)
+    monkeypatch.setattr(emission, "current_emitter", lambda: None)
     with pytest.raises(SessionUnavailableError, match="administrative_boundaries"):
         TOOL_REGISTRY[_NAME].fn(level="county", bbox=_BBOX)
 

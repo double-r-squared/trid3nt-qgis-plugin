@@ -15,14 +15,12 @@ import pytest
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts import new_ulid
 
-from trid3nt_server.render.layer_uri_emit import (
+from trid3nt.render.layer_uri_emit import (
     publish_input_layer,
     publish_raster_input_cog,
 )
-from trid3nt_server.render.pipeline_emitter import (
-    _CURRENT_EMITTER,
-    PipelineEmitter,
-)
+from trid3nt.render.emission import _CURRENT_EMITTER
+from trid3nt_server.render.pipeline_emitter import PipelineEmitter
 
 
 class _Sink:
@@ -145,7 +143,7 @@ async def test_publish_input_layer_swallows_add_loaded_layer_failure():
 _PUBLISH_LAYER_TARGET = (
     "trid3nt.render.publish.publish_layer"
 )
-_COG_EXISTS_TARGET = "trid3nt_server.render.layer_uri_emit._cog_object_exists"
+_COG_EXISTS_TARGET = "trid3nt.render.layer_uri_emit._cog_object_exists"
 
 
 @pytest.mark.asyncio
@@ -228,7 +226,7 @@ async def test_publish_raster_input_cog_skips_missing_object_loudly(caplog):
     with patch(_COG_EXISTS_TARGET, return_value=False), \
          patch(_PUBLISH_LAYER_TARGET, side_effect=_spy), \
          caplog.at_level(
-             "WARNING", logger="trid3nt_server.render.layer_uri_emit"):
+             "WARNING", logger="trid3nt.render.layer_uri_emit"):
         ok = await publish_raster_input_cog(
             emitter, cog_uri="s3://test-runs/RID/bed_bathymetry.tif",
             layer_id="input-river-bed-DEAD", name="Input: river bed bathymetry",

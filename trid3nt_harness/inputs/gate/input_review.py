@@ -1,4 +1,4 @@
-"""Two-mode INPUT_REQUIRED review gate -- the shared helper templates call.
+"""Two-mode INPUT_REQUIRED review gate -- the gate the SDK's input review asks.
 
 ``auto`` proceeds with every non-user input labeled; ``user_gated`` presents them for
 approval, bounded to ``max_rounds`` rounds then an honest cancel.
@@ -7,58 +7,25 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Literal
+from typing import Any, Awaitable, Callable
 
 from trid3nt_contracts import new_ulid
-from trid3nt_contracts.common import ORIGIN_LABELS, Origin, SyntheticInput
+from trid3nt_contracts.common import Origin, SyntheticInput
 from trid3nt_contracts.payload_warning import ParamSheet, PayloadWarningEnvelopePayload
+from trid3nt.inputs.review import (
+    GateCard,
+    InputGateMode,
+    ReviewOutcome,
+    _entry_field,
+    no_session,
+    render_input_review_lines,
+    resolve_input_gate_mode,
+)
 from trid3nt.settings import setting
 
 logger = logging.getLogger("trid3nt_harness.inputs.gate.input_review")
 
-__all__ = [
-    "GateCard",
-    "InputGateMode",
-    "ReviewOutcome",
-    "resolve_input_gate_mode",
-    "render_input_review_lines",
-    "gate_input_review",
-    "no_session",
-]
-
-#: Run-mode lever for every gated thing. ``auto``
-#: proceeds immediately with labeled inputs; ``user_gated`` pauses for review.
-InputGateMode = Literal["auto", "user_gated"]
-
-
-def resolve_input_gate_mode(forced: InputGateMode | None = None) -> InputGateMode:
-    """The mode in force: ``forced`` where a gate must always ask, else ``auto`` where the person's AUTO setting is on.
-
-    The setting is the person's alone - no call and no run states it - so a ready run launches on an act the person chose to skip."""
-    return forced or ("auto" if setting("AUTO") else "user_gated")
-
-
-def _entry_field(e: Any, name: str) -> Any:
-    return e.get(name) if isinstance(e, dict) else getattr(e, name, None)
-
-
-def render_input_review_lines(entries: Any) -> list[str]:
-    """One compact line per resolved input: ``param = value [origin, source]``.
-
-    ``source`` names the fetcher or dataset only where there is one."""
-    lines: list[str] = []
-    for e in entries or []:
-        value = _entry_field(e, "value")
-        units = _entry_field(e, "units")
-        source = _entry_field(e, "real_source_if_any")
-        val_txt = "?" if value is None else f"{value}"
-        if units:
-            val_txt = f"{val_txt} {units}"
-        tag = ORIGIN_LABELS[Origin(_entry_field(e, "basis"))]
-        src = f", {source}" if source else ""
-        lines.append(f"{_entry_field(e, 'param')} = {val_txt} [{tag}{src}]")
-    return lines
+__all__ = ["gate_input_review"]
 
 
 def _build_review_envelope(
@@ -138,50 +105,6 @@ def _apply_revision(
     return merged_entries, merged_params
 
 
-@dataclass(frozen=True)
-class GateCard:
-    """What a gate's card says this round: the body lines, the sheet, the args.
-
-    A caller with a thing of its own under review builds this each round, so what
-    the person reads is measured now rather than when the gate opened."""
-
-    lines: list[str]
-    param_sheet: "ParamSheet | None" = None
-    tool_args: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class ReviewOutcome:
-    """The result of an input-review gate.
-
-    ``proceed`` means run with ``params`` and stamp ``entries`` into the result;
-    ``cancelled`` means the template returns a typed cancel error and does NOT solve."""
-
-    proceed: bool
-    entries: list[SyntheticInput]
-    params: dict[str, Any]
-    cancelled: bool = False
-    cancel_reason: str | None = None
-    #: Which cancel this is - ``no_session``, ``timeout``, ``declined`` or
-    #: ``not_approved`` - so a caller can raise its own typed error by it.
-    cancel_code: str | None = None
-    mode: InputGateMode = "auto"
-    rounds_used: int = 0
-
-
-def no_session(tool_name: str, forced: InputGateMode | None = None) -> str | None:
-    """What a user-gated run with no live session refuses on, or ``None`` where it may launch: a workflow says it at its fill, the gate where a card would have opened."""
-    from trid3nt_server.render.pipeline_emitter import current_emitter
-
-    if resolve_input_gate_mode(forced) == "auto" or current_emitter() is not None:
-        return None
-    return (
-        f"NO_SESSION: {tool_name} did not run - it waits for a person "
-        "to proceed on its review card and no session is open. Open a "
-        "session to review and launch it, or turn AUTO on in "
-        "Settings to launch it at once.")
-
-
 async def gate_input_review(
     *,
     tool_name: str,
@@ -210,7 +133,7 @@ async def gate_input_review(
 
     # user_gated: the proceed on the card IS the launch, so a call with no live
     # session to present on refuses rather than runs.
-    from trid3nt_server.render.pipeline_emitter import current_emitter
+    from trid3nt.render.emission import current_emitter
     from trid3nt_harness.inputs.gate.pending import _PENDING_CONFIRMATIONS
 
     emitter = emitter or current_emitter()

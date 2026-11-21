@@ -84,7 +84,7 @@ async def settle_release(
     """Where a source enters the water: the stated point, checked against the accepted mesh, unmoved.
 
     The engine solves a source at its nearest node, so that node must be wet at t0 and off the rim."""
-    from trid3nt_server.render.pipeline_emitter import current_emitter
+    from trid3nt.render.emission import current_emitter
 
     import numpy as np
 

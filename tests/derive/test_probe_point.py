@@ -73,7 +73,7 @@ def _install_case(monkeypatch, layers, case_id="case-1", bbox=None, title="Test 
         bbox=bbox,
         loaded_layer_summaries=layers,
     )
-    import trid3nt_server.server.session.persistence_ref as persistence_ref
+    import trid3nt.store.persistence_ref as persistence_ref
 
     monkeypatch.setattr(persistence_ref, "get_persistence", lambda: FakePersistence(case))
     return case
@@ -256,7 +256,7 @@ async def test_case_not_found_typed_error(monkeypatch, tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_persistence_unavailable_typed_error(monkeypatch) -> None:
-    import trid3nt_server.server.session.persistence_ref as persistence_ref
+    import trid3nt.store.persistence_ref as persistence_ref
 
     monkeypatch.setattr(persistence_ref, "get_persistence", lambda: None)
     with pytest.raises(ProbePointCaseNotFoundError):

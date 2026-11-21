@@ -7,12 +7,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 
 from aiohttp import web
 
 from trid3nt_server.server.protocol.http.transport import (
     HttpError, failure, json_reply, raw_reply,
 )
+
+logger = logging.getLogger("trid3nt_server.server.protocol.http.layers")
 
 
 class _BadRequest(Exception):
@@ -91,7 +94,46 @@ async def _handle_ingest_layer_post(raw_body: bytes) -> bytes:
         crs_authid=crs_authid,
         make_aoi=bool(payload.get("make_aoi", False)),
     )
+    await _notify_live_sessions(case_id.strip())
     return json.dumps(result, separators=(",", ":")).encode("utf-8")
+
+
+async def _notify_live_sessions(case_id: str) -> None:
+    """Best-effort nudge to any LIVE session with ``case_id`` open; NEVER raises.
+
+    Persistence is the contract; this only repaints sooner than a reopen would."""
+    try:
+        from trid3nt_server.server.protocol import connections as _connections
+        from trid3nt.store import persistence_ref as _persistence_ref
+        from trid3nt_server.server.session import state as _session_state
+        from trid3nt_server.server.turn import wire as _wire
+        from trid3nt.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
+        from trid3nt_contracts.case import CaseListEnvelopePayload
+
+        session_ids = [
+            sid
+            for sid, cid in _session_state._SESSION_ACTIVE_CASE.items()
+            if cid == case_id
+        ]
+        if not session_ids:
+            return
+        p = _persistence_ref.get_persistence()
+        if p is None:
+            return
+        cases = await p.list_cases_for_user(LOCAL_SINGLE_USER_ID)
+        # The existing ``case-list`` envelope, never a fabricated ``session-state``: this cold entry
+        # point has no live emitter to source a truthful chat history from, and a
+        # fabricated one blanks the chat on the next reopen.
+        payload = CaseListEnvelopePayload(cases=cases)
+        for sid in session_ids:
+            sockets = list(_connections._SESSION_WS_CONNECTIONS.get(sid, ()) or ())
+            for ws in sockets:
+                try:
+                    await ws.send(_wire._new_envelope("case-list", sid, payload))
+                except Exception:  # noqa: BLE001 -- one dead socket must not
+                    continue  # block notifying the rest
+    except Exception:  # noqa: BLE001 -- best-effort, never break the ingest
+        logger.debug("layers: live-session nudge skipped", exc_info=True)
 
 
 async def _handle_probe_point_post(raw_body: bytes) -> bytes:

@@ -161,7 +161,7 @@ def said(monkeypatch):
 @pytest.fixture
 def card(monkeypatch):
     """The review card: what it was handed, and the run a person picks on it (unpicked, the offered one)."""
-    from trid3nt_harness.inputs.gate import input_review
+    from trid3nt.inputs import review as input_review
 
     seen: dict = {"pick": None}
 

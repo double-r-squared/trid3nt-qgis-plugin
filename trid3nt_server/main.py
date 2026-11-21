@@ -18,6 +18,7 @@ def _import_tools_registry() -> int:
     the number of registered tools; an empty registry is a packaging fault.
     """
     from trid3nt import tools  # noqa: F401 -- side-effect: registers atomic tools
+    import trid3nt_harness  # noqa: F401 -- side-effect: registers the gate and the model's own tools
     # Coded tools register only when imported; row-driven fetchers need no import.
     from trid3nt.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: F401
     from trid3nt.tools.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401
@@ -36,7 +37,7 @@ def _maybe_bind_dev_persistence() -> None:
         resolve_persistence_backend,
         _default_dev_persistence_dir,
     )
-    from .server.session.persistence_ref import get_persistence, set_persistence
+    from trid3nt.store.persistence_ref import get_persistence, set_persistence
 
     log = logging.getLogger("trid3nt_server.main")
     if not is_dev_persistence_enabled():

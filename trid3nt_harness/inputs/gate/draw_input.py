@@ -7,17 +7,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
 from typing import Any, Literal
 
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.ws import SpatialInputRequestPayload
 
+from trid3nt.inputs.review import DrawOutcome
 from trid3nt.settings import setting
 
 logger = logging.getLogger("trid3nt_harness.inputs.gate.draw_input")
 
-__all__ = ["DrawGeometry", "DrawOutcome", "gate_draw_input"]
+__all__ = ["DrawGeometry", "gate_draw_input"]
 
 #: The four declarable draw kinds, and the client affordance each rides.
 #: ``point``/``rectangle`` are the pick modes; the two multi-vertex kinds ride the
@@ -32,18 +32,6 @@ _AFFORDANCE: dict[str, tuple[str, str | None]] = {
     "polygon": ("vector_draw", "aoi"),
     "polyline": ("vector_draw", "line"),
 }
-
-
-@dataclass(frozen=True, slots=True)
-class DrawOutcome:
-    """What the canvas gave back: a value, or a reason there is none."""
-
-    value: Any = None
-    reason: str | None = None
-
-    @property
-    def drawn(self) -> bool:
-        return self.value is not None
 
 
 async def gate_draw_input(
@@ -63,7 +51,7 @@ async def gate_draw_input(
     affordance = _AFFORDANCE.get(geometry)
     if affordance is None:
         return DrawOutcome(reason=f"{geometry!r} is not a draw kind")
-    from trid3nt_server.render.pipeline_emitter import current_emitter
+    from trid3nt.render.emission import current_emitter
 
     emitter = current_emitter()
     if emitter is None:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from trid3nt.store.cases import Persistence
 
-logger = logging.getLogger("trid3nt_server.server")
+logger = logging.getLogger("trid3nt.store.persistence_ref")
 
 # App-level Persistence singleton, bound at startup and otherwise ``None``, in which case callers
 # fall back to in-memory state. Module-level rather than per-connection: a per-session write needs a

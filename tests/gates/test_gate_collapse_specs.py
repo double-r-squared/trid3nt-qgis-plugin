@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 import trid3nt_server  # noqa: F401 -- triggers tool registration
-from trid3nt_harness.inputs.gate.cards.estimate import resolve_provider
+from trid3nt.tools.card_estimate import resolve_provider
 from trid3nt.tools import TOOL_REGISTRY
 from trid3nt_harness.inputs.gate import confirm as _core
 

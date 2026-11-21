@@ -15,7 +15,7 @@ from trid3nt.render.charts import is_chart_emission_result
 from trid3nt.tools.fetchers._router.registration import registered_spec_names
 from trid3nt_harness.tools.search.fetch import FETCH, resolve_fetch
 from trid3nt_harness.tools.search.tool_retrieval import CORE_FLOOR
-from trid3nt_server.render.pipeline_emitter import bind_turn_case
+from trid3nt.render.emission import bind_turn_case
 from trid3nt_server.server.turn.compaction import complete_compaction_card, mint_compaction_card
 from trid3nt.render.uri_registry import get_uri_registry
 from trid3nt_harness.model.guards.circuit_breaker import CircuitBreakerError

@@ -49,7 +49,7 @@ def _landed(tool_name: str, params: dict, layer_id: str = "L-buildings") -> Laye
 def _state(session_id: str, layers: list) -> SimpleNamespace:
     """A session holding the case ROWS the emitter carries, which is what a
     reuse has to rebuild a layer from."""
-    from trid3nt_server.render.pipeline_emitter import summary_of
+    from trid3nt.render.layer_uri_emit import summary_of
 
     rows = [summary_of(layer) for layer in layers]
     return SimpleNamespace(

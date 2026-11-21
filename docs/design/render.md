@@ -101,6 +101,9 @@ in `docs/model/render-seam.sysml`.
 ## Invariants
 
 - A "modeled" envelope with empty layers NEVER reads status=ok (the honesty floor).
+- The SDK emits through its emission hook (`trid3nt/render/emission.py`): the
+  daemon's emitter binds it around each call, and with nothing bound a product
+  is still written and recorded onto its run and reaches no map.
 - Input layers surface via `purpose=` on router fetches, never hand-emitted.
 - Publication is automatic: a product is published as it is made, and there is no
   verb for showing one. The un-emit is a visibility flip on a row the canvas

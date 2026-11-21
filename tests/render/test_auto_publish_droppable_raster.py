@@ -14,7 +14,7 @@ import pytest
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.render import layer_uri_emit
+from trid3nt.render import layer_uri_emit
 from trid3nt_server.render.pipeline_emitter import PipelineEmitter
 
 S3_COG = "s3://bucket/cache/hillshade.tif"

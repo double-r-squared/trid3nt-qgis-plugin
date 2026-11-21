@@ -339,9 +339,8 @@ async def _register_on_case(
     """Mint ``layer`` as the Case's own row, pinning the AOI when asked.
 
     A missing case or unbound persistence raises ``CaseNotFoundError``."""
-    from trid3nt_server.render.layer_uri_emit import emit_layer_uri
-    from trid3nt_server.render.pipeline_emitter import summary_of
-    from trid3nt_server.server.session.persistence_ref import get_persistence
+    from trid3nt.render.layer_uri_emit import emit_layer_uri, summary_of
+    from trid3nt.store.persistence_ref import get_persistence
 
     p = get_persistence()
     if p is None:
@@ -366,7 +365,7 @@ async def _require_case_exists(case_id: str) -> None:
     """Fail fast before any ingest work for a case that does not exist.
 
     Only an early exit: the merge re-reads the case right before its own write."""
-    from trid3nt_server.server.session.persistence_ref import get_persistence
+    from trid3nt.store.persistence_ref import get_persistence
 
     p = get_persistence()
     if p is None:
@@ -376,46 +375,6 @@ async def _require_case_exists(case_id: str) -> None:
     case = await p.get_case(case_id)
     if case is None:
         raise CaseNotFoundError(f"case {case_id!r} not found")
-
-
-async def _notify_live_sessions(case_id: str) -> None:
-    """Best-effort nudge to any LIVE session with ``case_id`` open; NEVER raises.
-
-    Persistence is the contract; this only repaints sooner than a reopen would."""
-    try:
-        from trid3nt_server.server.protocol import connections as _connections
-        from trid3nt_server.server.session import persistence_ref as _persistence_ref
-        from trid3nt_server.server.session import state as _session_state
-        from trid3nt_server.server.turn import wire as _wire
-        from trid3nt.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
-        from trid3nt_contracts.case import CaseListEnvelopePayload
-
-        session_ids = [
-            sid
-            for sid, cid in _session_state._SESSION_ACTIVE_CASE.items()
-            if cid == case_id
-        ]
-        if not session_ids:
-            return
-        p = _persistence_ref.get_persistence()
-        if p is None:
-            return
-        cases = await p.list_cases_for_user(LOCAL_SINGLE_USER_ID)
-        # The existing ``case-list`` envelope, never a fabricated ``session-state``: this cold entry
-        # point has no live emitter to source a truthful chat history from, and a
-        # fabricated one blanks the chat on the next reopen.
-        payload = CaseListEnvelopePayload(cases=cases)
-        for sid in session_ids:
-            sockets = list(_connections._SESSION_WS_CONNECTIONS.get(sid, ()) or ())
-            for ws in sockets:
-                try:
-                    await ws.send(_wire._new_envelope("case-list", sid, payload))
-                except Exception:  # noqa: BLE001 -- one dead socket must not
-                    continue  # block notifying the rest
-    except Exception:  # noqa: BLE001 -- best-effort, never break the ingest
-        logger.debug("user_layer: live-session nudge skipped", exc_info=True)
-
-
 
 
 async def ingest_user_layer(
@@ -487,7 +446,6 @@ async def ingest_user_layer(
     await _register_on_case(
         case_id, layer, bbox=ingested["bbox"], make_aoi=make_aoi
     )
-    await _notify_live_sessions(case_id)
 
     logger.info(
         "user_layer: ingested case=%s layer_id=%s kind=%s make_aoi=%s",

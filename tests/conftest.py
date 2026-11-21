@@ -18,6 +18,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from trid3nt import tools as agent_tools
 
+# The suite runs wired as the daemon is: the harness's gate answers the SDK's review and its tools are registered.
+import trid3nt_harness  # noqa: E402,F401
+
 
 @pytest.fixture(autouse=True)
 def user_settings(monkeypatch, tmp_path_factory):

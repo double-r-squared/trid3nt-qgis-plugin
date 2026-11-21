@@ -17,7 +17,7 @@ import pytest
 
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_server.render.layer_uri_emit import emit_layer_uri
+from trid3nt.render.layer_uri_emit import emit_layer_uri
 from trid3nt.render.uri_registry import (
     SHORT_HANDLE_RE,
     SessionUriRegistry,

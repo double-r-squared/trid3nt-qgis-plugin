@@ -14,11 +14,10 @@ from trid3nt_contracts.ws import CancelPayload, ErrorPayload, LayerResponsePaylo
 from trid3nt_harness.model.adapters.model_selection import ModelSettings
 from trid3nt_harness.inputs.gate.pending import (
     _PENDING_CONFIRMATIONS,
-    _PENDING_LAYER,
-    _PENDING_PROCESSING,
     _PENDING_SPATIAL_INPUTS,
     _PENDING_TOOL_CHOICES,
 )
+from trid3nt.session.pending import _PENDING_LAYER, _PENDING_PROCESSING
 from trid3nt.settings import setting
 from trid3nt_server.server.dispatch.emitter import _assert_sync_offload_safe, _ensure_emitter
 from trid3nt_harness.inputs.gate.errors import SpatialInputInvalidResponseError

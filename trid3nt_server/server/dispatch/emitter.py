@@ -11,7 +11,8 @@ from trid3nt.tools import TOOL_REGISTRY
 from trid3nt.tools.fetchers._fetch_common import KeyAskError, UpstreamAPIError
 from trid3nt_harness.tools.search.fetch import FETCH, resolve_fetch
 from trid3nt_harness.tools.tool_arg_normalizer import autofill_missing_bbox, normalize_args
-from trid3nt_server.render.pipeline_emitter import PipelineEmitter, bind_turn_case
+from trid3nt.render.emission import bind_turn_case
+from trid3nt_server.render.pipeline_emitter import PipelineEmitter
 from trid3nt.render.uri_registry import activate_registry, deactivate_registry, get_uri_registry
 # The gate engine (trid3nt_harness.inputs.gate.confirm) is imported function-locally in
 # _invoke_tool_via_emitter -- deferred to break the server<->gates load cycle.

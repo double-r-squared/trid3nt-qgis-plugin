@@ -10,8 +10,12 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 
 - Three packages, imports one way: `trid3nt` imports neither other,
   `trid3nt_harness` imports `trid3nt` only, `trid3nt_server` imports
-  both. `tests/contracts/test_package_imports.py` pins it; the upward
-  edges still standing are its allow-list, which only shrinks.
+  both. `tests/contracts/test_package_imports.py` pins it, string module
+  paths included. The SDK owns each seam an upper package fills - the
+  emission hook (`render/emission.py`), the input review and draw
+  (`inputs/review.py`), the Persistence handle - and the upper package
+  registers at start-up; with nothing registered nothing is emitted and
+  nothing asks.
 - `trid3nt/` - the SDK, the domain, by feature:
   `tools/` (the atomic-tool registry; a tool is one of two kinds -
   `fetch` produces data from outside through a declared row

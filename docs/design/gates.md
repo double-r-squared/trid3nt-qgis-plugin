@@ -3,6 +3,18 @@
 `trid3nt_harness/inputs/gate/` is where a turn waits on a person. Its files are
 listed in that folder's README; this page says how the one card works.
 
+## Who asks
+
+The SDK never asks a person itself. Its review and its draw ask the gate
+registered on `trid3nt/inputs/review.py` (`register_gate`), which owns the card's
+types (`GateCard`, `ReviewOutcome`, `DrawOutcome`) and the decline every card
+cancel raises (`UserDeclinedError`). Importing `trid3nt_harness` registers this
+folder's machine there, so the daemon asks exactly as below. With nothing
+registered nothing asks: `auto` proceeds with every input labeled, and a review
+that would ask refuses `NO_SESSION` by name, at the fill for a workflow. The
+confirm engine (`confirm.py`) sends its cards through the one send the daemon
+registers (`register_wire`); the harness imports nothing of the daemon.
+
 ## One gate machine
 
 `gate_input_review` (`input_review.py`) presents, asks and accepts every

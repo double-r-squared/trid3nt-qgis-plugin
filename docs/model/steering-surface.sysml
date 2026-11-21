@@ -961,6 +961,15 @@ package SteeringSurface {
         none would inherit an animation nobody sized, so each states its own
         period in steps as its opinion, and the user overrides it by the
         keyword's name.
+
+        The SDK holds a run without asking anyone itself: its review asks the
+        gate a host registers, and with none registered a review that would ask
+        refuses NO_SESSION by name. The harness registers the card gate the
+        daemon asks on, and the harness reaches the daemon's wire only through
+        a send the daemon registers.
+
+        forbid: trid3nt -> trid3nt_harness
+        forbid: trid3nt_harness -> trid3nt_server
         */
     }
 

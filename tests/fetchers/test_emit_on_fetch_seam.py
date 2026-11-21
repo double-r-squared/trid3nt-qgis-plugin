@@ -19,16 +19,13 @@ from trid3nt.tools.fetchers._router.emit_on_fetch import (
     input_layer_name,
     maybe_emit_input_on_fetch,
 )
-from trid3nt_server.render.pipeline_emitter import (
-    _CURRENT_EMITTER,
-    _DISPATCHED_TOOL,
-    PipelineEmitter,
-)
+from trid3nt.render.emission import _CURRENT_EMITTER, _DISPATCHED_TOOL
+from trid3nt_server.render.pipeline_emitter import PipelineEmitter
 
 _PUBLISH_LAYER_TARGET = (
     "trid3nt.render.publish.publish_layer"
 )
-_COG_EXISTS_TARGET = "trid3nt_server.render.layer_uri_emit._cog_object_exists"
+_COG_EXISTS_TARGET = "trid3nt.render.layer_uri_emit._cog_object_exists"
 
 
 class _Sink:

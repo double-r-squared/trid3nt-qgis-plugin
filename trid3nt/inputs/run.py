@@ -98,7 +98,7 @@ async def case_run(engines: Sequence[str], *, label: str = "run", tool: str = ""
 
     from trid3nt_contracts.common import Origin, SyntheticInput
 
-    from trid3nt_harness.inputs.gate.input_review import gate_input_review
+    from trid3nt.inputs.review import gate_input_review
     from trid3nt.inputs.run_notes import journal_note
 
     found = await asyncio.to_thread(_case_runs, tuple(engines))

@@ -7,27 +7,13 @@ from .payload_warning import (
     _get_warning_threshold_mb,
     _resolve_payload_estimator,
 )
-from .fetch_resolution import (
-    MAX_FETCH_PX,
-    _FETCH_MAX_PX_BY_TOOL,
-    _LANDCOVER_DEFAULT_RES_M,
-    _build_fetch_resolution_envelope,
-    _clamp_fetch_resolution,
-    _gate_memory_key,
-)
 from .spatial_input import (
     _build_spatial_input_request_payload,
     _spatial_response_to_result,
 )
 
 __all__ = [
-    "MAX_FETCH_PX",
-    "_FETCH_MAX_PX_BY_TOOL",
-    "_LANDCOVER_DEFAULT_RES_M",
-    "_build_fetch_resolution_envelope",
     "_build_spatial_input_request_payload",
-    "_clamp_fetch_resolution",
-    "_gate_memory_key",
     "_get_hard_cap_mb",
     "_get_warning_threshold_mb",
     "_resolve_payload_estimator",

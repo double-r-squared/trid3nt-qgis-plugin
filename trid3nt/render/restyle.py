@@ -72,7 +72,7 @@ async def set_hidden(layer_id: str, hidden: bool) -> bool:
 
     False when no emitter is bound or the session never loaded that layer.
     """
-    from trid3nt_server.render.pipeline_emitter import current_emitter
+    from trid3nt.render.emission import current_emitter
 
     emitter = current_emitter()
     if emitter is None:
@@ -85,7 +85,7 @@ async def set_name(layer_id: str, name: str) -> bool:
 
     False when no emitter is bound or the session never loaded that layer.
     """
-    from trid3nt_server.render.pipeline_emitter import current_emitter
+    from trid3nt.render.emission import current_emitter
 
     emitter = current_emitter()
     if emitter is None:

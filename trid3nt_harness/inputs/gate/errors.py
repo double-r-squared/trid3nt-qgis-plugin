@@ -7,19 +7,7 @@ card nobody answered is neither (``GateConfirmationTimeoutError``).
 
 from __future__ import annotations
 
-
-class UserDeclinedError(RuntimeError):
-    """The user answered a gate card with cancel, so the tool never ran.
-
-    ``declined`` is the marker the emitter, the summarizer and the circuit breaker read
-    without importing this module; ``decline_note`` is the words the model relays."""
-
-    declined: bool = True
-    retryable: bool = False
-
-    def __init__(self, message: str, decline_note: str) -> None:
-        super().__init__(message)
-        self.decline_note = decline_note
+from trid3nt.inputs.review import UserDeclinedError
 
 
 class GateConfirmationTimeoutError(RuntimeError):

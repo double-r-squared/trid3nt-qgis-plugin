@@ -22,7 +22,7 @@ from ..us_state_envelopes import CONUS_LAND
 
 #: The confirm gate for a heavy raster fetcher (one resolution_m lever, no ``confirmed`` injection);
 #: a source opts in with ``confirm_gate: fetch_resolution``.
-_PROVIDERS = "trid3nt_harness.inputs.gate.cards.fetch_resolution"
+_PROVIDERS = "trid3nt.tools.fetchers._router.fetch_resolution"
 FETCH_RESOLUTION_GATE_SPEC = GateSpec(
     kind="fetch",
     estimate_provider=f"{_PROVIDERS}:estimate_fetch_resolution",

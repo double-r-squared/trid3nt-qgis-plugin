@@ -241,9 +241,8 @@ def _full_registry_floor(floor: set[str]) -> set[str]:
 
     The FULL registry is populated first, because a coded tool registers only when its module is imported."""
     try:
-        import trid3nt_server.main as _main
-
-        _main._import_tools_registry()
+        import trid3nt.tools  # noqa: F401 -- side-effect: registers the SDK's tools
+        import trid3nt_harness  # noqa: F401 -- and the harness's own
     except Exception:  # noqa: BLE001 -- a degraded snapshot is still a HOT_SET superset
         logger.warning(
             "tool_retrieval: full-registry import failed on fail-open", exc_info=True

@@ -12,8 +12,8 @@ from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.payload_warning import ParamOption, ParamSheet, ParamSheetRow
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_harness.inputs.gate.errors import UserDeclinedError
-from trid3nt_harness.inputs.gate.input_review import GateCard, gate_input_review
+from trid3nt.inputs.review import UserDeclinedError
+from trid3nt.inputs.review import GateCard, gate_input_review
 from trid3nt.inputs.user_input import UserInputError
 from trid3nt.settings import (
     entry, refuse_person_only, resolve, session_run, state_session_run, typed, user_values, write_user)
@@ -118,7 +118,7 @@ async def set_config(name: str, value: float | int | str | bool | None = None,
         previous = user_values().get(ident)
         where = str(await asyncio.to_thread(write_user, ident, final))
     else:
-        from trid3nt_server.render.pipeline_emitter import current_emitter
+        from trid3nt.render.emission import current_emitter
 
         session = current_emitter().session_id
         previous = session_run(session).get(ident)

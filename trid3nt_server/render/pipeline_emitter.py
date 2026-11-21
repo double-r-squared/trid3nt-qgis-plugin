@@ -8,7 +8,6 @@ there is no merge, update-partial or apply-delta helper here to break that.
 from __future__ import annotations
 
 import asyncio
-import contextvars
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -35,7 +34,12 @@ from trid3nt_contracts.ws import (
     ToolIoPayload,
 )
 
-from .layer_uri_emit import emit_layer_uri, publish_for_emission
+from trid3nt.render.emission import (  # noqa: F401 -- the bindings this emitter sets
+    _CURRENT_EMITTER,
+    _DISPATCHED_TOOL,
+    current_turn_case,
+)
+from trid3nt.render.layer_uri_emit import emit_layer_uri, publish_for_emission, summary_of
 from trid3nt.render.uri_registry import observe_published_layer
 
 __all__ = [
@@ -43,109 +47,9 @@ __all__ = [
     "StepNotFoundError",
     "PipelineEmitter",
     "EmissionSink",
-    "current_emitter",
-    "dispatched_tool_name",
-    "substep",
-    "begin_substeps",
-    "emit_chart_payloads",
     "ChartPersistHook",
     "ToolCardPersistHook",
-    "bind_turn_case",
-    "current_turn_case",
-    "summary_of",
 ]
-
-
-# The turn's pinned Case, bound at task entry; every envelope built inside the turn stamps ``case_id`` from it so
-# the client routes to the owning Case after a switch. Per-task, so concurrent turns cannot cross-tag.
-
-_TURN_CASE: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "trid3nt_turn_case", default=None
-)
-
-
-def bind_turn_case(case_id: str | None) -> contextvars.Token:
-    """Bind the turn's owning Case for envelope tagging; returns the token."""
-    return _TURN_CASE.set(case_id)
-
-
-def current_turn_case() -> str | None:
-    """The Case bound to the current task's turn, or None outside a turn."""
-    return _TURN_CASE.get()
-
-
-# The user's rubber-band rectangle (``drawn_geometry``), bound per task so a gate reads it without a new kwarg on every
-# dispatch path; a ``basis="user"`` knob that overrides the model's proposal. None when nothing was drawn.
-
-# The active emitter for one tool or workflow invocation, so a workflow body can fire a transient map verb mid-run.
-# A ContextVar: sessions run concurrently and a per-task binding never leaks across tasks.
-
-_CURRENT_EMITTER: contextvars.ContextVar["PipelineEmitter | None"] = (
-    contextvars.ContextVar("trid3nt_current_emitter", default=None)
-)
-
-#: The top-level tool ``emit_tool_call`` is dispatching. The emit-on-fetch seam compares it to the fetcher's name: equal
-#: is a direct chat fetch (the tool wrapper already emits the layer, the seam stays silent), different is an in-composer
-#: fetch (surfaced as a role="context" input). None outside ``emit_tool_call``.
-_DISPATCHED_TOOL: contextvars.ContextVar[str | None] = (
-    contextvars.ContextVar("trid3nt_dispatched_tool", default=None)
-)
-
-
-def current_emitter() -> "PipelineEmitter | None":
-    """Return the ``PipelineEmitter`` bracketing the current tool/workflow call.
-    ``None`` outside an ``emit_tool_call`` scope, and every caller must handle it:
-    a transient verb is never a correctness gate.
-    """
-    return _CURRENT_EMITTER.get()
-
-
-def dispatched_tool_name() -> str | None:
-    """The top-level tool name ``emit_tool_call`` is dispatching (or ``None``).
-
-    A nested call reads the name of its DISPATCHER here, not its own.
-    """
-    return _DISPATCHED_TOOL.get()
-
-
-@asynccontextmanager
-async def substep(emitter: "PipelineEmitter | None", raw_name: str):
-    """No-op-safe wrapper over ``PipelineEmitter.substep``.
-    Yields ``None`` and mints nothing when no emitter is bound, so a body reads
-    the same whether or not the timeline is being surfaced.
-    """
-    if emitter is None:
-        yield None
-        return
-    async with emitter.substep(raw_name) as child_id:
-        yield child_id
-
-
-def begin_substeps(emitter: "PipelineEmitter | None", total: int | None) -> None:
-    """No-op-safe wrapper over ``PipelineEmitter.begin_substeps``.
-
-    Declares the planned child count without a None-check at the call site.
-    """
-    if emitter is None:
-        return
-    emitter.begin_substeps(total)
-
-
-async def emit_chart_payloads(payloads: Any) -> None:
-    """Side-emit one or more chart-emission payloads via the current emitter.
-    Takes one payload, a sequence, or ``None``; a ``None`` entry is SKIPPED,
-    because a builder returns one when the series it needs is absent.
-    """
-    emitter = current_emitter()
-    if emitter is None:
-        return
-    if isinstance(payloads, (list, tuple)):
-        items = list(payloads)
-    else:
-        items = [payloads]
-    for payload in items:
-        if isinstance(payload, dict) and payload:
-            await emitter.emit_chart(payload)
 
 
 logger = logging.getLogger("trid3nt_server.render.pipeline_emitter")
@@ -265,50 +169,6 @@ def _elapsed_ms(started_at: datetime | None, completed_at: datetime | None) -> i
     if delta < 0:
         return 0
     return int(round(delta))
-
-
-def summary_of(layer: LayerURI) -> ProjectLayerSummary:
-    """THE mint: one client-bound ``LayerURI`` as the row a case and a session
-    both carry. A layer reaches a case through this function whether a turn
-    emitted it or a cold route registered it, so the two views cannot diverge."""
-    return ProjectLayerSummary(
-        layer_id=layer.layer_id,
-        name=layer.name,
-        layer_type=layer.layer_type,
-        uri=layer.uri,
-        visible=True,
-        role=layer.role,
-        origin=getattr(layer, "origin", None),
-        temporal=layer.valid_from is not None,
-        # Resolved style carry-over: the layer's own legend, else lifted from the stash by uri; None reaches the map unstyled.
-        legend=getattr(layer, "legend", None) or _legend_for_layer_uri(layer.uri),
-        # The quantity travels with the layer: matching a still to its animation by prose title ships two scales for one quantity.
-        quantity=getattr(layer, "quantity", None),
-        # And which tracer: position stays askable when a named release renames it.
-        tracer=getattr(layer, "tracer", None),
-        # Mesh CRS: an MDAL mesh reports an empty native crs(). None for raster/vector.
-        crs_authid=getattr(layer, "crs_authid", None),
-        # The dataset files a mesh row's derived groups were written to, and which group this row paints.
-        dataset_uris=list(getattr(layer, "dataset_uris", None) or ()),
-        dataset_group=(getattr(layer, "style", None) or {}).get("dataset_group"),
-        # The instant the mesh's seconds are counted from.
-        reference_time=getattr(layer, "reference_time", None),
-        # One frame states its own validity window so the map stamps a fixed temporal range.
-        valid_from=getattr(layer, "valid_from", None),
-        valid_to=getattr(layer, "valid_to", None),
-    )
-
-
-def _legend_for_layer_uri(uri: str | None) -> Any:
-    """Lift the stashed legend for a layer's uri; fail-open, an error leaves the layer unstyled rather than absent."""
-    if not uri:
-        return None
-    try:
-        from trid3nt.render.publish import pop_legend_for_uri
-
-        return pop_legend_for_uri(uri)
-    except Exception:  # noqa: BLE001 - legend lift is best-effort, never fatal
-        return None
 
 
 @dataclass

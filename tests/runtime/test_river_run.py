@@ -140,7 +140,7 @@ def _spanless_row() -> Input:
 @pytest.fixture
 def mode(monkeypatch):
     """The AUTO setting, and the review card a person answers: what it showed, and the reach they give."""
-    from trid3nt_harness.inputs.gate import input_review
+    from trid3nt.inputs import review as input_review
 
     held = {"mode": "auto", "answer": None, "cards": []}
     monkeypatch.setattr(input_review, "resolve_input_gate_mode", lambda forced=None: forced or held["mode"])

@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from trid3nt_contracts.ws import LayerResponsePayload
-from trid3nt_harness.inputs.gate.pending import _PENDING_LAYER
+from trid3nt.session.pending import _PENDING_LAYER
 
 
 @pytest.fixture()

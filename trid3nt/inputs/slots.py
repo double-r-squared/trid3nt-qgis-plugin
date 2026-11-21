@@ -225,13 +225,13 @@ async def draw_on_canvas(geometry: str, *, tool: str, param: str, prompt: str,
                          purpose: str | None = None) -> Any:
     """The one canvas ask: the drawn value as it came, or ``None`` - outside a
     live ``user_gated`` session, or when nothing was drawn."""
-    from trid3nt_harness.inputs.gate.input_review import resolve_input_gate_mode
-    from trid3nt_server.render.pipeline_emitter import current_emitter
+    from trid3nt.inputs.review import resolve_input_gate_mode
+    from trid3nt.render.emission import current_emitter
 
     if resolve_input_gate_mode() != "user_gated" \
             or current_emitter() is None:
         return None
-    from trid3nt_harness.inputs.gate.draw_input import gate_draw_input
+    from trid3nt.inputs.review import gate_draw_input
 
     outcome = await gate_draw_input(tool_name=tool, param=param,
                                     geometry=geometry, purpose=purpose,

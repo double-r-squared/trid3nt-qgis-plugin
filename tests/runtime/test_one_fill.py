@@ -259,6 +259,40 @@ def test_a_user_gated_engine_run_with_no_session_is_refused_at_the_fill_and_fetc
     assert "AUTO" not in state.inputs and "domain" in asked
 
 
+def _fill_in_a_session(monkeypatch, *, gate: bool):
+    from trid3nt.inputs import review
+    from trid3nt.render import emission
+
+    asked = []
+
+    async def _produce(env, decl):
+        asked.append(decl.name)
+        return "held"
+
+    monkeypatch.setattr(fill_mod, "_produce", _produce)
+    if not gate:
+        monkeypatch.setattr(review, "_ASK", {})
+    token = emission._CURRENT_EMITTER.set(types.SimpleNamespace(session_id="s1"))
+    try:
+        return asyncio.run(fill(Fill(workflow=_wf()), dict(_DYE))), asked
+    finally:
+        emission._CURRENT_EMITTER.reset(token)
+
+
+def test_with_no_gate_registered_a_run_a_session_would_review_refuses_naming_the_need(
+        monkeypatch, user_settings):
+    state, asked = _fill_in_a_session(monkeypatch, gate=False)
+    refused = state.inputs["AUTO"]
+    assert refused.code == "NO_SESSION" and "AUTO on" in refused.reason
+    assert not state.ready and asked == []
+
+
+def test_with_the_harness_gate_registered_the_same_run_goes_on_to_its_review(
+        monkeypatch, user_settings):
+    state, asked = _fill_in_a_session(monkeypatch, gate=True)
+    assert "AUTO" not in state.inputs and "domain" in asked
+
+
 def test_a_layer_by_id_is_supplied_and_ingested_before_it_answers(monkeypatch):
     seen = []
 
@@ -329,7 +363,7 @@ def test_a_card_edit_refills_through_the_modules_accept_rule(monkeypatch):
         await apply_revision({"LAW OF BOTTOM FRICTION": 4})
         return types.SimpleNamespace(proceed=True)
 
-    monkeypatch.setitem(sys.modules["trid3nt_harness.inputs.gate.input_review"].__dict__,
+    monkeypatch.setitem(sys.modules["trid3nt.inputs.review"].__dict__,
                         "gate_input_review", _gate)
     sheet = asyncio.run(tw._review(_fill, {}, steering=steering, workflow="w",
                                    title="", spent=()))
@@ -379,8 +413,8 @@ def test_an_untyped_fault_is_refused_and_its_trace_logged(monkeypatch, caplog):
 def test_a_refusal_keeps_the_code_of_its_reason_through_the_review(
         monkeypatch, cancel_code, code):
     from trid3nt.errors import DeclarativeError
-    from trid3nt_harness.inputs.gate import input_review
-    from trid3nt_harness.inputs.gate.input_review import ReviewOutcome
+    from trid3nt.inputs import review as input_review
+    from trid3nt.inputs.review import ReviewOutcome
     from trid3nt.workflows.runtime import review
     from trid3nt.workflows.runtime import review as tw
 

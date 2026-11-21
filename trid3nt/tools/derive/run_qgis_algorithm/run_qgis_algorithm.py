@@ -14,7 +14,7 @@ from typing import Any
 from trid3nt_contracts.execution import LayerURI, layer_seed
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.server.processing import SessionProcessingFailedError, run_in_session
+from trid3nt.session.processing import SessionProcessingFailedError, run_in_session
 from trid3nt.tools import register_tool
 
 __all__ = ["QgisLayerURI", "run_qgis_algorithm"]

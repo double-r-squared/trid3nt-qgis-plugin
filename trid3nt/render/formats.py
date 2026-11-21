@@ -121,11 +121,8 @@ async def publish(*, run_id: str, engine: str, name: str,
 
     Every layer is surfaced in the order the deliverables arrived in, because no
     product of a run ranks another; the camera rides the run's own record."""
-    from trid3nt_server.render.layer_uri_emit import publish_input_layer
-    from trid3nt_server.render.pipeline_emitter import (
-        current_emitter,
-        emit_chart_payloads,
-    )
+    from trid3nt.render.layer_uri_emit import publish_input_layer
+    from trid3nt.render.emission import current_emitter, emit_chart_payloads
     from trid3nt.workflows.runtime.run_output import persist_run_products
 
     shared = _shared_ranges(items)

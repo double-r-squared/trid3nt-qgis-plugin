@@ -900,7 +900,7 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, cores: int,
     the engine's ``progress`` parser reads its totals from. Judges nothing: a non-complete status is the caller's error to raise."""
     from functools import partial
 
-    from trid3nt_server.render.pipeline_emitter import current_emitter
+    from trid3nt.render.emission import current_emitter
 
     from .solve_progress import (
         StdoutSteps,

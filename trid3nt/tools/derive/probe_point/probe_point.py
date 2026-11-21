@@ -68,7 +68,7 @@ def resolve_case_id(case_id: Any,
     if case_id is not None and str(case_id).strip():
         return str(case_id).strip()
     try:
-        from trid3nt_server.render.pipeline_emitter import current_turn_case
+        from trid3nt.render.emission import current_turn_case
 
         bound = current_turn_case()
     except Exception:  # noqa: BLE001
@@ -86,7 +86,7 @@ async def layers_from_case(
 ) -> tuple[list[dict[str, Any]], list[float] | None, str, Any]:
     """``(layer dicts, case bbox, case title, case doc)`` for ``case_id``, read
     from the Case doc's persisted ``loaded_layer_summaries``."""
-    from trid3nt_server.server.session.persistence_ref import get_persistence
+    from trid3nt.store.persistence_ref import get_persistence
 
     persistence = get_persistence()
     if persistence is None:
