@@ -22,6 +22,8 @@ class INPUTS:
     parameters = Input()
     tune = Input().stated()
     method = Input()
+    sigma = Input().stated()
+    balance = Input().stated()
     observe = Input(OBSERVE, desc=(
         "The wells the run is held to: a point layer of wells reporting their water level; unfilled, every "
         "measured groundwater level the source reports over the run's ground. A depth below the land surface "

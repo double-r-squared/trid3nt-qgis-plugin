@@ -12,7 +12,7 @@ import datetime as dt
 import json
 import logging
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Mapping, Sequence
 
 from trid3nt_server.settings import setting
@@ -35,7 +35,7 @@ from .fields import FieldError, Record, produced_by
 from .geometry import read_geometry_doc, source_uri
 from .vertical_datum import DatumError, datum_of, onto_frame
 
-__all__ = ["Observation", "ObservationError", "convert", "note",
+__all__ = ["Accuracy", "Observation", "ObservationError", "convert", "note",
            "observation", "sited", "sites"]
 
 logger = logging.getLogger("trid3nt_server.inputs.observation")
@@ -60,6 +60,17 @@ _UNSOURCED: Mapping[str, Member] = {
     "datum": Member(field="vertical_datum"),
     "depth": Member(field="depth", unit=UnitField(field="depth_unit")),
 }
+
+
+@dataclass(frozen=True, slots=True)
+class Accuracy:
+    """A published accuracy on the reading's unit and where it is read from, or the code saying why none is;
+    ``widest`` is the widest the source cites for it elsewhere (its table, or the set's other sites)."""
+
+    value: float | None
+    cite: str = ""
+    unread: str = ""
+    widest: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,8 +104,10 @@ class Observation:
     #: where the source publishes no depth.
     depth: float | None = None
     depth_units: str | None = None
-    #: The published accuracy of ``value``, in ``units``, read off the source's map where the slot asks for it.
-    accuracy: float | None = None
+    #: The published accuracy of the reading, in ``units``; ``None`` for a stated number.
+    accuracy: Accuracy | None = None
+    #: The published accuracy of the gauge zero the value is lifted onto; ``None`` where no zero lifts it.
+    zero_accuracy: Accuracy | None = None
 
     @property
     def forcing(self) -> Series | float:
@@ -258,7 +271,7 @@ def _in_window(sampled: Any, at: Any,
 
 
 def observation(source: Any, *, near: Any = None, fields: Mapping[str, Member] | None = None,
-                producer: str = "", to_units: Any = None, accuracy: bool = False,
+                producer: str = "", to_units: Any = None,
                 at: Any = None, window_s: Any = None,
                 to_datum: Any = None, offset: Any = None, caption: str = "",
                 quantity: str = "state", label: str = "observation",
@@ -271,7 +284,7 @@ def observation(source: Any, *, near: Any = None, fields: Mapping[str, Member] |
     another zero reaches ``to_datum`` only through ``offset``. ``near`` ranks several
     candidates, none outside the window closing at ``at`` and none ``off`` names (site id ->
     why it is not this run's water); ``caption`` names the quantity in every refusal and the journal note.
-    A record reads by ``fields``, the map its ``producer`` states; ``accuracy`` reads that member too, refusing where unmapped."""
+    A record reads by ``fields``, the map its ``producer`` states, its accuracy beside it where the map cites one."""
     if source is None:
         return None
     measures, opens = caption or "this value", _opening(caption)
@@ -312,7 +325,7 @@ def observation(source: Any, *, near: Any = None, fields: Mapping[str, Member] |
     candidates.sort(key=lambda row: row[0])
     found = tuple(_found(source, feature, sampled, raw, distance_km,
                          _record(feature.get("properties") or {}, fields, producer, label),
-                         to_units=to_units, accuracy=accuracy,
+                         to_units=to_units,
                          at=at, window_s=window_s, to_datum=to_datum,
                          offset=offset, quantity=quantity, label=label,
                          measures=measures)
@@ -321,6 +334,7 @@ def observation(source: Any, *, near: Any = None, fields: Mapping[str, Member] |
     if every:
         from .run_notes import journal_note
 
+        found = _widest_of_the_set(found, fields)
         journal_note(f"{len(found)} sites of {label} report {measures} within "
                      f"{setting("OBSERVATION_WINDOW_DAYS"):g} days of {at}, each at its own sample; a "
                      "site the mesh does not hold is left out and said.")
@@ -400,7 +414,7 @@ def _depth(rec: Record) -> tuple[float | None, str | None]:
 
 
 def _found(source: Any, feature: Mapping[str, Any], sampled: str | None, raw: float,
-           distance_km: float, rec: Record, *, to_units: Any, accuracy: bool,
+           distance_km: float, rec: Record, *, to_units: Any,
            at: Any, window_s: Any, to_datum: Any, offset: Any,
            quantity: str, label: str, measures: str) -> Observation:
     """One site's reading on the slot's unit and datum, with its window where it reported one."""
@@ -427,7 +441,8 @@ def _found(source: Any, feature: Mapping[str, Any], sampled: str | None, raw: fl
         datum=datum, datum_note=datum_note,
         asked=None if asked is None else asked.isoformat(),
         depth=depth, depth_units=depth_units,
-        accuracy=_accuracy(rec, to_units) if accuracy else None,
+        accuracy=_accuracy(rec, "accuracy", to_units or units),
+        zero_accuracy=_accuracy(rec, "above_accuracy", to_units or units) if rec.maps("above") else None,
         series=_series(rec, rec.unit("series") or units,
                        to_units, shift + convert(zero, units, to_units)
                        if to_units is not None else shift + zero,
@@ -497,13 +512,33 @@ def _gauge_zero(rec: Record, units: Any, label: str, measures: str) -> float:
     return convert(float(stated), rec.unit("above") or units, units)
 
 
-def _accuracy(rec: Record, to_units: Any) -> float:
-    """The published accuracy of this record's value, on the slot's unit; a source publishing none refuses."""
+def _accuracy(rec: Record, name: str, to_units: Any) -> Accuracy:
+    """A member's published accuracy on the reading's unit; where none is cited, the refusal's code instead."""
     try:
-        found = rec.accuracy
-    except FieldError as exc:
-        raise ObservationError(exc.error_code, str(exc)) from exc
-    return convert(found.value, found.unit, to_units) if to_units is not None else float(found.value)
+        widest = max((convert(m.value, m.unit, to_units) for m in rec.cited(name)), default=None)
+    except (FieldError, ObservationError):
+        widest = None
+    try:
+        found = rec.read(name)
+        return Accuracy(convert(found.value, found.unit, to_units), cite=rec.cite(name), widest=widest)
+    except (FieldError, ObservationError) as exc:
+        return Accuracy(None, cite=rec.cite(name) if rec.maps(name) else "", unread=exc.error_code, widest=widest)
+
+
+def _widest_of_the_set(found: tuple[Observation, ...], fields: Mapping[str, Member]) -> tuple[Observation, ...]:
+    """Each site's accuracy told the widest any site of the set cites, where the source states it per record."""
+    for name in ("accuracy", "zero_accuracy"):
+        member = fields.get("above_accuracy" if name == "zero_accuracy" else name)
+        if member is None or not member.field or member.table is not None:
+            continue
+        stated = [(getattr(one, name).value, one.units) for one in found
+                  if getattr(one, name) is not None and getattr(one, name).value is not None]
+        if not stated:
+            continue
+        found = tuple(one if getattr(one, name) is None else replace(one, **{name: replace(
+            getattr(one, name), widest=max(convert(value, units, one.units) for value, units in stated))})
+            for one in found)
+    return found
 
 
 def _covers_the_run(rows: list[tuple[str, float]], at: Any,

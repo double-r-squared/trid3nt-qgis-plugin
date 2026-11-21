@@ -465,7 +465,9 @@ field empty on the record `FIELD_EMPTY`, a code the table holds no row for
 `FIELD_UNTABLED` - each naming the source, the member and the record's site. The
 fill hands a record slot the matched row's map and its source (`fields=`,
 `producer=`); observation, rain and wave read their members through it, and
-observation reads `accuracy` only where its slot asks. A source maps no member it does not report: an unmapped `site` is no site, never a
+every observation carries its reading's `accuracy` and, where a gauge zero lifts it, the zero's
+`above_accuracy` (`Observation.accuracy`, `zero_accuracy`: the number and its cite, or the refusal code saying why
+none is, and the widest the source cites elsewhere) - a missing accuracy never refuses the read. A source maps no member it does not report: an unmapped `site` is no site, never a
 guessed field. A layer no registered source produced reads by its ingestion's stated
 convention (observation: `value` and `time_series_csv` in the record's `unit`, and
 `site_id`, `site_name`, `quantity`, `vertical_datum`, `depth`; rain: `times` and

@@ -38,7 +38,7 @@ def _rows() -> list[dict]:
 
 def _study(tmp_path: Path, **stated) -> str:
     write_control(tmp_path, name="pestpp.pst", parameters=[Parameter("k", 1.0, 0.1, 10.0, "k")],
-                  observations=[Observed("o1", 2.0, 1.0, "heads")], templates=[("m.tpl", "m.in")],
+                  observations=[Observed("o1", 2.0, "heads", 1.0, "cited")], templates=[("m.tpl", "m.in")],
                   instructions=[("m.ins", "m.out")], command="mf6", stated=stated)
     return (tmp_path / "pestpp.pst").read_text()
 

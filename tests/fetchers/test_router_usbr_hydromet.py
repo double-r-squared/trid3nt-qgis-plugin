@@ -266,7 +266,7 @@ def test_the_source_is_found_through_its_class(class_routes_to_the_match):
 
 
 def test_the_elevation_reads_through_the_row_with_the_zero_each_station_states_and_no_accuracy(spec, monkeypatch):
-    from trid3nt_server.inputs.observation import ObservationError, observation
+    from trid3nt_server.inputs.observation import observation
 
     monkeypatch.setattr(uh, "get_client", lambda: object())
     monkeypatch.setattr(
@@ -281,6 +281,4 @@ def test_the_elevation_reads_through_the_row_with_the_zero_each_station_states_a
     found = observation(layer, fields=row.fields, producer="fetch_usbr_hydromet", at="2024-06-04T20:00:00Z")
     assert found.value == 303.36 and found.units == "ft" and found.datum == "NGVD29"
     assert found.site_name == "Henry Hagg Lake and Scoggins Dam (SCO)"
-    with pytest.raises(ObservationError) as unmapped:
-        observation(layer, fields=row.fields, producer="fetch_usbr_hydromet", accuracy=True)
-    assert unmapped.value.error_code == "FIELD_UNMAPPED"
+    assert found.accuracy.value is None and found.accuracy.unread == "FIELD_UNMAPPED"

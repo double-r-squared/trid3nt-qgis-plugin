@@ -19,7 +19,7 @@ import pytest
 
 from trid3nt_contracts.coverage import Coverage, Member
 from trid3nt_server.inputs.fields import FieldError, Measured, records
-from trid3nt_server.inputs.observation import ObservationError, observation
+from trid3nt_server.inputs.observation import observation
 from trid3nt_server.tools.fetchers._router import registration
 from trid3nt_server.tools.fetchers._router.executors import station_timeseries as st
 
@@ -67,14 +67,13 @@ def test_a_coops_reading_is_read_through_the_row_with_the_sensor_accuracy_and_no
     layer, _ = _stations(monkeypatch, "fetch_noaa_coops_tides", "8518750", "coops_wl_8518750_20241001.json")
     row = _row("fetch_noaa_coops_tides", "water level series", "measured")
     found = observation(layer, fields=row.fields, producer="fetch_noaa_coops_tides", at="2024-10-01T00:30:00Z",
-                        to_units="m", accuracy=True)
+                        to_units="m")
     assert found.value == pytest.approx(1.763) and found.sampled == "2024-10-01 00:30"
     assert found.site_id == "8518750" and found.site_name == "The Battery" and found.datum == "MLLW"
-    assert found.accuracy == 0.02
+    assert found.accuracy.value == 0.02
     predicted = _row("fetch_noaa_coops_tides", "water level series", "predicted")
-    with pytest.raises(ObservationError) as caught:
-        observation(layer, fields=predicted.fields, producer="fetch_noaa_coops_tides", accuracy=True)
-    assert caught.value.error_code == "FIELD_UNMAPPED"
+    found = observation(layer, fields=predicted.fields, producer="fetch_noaa_coops_tides")
+    assert found.accuracy.value is None and found.accuracy.unread == "FIELD_UNMAPPED"
     temperature = _row("fetch_noaa_coops_tides", "water quality sample")
     assert "accuracy" not in temperature.fields
 
@@ -83,8 +82,8 @@ def test_a_great_lakes_gauge_reads_on_the_lake_datum_with_the_primary_sensor_bou
     layer, _ = _stations(monkeypatch, "fetch_greatlakes_water_level", "9063063", "coops_greatlakes_9063063_20241001.json")
     row = _row("fetch_greatlakes_water_level", "water level series")
     found = observation(layer, fields=row.fields, producer="fetch_greatlakes_water_level",
-                        at="2024-10-01T00:06:00Z", to_units="m", accuracy=True)
-    assert found.site_name == "Cleveland" and found.value == pytest.approx(0.93) and found.accuracy == 0.02
+                        at="2024-10-01T00:06:00Z", to_units="m")
+    assert found.site_name == "Cleveland" and found.value == pytest.approx(0.93) and found.accuracy.value == 0.02
 
 
 def test_the_accuracy_the_sources_state_is_cited_and_the_model_output_states_none():
@@ -98,7 +97,7 @@ def test_the_accuracy_the_sources_state_is_cited_and_the_model_output_states_non
     assert all(r.kind != "measured" for r in registration.get_spec("fetch_nws_river_forecast").coverage)
 
 
-def test_a_forecast_gauge_reads_its_stage_series_by_nwps_keys_and_refuses_an_accuracy():
+def test_a_forecast_gauge_reads_its_stage_series_by_nwps_keys_and_cites_no_accuracy():
     from trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast import hooks as nws
 
     gauge = {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-91.0, 30.5]},
@@ -123,8 +122,7 @@ def test_a_forecast_gauge_reads_its_stage_series_by_nwps_keys_and_refuses_an_acc
     found = observation(layer, fields=row.fields, producer="fetch_nws_river_forecast", at="2026-11-09T21:00:00Z",
                         to_units="ft")
     assert found.value == pytest.approx(13.5) and found.site_id == "CIDI4" and found.datum == "NAVD88"
-    with pytest.raises(ObservationError):
-        observation(layer, fields=row.fields, producer="fetch_nws_river_forecast", accuracy=True)
+    assert observation(layer, fields=row.fields, producer="fetch_nws_river_forecast").accuracy.unread == "FIELD_UNMAPPED"
 
 
 def _hwm_layer(*qualities):

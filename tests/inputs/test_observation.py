@@ -424,18 +424,16 @@ def test_the_sources_time_member_dates_the_reading_and_no_other_field_does() -> 
     assert found.sampled == "2026-03-04"
 
 
-def test_accuracy_is_read_off_the_source_s_map_only_when_the_slot_asks_for_it() -> None:
+def test_accuracy_is_read_off_the_source_s_map_and_an_unmapped_one_says_why_without_refusing() -> None:
     cite = ("Sauer and Turnipseed 2010, USGS TM 3-A7, Stage-Accuracy Requirements p.3: 0.01 ft or "
             "0.2 percent of the effective stage, whichever is greater")
     stage = _fields("gage_height_ft", "ft", series="stage_series_csv")
     gauge = _fc(_gauge())
-    assert observation(gauge, fields=stage).accuracy is None
-    with pytest.raises(ObservationError) as caught:
-        observation(gauge, fields=stage, accuracy=True)
-    assert caught.value.error_code == "FIELD_UNMAPPED"
+    unmapped = observation(gauge, fields=stage).accuracy
+    assert unmapped.value is None and unmapped.unread == "FIELD_UNMAPPED" and unmapped.cite == ""
     ruled = {**stage, "accuracy": Member(absolute=0.01, relative=0.002, unit="ft", cite=cite)}
-    found = observation(gauge, fields=ruled, accuracy=True, to_units="m")
-    assert found.accuracy == pytest.approx(0.01 * 0.3048)
+    found = observation(gauge, fields=ruled, to_units="m")
+    assert found.accuracy.value == pytest.approx(0.01 * 0.3048) and found.accuracy.cite == cite
 
 
 def test_a_usgs_gauge_is_named_by_its_site_no() -> None:

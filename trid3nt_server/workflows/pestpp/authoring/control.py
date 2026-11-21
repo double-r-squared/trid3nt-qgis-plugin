@@ -21,7 +21,7 @@ __all__ = ["Observed", "Parameter", "TABLES", "substitute", "write_control"]
 #: The tables the control file names, each written beside it.
 TABLES = {"parameter groups": "study_groups.csv", "parameter data": "study_parameters.csv",
           "observation data": "study_observations.csv", "model input": "study_templates.csv",
-          "model output": "study_instructions.csv"}
+          "model output": "study_instructions.csv", "phi factors": "study_phi_factors.csv"}
 
 #: The group table's columns, all of which the binary requires once the table exists.
 _GROUP_COLUMNS = ("inctyp", "derinc", "derinclb", "forcen", "derincmul", "dermthd")
@@ -48,12 +48,19 @@ class Parameter:
 
 @dataclass(frozen=True)
 class Observed:
-    """One observation: its target value, weight and group."""
+    """One observation: its target value and group, and its sigma in the run's unit - the weight is one over it -
+    with how the sigma was reached and each part of it as ``(member, sigma, cite)``."""
 
     name: str
     value: float
-    weight: float
     group: str
+    sigma: float
+    basis: str
+    parts: tuple[tuple[str, float, str], ...] = ()
+
+    @property
+    def weight(self) -> float:
+        return 1.0 / self.sigma
 
 
 def _spelled(value: Any) -> str:
@@ -74,13 +81,14 @@ def _table(path: Path, header: Sequence[str], rows: Sequence[Sequence[Any]]) -> 
 def write_control(directory: Path, *, name: str, parameters: Sequence[Parameter],
                   observations: Sequence[Observed], templates: Sequence[tuple[str, str]],
                   instructions: Sequence[tuple[str, str]], command: str,
-                  stated: Mapping[str, Any] = {}, own: Mapping[str, Any] = {}) -> Path:
+                  stated: Mapping[str, Any] = {}, own: Mapping[str, Any] = {}, balanced: bool = False) -> Path:
     """The control file ``name`` and its tables, written into ``directory`` -> its path.
 
     ``stated`` are the options the run states, by identifier; ``own`` the options the study's own files
     need, by name. A stated locked option, or one the dictionary does not have, refuses. A parameter-group
     variable writes the group table (every other column the dictionary's default), a parameter column
-    replaces that column for every parameter, and any other option is a keyword line."""
+    replaces that column for every parameter, and any other option is a keyword line. ``balanced`` gives each
+    observation group an equal share of phi through PEST++'s own phi factor file."""
     options: dict[str, Any] = {}
     sectioned: dict[str, dict[str, Any]] = {"parameter groups": {}, "parameter data": {}}
     for identifier, value in stated.items():
@@ -92,6 +100,11 @@ def write_control(directory: Path, *, name: str, parameters: Sequence[Parameter]
                               error_code="PESTPP_OPTION_LOCKED")
         sectioned.get(slot.rubrique[0], options)[slot.keyword] = value
     options.update(own)
+    if balanced:
+        shares = list(dict.fromkeys(o.group for o in observations))
+        # The file has no header: a tag, then the group's share of phi.
+        (directory / TABLES["phi factors"]).write_text("".join(f"{group},{1.0 / len(shares)!r}\n" for group in shares))
+        options["ies_phi_factor_file"] = TABLES["phi factors"]
     if not parameters or not observations:
         raise PestppError("a study adjusts at least one parameter against at least one observation",
                           error_code="PESTPP_STUDY_EMPTY")

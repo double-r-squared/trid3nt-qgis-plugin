@@ -3050,6 +3050,14 @@
         "type": "str",
         "default": "ies",
         "desc": "How PEST++ calibrates: ies, an ensemble smoother (pestpp-ies) whose realizations are drawn inside the bounds, or glm, Gauss-Levenberg-Marquardt regression (pestpp-glm) of one parameter set from the run's own values, over a finite-difference Jacobian of each observation by each parameter. Unstated, ies. Each tool's own options are stated by name in keywords (ies_num_reals; lambdas, glm_num_reals); noptmax is stated for either"
+      },
+      "sigma": {
+        "type": "dict",
+        "desc": "The measurement sigma per observation group, in the run's own unit, which wins over the accuracy the records cite: {\"heads\": 0.1}. The groups are the engine's own (heads for a MODFLOW run's wells, levels for a TELEMAC run's gauges) and not_cited, the targets whose records cite no accuracy. Unstated, each target's sigma is its source's cited accuracy, a gauge zero's beside it in quadrature, and its weight one over it"
+      },
+      "balance": {
+        "type": "bool",
+        "desc": "Give each observation group an equal share of phi, by PEST++'s own ies_phi_factor_file over the initial ensemble; an ies study only. Unstated, no balancing: each target weighs one over its sigma"
       }
     }
   }

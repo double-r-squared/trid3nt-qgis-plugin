@@ -165,6 +165,8 @@ def targets(gauges: Sequence[Any], *, the_deck: Deck, finished: Any, frame: str
     from trid3nt_server.workflows.telemac.modules import wrapper_for
     from trid3nt_server.workflows.telemac.modules.outputs import Solved, _point, read_series
 
+    from ..weights import observed
+
     solved = Solved({"run_id": finished.run_id, "utm_epsg": the_deck.utm_epsg,
                      "result_basename": the_deck.result}, wrapper_for(the_deck.module))
     out: list[tuple[Observed, int]] = []
@@ -191,7 +193,8 @@ def targets(gauges: Sequence[Any], *, the_deck: Deck, finished: Any, frame: str
             continue
         node = solved.node_at(_point(gauge))
         held.add(site)
-        out.append((Observed(name=f"level_{len(out) + 1}", value=value, weight=1.0, group="levels"), node + 1))
+        out.append((observed(f"level_{len(out) + 1}", value, gauge, group="levels", to_run=lambda sigma, gauge=gauge: (
+            convert_units(sigma, str(gauge.units), "m"))), node + 1))
     return out, left
 
 

@@ -215,6 +215,8 @@ def head_targets(wells: Sequence[Any], *, the_deck: Deck, mesh: Mapping[str, Any
     from trid3nt_server.workflows.modflow.authoring.griddata import METRES
     from trid3nt_server.workflows.modflow.authoring.stress import at_cell
 
+    from ..weights import observed
+
     if the_deck.length_units not in METRES:
         raise PestppError(f"the run's length unit is {the_deck.length_units!r}, so no reading can be read in it",
                           error_code="PESTPP_DECK_UNREAD")
@@ -251,7 +253,8 @@ def head_targets(wells: Sequence[Any], *, the_deck: Deck, mesh: Mapping[str, Any
                         f"a head is read from a depth below the land surface or an elevation on {frame}")
             continue
         held.add(site)
-        out.append((Observed(name=f"head_{len(out) + 1}", value=head, weight=1.0, group="heads"), cell))
+        out.append((observed(f"head_{len(out) + 1}", head, well, group="heads", to_run=lambda sigma, well=well: (
+            convert_units(sigma, str(well.units), "m") / METRES[the_deck.length_units])), cell))
     return out, left
 
 

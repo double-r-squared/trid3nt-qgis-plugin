@@ -123,6 +123,18 @@ class Record:
                                 f"maps {name!r} to {member.field!r}, which holds "
                                 f"{str(stated)[:60]!r} on this record, not a number") from None
 
+    def cite(self, name: str) -> str:
+        """Where a mapped member's number is read from: the publication it cites, or the source's own field."""
+        member = self._member(name)
+        return member.cite or f"{self.source} field {member.field}"
+
+    def cited(self, name: str) -> list[Measured]:
+        """Every number a member's table cites, each rule read on this record; none for a member with no table."""
+        member = self.fields.get(name)
+        rows = () if member is None or member.table is None else member.table.values()
+        return [self._ruled(name, row) if isinstance(row, Rule) else Measured(float(row), self._unit(name, member))
+                for row in rows if isinstance(row, (Rule, int, float))]
+
     def _member(self, name: str) -> Member:
         member = self.fields.get(name)
         if member is None:

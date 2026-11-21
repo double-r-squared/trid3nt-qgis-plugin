@@ -121,6 +121,14 @@ def _bounds(identifier: str, stated: Any) -> tuple[float, float, str, bool]:
     return lower, upper, source, False
 
 
+def _sigmas(observed: Sequence[Any]) -> dict[str, list[float]]:
+    """Each observation group's sigmas, in the order the groups first appear."""
+    held: dict[str, list[float]] = {}
+    for target in observed:
+        held.setdefault(target.group, []).append(target.sigma)
+    return held
+
+
 class PestppWorkflow(Workflow):
     """PEST++ over a finished run of an engine with a piece: the template module, read by its own names.
     A template DECLARES INPUTS (the run, its parameters and its observations) and CAPTIONS; this builds every stage off them."""
@@ -193,7 +201,9 @@ class PestppWorkflow(Workflow):
         from trid3nt_server.render.pipeline_emitter import begin_substeps, current_emitter, substep
         from trid3nt_server.workflows.runtime.fill import call, production, read
 
-        from . import engine, outputs, staging
+        from trid3nt_server.errors import accuracy_not_cited_warning
+
+        from . import engine, outputs, staging, weights
         from .authoring.control import write_control
 
         env = production(state)
@@ -214,6 +224,11 @@ class PestppWorkflow(Workflow):
         observations = observations if isinstance(observations, tuple) else (observations,)
         named = dict(await read(env, "parameters") or {})
         tune = await read(env, "tune")
+        balanced = bool(await read(env, "balance"))
+        if balanced and method != "ies":
+            raise PestppError("balancing the groups' shares of phi is PEST++'s ies_phi_factor_file, which pestpp-ies "
+                              "reads and pestpp-glm does not; balance an ies study, or weigh the groups by sigma",
+                              error_code="PESTPP_BALANCE_UNSUPPORTED")
         options, _ = keyword_floor([PESTPP], dict(state.keywords))
         chosen, sources = [], {}
         for identifier, stated in named.items():
@@ -238,9 +253,14 @@ class PestppWorkflow(Workflow):
             if not targets:
                 raise PestppError(f"no {study.SITE}'s reading is a {study.OBSERVED} at a {study.PLACE} of the run, so "
                                   "the study has nothing to be held to", error_code="PESTPP_OBSERVATIONS_NONE")
-            journal_note(f"every one of the {len(targets)} {study.SITE}s weighs 1 in phi, the sum of the squared "
-                         "residuals")
+            targets = weights.restated(targets, await read(env, "sigma"))
             observed = [target for target, _where in targets]
+            uncited = sum(target.group == weights.NOT_CITED for target in observed)
+            if uncited:
+                journal_note(accuracy_not_cited_warning(count=uncited))
+            journal_note(f"each {study.SITE} weighs one over its sigma in phi: " + "; ".join(
+                f"{group} {len(held)} at sigma {min(held):.3g} to {max(held):.3g} in the run's unit"
+                for group, held in _sigmas(observed).items()))
 
             async def studied(tool: str, chosen: Sequence[tuple[str, float, float, bool]], stated: Mapping[str, Any]
                               ) -> tuple[dict[str, Any], Path, list, list]:
@@ -249,7 +269,7 @@ class PestppWorkflow(Workflow):
                     study.interface, deck_dir, where, chosen, the_deck=the_deck, targets=targets)
                 write_control(where, name=staging.CONTROL_FILENAME, parameters=parameters, observations=observed,
                               templates=templates, instructions=instructions, command=study.command(the_deck),
-                              stated=stated, own=study.OWN)
+                              stated=stated, own=study.OWN, balanced=balanced and tool == "ies")
                 staged = await staging.stage_study(where, tool=tool, control=staging.CONTROL_FILENAME,
                                                    name=f"{self.name} of {finished.run_id}",
                                                    model=finished.engine)
@@ -266,6 +286,11 @@ class PestppWorkflow(Workflow):
             handle, files, parameters, templates = await studied(method, chosen, options)
             read_off = await asyncio.to_thread(_calibration, method, files)
             best = read_off["best"]
+            widening = weights.widened(observed, read_off["residuals"])
+            journal_note(f"the widening after the fit (the discrepancy rule) scales each group's sigma so its phi is "
+                         f"its count, the calibrated parameters unchanged: phi {widening['phi']:.4g} over "
+                         f"{widening['observations']} observations before, {widening['widened_phi']:.4g} after; "
+                         + "; ".join(f"{group} x{held['factor']:.3g}" for group, held in widening["groups"].items()))
             solved = await stage("solve", study.calibrated, finished=finished, study_dir=work / method,
                                  the_deck=the_deck, parameters=parameters, templates=templates, best=best,
                                  frame=frame)
@@ -273,8 +298,12 @@ class PestppWorkflow(Workflow):
                             "finished_run": finished.run_id, "parameters": {
                                 p.name: {"lower": p.lower, "upper": p.upper, "source": sources.get(p.name) or None,
                                          "calibrated": best[p.name]} for p in parameters},
-                            "phi": read_off["phi"], **read_off["kept"],
-                            "observations": [{"name": o.name, "target": o.value} for o in observed]}
+                            "phi": read_off["phi"], **read_off["kept"], "balanced": balanced,
+                            "widening": {k: v for k, v in widening.items() if k != "sigma"},
+                            "observations": [{"name": o.name, "target": o.value, "group": o.group, "sigma": o.sigma,
+                                              "weight": o.weight, "basis": o.basis,
+                                              "parts": [{"member": m, "sigma": s, "cite": c} for m, s, c in o.parts],
+                                              "widened_sigma": widening["sigma"].get(o.name)} for o in observed]}
             value = await self._publish_calibrated(study, solved, phi=read_off["phi"],
                                                    residuals=read_off["residuals"], ensemble=read_off["spread"],
                                                    parameters=parameters, finished=finished)
@@ -314,16 +343,20 @@ class PestppWorkflow(Workflow):
         """The study before it runs, on the one review card where a person reviews; a decline ends the run."""
         from trid3nt_server.inputs.gate.input_review import gate_input_review
 
+        from .weights import USER
+
+        bounds = [SyntheticInput(param=name, value=f"{lower:g} to {upper:g} " + (
+                                     "in the run's own unit" if absolute else "times the run's own"),
+                                 basis=Origin.USER, real_source_if_any=sources.get(name.lower()) or None)
+                  for name, lower, upper, absolute in chosen]
+        sigmas = [SyntheticInput(param=f"sigma {group}", value=f"{min(held):.3g} to {max(held):.3g} in the run's unit",
+                                 basis=Origin.USER if any(o.basis == USER for o in observed if o.group == group)
+                                 else Origin.PRODUCER) for group, held in _sigmas(observed).items()]
         outcome = await gate_input_review(
             tool_name=self.name,
-            entries=[SyntheticInput(param=name, value=f"{lower:g} to {upper:g} " + (
-                                        "in the run's own unit" if absolute else "times the run's own"),
-                                    basis=Origin.USER, real_source_if_any=sources.get(name.lower()) or None)
-                     for name, lower, upper, absolute in chosen] + [SyntheticInput(param="observations", value=len(observed),
-                                                                         basis=Origin.PRODUCER),
-                                                          SyntheticInput(param="method", value=f"pestpp-{method}",
-                                                                         basis=Origin.USER if stated
-                                                                         else Origin.TEMPLATE)],
+            entries=[*bounds, SyntheticInput(param="observations", value=len(observed), basis=Origin.PRODUCER),
+                     *sigmas, SyntheticInput(param="method", value=f"pestpp-{method}",
+                                             basis=Origin.USER if stated else Origin.TEMPLATE)],
             params={PESTPP.MODULE_INPUT[k].keyword: v for k, v in options.items()})
         if not outcome.proceed:
             raise PestppError(f"the study was not run: {outcome.cancel_reason or 'declined'}",

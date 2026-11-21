@@ -80,7 +80,7 @@ def test_a_multiplier_is_written_into_the_array_s_own_factor(deck_dir, tmp_path)
     the_deck = study_deck.deck(deck_dir)
     parameters, templates, _ins = study_deck.interface(
         deck_dir, tmp_path / "study", [("NPF_K", 0.1, 10.0, False)], the_deck=the_deck,
-        targets=[(study_deck.Observed("head_1", 1.0, 1.0, "heads"), 0)])
+        targets=[(study_deck.Observed("head_1", 1.0, "heads", 1.0, "cited"), 0)])
     assert templates == [("gwf.npf.tpl", "gwf.npf")]
     assert (parameters[0].name, parameters[0].value, parameters[0].scale) == ("npf_k", 1.0, 1.0)
     template = (tmp_path / "study" / "gwf.npf.tpl").read_text().splitlines()
@@ -94,7 +94,7 @@ def test_two_arrays_of_one_file_share_one_template_and_a_constant_is_its_own_sca
     the_deck = study_deck.deck(deck_dir)
     parameters, templates, _ins = study_deck.interface(
         deck_dir, tmp_path / "study", [("NPF_K", 0.1, 10.0, False), ("NPF_ICELLTYPE", 0.5, 2.0, False)], the_deck=the_deck,
-        targets=[(study_deck.Observed("head_1", 1.0, 1.0, "heads"), 0)])
+        targets=[(study_deck.Observed("head_1", 1.0, "heads", 1.0, "cited"), 0)])
     assert templates == [("gwf.npf.tpl", "gwf.npf")]
     text = (tmp_path / "study" / "gwf.npf.tpl").read_text()
     assert "~npf_k" in text and "CONSTANT  ~npf_icelltype" in text
@@ -112,7 +112,7 @@ def test_the_best_values_are_written_through_the_scale_and_read_back_as_the_deck
     before = study_deck.deck_sheet(deck_dir, the_deck).filled["NPF_K"].value
     parameters, templates, _ins = study_deck.interface(
         deck_dir, tmp_path / "study", [("NPF_K", 0.1, 10.0, False)], the_deck=the_deck,
-        targets=[(study_deck.Observed("head_1", 1.0, 1.0, "heads"), 0)])
+        targets=[(study_deck.Observed("head_1", 1.0, "heads", 1.0, "cited"), 0)])
     study_deck.substitute(tmp_path / "study", templates, parameters, {"npf_k": 0.5})
     sheet = study_deck.deck_sheet(tmp_path / "study", the_deck)
     assert sheet.filled["NPF_K"].value[0][0] == pytest.approx(before[0][0] * 0.5)
@@ -121,7 +121,7 @@ def test_the_best_values_are_written_through_the_scale_and_read_back_as_the_deck
 
 def test_heads_are_observed_through_an_obs_file_the_model_names(deck_dir):
     the_deck = study_deck.deck(deck_dir)
-    targets = [(study_deck.Observed("head_1", 1.0, 1.0, "heads"), 6), (study_deck.Observed("head_2", 2.0, 1.0, "heads"), 9)]
+    targets = [(study_deck.Observed("head_1", 1.0, "heads", 1.0, "cited"), 6), (study_deck.Observed("head_2", 2.0, "heads", 1.0, "cited"), 9)]
     assert study_deck.observe_heads(deck_dir, targets, the_deck=the_deck) == ("study_heads.csv.ins", "study_heads.csv")
     assert "OBS6  study_heads.obs" in (deck_dir / "gwf.nam").read_text()
     assert "  head_1 HEAD 1 7\n  head_2 HEAD 1 10\n" in (deck_dir / "study_heads.obs").read_text()

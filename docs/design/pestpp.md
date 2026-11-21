@@ -106,8 +106,9 @@ read from; unstated bounds refuse), how many of them to tune (`tune`), the momen
    refuse over an INTERNAL array (whose FACTOR is not its values) and where the run's own value lies outside them.
 2. Each well's reading is a head target at its cell (the point contract: a site no cell holds is left out and
    said): a depth below the land surface is the cell's top less the depth, an elevation counts only on the run's
-   own frame, and a site is held once, at the first of its readings that is a head. Every well weighs 1. An OBS
-   file the study adds reads the heads; a run of more than one layer or one time step refuses.
+   own frame, and a site is held once, at the first of its readings that is a head. Each well weighs one over its
+   sigma (Weights, below). An OBS file the study adds reads the heads; a run of more than one layer or one time step
+   refuses.
 3. Where `tune` is below the number of parameters, a pestpp-sen pass ranks them by the mean absolute elementary
    effect and the top ones are confirmed on the review card (AUTO takes them as ranked, said).
 4. The study is reviewed on the one review card (the method on it), then the method's tool runs: pestpp-ies, or
@@ -145,9 +146,35 @@ Over a TELEMAC run (`authoring/telemac.py`), a TELEMAC-2D deck (another module r
    TELEMAC solver and published as TELEMAC publishes a run. A finished run whose record says it ended UNSTEADY is not
    calibrated (`PESTPP_RUN_UNSTEADY`).
 
+## Weights
+
+`weights.py`. Each target's sigma is the accuracy its record cites (the observation ingestion carries it as
+`Observation.accuracy`, read off the source's `accuracy` member with its cite, or the refusal code saying why none
+is), moved onto the run's unit; where the value is lifted onto a gauge zero (the record maps `above`), the zero's
+accuracy (`above_accuracy`, NWIS `alt_acy_va`) joins it in quadrature. The weight written is one over sigma; no
+`standard_deviation` column is written, so pestpp-ies keeps its own no-noise default unless the run states
+`ies_no_noise`. Cited targets are in the piece's group (`heads`, `levels`). A target whose reading or zero cites
+none still runs, in group `not_cited`, with the warning `ACCURACY_NOT_CITED`: its sigma starts at the widest its
+source cites elsewhere (the member's table, or for a per-record field the widest any other site of the set states),
+in quadrature with what it does cite, marked `floor`; where its source cites no accuracy at all it starts at 1 in
+the run's unit (`unit start`). A sigma the user states per group (`sigma`, `{"not_cited": 0.3}`, in the run's unit)
+wins (`stated by the user`); a group the study does not hold refuses `PESTPP_SIGMA_GROUP_UNKNOWN`. Each group's
+sigma range is on the review card.
+
+Group balancing runs only when asked (`balance`): PEST++'s own `ies_phi_factor_file`, each group an equal share of
+the initial ensemble's phi; pestpp-glm has no such mechanism, so a balanced glm study refuses
+`PESTPP_BALANCE_UNSUPPORTED`.
+
+After the fit, the widening is a stated step (the discrepancy rule, PWTADJ2 / Morozov): off PEST++'s residual file at
+the best set, each group's sigma is scaled by one factor, sqrt(phi_g / n_g), so its phi is its count; a cited, floor
+or stated group never narrows (factor at least 1), a `unit start` group takes its factor either way. The calibrated
+parameters are the fit's. pestpp-glm's own FOSM reweight (`pestpp.fosm_reweight.rei`) is a different, per-observation
+rule PEST++ applies for its posterior; nothing reads it.
+
 The run's record is that engine's run's, its `study` entry naming the study run, the finished run, each
 parameter's bounds, source and calibrated value, phi, the method (`tool`) and the last ensemble (ies) or the set at
-each iteration (glm).
+each iteration (glm), whether it was balanced, the widening (phi before and after, each group's count, phi and
+factor), and each observation's target, group, sigma, weight, basis, parts (member, sigma, cite) and widened sigma.
 
 ## What is not built yet
 
