@@ -48,6 +48,7 @@ DATA_CLASSES = (
     "precipitation series",
     "wave series",
     "weather forcing",
+    "cloud cover",
     "water quality sample",
     "land cover",
     "soil",
@@ -70,6 +71,7 @@ DataClass = Literal[
     "precipitation series",
     "wave series",
     "weather forcing",
+    "cloud cover",
     "water quality sample",
     "land cover",
     "soil",
@@ -228,12 +230,12 @@ def _in_ring(ring: list[tuple[float, float]], lon: float, lat: float) -> bool:
 MEMBERS = ("value", "series", "time", "above", "above_accuracy", "accuracy",
            "height", "period", "from_direction", "site", "site_name", "quantity", "depth", "datum",
            "air_temperature", "dew_point", "relative_humidity", "wind_speed", "wind_from",
-           "solar_radiation", "pressure", "cloud_cover", "rain")
+           "solar_radiation", "pressure", "cloud_cover", "cloud_cover_accuracy", "rain")
 
 MemberName = Literal["value", "series", "time", "above", "above_accuracy", "accuracy",
                      "height", "period", "from_direction", "site", "site_name", "quantity", "depth",
                      "datum", "air_temperature", "dew_point", "relative_humidity", "wind_speed",
-                     "wind_from", "solar_radiation", "pressure", "cloud_cover", "rain"]
+                     "wind_from", "solar_radiation", "pressure", "cloud_cover", "cloud_cover_accuracy", "rain"]
 
 #: Members holding a number (a series holds numbers), so each states the unit it is counted in.
 NUMERIC_MEMBERS = frozenset(MEMBERS) - {"time", "site", "site_name", "quantity", "datum"}

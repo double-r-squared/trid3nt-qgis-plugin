@@ -366,6 +366,24 @@ from. The engine keeps only its reading of them: which quantities its modules
 read, the mnemonic or keyword each becomes, the one clock its table is written
 on, and the refusal by name of a column it reads that the station is short of.
 
+`CLOUD` is the same ingestion held to one quantity: the cloud cover over the domain, a series in octas on the
+run's clock, from its own need of the class `cloud cover`. A template whose engine reads cloud (the water
+temperature and ice cover templates) declares `cloud = Input(CLOUD).need("cloud cover")` and hands it to the
+atmosphere (`Atmosphere(observed="weather", cloud_octas="cloud")`); the atmosphere reads that series at every
+instant of the station record's clock, and the station's own cloud column stands only where no cloud record is
+handed. The match ranks `fetch_goes_cloud_cover` first (a gridded row inside its sector) and ASOS sky cover next,
+through the one walk every need shares. GOES states cloud as 8 times the cloudy-pixel fraction of the ABI Clear Sky
+Mask (ABI-L2-ACMC, 2 km) in the 5 x 5 pixel box (10 km at nadir) around the point, unrounded, counting only
+pixels of data quality 0 with a valid mask (the Cloud Cover Layers product is not used: its
+guide gives its quality flag no meaning beyond good, degraded and bad, and over Des Moines its bad flag covered
+every clear hour); the counts of the other pixels stay on the record,
+and a box with no counted pixel has no cloud reading, never a clear one. The satellite is the one whose projection is
+centred nearer the point (GOES-19 at 75 W, GOES-18 at 137 W) and a window before its bucket's first hour refuses. ASOS
+sky cover is the fallback: each category reads as the midpoint of the ASOS User's Guide Table 3 percent-of-sky
+range in octas with half the range as `cloud_cover_accuracy`, a code outside the table (SKC, NCD, NSC, VV) refuses
+`FIELD_UNTABLED`, and the run states `CLOUD_COVER_FROM_ASOS` (the swap, and the ceilometer's 12,000 ft limit).
+No GOES and no ASOS refuses `DATA_NEED_UNMATCHED`.
+
 `.need` names a CLASS of the coverage vocabulary, never a fetcher; `geometry=`
 is which SHAPE of that class is asked for, a filter on the match, never a
 conversion. A slot whose ingestion reads one shape states it once (`reads=`):
@@ -434,7 +452,7 @@ The vocabulary is closed (`MEMBERS`): `value`, `series`, `time`, `above`,
 (`quantity`) and is counted from (`datum`), a well's `depth`, the sea state's
 `height`, `period`, `from_direction`, each naming the window it is reported over, and
 the air's `air_temperature`, `dew_point`, `relative_humidity`, `wind_speed`,
-`wind_from`, `solar_radiation`, `pressure`, `cloud_cover` and `rain`. A
+`wind_from`, `solar_radiation`, `pressure`, `cloud_cover` (with `cloud_cover_accuracy`) and `rain`. A
 window member holding JSON names the reading's keys (`time_key`, `value_key`). A coverage row
 restates only the members that differ for its class and, once loaded, carries its
 source's map with its own over it.

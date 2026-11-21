@@ -208,6 +208,7 @@ _RECALL_FIXTURE = [
 #: A question in a data source's own words: it routes to the door, and the door's query names the source.
 _SOURCE_RECALL_FIXTURE = [
     ("show me the lightning over this storm from GOES", "fetch_glm_lightning"),
+    ("total cloud cover over this lake from the GOES satellite cloud mask", "fetch_goes_cloud_cover"),
     ("fetch high resolution aerial imagery for this area", "fetch_naip"),
     ("get the NOAA SIFT unit sources for a tsunami earthquake scenario", "fetch_sift_unit_sources"),
     ("the USGS slip model of the 2011 Tohoku earthquake by event id", "fetch_finite_fault"),

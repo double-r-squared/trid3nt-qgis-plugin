@@ -71,12 +71,39 @@ fields:
   pressure: {field: mslp, unit: hPa}
   cloud_cover:
     field: skyc1
-    table: {CLR: 0.0, SKC: 0.0, NCD: 0.0, NSC: 0.0, FEW: 2.0, SCT: 4.0, BKN: 6.0, OVC: 8.0, VV: 8.0}
+    table: {CLR: 0.2, FEW: 1.2, SCT: 3.0, BKN: 5.48, OVC: 7.48}
     unit: octa
-    cite: "Federal Meteorological Handbook No. 1 (OFCM FCM-H1) sky cover contractions: CLR/SKC no cloud, FEW over 0 to 2 eighths, SCT 3 to 4, BKN 5 to 7, OVC 8, VV an obscured sky read as covered. Where a class spans eighths the value is the one this table has always carried (FEW 2, SCT 4, BKN 6), which the handbook does not state."
+    cite: "ASOS User's Guide (NWS) Table 3, printed p. 25: ASOS measures CLR as 0 to under 5 percent of sky, FEW over 5 to under 25, SCT over 25 to under 50, BKN over 50 to under 87, OVC over 87 to 100. Each value is the midpoint of the category's percent range times 8/100 (octas); the guide states the ranges, not a point, and leaves the printed boundaries (5, 25, 50, 87) to no category. A code outside Table 3 (SKC, NCD, NSC, VV) is not read."
+  cloud_cover_accuracy:
+    field: skyc1
+    table:
+      CLR: {absolute: 0.2, unit: octa}
+      FEW: {absolute: 0.8, unit: octa}
+      SCT: {absolute: 1.0, unit: octa}
+      BKN: {absolute: 1.48, unit: octa}
+      OVC: {absolute: 0.52, unit: octa}
+    cite: "Half the width of the ASOS User's Guide Table 3 percent-of-sky range of each category, times 8/100 (octas). The ceilometer reports no cloud above 12,000 ft (User's Guide printed pp. 23 and 26), so a CLR is clear of cloud below that height only."
   rain: {field: p01i, unit: in}
 coverage:
 - data_class: weather forcing
+  kind: measured
+  reach_km: 60.0
+  extent:
+    kind: stations
+    rings:
+      - [[-125.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+      - [[-172.0, 51.0], [-129.0, 51.0], [-129.0, 72.0], [-172.0, 72.0]]
+      - [[-161.0, 18.0], [-154.0, 18.0], [-154.0, 23.0], [-161.0, 23.0]]
+      - [[-68.5, 17.0], [-64.0, 17.0], [-64.0, 19.0], [-68.5, 19.0]]
+      - [[144.0, 13.0], [146.5, 13.0], [146.5, 21.0], [144.0, 21.0]]
+      - [[-171.5, -15.0], [-169.0, -15.0], [-169.0, -13.0], [-171.5, -13.0]]
+    note: IEM ASOS/METAR network, US + territories airports
+    discover: bbox
+  window:
+    series: true
+    cadence: hourly (plus SPECI); IEM archive reaches the 1920s at some sites
+  datum: null
+- data_class: cloud cover
   kind: measured
   reach_km: 60.0
   extent:

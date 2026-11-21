@@ -427,7 +427,7 @@ def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch, use
         "seed": [0.5, 0.5],
         "event_time": "2024-06-01T00:00:00Z"}))
     run = asyncio.run(wf._launched(state))
-    rows = ["domain", "observe", "bed", "weather", "level", "discharge"]
+    rows = ["domain", "observe", "bed", "cloud", "weather", "level", "discharge"]
     assert run.choices == rows
     assert covered == [f"the {name} covers the cut" for name in rows]
     assert run.notes[:2 * len(rows)] == [said for name in rows for said in (

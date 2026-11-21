@@ -6,7 +6,7 @@ import sys
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.inputs import point_arg
-from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, OBSERVE, WEATHER
+from trid3nt_server.inputs.slots import BED, CLOUD, DISCHARGE, DOMAIN, LEVEL, OBSERVE, WEATHER
 from trid3nt_server.tools.mesh.recipe import RESOLUTION
 from trid3nt_server.inputs.input import Input
 from trid3nt_server.workflows.runtime import (
@@ -43,6 +43,7 @@ class INPUTS:
     level = Input(LEVEL).need("water level series")
 
     weather = Input(WEATHER).need("weather forcing")
+    cloud = Input(CLOUD).need("cloud cover")
     observe = Input(OBSERVE).need("water quality sample", of="TEMPERATURE")
 
 
@@ -78,7 +79,7 @@ class STEERING(T2D):
 
     boundaries = Boundaries(tracers="INITIAL_VALUES_OF_TRACERS")
 
-    atmosphere = Atmosphere(observed="weather")
+    atmosphere = Atmosphere(observed="weather", cloud_octas="cloud")
 
     coupling = [WAQTEL.thermal()]
 

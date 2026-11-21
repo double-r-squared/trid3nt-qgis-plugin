@@ -1,0 +1,110 @@
+# GOES ABI L2 Clear Sky Mask (ABI-L2-ACMC) over one point: a library_delegate vector, one point per scan.
+# boto3 owns the socket (anonymous public NOAA buckets); the hook reads the 2 km binary cloud mask and its
+# quality flags in the 5 x 5 pixel box (10 km at nadir) around the point.
+schema_version: v1
+
+name: fetch_goes_cloud_cover
+source_class: goes_cloud
+error_prefix: GOES_CLOUD
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  archive_s3:
+    url: https://noaa-goes19.s3.amazonaws.com/
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; agent@trid3nt.dev)"
+
+params:
+  seed_point: {type: point, required: true}
+  start_time: {type: str, required: false, schema_optional: true}
+  end_time: {type: str, required: false, schema_optional: true}
+
+ingest:
+  delegate:
+    library: boto3
+    timeout_s: 900.0
+hooks:
+  delegate: goes_cloud.read
+  delegate_validate: goes_cloud.validate
+
+normalize:
+  crs: EPSG:4326
+  units: octa
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style:
+    kind: reference
+    geometry: point
+
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_feature
+  kb_per_feature: 1.0
+  features_per_sq_deg: 200.0
+  floor_mb: 0.001
+
+fields:
+  site: {field: site}
+  time: {field: scan_start}
+  cloud_cover: {field: cloud_octas, unit: octa}
+
+coverage:
+- data_class: cloud cover
+  kind: measured
+  resolution_m: 10000.0
+  extent:
+    kind: surface
+    rings:
+      - [[-125.0, 31.5], [-106.0, 31.5], [-106.0, 24.0], [-66.0, 24.0], [-66.0, 50.0], [-125.0, 50.0]]
+    note: the CONUS sector of GOES-19 east of 106 W and of GOES-18 west of it, where the point falls inside the sector's grid
+  window:
+    series: true
+    earliest: '2022-05-11'
+    cadence: hourly scans chosen from 5-minute CONUS scans
+  datum: null
+
+caveats:
+- The satellite is the one whose projection is centred nearer the point's longitude (GOES-19 at 75 W, GOES-18 at 137 W). GOES-19 holds the product from 2024-10-15 and GOES-18 from 2022-05-11; a window opening before its satellite's first hour, or a point outside that satellite's CONUS grid, refuses.
+- cloud_cover is 8 times the fraction of cloudy or probably cloudy pixels, in octas, unrounded. It is an area fraction over a 5 x 5 block of 2 km pixels (10 km at nadir) around the point, not the sky seen from the ground, and the product states no accuracy for it.
+- Only pixels with data quality flag 0 and a valid mask count. The counts of degraded, bad, space and other pixels stay on the record, and a box with no good pixel carries no cloud_cover at all, never a clear sky. A window with no such box refuses GOES_CLOUD_EMPTY.
+- No key; the public noaa-goes19 and noaa-goes18 buckets answer anonymously.
+docstring: |-
+  Fetch the cloud cover over one point from the GOES-R ABI Clear Sky Mask, as a point FlatGeobuf with a record per hourly scan.
+
+  Reads the 2 km binary cloud mask (cloudy or probably cloudy against clear or probably clear) of the CONUS scan at or
+  before each hour of the window, in the 5 x 5 pixel box (10 km at nadir) around the point, and states the cloud fraction
+  of the pixels of good data quality. ``cloud_octas`` is 8 times that fraction, unrounded. Satellite imagery sees every
+  height, so unlike an airport ceilometer it counts high cloud.
+
+  When to use:
+    - A run needs the total cloud cover over a place and a time window (the heat budget and ice growth of a water body).
+    - The sky condition over a point where no airport reports, or where an airport's sky report stops at 12,000 ft.
+
+  When NOT to use:
+    - Cloud height, layers or optical depth: this is a cloud/no-cloud mask only.
+    - Outside the continental US sector, or before 2022-05-11 (GOES-18, west of 106 W) or 2024-10-15 (GOES-19, east of it).
+    - A forecast: GOES holds observations.
+
+  Parameters:
+      seed_point: ``(lon, lat)`` in EPSG:4326 the cloud cover is read at.
+      start_time: the window's first instant, ISO 8601 UTC. One scan is read per hour from it.
+      end_time: the window's last instant, ISO 8601 UTC.
+
+  Returns:
+      ``LayerURI`` for a point FlatGeobuf, one feature per distinct scan, every field the box states: ``site`` (the
+      satellite), ``scan_start`` and ``scan_end``, the box's pixel counts by data quality (``n_pixels``,
+      ``n_dqf_good``, ``n_dqf_degraded``, ``n_dqf_bad``, ``n_dqf_space``, ``n_dqf_other``, ``n_mask_fill``,
+      ``n_used``, ``n_cloudy``), ``cloud_fraction`` and ``cloud_octas`` (null where no pixel of the box is good).
+
+  Errors:
+      - ``GOES_CLOUD_INPUT_INVALID``: a missing point or window, a window before the satellite's first hour, a point
+        its satellite does not see or outside its CONUS grid.
+      - ``GOES_CLOUD_EMPTY``: no scan in the window, or no box with a good pixel.

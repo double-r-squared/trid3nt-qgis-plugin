@@ -19,6 +19,7 @@ ICE COVER under a cold snap: when water freezes over, and how thick.
 | `discharge` | matched on a need for discharge series | the discharge series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of discharge series. | - |
 | `level` | matched on a need for water level series | the water level series this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water level series. | - |
 | `weather` | matched on a need for weather forcing | the weather forcing this run reads, as a uri or a layer name; unfilled, the run matches a source of weather forcing. | - |
+| `cloud` | matched on a need for cloud cover | the cloud cover this run reads, as a uri or a layer name; unfilled, the run matches a source of cloud cover. | - |
 | `observe` | matched on a need for water quality sample | the water quality sample this run opens on: a layer of sites that report it, or the number itself; unfilled, the run matches a source of water quality sample. | - |
 | `banks` | supplied by the caller | Leave unset unless the user hands the water surface of the reach: a polygon layer the reach is cut square from, used as it is in place of the mapped water surface the run would fetch | - |
 | `mesh` | supplied by the caller | a mesh this case already built, as its uri or its layer name, solved on in place of the one the run would build; the user may state one; unstated, the run builds its own. | - |

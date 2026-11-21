@@ -6,7 +6,8 @@ importing any workflows module registers the TELEMAC solver and would close an i
 
 from __future__ import annotations
 
-__all__ = ["DeclarationError", "DeclarativeError", "GateRefusedError", "INPUT_NOT_USED", "unused_input_warning"]
+__all__ = ["CLOUD_COVER_FROM_ASOS", "DeclarationError", "DeclarativeError", "GateRefusedError", "INPUT_NOT_USED",
+           "cloud_cover_from_asos_warning", "unused_input_warning"]
 
 #: The warning code for a handed input the engine's chosen option does not read; a warning is a run note that opens with its code.
 INPUT_NOT_USED = "INPUT_NOT_USED"
@@ -18,6 +19,20 @@ def unused_input_warning(*, slot: str, option: str) -> str:
     Names only the slot and the keyword identifier, never a value a source or a person supplied."""
     return (f"{INPUT_NOT_USED}: the {slot} input was handed and is not used, because the option stated under {option} "
             f"does not read it. Change {option} to an option that reads it, or drop the {slot} input.")
+
+
+#: The warning code for cloud cover read from the ASOS sky-cover report because the satellite source held none.
+CLOUD_COVER_FROM_ASOS = "CLOUD_COVER_FROM_ASOS"
+
+
+def cloud_cover_from_asos_warning() -> str:
+    """The run note for cloud cover read from ASOS sky-cover categories in place of the GOES cloud mask.
+
+    States the swap and the ceilometer's limit; names no station, value or source text."""
+    return (f"{CLOUD_COVER_FROM_ASOS}: cloud cover is read from the ASOS sky-cover report, not from GOES, which held "
+            "nothing for this point and window. The ASOS ceilometer reports no cloud above 12,000 ft, so its clear "
+            "sky can hide high cloud, and each value is the midpoint of a reported percent-of-sky range. Use a "
+            "window and point GOES covers, or state the cloud cover.")
 
 
 class DeclarativeError(RuntimeError):

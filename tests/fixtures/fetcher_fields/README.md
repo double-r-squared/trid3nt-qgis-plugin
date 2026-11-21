@@ -77,3 +77,8 @@ Recorded 2026-11-18, verbatim, from the public services:
   `outFields=*` (geometry simplified), recorded 2026-11-20.
 - FIRMS answers nothing without a MAP_KEY, so no FIRMS answer is recorded: its test states the documented VIIRS header by
   hand and says so.
+- `goes19_acmc_conus_des_moines_crop.nc` - one GOES-19 ABI-L2-ACMC CONUS scan (2026-11-19 21:01 UTC, bucket noaa-goes19) cut
+  to 100 x 60 pixels (columns 1040-1139, rows 245-304) around Des Moines: the binary cloud mask BCM, the quality flags DQF,
+  x, y, goes_imager_projection and the file's global attributes, values untouched, recorded 2026-11-20.
+- `goes19_acmc_listing_20261119_h20_h21.json` - the S3 listing (key and size) of the ABI-L2-ACMC prefixes of hours 20 and 21
+  of 2026-11-19 on noaa-goes19, as the anonymous list_objects_v2 returned them, recorded 2026-11-20.

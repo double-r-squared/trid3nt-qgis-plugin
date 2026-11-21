@@ -292,7 +292,7 @@ def test_the_airport_record_carries_every_column_an_ice_run_reads():
                                             "CLDC", "RAINI"]
     assert _column(text, "TAIR")[0] == pytest.approx(-6.111, abs=1e-3)
     assert _column(text, "TDEW")[0] == pytest.approx(-11.111, abs=0.05)
-    assert _column(text, "CLDC")[0] == 8.0
+    assert _column(text, "CLDC")[0] == pytest.approx(7.48)
     assert _column(text, "RAINI")[0] == pytest.approx(0.254, abs=1e-3)
 
 

@@ -19,7 +19,7 @@ from .input import Input
 
 __all__ = ["BED", "DISCHARGE", "DOMAIN", "DRAW", "EXTENT", "LEVEL", "LINE",
            "MESH", "OBSERVE", "RAIN", "RUN", "SOIL", "Slot", "WAVE", "WEATHER",
-           "ask_on_canvas", "draw_on_canvas", "ingest_slot", "needs_of"]
+           "CLOUD", "ask_on_canvas", "draw_on_canvas", "ingest_slot", "needs_of"]
 
 logger = logging.getLogger("trid3nt_server.inputs.slots")
 
@@ -137,6 +137,11 @@ EXTENT = Slot("extent", ingestion="extent", geometry="rectangle")
 WEATHER = Slot("weather", ingestion="weather",
                classes=frozenset({"weather forcing"}), record=True,
                reads="point")
+
+#: The cloud over the domain: the total cloud cover, in octas, on the run's clock; the weather record's own cloud
+#: reading stands under it.
+CLOUD = Slot("cloud", ingestion="cloud", classes=frozenset({"cloud cover"}), record=True,
+             reads="point")
 
 #: The rain that falls on the domain: the depth per interval a record reports.
 RAIN = Slot("rain", ingestion="rain",

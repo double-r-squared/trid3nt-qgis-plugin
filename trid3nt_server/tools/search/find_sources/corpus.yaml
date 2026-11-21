@@ -69,6 +69,13 @@ wave series:
 - what sea state was recorded here
 - the swell period and direction offshore
 - how rough was the water during the event
+cloud cover:
+- how cloudy was it over this water during these days
+- total cloud cover at this site through the event
+- satellite measured cloud fraction over this place
+- sky cover for the heat budget of this lake
+- how much of the sky was covered by cloud here
+- cloud cover observations through this week
 weather forcing:
 - wind and pressure through this event
 - what weather was measured over this event

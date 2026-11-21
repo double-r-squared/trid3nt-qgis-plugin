@@ -117,7 +117,7 @@ def test_asos_weather_is_read_through_the_members_its_source_states():
     assert found.columns["air_temp_c"].values[0] == pytest.approx((75.0 - 32.0) / 1.8, abs=1e-3)
     assert found.columns["wind_speed_mps"].values[0] == pytest.approx(10.0 * 0.514444, abs=1e-3)
     assert found.columns["pressure_pa"].values[0] == pytest.approx(102400.0)
-    assert found.columns["cloud_octas"].values[0] == 4.0 and found.columns["rain_mm"].values[0] == 0.0
+    assert found.columns["cloud_octas"].values[0] == 3.0 and found.columns["rain_mm"].values[0] == 0.0
 
 
 def test_a_sky_cover_code_the_table_does_not_hold_refuses_naming_it():
@@ -131,7 +131,7 @@ def test_a_sky_cover_code_the_table_does_not_hold_refuses_naming_it():
 
 def test_the_sky_cover_table_cites_where_its_codes_come_from():
     cover = _spec("fetch_asos_metar").fields["cloud_cover"]
-    assert cover.table["OVC"] == 8.0 and cover.unit == "octa" and "Federal Meteorological Handbook" in cover.cite
+    assert cover.unit == "octa" and "ASOS User's Guide" in cover.cite and "Table 3" in cover.cite
 
 
 def test_raws_keeps_the_station_record_whole_and_every_observation_field_beside_it():

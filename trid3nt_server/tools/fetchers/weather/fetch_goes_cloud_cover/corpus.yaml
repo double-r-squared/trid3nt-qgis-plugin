@@ -1,0 +1,7 @@
+fetch_goes_cloud_cover:
+- how cloudy was the sky over this lake last week from satellite
+- total cloud cover over this point from the GOES cloud mask
+- cloud fraction in octas from geostationary satellite observations
+- measured cloud cover for the water temperature heat budget at this site
+- what fraction of the sky is covered by cloud over this place, including high cloud an airport ceilometer misses
+- GOES ABI clear sky mask cloudy or clear over a point during a time window

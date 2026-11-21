@@ -245,7 +245,7 @@ def test_the_weather_file_carries_what_the_ice_reads_and_no_solar_column(
     lines = sheet.files[ATMOSPHERE_FILENAME].splitlines()
     assert lines[1].split() == ["T", "TAIR", "TDEW", "WINDS", "CLDC", "RAINI"]
     assert lines[2].split() == ["s", "degC", "degC", "m/s", "tenth", "mm/h"]
-    assert float(lines[3].split()[4]) == 10.0
+    assert float(lines[3].split()[4]) == pytest.approx(9.35)
     assert STEERING_FILENAME in sheet.files
 
 

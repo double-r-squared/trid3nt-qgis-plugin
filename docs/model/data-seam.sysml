@@ -677,6 +677,12 @@ package DataSeam {
         */
     }
 
+    part cloudReader : WeatherReader {
+        doc /*
+        code: trid3nt_server/inputs/cloud.py
+        */
+    }
+
     part rainReader : RainReader {
         doc /*
         code: trid3nt_server/inputs/rain.py
@@ -1165,6 +1171,10 @@ package DataSeam {
         refused naming the stamps either side. The sea state is a height, a
         period and the bearing the waves come FROM.
 
+        THE CLOUD is the same ingestion held to one quantity, from a need of
+        its own: cloud cover in octas on the run's clock. A source that states
+        it as sky-cover categories says so on the run, by code.
+
         A SLOT ASKS ONLY THE SOURCES ITS INGESTION READS: the weather reads
         station points and the rain a record, so a gridded product serving the
         same class is excluded by the match and never fetched.
@@ -1610,6 +1620,11 @@ package DataSeam {
     verify requirement ASeaStateIsAReservedSlot by
         "tests/inputs/test_wave.py::test_a_source_that_maps_no_period_refuses_by_the_quantity_it_lacks";
     satisfy requirement ARecordSlotHoldsWhatWasMeasured by weatherReader;
+    satisfy requirement ARecordSlotHoldsWhatWasMeasured by cloudReader;
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/fetchers/test_goes_cloud_cover.py::test_the_asos_fallback_reads_octas_on_the_runs_clock_and_warns_of_the_swap_by_its_code";
+    verify requirement ARecordSlotHoldsWhatWasMeasured by
+        "tests/fetchers/test_goes_cloud_cover.py::test_a_box_with_no_cloud_cover_is_a_missing_reading_not_a_clear_one";
     satisfy requirement ARecordSlotHoldsWhatWasMeasured by rainReader;
     satisfy requirement ARecordSlotHoldsWhatWasMeasured by seaStateReader;
     verify requirement ARecordSlotHoldsWhatWasMeasured by

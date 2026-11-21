@@ -262,10 +262,14 @@ def expand_atmosphere(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 def _resolved(value: Mapping[str, Any], columns: Sequence[str]
               ) -> tuple[Any, dict[str, Any], str]:
     stated = {name: value.get(name) for name in COLUMNS}
+    records = {name: held for name, held in stated.items() if isinstance(held, Weather)}
     if value.get("observed") is None:
-        return value["times_s"], stated, ""
-    wanted = tuple(name for name in columns if stated.get(name) is None)
-    times, reported, note = _from_record(value["observed"], wanted)
+        times, reported, note = value["times_s"], {}, ""
+    else:
+        wanted = tuple(name for name in columns if stated.get(name) is None)
+        times, reported, note = _from_record(value["observed"], wanted)
+    for name, held in records.items():
+        stated[name] = _on_this_clock(times, name, held, value.get("observed"))
     return times, {name: stated[name] if stated[name] is not None
                    else reported.get(name) for name in COLUMNS}, note
 
@@ -318,6 +322,27 @@ def _from_record(observed: Weather, columns: Sequence[str]
         "this table's t = 0."
         + (f" This network reports no {', '.join(absent)}, so the engine "
            "reads its own constant for it." if absent else ""))
+
+
+def _on_this_clock(clock: Sequence[float], name: str, held: Weather, observed: Any) -> list[float]:
+    """One column of its own record, read at every instant of the table's clock.
+
+    The record stands over the station's column of that name; the two read their zero at one moment."""
+    if observed is not None and held.opens != observed.opens:
+        raise TelemacError(
+            f"{COLUMNS[name][0]} is read from a record that opens at {held.opens:%Y-%m-%d %H:%M} UTC, and the "
+            f"station record opens at {observed.opens:%Y-%m-%d %H:%M}: one table has one zero.",
+            error_code="TELEMAC_WEATHER_INCOMPLETE")
+    if name not in held.columns:
+        raise TelemacError(
+            f"the record {held.site_id} gives {COLUMNS[name][0]} no series"
+            + (f": {held.short[name]}" if name in held.short else "") + ".",
+            error_code="TELEMAC_WEATHER_INCOMPLETE")
+    try:
+        return _on(clock, name, align(held.columns[name], max_gap_s=_MAX_GAP_S).series)
+    except TemporalGapError as why:
+        raise TelemacError(f"{COLUMNS[name][0]} at {held.site_id}: {why}",
+                           error_code="TELEMAC_WEATHER_INCOMPLETE") from why
 
 
 def _on(clock: Sequence[float], name: str, series: Series) -> list[float]:
