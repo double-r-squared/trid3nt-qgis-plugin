@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.modflow.authoring import staged_check as C
-from trid3nt_server.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.authoring import staged_check as C
+from trid3nt.workflows.modflow.errors import ModflowError
 
 #: The directory a solve would take: name files, timing, a two-cell DISV, one
 #: package with a period list. Every clause breaks exactly one piece of it.
@@ -150,7 +150,7 @@ def test_a_mesh_still_in_the_store_is_read_through_its_staged_name(
     (store / "mesh.disv").write_bytes((rundir / "mesh.disv").read_bytes())
     (rundir / "mesh.disv").unlink()
     monkeypatch.setattr(
-        "trid3nt_server.tools.cache.read_object_bytes_s3",
+        "trid3nt.tools.cache.read_object_bytes_s3",
         lambda uri: (store / uri.rsplit("/", 1)[-1]).read_bytes())
 
     read = _check(rundir, inputs=[{"gs_uri": "s3://bucket/mesh.disv",
@@ -284,8 +284,8 @@ def test_cores_are_accepted_without_a_clause(tmp_path):
 async def test_a_run_staged_against_a_clause_refuses_before_the_manifest(
         tmp_path, monkeypatch):
     """The clauses read on the real path: the staging seam calls them itself."""
-    from trid3nt_server.workflows.solver import staging
-    from trid3nt_server.workflows.modflow.authoring.staged_check import (
+    from trid3nt.workflows.solver import staging
+    from trid3nt.workflows.modflow.authoring.staged_check import (
         check_staged_run,
     )
 
@@ -344,7 +344,7 @@ def test_an_object_store_object_is_read_into_a_scratch_directory_the_check_remov
         monkeypatch, tmp_path):
     from pathlib import Path
 
-    monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3",
+    monkeypatch.setattr("trid3nt.tools.cache.read_object_bytes_s3",
                         lambda uri: b"bytes")
     seen = {}
 

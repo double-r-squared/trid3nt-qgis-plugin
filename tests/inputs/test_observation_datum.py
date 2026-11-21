@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.observation import ObservationError, note, observation
+from trid3nt.inputs.observation import ObservationError, note, observation
 
 _NAVD88 = "NAVD88 (metres, positive up)"
 _NGVD29_TO_NAVD88 = {"offset_m": 1.057, "from_frame": "NGVD29",

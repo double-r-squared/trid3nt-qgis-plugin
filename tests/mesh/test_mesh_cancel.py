@@ -15,11 +15,11 @@ from multiprocessing import forkserver
 import mesh_builds
 import pytest
 
-from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-from trid3nt_server.model.credentials.resolver import bind_session, clear_session, set_session_credential, unbind_session
-from trid3nt_server.tools.mesh.inputs import raster_scope, solve_estimated_by
-from trid3nt_server.tools.mesh.meshers import MeshToolError
-from trid3nt_server.tools.mesh.session import _in_child, to_build_thread
+from trid3nt.inputs.run_notes import bind_notes, drain_notes
+from trid3nt.credentials.resolver import bind_session, clear_session, set_session_credential, unbind_session
+from trid3nt.tools.mesh.inputs import raster_scope, solve_estimated_by
+from trid3nt.tools.mesh.meshers import MeshToolError
+from trid3nt.tools.mesh.session import _in_child, to_build_thread
 
 
 def _gone(pid: int, within_s: float = 5.0) -> bool:
@@ -117,7 +117,7 @@ def _seen(build) -> str:
 
 def test_a_build_forks_from_the_server_that_preloaded_the_registry():
     server = _started()
-    assert "trid3nt_server.tools" in forkserver._forkserver._preload_modules
+    assert "trid3nt.tools" in forkserver._forkserver._preload_modules
     assert _seen(mesh_builds.reports_parent).endswith(f"parent {server}")
 
 

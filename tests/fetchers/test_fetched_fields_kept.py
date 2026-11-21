@@ -16,9 +16,9 @@ import pyogrio
 import pytest
 
 from trid3nt_contracts.source_spec import SourceSpec
-from trid3nt_server.tools.fetchers._router.errors import RouterUpstreamError
-from trid3nt_server.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers._router.errors import RouterUpstreamError
+from trid3nt.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "fetcher_fields"
 _SPECS = compose_specs_from_tree()

@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.domain import domain
-from trid3nt_server.inputs.user_input import EmptyResultError
+from trid3nt.inputs.domain import domain
+from trid3nt.inputs.user_input import EmptyResultError
 
 #: A long river band, 1 degree east-west, the way a national river-area polygon overruns a reach.
 _RIVER = {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": {

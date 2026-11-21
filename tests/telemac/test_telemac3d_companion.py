@@ -13,8 +13,8 @@ import pytest
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.render.formats import Published
-from trid3nt_server.workflows.telemac.modules import T3D, fill
+from trid3nt.render.formats import Published
+from trid3nt.workflows.telemac.modules import T3D, fill
 
 _TRACER = "TEMPERATURE     DEGC"
 _X = [500000.0, 500120.0, 500000.0, 500120.0, 500060.0]
@@ -53,7 +53,7 @@ def published(monkeypatch, fake_s3, telemac_result):
             layer_id="L", name="Water depth", layer_type="mesh",
             uri="s3://runs/RID/res2d_basin.slf", quantity="water_depth"),))
 
-    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish",
+    monkeypatch.setattr("trid3nt.workflows.runtime.primitives.publish",
                         _publish)
     three = telemac_result(
         varnames=["ELEVATION Z", "VELOCITY U", "VELOCITY V", "VELOCITY W",
@@ -71,10 +71,10 @@ def published(monkeypatch, fake_s3, telemac_result):
               "WATER DEPTH": [[3.0] * 5, [3.5] * 5], "BOTTOM": [[-3.0] * 5] * 2})
     files = {"res3d_basin.slf": three, "res2d_basin.slf": two}
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: basename)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.modules.outputs.read_selafin",
+        "trid3nt.workflows.telemac.modules.outputs.read_selafin",
         lambda path, **_: files[path])
     sheet = _sheet(ED_RESULT_FILE="res2d_basin.slf")
     run = {"run_id": "RID", "utm_epsg": 32610, "result_basename": "res3d_basin.slf",
@@ -90,7 +90,7 @@ def published(monkeypatch, fake_s3, telemac_result):
 
 
 def test_the_companion_s_depth_and_bottom_are_published_from_its_own_file(published):
-    from trid3nt_server.workflows.telemac import workflow as door
+    from trid3nt.workflows.telemac import workflow as door
 
     seen, run = published
     asyncio.run(door.publish_outputs(run=run, outputs=[], captions={}, params={}))

@@ -9,9 +9,9 @@ already answered by one of those or by the user's QGIS session.
    tool of ours: the model runs it in the user's session through
    `run_qgis_algorithm`, and a composed analysis through `run_pyqgis`.
 2. **A fetcher is a row, not code.** Data from a source is DECLARED as a
-   `source.yaml` beside a `corpus.yaml` under `trid3nt_server/tools/fetchers/`;
+   `source.yaml` beside a `corpus.yaml` under `trid3nt/tools/fetchers/`;
    the router promotes the row into a registered tool. See
-   `trid3nt_server/tools/README.md`.
+   `trid3nt/tools/README.md`.
 3. **The derive law: a derive never fetches.** A derive takes a layer or a
    value and gives one back, useful on its own outside any template. The fetch
    that declares the data runs first; the derive refuses, naming that fetch,
@@ -20,14 +20,14 @@ already answered by one of those or by the user's QGIS session.
 
 ## The one real example
 
-Read `trid3nt_server/tools/derive/probe_point/` whole. It is a directory of
+Read `trid3nt/tools/derive/probe_point/` whole. It is a directory of
 three files - `probe_point.py`, `corpus.yaml`, `__init__.py` - and shows
 every seam a derive touches:
 
 - the function under `@register_tool` with its `AtomicToolMetadata`, its
   LLM-facing docstring front-loaded with routing (the adapter keeps the first
   1000 characters);
-- the eager import in `trid3nt_server/tools/__init__.py` that makes the
+- the eager import in `trid3nt/tools/__init__.py` that makes the
   decorator fire at startup;
 - the practitioner phrasings in `corpus.yaml` that retrieval ranks it by;
 - a refusal that names the missing input instead of guessing it, and a

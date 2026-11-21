@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.tools import (
+from trid3nt.tools import (
     TOOL_REGISTRY,
     clear_registry_for_tests,
     register_tool,

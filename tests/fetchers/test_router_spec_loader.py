@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from trid3nt_contracts.source_spec import SourceSpec
-from trid3nt_server.tools.fetchers._router.spec import (
+from trid3nt.tools.fetchers._router.spec import (
     SpecLoadError,
     compose_specs_from_tree,
     load_spec,
@@ -366,9 +366,9 @@ def test_a_changed_vocabulary_misses_the_artifact_cached_under_the_old_one(fake_
     change to them invalidates the bytes fetched under the old ones by itself -
     without it a corrected source keeps serving the record it was corrected of
     for the rest of the TTL bucket."""
-    from trid3nt_server.tools.cache import read_through
-    from trid3nt_server.tools.fetchers._router.router import synthesize_metadata
-    from trid3nt_server.tools.fetchers._router.spec import record_shape
+    from trid3nt.tools.cache import read_through
+    from trid3nt.tools.fetchers._router.router import synthesize_metadata
+    from trid3nt.tools.fetchers._router.spec import record_shape
 
     spec = load_spec({**raster_spec(), "coverage": [_coverage()]})
     metadata = synthesize_metadata(spec)
@@ -395,9 +395,9 @@ def test_a_changed_vocabulary_misses_the_artifact_cached_under_the_old_one(fake_
 def test_a_changed_provider_row_misses_the_artifact_cached_under_the_old_one(fake_s3):
     """A declarative row states its ingestion where a hook used to hold it, so a
     corrected datasource has to invalidate the same way corrected hook bytes do."""
-    from trid3nt_server.tools.cache import read_through
-    from trid3nt_server.tools.fetchers._router.router import synthesize_metadata
-    from trid3nt_server.tools.fetchers._router.spec import record_shape
+    from trid3nt.tools.cache import read_through
+    from trid3nt.tools.fetchers._router.router import synthesize_metadata
+    from trid3nt.tools.fetchers._router.spec import record_shape
 
     rowed = {**vector_spec(), "ingest": {
         "access": "qgis_provider",

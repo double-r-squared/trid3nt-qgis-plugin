@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from trid3nt_server.workflows.telemac.authoring.cas_validate import (  # noqa: E402
+from trid3nt.workflows.telemac.authoring.cas_validate import (  # noqa: E402
     engine_home, run_engine_script)
 
 #: The modules the wrapper layer exposes. TOMAWAC rides along because its
@@ -28,7 +28,7 @@ _TIMEOUT_S = 600
 
 def module_input_dir() -> Path:
     """Where the committed module inputs live."""
-    return (Path(__file__).resolve().parents[1] / "trid3nt_server" / "workflows"
+    return (Path(__file__).resolve().parents[1] / "trid3nt" / "workflows"
             / "telemac" / "modules" / "module_input")
 
 

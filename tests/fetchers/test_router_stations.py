@@ -15,16 +15,16 @@ from unittest.mock import patch
 import geopandas as gpd
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.executors import (
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.executors import (
     chained_resolution as cr,
 )
-from trid3nt_server.tools.fetchers._router.executors import http_json
-from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
-from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+from trid3nt.tools.fetchers._router.executors import http_json
+from trid3nt.tools.fetchers._router.registration import _SPEC_REGISTRY
+from trid3nt.tools.fetchers._router.spec import load_spec_from_path
 
-_FETCHERS = Path("trid3nt_server/tools/fetchers")
+_FETCHERS = Path("trid3nt/tools/fetchers")
 _SPECS = {
     "fetch_asos_metar": _FETCHERS / "weather/fetch_asos_metar/source.yaml",
     "fetch_raws_weather": _FETCHERS / "weather/fetch_raws_weather/source.yaml",
@@ -121,7 +121,7 @@ def test_raws_enrich_expands_and_best_effort_survives():
         if "obhistory" in plan.url:
             # The 09-01 date succeeds; 09-02 raises (best-effort skip)
             if plan.params.get("date") == "2024-09-02":
-                from trid3nt_server.tools.fetchers._router.errors import router_upstream_error
+                from trid3nt.tools.fetchers._router.errors import router_upstream_error
                 raise router_upstream_error(spec.error_code_prefix, "boom")
             return day
         return geo
@@ -187,7 +187,7 @@ def test_snotel_merge_and_degrade_to_locations():
     def fail_data(spec_, plan):
         if plan.url.endswith("/stations") or "/stations?" in plan.url:
             return _snotel_catalog()
-        from trid3nt_server.tools.fetchers._router.errors import router_upstream_error
+        from trid3nt.tools.fetchers._router.errors import router_upstream_error
         raise router_upstream_error(spec.error_code_prefix, "data down")
 
     with patch.object(cr, "_get", fail_data), patch.object(http_json, "_get", fail_data):
@@ -296,7 +296,7 @@ def test_the_temperature_product_asks_at_its_own_cadence_and_on_no_datum(monkeyp
     """The hourly interval and the MLLW stamp belong to the water level. The
     temperature row's own request block drops both, so the sensor's 6-minute
     record comes back whole."""
-    from trid3nt_server.tools.fetchers._router.executors import station_timeseries as st
+    from trid3nt.tools.fetchers._router.executors import station_timeseries as st
 
     asked = {}
 
@@ -322,8 +322,8 @@ def test_the_temperature_product_asks_at_its_own_cadence_and_on_no_datum(monkeyp
 def _station_client(monkeypatch, statuses: list[int], calls: list[int]):
     import httpx
 
-    from trid3nt_server.tools.fetchers._router.executors import station_timeseries
-    from trid3nt_server.tools.fetchers._router.transport import client as transport_client
+    from trid3nt.tools.fetchers._router.executors import station_timeseries
+    from trid3nt.tools.fetchers._router.transport import client as transport_client
 
     def handler(request):
         calls.append(1)
@@ -348,7 +348,7 @@ def test_a_station_catalog_503_is_retried_by_the_transport(monkeypatch):
 
 def test_a_lasting_station_catalog_failure_is_upstream_with_the_provider_message(monkeypatch):
     from trid3nt_server.render.pipeline_emitter import PipelineEmitter
-    from trid3nt_server.tools.fetchers._router.errors import RouterUpstreamError
+    from trid3nt.tools.fetchers._router.errors import RouterUpstreamError
     calls: list[int] = []
     st = _station_client(monkeypatch, [503] * 99, calls)
     spec = load_spec_from_path(_FETCHERS / "ocean/fetch_greatlakes_water_level/source.yaml")

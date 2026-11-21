@@ -16,15 +16,15 @@ import pandas as pd
 import pytest
 from shapely.geometry import Point, Polygon
 
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
-from trid3nt_server.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
-from trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings import hooks as BH
-from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
+from trid3nt.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
+from trid3nt.tools.fetchers.socioeconomic.fetch_buildings import hooks as BH
+from trid3nt.tools.fetchers._router.spec import load_spec_from_path
 
 SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[2]
-    / "trid3nt_server/tools/fetchers/socioeconomic/fetch_buildings/source.yaml"
+    / "trid3nt/tools/fetchers/socioeconomic/fetch_buildings/source.yaml"
 )
 
 # An AOI wide enough to contain the synthetic footprints (~26.60-26.63, -81.87..-81.84).
@@ -94,7 +94,7 @@ def test_executor_is_library_delegate():
 
 
 def test_promoted_signature_matches_twin():
-    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt.tools.fetchers._router import registration
     sig, _ = registration.promoted_signature(SPEC)
     assert list(sig.parameters) == ["bbox", "source", "_extra_ignored"]
     assert sig.parameters["source"].default == "osm"

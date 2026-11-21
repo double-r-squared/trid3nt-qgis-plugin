@@ -29,14 +29,14 @@ TEMPLATE_MODULES: tuple[tuple[str, str], ...] = (
 
 
 def _steering(tool_name: str) -> type:
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY[tool_name].fn.workflow.steering
 
 
 @pytest.mark.parametrize("tool_name,module", TEMPLATE_MODULES)
 def test_every_template_is_values_over_a_module_of_the_one_engine(tool_name, module):
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY[tool_name].fn.workflow
     assert workflow.engine == "telemac"
@@ -54,7 +54,7 @@ def test_every_slot_of_a_template_s_default_fill_carries_one_of_the_four(
     """The default fill is what the body states before a run measures anything:
     the values that stand, and the assertions still waiting on a read. A writer
     that invented a fifth word is caught here, not on a card nobody can read."""
-    from trid3nt_server.workflows.runtime.sheet import _standing
+    from trid3nt.workflows.runtime.sheet import _standing
 
     _body, standing, pending = _standing(_steering(tool_name))
     assert standing or pending, tool_name
@@ -69,9 +69,9 @@ def test_a_card_names_the_origin_of_every_set_row_and_of_no_other(
         tool_name, _module):
     """The chip is rendered off the sheet: a SET row always has one, and a row
     holding no filled value - open, or left to the engine - has none to claim."""
-    from trid3nt_server.workflows.runtime.sheet import _standing
-    from trid3nt_server.workflows.telemac.modules.sheet import TelemacSheet
-    from trid3nt_server.workflows.runtime.review import card_rows
+    from trid3nt.workflows.runtime.sheet import _standing
+    from trid3nt.workflows.telemac.modules.sheet import TelemacSheet
+    from trid3nt.workflows.runtime.review import card_rows
 
     body = _steering(tool_name)
     _body, standing, _pending = _standing(body)
@@ -86,7 +86,7 @@ def test_the_run_record_carries_the_engine_and_the_module_and_no_template():
     """A run is recorded under the engine and the module that ran it. The template
     is not a field of the line; it survives as the provenance of the slots it
     filled, which is how a reader - and the template pages - find its runs."""
-    from trid3nt_server.workflows.runtime import journal
+    from trid3nt.workflows.runtime import journal
 
     record = journal.build_record(
         run_id="RUN1", engine="telemac", module="telemac2d",
@@ -105,7 +105,7 @@ def test_the_run_record_carries_the_engine_and_the_module_and_no_template():
 def test_the_module_and_the_deck_are_read_off_the_solve_step_the_workflow_declares():
     from types import SimpleNamespace
 
-    from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
+    from trid3nt.workflows.telemac.workflow import TelemacWorkflow
 
     run = SimpleNamespace(inputs={}, results={"solve": {
         "module": "artemis",
@@ -123,7 +123,7 @@ def test_a_template_s_own_name_is_what_its_slots_are_stamped_with(
     """The detail beside the ``template`` origin is the template, not the body
     class: eight templates share the class names, and a page that selects its own
     runs by the provenance needs the name that tells them apart."""
-    from trid3nt_server.workflows.runtime.sheet import _standing
+    from trid3nt.workflows.runtime.sheet import _standing
 
     _body, standing, pending = _standing(_steering(tool_name), tool_name)
     stamped = [row.provenance for row in standing.values()]
@@ -136,8 +136,8 @@ def test_a_template_s_own_name_is_what_its_slots_are_stamped_with(
 def test_what_the_cut_covers_is_on_the_card_before_the_solve():
     """R82's whole answer: a share the person would refuse at is stated where
     they meet the fill, not discovered on the journal after the run."""
-    from trid3nt_server.inputs.run_notes import bind_coverage, cut_coverage, drain_coverage
-    from trid3nt_server.workflows.runtime.review import _coverage_rows
+    from trid3nt.inputs.run_notes import bind_coverage, cut_coverage, drain_coverage
+    from trid3nt.workflows.runtime.review import _coverage_rows
 
     token = bind_coverage()
     try:
@@ -151,16 +151,16 @@ def test_what_the_cut_covers_is_on_the_card_before_the_solve():
 
 
 def test_a_run_that_cut_nothing_states_no_coverage_row():
-    from trid3nt_server.workflows.runtime.review import _coverage_rows
+    from trid3nt.workflows.runtime.review import _coverage_rows
 
     assert _coverage_rows() == []
 
 
 def test_the_source_a_slot_was_filled_from_is_on_the_card():
     from trid3nt_contracts.coverage import SourceChoice
-    from trid3nt_server.workflows.runtime.journal import (
+    from trid3nt.workflows.runtime.journal import (
         bind_choices, drain_choices, slot_choice)
-    from trid3nt_server.workflows.runtime.review import _source_rows
+    from trid3nt.workflows.runtime.review import _source_rows
 
     token = bind_choices()
     try:
@@ -175,9 +175,9 @@ def test_the_source_a_slot_was_filled_from_is_on_the_card():
 
 def test_a_composed_bed_names_each_surface_so_the_sheet_rows_stay_unique():
     from trid3nt_contracts.coverage import SourceChoice
-    from trid3nt_server.workflows.runtime.journal import (
+    from trid3nt.workflows.runtime.journal import (
         bind_choices, drain_choices, slot_choice)
-    from trid3nt_server.workflows.runtime.review import _source_rows
+    from trid3nt.workflows.runtime.review import _source_rows
 
     token = bind_choices()
     try:

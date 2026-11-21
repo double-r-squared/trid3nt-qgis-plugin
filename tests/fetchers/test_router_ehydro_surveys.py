@@ -13,11 +13,11 @@ import datetime as _dt
 
 import pytest
 
-from trid3nt_server.settings import setting
+from trid3nt.settings import setting
 
-from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.hydrology.fetch_ehydro_surveys import hooks as eh
+from trid3nt.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.hydrology.fetch_ehydro_surveys import hooks as eh
 
 
 @pytest.fixture(scope="module")
@@ -276,8 +276,8 @@ def test_the_layer_records_the_datum_and_the_shift_its_surveys_publish(
         spec, monkeypatch):
     """The fetched layer states the zero its records count from and the shift
     the package publishes about it, on the layer record the router returns."""
-    from trid3nt_server.tools.cache import ReadThroughResult
-    from trid3nt_server.tools.fetchers._router import router
+    from trid3nt.tools.cache import ReadThroughResult
+    from trid3nt.tools.fetchers._router import router
 
     monkeypatch.setattr(eh, "_index", lambda *_a: [_feature("2026-01-05", "WR_03")])
     monkeypatch.setattr(eh, "_package", lambda *_a: _Archive({"WR_03.XML": (
@@ -422,7 +422,7 @@ def test_a_package_stating_depths_is_left_out_and_the_navd88_package_kept(spec, 
     """CENWO's 2024 RM 609-617.5 package states depths on the survey date and no NAVD88
     file; the 2026 package beside it states NAVD88 elevations. The bed keeps the 2026
     soundings and the run is told which package was left out and why."""
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     _omaha_and_2024(monkeypatch, OMAHA, DEPTHS_2024)
     token = bind_notes()

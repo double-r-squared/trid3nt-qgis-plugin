@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from trid3nt_server.tools.fetchers.imagery import _satellite_slider as ss
+from trid3nt.tools.fetchers.imagery import _satellite_slider as ss
 
 #: The registration the index publishes for GOES-West, verbatim.
 _GOES18_QUERY = {

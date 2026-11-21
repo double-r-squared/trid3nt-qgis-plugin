@@ -1,0 +1,170 @@
+"""Pooled httpx client and the ONE retry authority for every remote read.
+
+One process-wide client reuses connections across every read and every parallel range
+frame, and a library that owns its own socket borrows :func:`retried`. Retry
+lives here and nowhere else; a caller whose retries were already spent
+elsewhere uses the un-retried :func:`get_once`."""
+
+from __future__ import annotations
+
+import email.utils
+import json
+import logging
+import random
+import threading
+import time
+from typing import Any, Callable, TypeVar
+
+import httpx
+
+from trid3nt.settings import setting
+
+from .errors import TransportAuthError, TransportUpstreamError, classify_status
+
+logger = logging.getLogger(
+    "trid3nt.tools.fetchers._router.transport.client"
+)
+
+__all__ = [
+    "get_client", "get_bytes", "get_once", "post_bytes",
+    "retried", "RETRYABLE_STATUS",
+]
+
+RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+_BACKOFF_BASE = 0.5
+_BACKOFF_CAP = 20.0
+_DEFAULT_TIMEOUT = 60.0
+
+T = TypeVar("T")
+
+_CLIENT: httpx.Client | None = None
+_CLIENT_LOCK = threading.Lock()
+
+
+def get_client() -> httpx.Client:
+    global _CLIENT
+    if _CLIENT is None:
+        with _CLIENT_LOCK:
+            if _CLIENT is None:
+                _CLIENT = httpx.Client(
+                    timeout=_DEFAULT_TIMEOUT,
+                    follow_redirects=True,
+                    limits=httpx.Limits(
+                        max_connections=16, max_keepalive_connections=8
+                    ),
+                )
+    return _CLIENT
+
+
+def _retry_after_seconds(raw: str | float | None) -> float | None:
+    if isinstance(raw, (int, float)):
+        return max(0.0, float(raw))
+    if not raw:
+        return None
+    raw = raw.strip()
+    try:
+        return max(0.0, float(int(raw)))
+    except ValueError:
+        pass
+    try:
+        dt = email.utils.parsedate_to_datetime(raw)
+    except (TypeError, ValueError):
+        return None
+    if dt is None:
+        return None
+    return max(0.0, dt.timestamp() - time.time())
+
+
+def _sleep_backoff(attempt: int, retry_after: str | float | None) -> None:
+    hinted = _retry_after_seconds(retry_after)
+    if hinted is not None:
+        delay = min(hinted, _BACKOFF_CAP)
+    else:
+        delay = min(_BACKOFF_BASE * (2 ** attempt), _BACKOFF_CAP)
+        delay += random.uniform(0.0, _BACKOFF_BASE)
+    time.sleep(delay)
+
+
+def retried(call: Callable[[], T], *, transient: Callable[[Exception], bool],
+            label: str) -> T:
+    """Run ``call`` under this module's attempt budget and backoff for a library that owns its socket: only a ``transient``
+    exception is retried, the last raises unchanged, and an exception's ``retry_after`` is honoured."""
+    retries = int(setting("FETCH_RETRIES"))
+    for attempt in range(retries + 1):
+        try:
+            return call()
+        except Exception as exc:
+            if attempt == retries or not transient(exc):
+                raise
+            logger.warning("transport.retried %s attempt=%d: %s: %s",
+                           label, attempt, type(exc).__name__, exc)
+            _sleep_backoff(attempt, getattr(exc, "retry_after", None))
+
+
+def _send(client: httpx.Client, method: str, url: str, **kw: Any) -> httpx.Response:
+    """One request under :func:`retried`: a network failure or 429/5xx is retried and exhaustion raises status and body verbatim."""
+    def call() -> httpx.Response:
+        try:
+            resp = client.request(method, url, **kw)
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            raise TransportUpstreamError(f"{method} network failure url={url}: {exc}") from exc
+        if resp.status_code in RETRYABLE_STATUS:
+            err = TransportUpstreamError(
+                f"{method} exhausted retries at HTTP {resp.status_code} url={url}: "
+                f"{resp.text[:400]!r}", status=resp.status_code, body=resp.text)
+            err.retry_after = resp.headers.get("retry-after")  # type: ignore[attr-defined]
+            raise err
+        return resp
+
+    return retried(call, transient=lambda e: isinstance(e, TransportUpstreamError),
+                   label=f"{method} {url}")
+
+
+def _arcgis_token_code(content: bytes) -> int | None:
+    """The 498/499 an ArcGIS REST service spells a token it needs or refuses with, under a 200."""
+    if len(content) > 2048 or not content.lstrip().startswith(b'{"error"'):
+        return None
+    try:
+        code = json.loads(content).get("error", {}).get("code")
+    except (ValueError, AttributeError):
+        return None
+    return code if code in (498, 499) else None
+
+
+def _body(resp: httpx.Response, url: str) -> tuple[bytes, str, str]:
+    if resp.status_code >= 400:
+        raise classify_status(resp.status_code, resp.text, url)
+    token_code = _arcgis_token_code(resp.content)
+    if token_code is not None:
+        raise TransportAuthError(f"token needed (ArcGIS {token_code}) url={url}: {resp.text[:400]!r}",
+                                 status=token_code, body=resp.text)
+    return resp.content, resp.headers.get("content-type", ""), str(resp.url)
+
+
+def get_bytes(
+    client: httpx.Client, url: str, *, headers: dict[str, str] | None = None,
+    params: dict[str, Any] | None = None,
+) -> tuple[bytes, str, str]:
+    """GET a whole object; return ``(body, content_type, final_url)``; any 4xx classifies to a typed transport error at once."""
+    return _body(_send(client, "GET", url, headers=headers, params=params), url)
+
+
+def get_once(client: httpx.Client, url: str, *, headers: dict[str, str] | None = None
+             ) -> tuple[bytes, int]:
+    """ONE GET, no retry, no typed error: body and status as answered (500 included); only a network failure raises."""
+    try:
+        resp = client.get(url, headers=headers)
+    except (httpx.TimeoutException, httpx.TransportError) as exc:
+        logger.warning("transport.get_once network error url=%s: %s", url, exc)
+        raise TransportUpstreamError(f"GET network failure url={url}: {exc}") from exc
+    return resp.content, resp.status_code
+
+
+def post_bytes(
+    client: httpx.Client, url: str, *, headers: dict[str, str] | None = None,
+    params: dict[str, Any] | None = None, json_body: Any = None,
+    data: dict[str, Any] | None = None,
+) -> tuple[bytes, str, str]:
+    """POST ``json_body`` or form-encoded ``data``; retried like a GET, assuming every routed endpoint is a side-effect-free query."""
+    return _body(_send(client, "POST", url, headers=headers, params=params,
+                       json=json_body, data=data), url)

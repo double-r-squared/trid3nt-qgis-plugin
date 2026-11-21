@@ -11,16 +11,16 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.wave import Wave
-from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, OBSERVE, WAVE
-from trid3nt_server.workflows.telemac.modules import T2D, WAC, fill
-from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.workflows.telemac.authoring.boundaries import (
+from trid3nt.inputs.wave import Wave
+from trid3nt.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, OBSERVE, WAVE
+from trid3nt.workflows.telemac.modules import T2D, WAC, fill
+from trid3nt.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.telemac.authoring.boundaries import (
     LIQUID_BOUNDARIES_FILENAME)
-from trid3nt_server.workflows.telemac.modules.tomawac import RESULT_FILENAME
-from trid3nt_server.workflows.telemac.templates.wave_driven_currents import (
+from trid3nt.workflows.telemac.modules.tomawac import RESULT_FILENAME
+from trid3nt.workflows.telemac.templates.wave_driven_currents import (
     wave_driven_currents as template)
-from trid3nt_server.workflows.telemac.workflow import run_bodies
+from trid3nt.workflows.telemac.workflow import run_bodies
 from seated import value_inputs, row_inputs
 
 _TOOL = "tomawac_wave_driven_currents"
@@ -28,7 +28,7 @@ _HOUR_S = 3600.0
 
 
 def _workflow():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY[_TOOL].fn.workflow
 
@@ -191,7 +191,7 @@ def test_the_tide_reaches_the_rim_as_the_series_the_record_served():
     the record reported as the boundary's own column: a rim held at one number
     is a sea standing still for the whole run, which a wave-driven current is
     measured against."""
-    from trid3nt_server.inputs.temporal import Series
+    from trid3nt.inputs.temporal import Series
 
     tide = Series([0.0, 1800.0, 3600.0], [0.25, 0.40, 0.52], units="m")
     rows = _rows()

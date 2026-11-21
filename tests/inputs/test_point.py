@@ -11,14 +11,14 @@ import json
 
 import pytest
 
-from trid3nt_server.inputs.point import (
+from trid3nt.inputs.point import (
     Point,
     PointNotViableError,
     point,
     point_arg,
     require_viable,
 )
-from trid3nt_server.inputs.user_input import UserInputError
+from trid3nt.inputs.user_input import UserInputError
 
 
 def _ingest(value, **kw):
@@ -91,7 +91,7 @@ def test_a_value_of_no_readable_shape_refuses_under_the_callers_code(bad):
 # -- the pick-or-wire coercion ---------------------------------------------------- #
 
 def test_the_coercion_reads_the_wire_value_and_never_asks_in_auto(monkeypatch, user_settings):
-    from trid3nt_server.inputs.gate import draw_input
+    from trid3nt_harness.inputs.gate import draw_input
 
     user_settings(AUTO=True)
 
@@ -107,7 +107,7 @@ def test_the_coercion_reads_the_wire_value_and_never_asks_in_auto(monkeypatch, u
 
 def test_the_coercion_asks_the_canvas_only_when_gated_live_and_empty(monkeypatch):
     from trid3nt_server.render import pipeline_emitter
-    from trid3nt_server.inputs.gate import draw_input
+    from trid3nt_harness.inputs.gate import draw_input
 
     asked: list[tuple[str, str]] = []
 
@@ -128,7 +128,7 @@ def test_the_coercion_asks_the_canvas_only_when_gated_live_and_empty(monkeypatch
 
 
 def test_a_point_and_a_drawn_slot_ask_through_the_one_canvas_ask(monkeypatch):
-    from trid3nt_server.inputs import slots
+    from trid3nt.inputs import slots
 
     asked: list[tuple[str, str]] = []
 
@@ -144,7 +144,7 @@ def test_a_point_and_a_drawn_slot_ask_through_the_one_canvas_ask(monkeypatch):
 
 
 def test_a_point_with_no_prompt_is_read_and_never_asked_for(monkeypatch):
-    from trid3nt_server.inputs import slots
+    from trid3nt.inputs import slots
 
     async def _draw(geometry, *, tool, param, **_kw):
         raise AssertionError("a point the caller may leave unstated is never asked for")
@@ -158,7 +158,7 @@ def test_a_point_with_no_prompt_is_read_and_never_asked_for(monkeypatch):
 
 def test_a_declined_pick_leaves_the_slot_empty(monkeypatch):
     from trid3nt_server.render import pipeline_emitter
-    from trid3nt_server.inputs.gate import draw_input
+    from trid3nt_harness.inputs.gate import draw_input
 
     async def _gate(**_kw):
         return draw_input.DrawOutcome(reason="the drawing was cancelled")

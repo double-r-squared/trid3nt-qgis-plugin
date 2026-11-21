@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.store import journal as store_journal
-from trid3nt_server.store.journal import run_outputs
-from trid3nt_server.workflows.runtime import journal
+from trid3nt.store import journal as store_journal
+from trid3nt.store.journal import run_outputs
+from trid3nt.workflows.runtime import journal
 
 RID = "01JRUNRUNRUNRUNRUNRUNRUNRU"
 
@@ -57,7 +57,7 @@ def test_the_last_line_for_a_run_stands(_journal) -> None:
 def test_the_seam_reads_no_object_store(monkeypatch, _journal) -> None:
     """The record is the ONE source: a seam that reached the store for a second
     registry would fail here rather than quietly reading one."""
-    from trid3nt_server.store import objects as storage
+    from trid3nt.store import objects as storage
 
     def _refuse(*_a, **_k):
         raise AssertionError("the outputs seam reached the object store")
@@ -72,7 +72,7 @@ def test_the_publish_stage_writes_the_field() -> None:
     """What render publishes is what the record carries: the channel the publish
     stage writes through is the one the record is built from."""
     from trid3nt_contracts.execution import LayerURI
-    from trid3nt_server.render.formats import record_run_outputs
+    from trid3nt.render.formats import record_run_outputs
 
     token = journal.bind_outputs()
     record_run_outputs([LayerURI(layer_id="a", name="Peak depth", layer_type="mesh",

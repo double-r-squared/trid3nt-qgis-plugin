@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from trid3nt_server.store.cases import Persistence
+from trid3nt.store.cases import Persistence
 
 logger = logging.getLogger("trid3nt_server.server")
 

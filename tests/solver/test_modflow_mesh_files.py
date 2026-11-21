@@ -13,11 +13,11 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow.authoring import mesh_files as MF
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow.authoring import mesh_files as MF
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF
+from trid3nt.workflows.runtime.sheet import fill
 
 
 def _lattice(tmp_path: Path, *, bed: str = "-2.0") -> Path:

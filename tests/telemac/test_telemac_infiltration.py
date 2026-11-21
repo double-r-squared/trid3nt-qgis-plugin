@@ -10,10 +10,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.mesh.shared.nodes import reproject_nodes_to_utm
-from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.telemac.modules.telemac2d import Infiltration, _huang
-from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+from trid3nt.tools.mesh.shared.nodes import reproject_nodes_to_utm
+from trid3nt.workflows.telemac.modules import T2D
+from trid3nt.workflows.telemac.modules.telemac2d import Infiltration, _huang
+from trid3nt.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
     LANDCOVER_CN_MANNING,
     LANDCOVER_UNMAPPED,
 )
@@ -68,14 +68,14 @@ _LONLAT = np.array([[-83.40, 35.05], [-83.399, 35.05], [-83.40, 35.051]])
 @pytest.fixture()
 def surface(monkeypatch):
     """The composite's reads stood in for: the accepted mesh and the raster."""
-    import trid3nt_server.tools.mesh.shared.nodes as nodes_mod
+    import trid3nt.tools.mesh.shared.nodes as nodes_mod
 
     monkeypatch.setattr(nodes_mod, "read_accepted_mesh_nodes",
                         lambda _uri, utm_epsg=None: (_POINTS, _CELLS, _BED, _LONLAT))
     monkeypatch.setattr(nodes_mod, "sample_raster_at_nodes",
                         lambda _path, lonlat, interp="nearest", fill_holes=True:
                         np.array([41.0, 22.0, 7.0]))
-    monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3",
+    monkeypatch.setattr("trid3nt.tools.cache.read_object_bytes_s3",
                         lambda _uri: b"")
     from types import SimpleNamespace
 
@@ -148,7 +148,7 @@ def test_a_fourth_moisture_word_refuses_rather_than_seating_amc_ii(surface):
 def test_the_surface_names_no_runoff_model_and_the_template_does(surface):
     """Four rainfall-runoff models read the same field: which one runs is the
     template's assertion, not the composite's."""
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+    from trid3nt.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         STEERING,
     )
 
@@ -160,7 +160,7 @@ def test_the_surface_names_no_runoff_model_and_the_template_does(surface):
 def test_the_land_cover_is_read_as_class_codes_never_blended(surface, monkeypatch):
     """Land cover is CATEGORICAL: a node between two classes takes one of them,
     never a code interpolated between them."""
-    import trid3nt_server.tools.mesh.shared.nodes as nodes_mod
+    import trid3nt.tools.mesh.shared.nodes as nodes_mod
 
     kernels: list[str] = []
     monkeypatch.setattr(nodes_mod, "sample_raster_at_nodes",

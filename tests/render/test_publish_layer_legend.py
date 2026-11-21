@@ -12,8 +12,8 @@ import pytest
 import rasterio
 from rasterio.io import MemoryFile
 
-from trid3nt_server.render import publish as pl
-from trid3nt_server.render.publish import (
+from trid3nt.render import publish as pl
+from trid3nt.render.publish import (
     legend_for_published_layer,
     pop_legend_for_uri,
     publish_layer,
@@ -181,7 +181,7 @@ def _s3_titiler(monkeypatch: pytest.MonkeyPatch) -> None:
     TiTiler exit: no TRID3NT_TILE_SERVER_BASE - publish_layer emits the raw
     s3:// COG uri and the legend stash is keyed by that uri.
     """
-    from trid3nt_server.tools import cache as cache_mod
+    from trid3nt.tools import cache as cache_mod
 
     monkeypatch.setattr(cache_mod, "storage_scheme", lambda: "s3")
 

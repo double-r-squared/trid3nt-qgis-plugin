@@ -12,9 +12,9 @@ import pytest
 
 from trid3nt_contracts.coverage import Member
 
-from trid3nt_server.inputs.observation import ObservationError
-from trid3nt_server.inputs.rain import Rain, rain
-from trid3nt_server.inputs.slots import RAIN, ingest_slot
+from trid3nt.inputs.observation import ObservationError
+from trid3nt.inputs.rain import Rain, rain
+from trid3nt.inputs.slots import RAIN, ingest_slot
 
 _QUARTERS = ["2020-06-01T00:00", "2020-06-01T00:15", "2020-06-01T00:30"]
 

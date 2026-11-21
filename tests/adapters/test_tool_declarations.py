@@ -14,16 +14,16 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.model.adapters.adapter import (
+from trid3nt_harness.model.adapters.adapter import (
     _parameter_schema,
     _tool_schema,
     build_tool_declarations,
 )
 import trid3nt_server.main as _main
-from trid3nt_server.tools import TOOL_REGISTRY  # noqa: F401 -- populated on import
+from trid3nt.tools import TOOL_REGISTRY  # noqa: F401 -- populated on import
 
 # The catalog tools register through the daemon startup import, not through
-# ``trid3nt_server.tools``, so a module that sweeps the registry must run that
+# ``trid3nt.tools``, so a module that sweeps the registry must run that
 # import itself or its case list depends on which test module loaded first.
 _main._import_tools_registry()
 

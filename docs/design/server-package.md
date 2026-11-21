@@ -2,7 +2,9 @@
 
 The Python application that serves the plugin's WebSocket protocol, hosts the
 tool registry (fetchers, search, derive, display, meta, and the engine
-workflows), runs the multi-turn generation loop against a **pluggable LLM
+workflows - all of them the SDK's, `trid3nt/`) and the control plane
+(`trid3nt_harness/`: the provider adapters, the turn guards, retrieval and the
+gates), runs the multi-turn generation loop against a **pluggable LLM
 provider**, streams replies, propagates cancellation, and enforces the
 determinism boundary and the confirmation-before-consequence gates.
 
@@ -11,7 +13,7 @@ them: [`trid3nt_server/README.md`](../../trid3nt_server/README.md) maps the
 package, and each subpackage carries its own README (the daemon core is
 [`trid3nt_server/server/README.md`](../../trid3nt_server/server/README.md), the
 providers are
-[`trid3nt_server/model/adapters/README.md`](../../trid3nt_server/model/adapters/README.md)).
+[`trid3nt_harness/model/adapters/README.md`](../../trid3nt_harness/model/adapters/README.md)).
 
 ## The provider seam
 
@@ -70,7 +72,8 @@ logs to `logs/agent.log`, and writes a PID to `run/agent.pid`. See
 
 ## Deploy
 
-There is no separate deploy step for the server: edit `trid3nt_server/`, then
+There is no separate deploy step for the server: edit any of the three
+packages (`trid3nt/`, `trid3nt_harness/`, `trid3nt_server/`), then
 restart the agent (`make agent` from the repo root; the venv installs the
 package editable, so a restart picks the change up). See the root
 [README's deploy seams](../../README.md#deploy-seams) for the other two seams

@@ -19,16 +19,17 @@ from trid3nt_server.server.protocol.http.transport import failure, json_reply
 #: the metadata before this table, because a template is a subsystem by what it
 #: is rather than by where it sits.
 _SUBSYSTEM_BY_MODULE: tuple[tuple[str, str], ...] = (
-    ("trid3nt_server.tools.fetchers", "fetchers"),
-    ("trid3nt_server.tools.derive", "derives"),
-    ("trid3nt_server.tools.search", "search"),
-    ("trid3nt_server.render", "render"),
-    ("trid3nt_server.tools.mesh", "mesh"),
-    ("trid3nt_server.workflows.solver", "solver"),
-    ("trid3nt_server.workflows.runtime", "runtime"),
-    ("trid3nt_server.workflows.telemac", "engine"),
-    ("trid3nt_server.inputs.gate", "gates"),
-    ("trid3nt_server.tools.meta", "meta"),
+    ("trid3nt.tools.fetchers", "fetchers"),
+    ("trid3nt.tools.derive", "derives"),
+    ("trid3nt_harness.tools.search", "search"),
+    ("trid3nt.tools.search", "search"),
+    ("trid3nt.render", "render"),
+    ("trid3nt.tools.mesh", "mesh"),
+    ("trid3nt.workflows.solver", "solver"),
+    ("trid3nt.workflows.runtime", "runtime"),
+    ("trid3nt.workflows.telemac", "engine"),
+    ("trid3nt_harness.inputs.gate", "gates"),
+    ("trid3nt.tools.meta", "meta"),
 )
 
 #: The order the subsystems are listed in: what a run is made of, then what it
@@ -118,7 +119,7 @@ def _data_entry(fetcher: str, row: Any) -> dict[str, Any]:
 def _classes() -> list[dict[str, Any]]:
     """Every row under its class and then its kind. The class is the row's own declaration, never
     inferred."""
-    from trid3nt_server.tools.search.match import sources_with_coverage
+    from trid3nt.tools.search.match import sources_with_coverage
 
     grouped: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for name, row in sources_with_coverage():
@@ -137,7 +138,7 @@ def _classes() -> list[dict[str, Any]]:
 def _credentials() -> list[dict[str, Any]]:
     """Every credential a keyed row declares, once per name, with no key
     material: the keys form's one source of names."""
-    from trid3nt_server.model.credentials.resolver import keyed_credentials
+    from trid3nt.credentials.resolver import keyed_credentials
 
     return [{"name": name, "label": cred.label, "env_var": cred.env_var}
             for name, cred in sorted(keyed_credentials().items())]
@@ -148,7 +149,7 @@ def build_library_payload(*, use_cache: bool = True) -> dict[str, Any]:
     every row under its class and kind, every credential a row declares.
     Read-only, and cached for the life of the process because the registries
     are filled at import."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     global _LIBRARY_CACHE
     if use_cache and _LIBRARY_CACHE is not None:
@@ -179,7 +180,7 @@ def build_library_payload(*, use_cache: bool = True) -> dict[str, Any]:
 def _classes_named_by(query: str) -> list[str]:
     """The data classes an ask names, best overlap first. Read against the class vocabulary through the tool index's own tokenizer, since a covered
     source carries no corpus phrasing."""
-    from trid3nt_server.tools.search.search_tools.search_tools import (
+    from trid3nt_harness.tools.search.search_tools.search_tools import (
         _STOPWORDS, _tokenize,
     )
     from trid3nt_contracts.coverage import DATA_CLASSES
@@ -196,8 +197,8 @@ async def build_library_search(query: str, top_k: int = 10) -> dict[str, Any]:
     """The ``/api/library/search`` hits: one ask over both facets. The rows of the
     classes the ask names come first, which is how a covered source is reached at
     all; the tools follow, ranked by the BM25 corpus the model routes on."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.tools.search.search_tools.search_tools import search_tools
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt_harness.tools.search.search_tools.search_tools import search_tools
 
     try:
         k = max(1, min(_SEARCH_TOP_K, int(top_k)))

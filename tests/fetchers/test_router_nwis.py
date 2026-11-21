@@ -16,10 +16,10 @@ import pandas as pd
 import pytest
 from dataretrieval.exceptions import HTTPError, ServiceUnavailable
 
-from trid3nt_server.tools.fetchers._router import hooks, registration
-from trid3nt_server.tools.fetchers._router.executors import http_json
-from trid3nt_server.tools.fetchers._router.transport import errors as terrors
-from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges import (
+from trid3nt.tools.fetchers._router import hooks, registration
+from trid3nt.tools.fetchers._router.executors import http_json
+from trid3nt.tools.fetchers._router.transport import errors as terrors
+from trid3nt.tools.fetchers.hydrology.fetch_usgs_nwis_gauges import (
     hooks as nwis_hooks)
 
 
@@ -82,7 +82,7 @@ def _flat(feature):
 
 
 def test_nwis_registered_and_spec_served(spec):
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     assert "fetch_usgs_nwis_gauges" in TOOL_REGISTRY
     assert "_promoted" in TOOL_REGISTRY["fetch_usgs_nwis_gauges"].module
@@ -316,7 +316,7 @@ def _flaky(calls, failures, result):
 
 @pytest.fixture
 def no_sleep(monkeypatch):
-    from trid3nt_server.tools.fetchers._router.transport import client
+    from trid3nt.tools.fetchers._router.transport import client
     slept = []
     monkeypatch.setattr(client, "_sleep_backoff", lambda attempt, _hint: slept.append(attempt))
     return slept
@@ -344,7 +344,7 @@ def test_a_503_then_success_succeeds(spec, nwis_calls, no_sleep, monkeypatch):
 def test_a_lasting_timeout_is_the_upstream_error_after_every_attempt(spec, no_sleep, monkeypatch):
     import dataretrieval.nwis as nwis
     from dataretrieval.exceptions import NetworkError
-    from trid3nt_server.tools.fetchers._fetch_common import UpstreamAPIError
+    from trid3nt.tools.fetchers._fetch_common import UpstreamAPIError
     said = ("Could not reach the service at https://waterservices.usgs.gov/nwis/iv: "
             "_ssl.c:993: The handshake operation timed out")
     calls = []
@@ -369,7 +369,7 @@ def test_a_404_is_not_retried(spec, no_sleep, monkeypatch):
 def test_a_lasting_upstream_failure_reaches_the_step_and_the_wire_as_upstream():
     from trid3nt_server.render.pipeline_emitter import PipelineEmitter
     from trid3nt_server.server.dispatch.persist import _VALID_ERROR_CODES
-    from trid3nt_server.tools.fetchers._router.errors import router_upstream_error
+    from trid3nt.tools.fetchers._router.errors import router_upstream_error
     exc = router_upstream_error("NWIS_GAUGES", "NetworkError: Could not reach waterservices.usgs.gov/nwis/iv")
     code, message = PipelineEmitter._classify_exception(None, exc)
     assert (code, message) == ("UPSTREAM_API_ERROR", "[NWIS_GAUGES_UPSTREAM_ERROR] NetworkError: "
@@ -384,7 +384,7 @@ async def test_a_lasting_upstream_failure_on_the_invoke_path_goes_out_as_upstrea
     from trid3nt_contracts import new_ulid
     from trid3nt_server.server import SessionState
     from trid3nt_server.server.dispatch import emitter
-    from trid3nt_server.tools.fetchers._router.errors import router_upstream_error
+    from trid3nt.tools.fetchers._router.errors import router_upstream_error
 
     async def _raise(*_args):
         raise router_upstream_error("NWIS_GAUGES", "NetworkError: Could not reach waterservices.usgs.gov")

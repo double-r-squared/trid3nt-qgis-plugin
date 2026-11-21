@@ -16,18 +16,18 @@ import rasterio
 from rasterio.transform import from_origin
 
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_server.inputs.bed import RASTER, bed
-from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.settings import bind_run, reset_run
-from trid3nt_server.tools.derive._raster_layers import FILLED
+from trid3nt.inputs.bed import RASTER, bed
+from trid3nt.inputs.run_notes import bind_notes, drain_notes
+from trid3nt.inputs.user_input import UserInputError
+from trid3nt.settings import bind_run, reset_run
+from trid3nt.tools.derive._raster_layers import FILLED
 
 _LON, _LAT, _STEP = -122.67, 45.52, 0.0001
 
 
 @pytest.fixture(autouse=True)
 def _written_locally(monkeypatch, tmp_path):
-    from trid3nt_server.tools.derive import _hydrology_common as common
+    from trid3nt.tools.derive import _hydrology_common as common
 
     real = common.write_cog
     monkeypatch.setattr(common, "write_cog", lambda band, **kw: real(

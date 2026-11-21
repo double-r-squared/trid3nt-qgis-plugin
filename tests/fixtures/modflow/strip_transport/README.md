@@ -2,7 +2,7 @@
 
 A solved one-model GWF + GWT simulation (MODFLOW 6.7.0, one 1x3-cell strip
 DISV grid shared by both models through the GWF6-GWT6 exchange) produced by
-`trid3nt_server/workflows/modflow/authoring/simulation.py` serialize on
+`trid3nt/workflows/modflow/authoring/simulation.py` serialize on
 2026-10-18. Banner: synthetic - the strip's geometry and values are hand
 stated for reader tests; no real catchment, no claim about any field.
 

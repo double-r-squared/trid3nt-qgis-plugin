@@ -15,14 +15,14 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.tools.tool_arg_normalizer import (
+from trid3nt import tools as agent_tools
+from trid3nt_harness.model.adapters.model_selection import ModelSettings
+from trid3nt_harness.tools.tool_arg_normalizer import (
     fuzzy_correct_enum_args,
     normalize_args,
 )
-from trid3nt_server.tools import RegisteredTool
-from trid3nt_server.render.uri_registry import reset_uri_registries_for_tests
+from trid3nt.tools import RegisteredTool
+from trid3nt.render.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
@@ -219,9 +219,9 @@ _FETCHES: list[dict] = []
 def _cache_uri(tool_name: str, params: dict) -> str:
     """The uri a real fetch of ``tool_name`` would land these params under - the
     address the reuse guard keys on, so a stub has to land at it too."""
-    from trid3nt_server.tools.cache import cache_path
-    from trid3nt_server.tools.fetchers._router.registration import get_spec
-    from trid3nt_server.tools.fetchers._router.router import prospective_cache_key
+    from trid3nt.tools.cache import cache_path
+    from trid3nt.tools.fetchers._router.registration import get_spec
+    from trid3nt.tools.fetchers._router.router import prospective_cache_key
 
     spec = get_spec(tool_name)
     key = prospective_cache_key(spec, params)

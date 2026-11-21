@@ -8,25 +8,36 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 
 ## The map
 
-- `trid3nt_server/` - the framework package, by feature:
+- Three packages, imports one way: `trid3nt` imports neither other,
+  `trid3nt_harness` imports `trid3nt` only, `trid3nt_server` imports
+  both. `tests/contracts/test_package_imports.py` pins it; the upward
+  edges still standing are its allow-list, which only shrinks.
+- `trid3nt/` - the SDK, the domain, by feature:
   `tools/` (the atomic-tool registry; a tool is one of two kinds -
   `fetch` produces data from outside through a declared row
   the router executes, `derive` ingests data and outputs data - with
-  `search`, `display` and `meta` beside them as infrastructure, and
-  `mesh` the one mesh front, which knows no engine),
+  `search` (`match.py`, `describe_keywords/`), `display` and `meta`
+  beside them as infrastructure, and `mesh` the one mesh front, which
+  knows no engine),
   `render/` (the FORMAT SET a product reaches the map in - a COG
   raster, a GeoJSON vector, an MDAL mesh with the dataset files beside
-  it, a chart payload - the one emission seam, the publish mechanism,
-  the presets and the restyle seam), `workflows/` (the template `runtime/` -
+  it, a chart payload - the publish mechanism, the presets and the
+  restyle seam), `workflows/` (the template `runtime/` -
   which holds the fill, `fill.py` - the `solver/` executor, and the engine
   package `telemac/`), `inputs/` (the typed inputs and their ingestions,
-  the slots, and `gate/` - the input review, draw, confirm, cards and
-  pending registries; it imports nothing from `workflows/`),
-  `model/` (`adapters/` the LLM providers - the ONLY
-  place provider nouns appear - with `credentials/` and the turn
-  `guards/`), `server/` (session/ turn/ dispatch/ protocol/),
+  and the slots; it imports nothing from `workflows/`),
+  `credentials/` (the connect handshake and the key resolver),
+  `settings/`, and
   `store/` (`objects.py` the object store's one client and the bucket
   names, `cases.py` the case documents, `sweep.py` the cache sweep).
+- `trid3nt_harness/` - the control plane: `model/` (`adapters/` the LLM
+  providers - the ONLY place provider nouns appear - and the turn
+  `guards/`), `inputs/gate/` (the input review, draw, confirm, cards
+  and pending registries), `tools/` (`search/` tool retrieval and the
+  search tools, the dispatch-seam kwargs cleanup, the routing corpus).
+- `trid3nt_server/` - the daemon: `server/` (session/ turn/ dispatch/
+  protocol/), `render/` (the one emission seam and the session's
+  pipeline state), `main.py`.
 - `workers/` - the telemac solver worker plus the mesh and qgis
   legs. Worker code is INERT until its image is
   rebuilt: absolute -f/context paths, provenance-check the new code is

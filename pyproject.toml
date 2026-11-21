@@ -196,16 +196,18 @@ markers = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["trid3nt_server*"]
+include = ["trid3nt", "trid3nt.*", "trid3nt_harness", "trid3nt_harness.*", "trid3nt_server", "trid3nt_server.*"]
 
 # Runtime data files shipped in the wheel. setuptools drops every non-.py file
 # by default, so a non-editable `pip install` omits them silently while an
 # editable install on the box keeps working - the failure only appears on the
 # image. Any new file loaded via Path(__file__).parent belongs in this list.
 [tool.setuptools.package-data]
-trid3nt_server = [
-    "tools/tool_query_corpus.yaml",
+trid3nt = [
     "tools/README.md",
     "workflows/telemac/authoring/*/*.f",
     "workflows/telemac/authoring/engine_scripts/*.py",
+]
+trid3nt_harness = [
+    "tools/tool_query_corpus.yaml",
 ]

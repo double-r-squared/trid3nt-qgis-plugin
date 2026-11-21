@@ -10,9 +10,9 @@ import json
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.hydrology.fetch_nhd_waterbody_at_point import hooks as wb
+from trid3nt.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.hydrology.fetch_nhd_waterbody_at_point import hooks as wb
 
 #: Walden Pond, Concord MA - a small named body the seed can stand in or beside.
 _SEED = [-71.3395, 42.4380]

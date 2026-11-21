@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.store import journal as store_journal
-from trid3nt_server.store.journal import run_outputs
-from trid3nt_server.workflows.runtime import journal
+from trid3nt.store import journal as store_journal
+from trid3nt.store.journal import run_outputs
+from trid3nt.workflows.runtime import journal
 
 RID = "run-xyz"
 

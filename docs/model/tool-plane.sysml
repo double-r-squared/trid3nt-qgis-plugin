@@ -261,7 +261,7 @@ package ToolPlane {
 
     part runPyqgis : SessionCodeTool {
         doc /*
-        code: trid3nt_server/tools/derive/run_pyqgis/run_pyqgis.py
+        code: trid3nt/tools/derive/run_pyqgis/run_pyqgis.py
         */
         port approvalIn : ApprovalIn;
         port askOut : AskOut;
@@ -269,14 +269,14 @@ package ToolPlane {
 
     part runQgisAlgorithm : SessionAlgorithmTool {
         doc /*
-        code: trid3nt_server/tools/derive/run_qgis_algorithm/run_qgis_algorithm.py
+        code: trid3nt/tools/derive/run_qgis_algorithm/run_qgis_algorithm.py
         */
         port askOut : AskOut;
     }
 
     part codeExecGate : CodeExecGate {
         doc /*
-        code: trid3nt_server/inputs/gate/confirm.py
+        code: trid3nt_harness/inputs/gate/confirm.py
         */
         port approvalIn : ApprovalIn;
         port approvalOut : ApprovalOut;
@@ -307,7 +307,7 @@ package ToolPlane {
 
     part mintedToken : ConnectGate {
         doc /*
-        code: trid3nt_server/model/credentials/auth_handshake.py
+        code: trid3nt/credentials/auth_handshake.py
         */
     }
 
@@ -329,7 +329,7 @@ package ToolPlane {
 
     part borrowedProvider : BorrowedProvider {
         doc /*
-        code: trid3nt_server/tools/fetchers/_router/executors/qgis_provider.py
+        code: trid3nt/tools/fetchers/_router/executors/qgis_provider.py
         */
         port requestOut : RequestOut;
         port responseIn : ResponseIn;
@@ -352,7 +352,7 @@ package ToolPlane {
 
     part keywordLookup : KeywordLookup {
         doc /*
-        code: trid3nt_server/tools/search/describe_keywords/describe_keywords.py
+        code: trid3nt/tools/search/describe_keywords/describe_keywords.py
         */
     }
 
@@ -432,8 +432,8 @@ package ToolPlane {
         it. The modules that carry a request may not spawn a process of their
         own.
 
-        forbid: trid3nt_server.tools.derive.run_pyqgis -> subprocess
-        forbid: trid3nt_server.tools.derive.run_qgis_algorithm -> subprocess
+        forbid: trid3nt.tools.derive.run_pyqgis -> subprocess
+        forbid: trid3nt.tools.derive.run_qgis_algorithm -> subprocess
         forbid: trid3nt_server.server.processing -> subprocess
         */
     }
@@ -485,10 +485,10 @@ package ToolPlane {
         canvas name for the same reason: the model fetches, and when the layer
         exists, runs.
 
-        forbid: trid3nt_server.tools.derive.run_pyqgis -> trid3nt_server.tools.fetchers
-        forbid: trid3nt_server.tools.derive.run_qgis_algorithm -> trid3nt_server.tools.fetchers
-        forbid: trid3nt_server.tools.derive.run_pyqgis -> trid3nt_server.tools.cache
-        forbid: trid3nt_server.tools.derive.run_qgis_algorithm -> trid3nt_server.tools.cache
+        forbid: trid3nt.tools.derive.run_pyqgis -> trid3nt.tools.fetchers
+        forbid: trid3nt.tools.derive.run_qgis_algorithm -> trid3nt.tools.fetchers
+        forbid: trid3nt.tools.derive.run_pyqgis -> trid3nt.tools.cache
+        forbid: trid3nt.tools.derive.run_qgis_algorithm -> trid3nt.tools.cache
         */
     }
 

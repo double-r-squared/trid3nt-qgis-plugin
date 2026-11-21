@@ -16,7 +16,7 @@ def test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outli
     """The water inside the footprint was removed, so a boundary node is on the cut when
     it stands at the half-width, to the precision a relaxation places a node on a
     locked outline. An equality at exactly 10.000 m would halve one population."""
-    from trid3nt_server.workflows.telemac.authoring.walked_boundary import _nodes_near
+    from trid3nt.workflows.telemac.authoring.walked_boundary import _nodes_near
 
     # one 200 m centreline segment, cut 20 m wide on a 5 m mesh: the outline runs
     # at 10 m and a node sits on it to within an edge.
@@ -34,7 +34,7 @@ def test_a_lone_node_between_two_of_another_kind_is_not_a_face():
     """front2.f refuses "a solid point between two liquid points" and the reverse
     by name, so the walk settles them: a role is a RUN, and a single node whose
     two neighbours agree with each other is theirs."""
-    from trid3nt_server.workflows.telemac.authoring.walked_boundary import _settled_walk
+    from trid3nt.workflows.telemac.authoring.walked_boundary import _settled_walk
 
     walk = [10, 11, 12, 13, 14, 15, 16, 17]
     structure, liquid = _settled_walk(
@@ -50,7 +50,7 @@ def test_a_lone_node_between_two_of_another_kind_is_not_a_face():
 def test_the_thermocline_is_stated_below_the_water_top_not_the_datum():
     """The hook has only the node's elevation, so a free surface the run opened
     above the datum has to enter the depth the thermocline is placed at."""
-    from trid3nt_server.workflows.telemac.modules.telemac3d import _condi_thermocline
+    from trid3nt.workflows.telemac.modules.telemac3d import _condi_thermocline
 
     assert "DPTH=0.2910D0-Z(I3)" in _condi_thermocline(
         8.0, 18.0, 6.0, 1.5, 0.291)

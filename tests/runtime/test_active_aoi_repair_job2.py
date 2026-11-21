@@ -14,9 +14,9 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.model.adapters.adapter import build_layers_present_note
-from trid3nt_server.store.cases import Persistence
+from trid3nt import tools as agent_tools
+from trid3nt_harness.model.adapters.adapter import build_layers_present_note
+from trid3nt.store.cases import Persistence
 from trid3nt_server.server import (
     SessionState,
     _emit_case_open,
@@ -24,8 +24,8 @@ from trid3nt_server.server import (
     get_persistence,
     set_persistence,
 )
-from trid3nt_server.tools import RegisteredTool
-from trid3nt_server.render.uri_registry import reset_uri_registries_for_tests
+from trid3nt.tools import RegisteredTool
+from trid3nt.render.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
@@ -44,7 +44,7 @@ def _cap_gate_waits(monkeypatch):
 
     Production leaves ``GATE_WAIT_CAP_S`` unset, so this is a fail-closed
     backstop rather than the path the fetch tests take."""
-    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
+    monkeypatch.setattr("trid3nt_harness.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
 
 
 async def _invoke_with_gate_proceed(ws, state, tool_name: str, params: dict):
@@ -200,9 +200,9 @@ _FETCHES: list[dict] = []
 def _cache_uri(tool_name: str, params: dict) -> str:
     """The uri a real fetch of ``tool_name`` would land these params under - the
     address the reuse guard keys on, so a stub has to land at it too."""
-    from trid3nt_server.tools.cache import cache_path
-    from trid3nt_server.tools.fetchers._router.registration import get_spec
-    from trid3nt_server.tools.fetchers._router.router import prospective_cache_key
+    from trid3nt.tools.cache import cache_path
+    from trid3nt.tools.fetchers._router.registration import get_spec
+    from trid3nt.tools.fetchers._router.router import prospective_cache_key
 
     spec = get_spec(tool_name)
     key = prospective_cache_key(spec, params)

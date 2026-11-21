@@ -22,7 +22,7 @@ def _cap_gate_waits(monkeypatch):
 
     Production leaves ``GATE_WAIT_CAP_S`` unset; the dedicated timeout test
     tightens the cap so it reaches the honest fail-closed path fast."""
-    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
+    monkeypatch.setattr("trid3nt_harness.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
 
 
 class _FakeWS:
@@ -93,7 +93,7 @@ def test_fetch_tools_in_fetch_confirm_set() -> None:
 )
 async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -> None:
     from trid3nt_server import server
-    from trid3nt_server.inputs.gate.cards import fetch_resolution as solver_confirm
+    from trid3nt_harness.inputs.gate.cards import fetch_resolution as solver_confirm
 
     ws, state = _FakeWS(), _FakeState()
     approver = asyncio.create_task(_drive_decision(server, "proceed"))
@@ -217,12 +217,12 @@ async def test_cancel_fails_closed() -> None:
 @pytest.mark.asyncio
 async def test_timeout_fails_closed(monkeypatch) -> None:
     from trid3nt_server import server
-    from trid3nt_server.inputs.gate.errors import GateConfirmationTimeoutError
+    from trid3nt_harness.inputs.gate.errors import GateConfirmationTimeoutError
 
     # No client answers the card: the local-lane gate would wait 24h, so the
     # cap forces the honest timeout path quickly (a tight override of the
     # autouse 5s net keeps this pure-timeout assertion fast).
-    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 0.05)
+    monkeypatch.setattr("trid3nt_harness.inputs.gate.confirm.GATE_WAIT_CAP_S", 0.05)
     ws, state = _FakeWS(), _FakeState()
     with pytest.raises(GateConfirmationTimeoutError):
         await server._gate_on_solver_confirm(  # type: ignore[arg-type]
@@ -277,7 +277,7 @@ def test_clamp_fetch_resolution_helper() -> None:
 
 def test_a_spacing_finer_than_the_source_serves_is_stated_as_the_one_used() -> None:
     from trid3nt_server import server
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     token = bind_notes()
     server._clamp_fetch_resolution(1.0, 5.0)

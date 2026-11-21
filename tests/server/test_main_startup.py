@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import logging
 
-from trid3nt_server import tools as agent_tools
+from trid3nt import tools as agent_tools
 from trid3nt_server.main import _import_tools_registry, run
 
 
 def test_import_tools_registry_populates_startup_only_tools():
-    """The eager block registers what a bare ``import trid3nt_server.tools``
+    """The eager block registers what a bare ``import trid3nt.tools``
     leaves out - the solver-dispatch pair is registered only here."""
     n = _import_tools_registry()
     assert n >= 2

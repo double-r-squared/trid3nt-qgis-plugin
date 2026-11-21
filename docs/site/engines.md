@@ -2,7 +2,7 @@
 
 ONE solver engine ships in this repo: **TELEMAC**, in a locally built container, plus the
 GPL-isolated **OceanMesh2D** meshing environment beside it. Both run through the same
-`run_solver` / `wait_for_completion` seam (`trid3nt_server/workflows/solver/solver.py`): the
+`run_solver` / `wait_for_completion` seam (`trid3nt/workflows/solver/solver.py`): the
 supervisor stages deck inputs into `$TRID3NT_RUNS_DIR/<run_id>/`, launches the container over
 that bind-mounted rundir, uploads the outputs to MinIO and writes `completion.json`. The worker
 is the engine room -- a staged run directory in, results out, no network and no opinions of its

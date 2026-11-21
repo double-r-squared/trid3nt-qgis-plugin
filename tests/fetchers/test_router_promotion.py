@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.model.adapters.adapter import build_tool_declarations
-from trid3nt_server.tools.fetchers._router.errors import (
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt_harness.model.adapters.adapter import build_tool_declarations
+from trid3nt.tools.fetchers._router.errors import (
     RouterInputError,
     bbox_error_suffix,
 )
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
 # The 5 promoted pilots: name -> (source_class, expected declaration inputSchema).
 # The schema map is the ground truth captured from the hand-written twins BEFORE
@@ -181,7 +181,7 @@ def test_pilot_degenerate_bbox_raises_twin_typed_error(name: str) -> None:
 
 
 def _route(name: str, **params):
-    from trid3nt_server.tools.fetchers._router import router as _r
+    from trid3nt.tools.fetchers._router import router as _r
     return _r.route(_SPECS[name], params)
 
 
@@ -204,7 +204,7 @@ def test_wqp_input_validation(params: dict, code: str) -> None:
 def test_wqp_characteristic_alias_resolves() -> None:
     """The friendly alias resolves to the canonical WQP name (LayerURI.units)."""
     spec = _SPECS["fetch_usgs_water_quality"]
-    from trid3nt_server.tools.fetchers._router.router import validate_params
+    from trid3nt.tools.fetchers._router.router import validate_params
     p = validate_params(spec, dict(bbox=[-93.3, 41.9, -93.1, 42.1], characteristic="do"))
     assert p["characteristic"] == "Dissolved oxygen (DO)"  # alias-mapped
     p2 = validate_params(spec, dict(bbox=[-93.3, 41.9, -93.1, 42.1], characteristic="Arsenic"))
@@ -213,7 +213,7 @@ def test_wqp_characteristic_alias_resolves() -> None:
 
 @pytest.mark.parametrize("name", ["fetch_usgs_water_quality", "fetch_nhdplus_nldi_navigate"])
 def test_the_dataretrieval_services_route_through_their_library_delegate(name):
-    from trid3nt_server.tools.fetchers._router import router
+    from trid3nt.tools.fetchers._router import router
     spec = _SPECS[name]
     assert spec.hooks is not None and spec.hooks.delegate and spec.hooks.delegate_validate
     assert router.select_executor(spec).__module__.endswith("executors.library_delegate")
@@ -249,7 +249,7 @@ def test_nldi_input_validation(params: dict) -> None:
 
 import datetime as _dt  # noqa: E402
 
-from trid3nt_server.tools.fetchers._router.executors.station_timeseries import (  # noqa: E402
+from trid3nt.tools.fetchers._router.executors.station_timeseries import (  # noqa: E402
     coops_currents_select,
 )
 

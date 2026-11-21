@@ -11,14 +11,14 @@ import json
 import pytest
 
 from trid3nt_contracts.source_spec import SourceSpec
-from trid3nt_server.tools.fetchers._router import field_map as F
-from trid3nt_server.tools.fetchers._router import router as R
-from trid3nt_server.tools.fetchers._router.errors import (RouterEmptyError,
+from trid3nt.tools.fetchers._router import field_map as F
+from trid3nt.tools.fetchers._router import router as R
+from trid3nt.tools.fetchers._router.errors import (RouterEmptyError,
                                                           RouterInputError,
                                                           RouterUpstreamError)
-from trid3nt_server.tools.fetchers._router.executors import http_json as HJ
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers._router.transport import TransportError
+from trid3nt.tools.fetchers._router.executors import http_json as HJ
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers._router.transport import TransportError
 
 _SPECS = compose_specs_from_tree()
 

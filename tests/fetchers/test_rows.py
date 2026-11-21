@@ -12,9 +12,9 @@ import pytest
 
 from trid3nt_contracts.coverage import (
     DATA_CLASSES, PROVENANCE_KINDS, CoverageExtent, CoveragePoint)
-from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+from trid3nt.tools.fetchers._router.spec import load_spec_from_path
 
-_ROOT = Path(__file__).resolve().parents[2] / "trid3nt_server" / "tools" / "fetchers"
+_ROOT = Path(__file__).resolve().parents[2] / "trid3nt" / "tools" / "fetchers"
 
 #: Every fetcher row in the tree - the sweep reads what each one declares
 #: rather than a hand-kept list that goes stale the moment a source lands.

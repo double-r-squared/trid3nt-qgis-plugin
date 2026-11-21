@@ -385,7 +385,7 @@ package RenderSeam {
 
     part styleDeclaration : StyleDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/weather/fetch_mrms_qpe/source.yaml
+        code: trid3nt/tools/fetchers/weather/fetch_mrms_qpe/source.yaml
         */
         port rowOut : RowOut;
     }
@@ -399,7 +399,7 @@ package RenderSeam {
 
     part fetcherRouter : FetcherRouter {
         doc /*
-        code: trid3nt_server/tools/fetchers/_router/router.py
+        code: trid3nt/tools/fetchers/_router/router.py
         */
         port rowIn : RowIn;
         port layerOut : LayerOut;
@@ -416,7 +416,7 @@ package RenderSeam {
 
     part publishPath : PublishPath {
         doc /*
-        code: trid3nt_server/render/publish.py
+        code: trid3nt/render/publish.py
         */
         port rowIn : RowIn;
         port rowOut : RowOut;
@@ -427,7 +427,7 @@ package RenderSeam {
 
     part presetFamily : PresetFamily {
         doc /*
-        code: trid3nt_server/render/presets.py
+        code: trid3nt/render/presets.py
         */
         port kindIn : KindIn;
         port rowIn : RowIn;
@@ -436,7 +436,7 @@ package RenderSeam {
 
     part restyleSurface : RestyleSurface {
         doc /*
-        code: trid3nt_server/render/restyle.py
+        code: trid3nt/render/restyle.py
         */
         port askIn : AskIn;
         port rowOut : RowOut;
@@ -444,14 +444,14 @@ package RenderSeam {
 
     part restyleTool : RestyleTool {
         doc /*
-        code: trid3nt_server/tools/derive/restyle_layer/restyle_layer.py
+        code: trid3nt/tools/derive/restyle_layer/restyle_layer.py
         */
         port askOut : AskOut;
     }
 
     part layerRecord : LayerRecord {
         doc /*
-        code: trid3nt_server/render/uri_registry.py
+        code: trid3nt/render/uri_registry.py
         */
         port recordIn : RecordIn;
     }
@@ -469,7 +469,7 @@ package RenderSeam {
 
     part outputsSeamPoint : OutputsSeamPoint {
         doc /*
-        code: trid3nt_server/render/formats.py
+        code: trid3nt/render/formats.py
         */
         port layerOut : LayerOut;
         port recordOut : RecordOut;
@@ -572,7 +572,7 @@ package RenderSeam {
         half: a style writer that could reach the declaration machinery is one
         import away from a declaration that styles.
 
-        forbid: trid3nt_server.render.presets -> trid3nt_server.workflows
+        forbid: trid3nt.render.presets -> trid3nt.workflows
         */
     }
 
@@ -677,6 +677,8 @@ package RenderSeam {
         its own, which is what keeps one style writer instead of two that
         disagree.
 
+        forbid: plugin.render.layers -> trid3nt
+        forbid: plugin.render.layers -> trid3nt_harness
         forbid: plugin.render.layers -> trid3nt_server
         */
     }

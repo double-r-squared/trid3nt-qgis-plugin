@@ -6,11 +6,11 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.modflow.modules import GWF, GWT
-from trid3nt_server.workflows.modflow.workflow import _floor
-from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.modflow.modules import GWF, GWT
+from trid3nt.workflows.modflow.workflow import _floor
+from trid3nt.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.runtime.sheet import fill
 
 
 def _steering():
@@ -27,7 +27,7 @@ class Paired(GWF):
 def test_a_run_s_bodies_are_the_carrier_and_the_body_it_couples():
     """The bodies the floor resolves against: the steering, then each Transport it states;
     a steering that couples none runs the carrier alone."""
-    from trid3nt_server.workflows.modflow.workflow import run_bodies
+    from trid3nt.workflows.modflow.workflow import run_bodies
 
     assert [body.MODULE for body in run_bodies(_steering())] == ["gwf", "gwt"]
 
@@ -100,7 +100,7 @@ def test_the_lookup_reads_whichever_body_carries_the_name():
 def test_a_run_statement_layers_over_the_template_s_statement_of_the_body():
     """The run's values land on the body the template also stated: the one key the
     run states wins and the template's other slots are kept, never replaced."""
-    from trid3nt_server.workflows.modflow.workflow import _compose_coupled
+    from trid3nt.workflows.modflow.workflow import _compose_coupled
 
     sheet = fill(Paired, produced={})
     _, coupled = _floor(Paired, {"gwt: MST_POROSITY": 0.3, "gwt: ADV_SCHEME": "tvd"})
@@ -115,7 +115,7 @@ def test_a_run_statement_layers_over_the_template_s_statement_of_the_body():
 def test_a_stress_statement_on_a_run_expands_like_the_template_s():
     """A stress period the run states on the coupled body is shaped by the wrapper's
     own composite: the package marked, the statement checked and placed later."""
-    from trid3nt_server.workflows.modflow.workflow import _compose_coupled
+    from trid3nt.workflows.modflow.workflow import _compose_coupled
 
     sheet = fill(Paired, produced={})
     _, coupled = _floor(Paired, {
@@ -134,7 +134,7 @@ def test_a_stress_statement_on_a_run_expands_like_the_template_s():
 def test_a_qualified_simulation_own_keyword_refuses_at_the_carrier_s_composite():
     """A run may not restate the clock or grid onto a coupled body: the carrier's
     own composite refuses it there, naming the deck that owns the family."""
-    from trid3nt_server.workflows.modflow.workflow import _compose_coupled
+    from trid3nt.workflows.modflow.workflow import _compose_coupled
 
     sheet = fill(Paired, produced={})
     _, coupled = _floor(Paired, {"gwt: TDIS_NPER": 3})
@@ -147,7 +147,7 @@ def test_a_body_the_run_names_joins_its_bodies():
     """A qualifier may add the body it names where the carrier couples it, so the
     floor and the lookup have a body to resolve against before any fill; a bare
     name or an unknown module word adds nothing."""
-    from trid3nt_server.workflows.modflow.workflow import run_bodies
+    from trid3nt.workflows.modflow.workflow import run_bodies
 
     assert [body.MODULE for body in run_bodies(GWF)] == ["gwf"]
     assert [body.MODULE for body in run_bodies(
@@ -159,7 +159,7 @@ def test_a_body_the_run_names_joins_its_bodies():
 def test_a_run_qualified_body_couples_where_the_template_stated_none():
     """No Transport on the template is not a wall: the run's own qualified keywords
     create the body through the same composite, carrying only what the run stated."""
-    from trid3nt_server.workflows.modflow.workflow import _compose_coupled
+    from trid3nt.workflows.modflow.workflow import _compose_coupled
 
     sheet = fill(GWF, produced={})
     assert sheet.coupled == ()

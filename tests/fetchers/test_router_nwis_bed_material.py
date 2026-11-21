@@ -11,9 +11,9 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.hydrology.fetch_nwis_bed_material import hooks as nb
+from trid3nt.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.hydrology.fetch_nwis_bed_material import hooks as nb
 
 
 @pytest.fixture(scope="module")
@@ -136,7 +136,7 @@ def test_the_source_is_found_through_its_class(class_routes_to_the_match):
 def test_a_reset_on_the_station_call_and_a_503_on_the_result_call_are_each_tried_again(spec, monkeypatch):
     import dataretrieval.wqp as wqp
     from dataretrieval.exceptions import NetworkError, ServiceUnavailable
-    from trid3nt_server.tools.fetchers._router.transport import client
+    from trid3nt.tools.fetchers._router.transport import client
 
     monkeypatch.setattr(client, "_sleep_backoff", lambda *_: None)
     calls = {"what_sites": 0, "get_results": 0}

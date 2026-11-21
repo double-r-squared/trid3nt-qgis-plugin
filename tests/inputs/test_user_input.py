@@ -2,7 +2,7 @@
 
 import pytest
 
-from trid3nt_server.inputs.user_input import UserInputError, polyline_coords
+from trid3nt.inputs.user_input import UserInputError, polyline_coords
 
 
 def test_unknown_layer_name_is_named_in_the_refusal():

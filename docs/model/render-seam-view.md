@@ -9,16 +9,16 @@ Plane: **workflow**. System: **fetcher -> products -> the user plane's canvas**.
 ```mermaid
 flowchart LR
     emissionSeamPoint["EmissionSeamPoint<br/>trid3nt_server/render/layer_uri_emit.py"]
-    fetcherRouter["FetcherRouter<br/>trid3nt_server/tools/fetchers/_router/router.py"]
+    fetcherRouter["FetcherRouter<br/>trid3nt/tools/fetchers/_router/router.py"]
     layerMaterializer["LayerMaterializer<br/>plugin/render/layers.py"]
-    layerRecord["LayerRecord<br/>trid3nt_server/render/uri_registry.py"]
-    outputsSeamPoint["OutputsSeamPoint<br/>trid3nt_server/render/formats.py"]
+    layerRecord["LayerRecord<br/>trid3nt/render/uri_registry.py"]
+    outputsSeamPoint["OutputsSeamPoint<br/>trid3nt/render/formats.py"]
     pipelineEmitter["PipelineEmitter<br/>trid3nt_server/render/pipeline_emitter.py"]
-    presetFamily["PresetFamily<br/>trid3nt_server/render/presets.py"]
-    publishPath["PublishPath<br/>trid3nt_server/render/publish.py"]
-    restyleSurface["RestyleSurface<br/>trid3nt_server/render/restyle.py"]
-    restyleTool["RestyleTool<br/>trid3nt_server/tools/derive/restyle_layer/restyle_layer.py"]
-    styleDeclaration["StyleDeclaration<br/>trid3nt_server/tools/fetchers/weather/fetch_mrms_qpe/source.yaml"]
+    presetFamily["PresetFamily<br/>trid3nt/render/presets.py"]
+    publishPath["PublishPath<br/>trid3nt/render/publish.py"]
+    restyleSurface["RestyleSurface<br/>trid3nt/render/restyle.py"]
+    restyleTool["RestyleTool<br/>trid3nt/tools/derive/restyle_layer/restyle_layer.py"]
+    styleDeclaration["StyleDeclaration<br/>trid3nt/tools/fetchers/weather/fetch_mrms_qpe/source.yaml"]
     styleRowSchema["StyleRowSchema<br/>contracts/trid3nt_contracts/source_spec.py"]
     styleRowSchema -- "PresetKindVocabulary" --> presetFamily
     pipelineEmitter -- "SessionLayerRow" --> layerMaterializer

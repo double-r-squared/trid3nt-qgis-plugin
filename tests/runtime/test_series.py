@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.temporal import Series
-from trid3nt_server.inputs.temporal import (
+from trid3nt.inputs.temporal import Series
+from trid3nt.inputs.temporal import (
     TemporalShapeError,
     TemporalUnitsError,
 )

@@ -10,8 +10,8 @@ from __future__ import annotations
 import pytest
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.tools import (
+from trid3nt import tools as agent_tools
+from trid3nt.tools import (
     RegisteredTool,
     ToolRegistrationError,
     get_registered_tools,
@@ -102,7 +102,7 @@ def test_get_registered_tools_returns_sorted_snapshot(empty_registry):
 
 
 def test_eager_import_registers_meta_tools():
-    """Importing ``trid3nt_server.tools`` populates the registry on its own.
+    """Importing ``trid3nt.tools`` populates the registry on its own.
 
     A module-level ``@register_tool`` fires at package import with no fixture, and
     the dead ``mongo_query`` stub must NOT be there."""

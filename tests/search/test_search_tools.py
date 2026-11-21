@@ -13,11 +13,11 @@ from typing import Any
 import pytest
 
 # Force the full tool + workflow surface to register before the index builds.
-from trid3nt_server.tools import TOOL_REGISTRY  # noqa: F401
-from trid3nt_server.tools.search.search_tools import search_tools as discover_module
-from trid3nt_server.workflows.solver import solver  # noqa: F401 — registration side-effect
+from trid3nt.tools import TOOL_REGISTRY  # noqa: F401
+from trid3nt_harness.tools.search.search_tools import search_tools as discover_module
+from trid3nt.workflows.solver import solver  # noqa: F401 — registration side-effect
 
-from trid3nt_server.tools.search.search_tools.search_tools import (
+from trid3nt_harness.tools.search.search_tools.search_tools import (
     _close_vocab_matches,
     _lexical_reinforcement,
     _load_corpus,

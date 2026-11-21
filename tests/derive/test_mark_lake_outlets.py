@@ -16,8 +16,8 @@ import geopandas as gpd
 import pytest
 
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_server.tools.derive import DeriveError
-from trid3nt_server.tools.derive.mark_lake_outlets.mark_lake_outlets import RECEIVES, mark_lake_outlets, marked
+from trid3nt.tools.derive import DeriveError
+from trid3nt.tools.derive.mark_lake_outlets.mark_lake_outlets import RECEIVES, mark_lake_outlets, marked
 
 _FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "nhd_hr"
 _JOHNS, _COONAMESSETT, _PARKER_ROAD = "136693229", "136693233", "136665259"

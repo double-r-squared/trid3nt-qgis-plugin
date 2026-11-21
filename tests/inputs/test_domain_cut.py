@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.domain import _cut_square, domain, needs_beside
-from trid3nt_server.inputs.user_input import UserInputError
+from trid3nt.inputs.domain import _cut_square, domain, needs_beside
+from trid3nt.inputs.user_input import UserInputError
 
 #: A 0.2 x 0.02 degree band running east along lat 35 - the mapped banks of a
 #: river, wide enough that a section of it has real area.

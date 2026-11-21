@@ -13,8 +13,8 @@ import json
 
 import pytest
 
-from trid3nt_server.inputs.domain import domain
-from trid3nt_server.inputs.user_input import UserInputError
+from trid3nt.inputs.domain import domain
+from trid3nt.inputs.user_input import UserInputError
 
 _BOX = (-70.0, 42.0, -69.0, 43.0)
 

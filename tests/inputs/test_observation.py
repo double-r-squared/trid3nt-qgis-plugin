@@ -18,7 +18,7 @@ import json
 
 import pytest
 
-from trid3nt_server.inputs.observation import (
+from trid3nt.inputs.observation import (
     Observation,
     ObservationError,
     convert,
@@ -347,7 +347,7 @@ def test_the_gauge_row_says_which_column_carries_a_temperature() -> None:
     what the ingestion reads either one through: the columns and their units
     come off the row of whichever source answered, never off its name.
     The gauge carries no per-feature unit column, so the row's is the unit."""
-    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt.tools.fetchers._router import registration
     import trid3nt_server.main as main
 
     main._import_tools_registry()
@@ -370,7 +370,7 @@ def test_the_gauge_row_says_which_column_carries_a_temperature() -> None:
 def test_what_an_engine_is_driven_by_is_the_window_where_one_was_reported():
     """The choice between a measured record and a lumped constant belongs to the
     record, not to the deck that reads it."""
-    from trid3nt_server.inputs.temporal import Series
+    from trid3nt.inputs.temporal import Series
 
     window = Series([0.0, 3600.0], [3.2, 0.2], units="degC")
     assert Observation(value=3.2, series=window).forcing is window
@@ -395,7 +395,7 @@ def test_a_stated_number_stands_at_no_site_and_states_no_quantity() -> None:
 def test_a_reading_is_stamped_by_the_time_member_its_source_maps() -> None:
     """The NWS source stamps its forecast by ``fcst_valid_time``, which no guess names: the
     reading is dated by the mapped field, lifted by the row's zero, and read at the moment asked."""
-    from trid3nt_server.tools.fetchers._router.registration import get_spec
+    from trid3nt.tools.fetchers._router.registration import get_spec
 
     row = next(r for r in get_spec("fetch_nws_river_forecast").coverage
                if r.data_class == "water level series")
@@ -443,7 +443,7 @@ def test_a_usgs_gauge_is_named_by_its_site_no() -> None:
 
     layer = (Path(__file__).resolve().parents[1] / "fixtures" / "usgs_nwis_gauges"
              / "etowah_bbox_2026-09-21.fgb")
-    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt.tools.fetchers._router import registration
 
     row = next(r for r in registration.get_spec("fetch_usgs_nwis_gauges").coverage
                if r.data_class == "water level series")

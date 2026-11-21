@@ -8,17 +8,17 @@ import re
 import logging
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.ws import AgentMessageChunkPayload, SessionStatePayload
-from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt.tools import TOOL_REGISTRY
 from trid3nt_server.render.pipeline_emitter import current_turn_case
-from trid3nt_server.settings import setting
+from trid3nt.settings import setting
 from trid3nt_server.server.config import _tool_choice_timeout_s
-from trid3nt_server.inputs.extent import bbox_overlaps
+from trid3nt.inputs.extent import bbox_overlaps
 from trid3nt_server.server.dispatch.emitter import _ensure_emitter
 from trid3nt_server.server.dispatch.persist import _persist_chat_turn
-from trid3nt_server.inputs.gate.pending import _PENDING_TOOL_CHOICES
+from trid3nt_harness.inputs.gate.pending import _PENDING_TOOL_CHOICES
 from trid3nt_server.server.session.case_state import _persist_session_active_case
 from trid3nt_server.server.session.state import SessionState, _CASE_SYNC_NEVER
-from trid3nt_server.inputs.extent import as_bbox
+from trid3nt.inputs.extent import as_bbox
 from trid3nt_server.server.turn.cases import _auto_create_case_from_root, _emit_auto_case_open, _sync_case_context
 from trid3nt_server.server.turn.wire import _new_envelope, _session_safe_send
 from typing import Any
@@ -210,7 +210,7 @@ async def _maybe_emit_tool_candidates(
         return None, []
 
     from trid3nt_server.server.config import _tool_retrieval_k
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_matched_tools
+    from trid3nt_harness.tools.search.tool_retrieval import retrieve_matched_tools
 
     ranked = retrieve_matched_tools(user_text, _tool_retrieval_k())
     if exclude_tools:

@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import do_profile
+from trid3nt.workflows.telemac.templates.do_sag.streeter_phelps import do_profile
 
 
 def test_the_profile_is_a_genuine_sag() -> None:

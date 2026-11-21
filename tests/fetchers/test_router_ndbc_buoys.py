@@ -15,10 +15,10 @@ import json
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import (
+from trid3nt.tools.fetchers._router.errors import (
     RouterEmptyError, RouterInputError)
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.ocean.fetch_ndbc_buoys import hooks as nb
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.ocean.fetch_ndbc_buoys import hooks as nb
 
 #: Recorded from ``GET https://www.ndbc.noaa.gov/activestations.xml`` (five of
 #: its 1353 stations: three wave buoys, a fixed CO-OPS platform carrying the
@@ -286,8 +286,8 @@ def test_the_rows_floor_is_the_first_measured_wave_and_not_a_files_existence(
 async def test_a_1973_window_at_46001_lists_no_buoy(monkeypatch):
     """Under the floor there is nothing to ask: the match drops the source by
     name rather than selling a window whose files measure no sea state."""
-    from trid3nt_server.tools.search import match
-    from trid3nt_server.tools.search.find_sources import find_sources
+    from trid3nt.tools.search import match
+    from trid3nt_harness.tools.search.find_sources import find_sources
 
     monkeypatch.setattr(nb, "get_client", lambda: object())
     monkeypatch.setattr(nb, "get_bytes",
@@ -301,7 +301,7 @@ async def test_a_1973_window_at_46001_lists_no_buoy(monkeypatch):
 
 
 def test_the_wave_slot_reads_the_recorded_table_through_the_row_and_the_height_accuracy_is_cited(spec, row):
-    from trid3nt_server.inputs.wave import wave
+    from trid3nt.inputs.wave import wave
 
     feature = nb.parse_response(spec, {**_AT_44097, "start_date": "2026-09-20", "end_date": "2026-09-20",
                                        "_station": {"id": "44097", "name": "Block Island, RI  (154)",
@@ -312,7 +312,7 @@ def test_the_wave_slot_reads_the_recorded_table_through_the_row_and_the_height_a
     found = wave(layer, fields=row.fields, at="2026-09-20T11:00:00Z")
     assert (found.height_m, found.peak_period_s, found.from_direction_deg) == (0.7, 7.0, 122.0)
     assert found.site_id == "44097" and found.site_name == "Block Island, RI  (154)"
-    from trid3nt_server.inputs.fields import Measured, records
+    from trid3nt.inputs.fields import Measured, records
 
     rec = records(layer, row.fields, source="fetch_ndbc_buoys")[0]
     assert rec.accuracy == Measured(0.2, "m")

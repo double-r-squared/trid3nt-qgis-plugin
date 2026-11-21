@@ -13,8 +13,8 @@ import asyncio
 import json
 from types import SimpleNamespace
 
-from trid3nt_server.inputs.domain import place_kind
-from trid3nt_server.inputs.point import Point, point
+from trid3nt.inputs.domain import place_kind
+from trid3nt.inputs.point import Point, point
 
 
 def _ingested(value):
@@ -55,7 +55,7 @@ def test_a_pick_states_no_kind() -> None:
 def test_the_geocoder_s_own_two_words_are_published_as_they_came(monkeypatch) -> None:
     """The service states what the place is on the SAME answer that resolved
     it, so the words are carried off that answer and never asked for again."""
-    from trid3nt_server.tools.fetchers.socioeconomic.geocode_location import (
+    from trid3nt.tools.fetchers.socioeconomic.geocode_location import (
         geocode_location as module)
 
     raw = {"display_name": "Henry Hagg Lake, Oregon",

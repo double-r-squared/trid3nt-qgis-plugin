@@ -13,10 +13,10 @@ from types import MappingProxyType, SimpleNamespace
 import numpy as np
 import pytest
 
-from trid3nt_server.inputs.slots import SOIL, needs_of
-from trid3nt_server.inputs.soil import Soil, soil
-from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.workflows.telemac.authoring.selafin_io import BOUNDARY_CONDITIONS_FILE, GEOMETRY_FILE
+from trid3nt.inputs.slots import SOIL, needs_of
+from trid3nt.inputs.soil import Soil, soil
+from trid3nt.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.telemac.authoring.selafin_io import BOUNDARY_CONDITIONS_FILE, GEOMETRY_FILE
 from seated import row_inputs
 
 _FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "green_ampt"
@@ -59,9 +59,9 @@ def _mesh():
 @pytest.fixture()
 def ros_run(monkeypatch, tmp_path):
     """The seated settle and the fill over it, with the accepted mesh's reads and every raster stood in for."""
-    import trid3nt_server.tools.mesh.shared.nodes as nodes_mod
-    from trid3nt_server.workflows.telemac.authoring import accepted_mesh as mesh_mod
-    from trid3nt_server.workflows.telemac.authoring import opening as asm_mod
+    import trid3nt.tools.mesh.shared.nodes as nodes_mod
+    from trid3nt.workflows.telemac.authoring import accepted_mesh as mesh_mod
+    from trid3nt.workflows.telemac.authoring import opening as asm_mod
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(nodes_mod, "read_accepted_mesh_nodes", lambda _uri, utm_epsg=None: _NODES)
@@ -71,8 +71,8 @@ def ros_run(monkeypatch, tmp_path):
                         lambda layer, lonlat, interp=None, fill_holes=True: np.array(under[layer["uri"]], dtype=float))
 
     async def _fill(keywords=None, under_k=None, **params):
-        from trid3nt_server.workflows.telemac.modules import fill
-        from trid3nt_server.workflows.telemac.templates.rain_on_soil.rain_on_soil import STEERING
+        from trid3nt.workflows.telemac.modules import fill
+        from trid3nt.workflows.telemac.templates.rain_on_soil.rain_on_soil import STEERING
 
         if under_k is not None:
             under["s3://soil/k.tif"] = under_k
@@ -95,8 +95,8 @@ def ros_run(monkeypatch, tmp_path):
 
 
 def test_registered_with_the_soil_row_and_green_ampt_on_the_deck():
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.telemac.templates.rain_on_soil.rain_on_soil import STEERING, telemac_rain_on_soil
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.workflows.telemac.templates.rain_on_soil.rain_on_soil import STEERING, telemac_rain_on_soil
 
     assert TOOL_REGISTRY["telemac_rain_on_soil"].metadata.tier == "template"
     rows = {row.name: row for row in row_inputs(telemac_rain_on_soil.workflow)}
@@ -110,7 +110,7 @@ def test_the_soil_row_asks_its_silt_clay_and_organic_carbon_beside_it():
 
 
 def test_a_soil_need_reaches_soilgrids_alone_asking_the_property_in_its_own_word(monkeypatch):
-    import trid3nt_server.tools.search.match as match_mod
+    import trid3nt.tools.search.match as match_mod
 
     rows = {name: row for name, row in match_mod.sources_with_coverage() if row.data_class == "soil"}
     need = match_mod.Need(slot="soil", data_class="soil", of="sand", lon=-83.4, lat=35.05)
@@ -191,7 +191,7 @@ async def test_a_measured_storm_compiles_the_green_ampt_routine_reading_the_bloc
 
 
 def test_the_authored_routine_is_the_engine_s_with_the_block_branch_only():
-    from trid3nt_server.workflows.telemac.authoring.storm import block_routine
+    from trid3nt.workflows.telemac.authoring.storm import block_routine
 
     name, text = block_routine(3)
     scs_name, scs = block_routine(1)
@@ -206,7 +206,7 @@ def test_the_soil_ingestion_composes_the_derive_over_recorded_soilgrids(tmp_path
     from trid3nt_contracts.execution import LayerURI
     import importlib
 
-    derive_mod = importlib.import_module("trid3nt_server.tools.derive.green_ampt_parameters.green_ampt_parameters")
+    derive_mod = importlib.import_module("trid3nt.tools.derive.green_ampt_parameters.green_ampt_parameters")
 
     def layer(fraction):
         return LayerURI(layer_id=f"gulf-{fraction}", name=fraction, layer_type="raster", units="percent",
@@ -224,7 +224,7 @@ def test_the_soil_ingestion_composes_the_derive_over_recorded_soilgrids(tmp_path
 @pytest.fixture()
 def card(monkeypatch, ros_run):
     """The ask's gate: the cards it drew, answered by ``held['answer']``; the mode is ``held['mode']``."""
-    import trid3nt_server.inputs.gate.input_review as review_mod
+    import trid3nt_harness.inputs.gate.input_review as review_mod
 
     held = {"mode": "user_gated", "answer": {}, "cards": []}
 
@@ -238,9 +238,9 @@ def card(monkeypatch, ros_run):
 
 
 def _asked(keywords=None):
-    from trid3nt_server.workflows.runtime.review import ask_unstated
-    from trid3nt_server.workflows.telemac.templates.rain_on_soil.rain_on_soil import STEERING
-    from trid3nt_server.workflows.telemac.workflow import stated
+    from trid3nt.workflows.runtime.review import ask_unstated
+    from trid3nt.workflows.telemac.templates.rain_on_soil.rain_on_soil import STEERING
+    from trid3nt.workflows.telemac.workflow import stated
 
     keywords = dict(keywords or {})
     return ask_unstated(steering=STEERING, produced={"soil": _SOIL, "mesh": _mesh()}, workflow="telemac_rain_on_soil",
@@ -285,7 +285,7 @@ async def test_a_run_stating_all_three_is_asked_nothing(card):
 
 @pytest.mark.asyncio
 async def test_auto_takes_the_derived_pair_and_says_so_and_leaves_the_initial_content_to_refuse(card):
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     card["mode"] = "auto"
     token = bind_notes()
@@ -297,8 +297,8 @@ async def test_auto_takes_the_derived_pair_and_says_so_and_leaves_the_initial_co
 
 @pytest.mark.asyncio
 async def test_a_model_reading_only_the_constant_runs_on_it_and_warns_the_series_was_not_used(ros_run):
-    from trid3nt_server.errors import INPUT_NOT_USED
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.errors import INPUT_NOT_USED
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     token = bind_notes()
     sheet = await ros_run(keywords={"INITIAL_WATER_CONTENT": 0.15, "RAINFALL_RUNOFF_MODEL": 2}, rain_series_mm=[3.0, 12.5, 0.0])
@@ -311,7 +311,7 @@ async def test_a_model_reading_only_the_constant_runs_on_it_and_warns_the_series
 
 
 def test_the_unused_input_warning_names_identifiers_only_and_never_a_value():
-    from trid3nt_server.errors import INPUT_NOT_USED, unused_input_warning
+    from trid3nt.errors import INPUT_NOT_USED, unused_input_warning
 
     text = unused_input_warning(slot="storm", option="RAINFALL_RUNOFF_MODEL")
     assert text.startswith(f"{INPUT_NOT_USED}: ") and "storm" in text and "RAINFALL_RUNOFF_MODEL" in text

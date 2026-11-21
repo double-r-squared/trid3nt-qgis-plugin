@@ -13,8 +13,8 @@ import pytest
 import yaml
 
 import trid3nt_server.main as _main
-from trid3nt_server.tools.search.search_tools import search_tools as dd
-from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
+from trid3nt_harness.tools.search.search_tools import search_tools as dd
+from trid3nt_harness.tools.search.tool_retrieval import retrieve_visible_tools
 
 #: The engine templates the tree registers. Pinned as a SET, not derived: a
 #: template that stops registering is a capability that silently left, and the
@@ -60,7 +60,7 @@ DELETED_DOORS = {
 
 def _full_registry():
     _main._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY
 
@@ -100,7 +100,7 @@ def warm_index():
 
 def _template_corpus() -> dict[str, list[str]]:
     """Load each template's co-located workflows/**/corpus.yaml queries."""
-    import trid3nt_server.tools as t
+    import trid3nt.tools as t
 
     workflows = Path(t.__file__).resolve().parents[1] / "workflows"
     out: dict[str, list[str]] = {}

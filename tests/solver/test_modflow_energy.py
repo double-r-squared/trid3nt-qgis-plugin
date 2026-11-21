@@ -18,18 +18,18 @@ from pyproj import Transformer
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-from trid3nt_server.render.formats import Mesh, Published
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow.authoring import mesh_files as MF
-from trid3nt_server.workflows.modflow.authoring import simulation as SIM
-from trid3nt_server.workflows.modflow.authoring.simulation import serialize
-from trid3nt_server.workflows.modflow.authoring.stress import place
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWE, GWF
-from trid3nt_server.workflows.modflow.modules.outputs import Solved
-from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.inputs.run_notes import bind_notes, drain_notes
+from trid3nt.render.formats import Mesh, Published
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow.authoring import mesh_files as MF
+from trid3nt.workflows.modflow.authoring import simulation as SIM
+from trid3nt.workflows.modflow.authoring.simulation import serialize
+from trid3nt.workflows.modflow.authoring.stress import place
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWE, GWF
+from trid3nt.workflows.modflow.modules.outputs import Solved
+from trid3nt.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.runtime.sheet import fill
 
 _NCOL = 101
 _FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "modflow" / "strip_energy"
@@ -261,7 +261,7 @@ def test_each_energy_value_left_unstated_refuses_by_name(
 
 
 def test_ctp_at_a_point_off_the_mesh_refuses(strip, staged_beside, tmp_path):
-    from trid3nt_server.inputs.point import PointNotViableError
+    from trid3nt.inputs.point import PointNotViableError
 
     body = _energy()
     body["slots"]["CTP_STRESS_PERIOD_DATA"] = {
@@ -331,8 +331,8 @@ def _stage_fixture(monkeypatch, tmp_path):
         shutil.copy(_FIXTURE / basename, dest)
         return str(dest)
 
-    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result", download)
-    from trid3nt_server.workflows.modflow.modules import outputs as out_mod
+    monkeypatch.setattr("trid3nt.workflows.solver.solver.download_result", download)
+    from trid3nt.workflows.modflow.modules import outputs as out_mod
     quads = ([(x, y) for y in (0.0, 1.0) for x in (0.0, 10.0, 20.0, 30.0)],
              [[c, 4 + c, 5 + c, c + 1] for c in range(3)], None, None)
     monkeypatch.setattr(out_mod, "mesh_nodes", lambda _mesh: quads)
@@ -348,8 +348,8 @@ def _stage_fixture(monkeypatch, tmp_path):
 
 def test_the_fixture_s_temperature_publishes_as_its_temporal_group(
         monkeypatch, tmp_path, fake_s3):
-    from trid3nt_server.store import objects as storage
-    from trid3nt_server.workflows.modflow import workflow as door
+    from trid3nt.store import objects as storage
+    from trid3nt.workflows.modflow import workflow as door
 
     handle = _stage_fixture(monkeypatch, tmp_path)
     handed = []
@@ -361,7 +361,7 @@ def test_the_fixture_s_temperature_publishes_as_its_temporal_group(
                      uri=f"s3://runs/{run_id}/{item.product.file}")
             for rank, item in enumerate(items) if isinstance(item.product, Mesh)))
 
-    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
+    monkeypatch.setattr("trid3nt.workflows.runtime.primitives.publish", _publish)
     token = bind_notes()
     try:
         asyncio.run(door.publish_outputs(
@@ -385,8 +385,8 @@ def test_the_fixture_s_temperature_read_directly_is_its_saved_frames(
         monkeypatch, tmp_path, fake_s3):
     from trid3nt_contracts.common import Origin
 
-    from trid3nt_server.workflows.runtime import primitives as P
-    from trid3nt_server.workflows.runtime.sheet import Filled, Provenance
+    from trid3nt.workflows.runtime import primitives as P
+    from trid3nt.workflows.runtime.sheet import Filled, Provenance
 
     handle = _stage_fixture(monkeypatch, tmp_path)
     run = {**handle, "sheet": _fixture_sheet()}

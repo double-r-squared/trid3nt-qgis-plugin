@@ -10,11 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.inputs.temporal import convert_units
-from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place, sample
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.inputs.temporal import convert_units
+from trid3nt.workflows.modflow.authoring.griddata import frame_of, place, sample
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF
+from trid3nt.workflows.runtime.sheet import fill
 
 _POINTS = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0),
            (20.0, 0.0), (20.0, 5.0)]
@@ -157,7 +157,7 @@ def test_the_frame_is_what_the_sheet_states():
 
 
 def test_a_length_spelled_out_reads_as_its_symbol():
-    from trid3nt_server.inputs.temporal import convert_units
+    from trid3nt.inputs.temporal import convert_units
 
     assert convert_units(3.0, "meters", "m") == 3.0
     assert convert_units(3.0, "metres", "m") == 3.0

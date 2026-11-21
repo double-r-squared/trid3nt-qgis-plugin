@@ -13,15 +13,15 @@ from pathlib import Path
 import pytest
 from pyproj import Transformer
 
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow.authoring import mesh_files as MF
-from trid3nt_server.workflows.modflow.authoring.simulation import serialize
-from trid3nt_server.workflows.modflow.authoring.stress import cells_of, place_streams
-from trid3nt_server.workflows.modflow.authoring.validate import validate_authored_simulation
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF
-from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow.authoring import mesh_files as MF
+from trid3nt.workflows.modflow.authoring.simulation import serialize
+from trid3nt.workflows.modflow.authoring.stress import cells_of, place_streams
+from trid3nt.workflows.modflow.authoring.validate import validate_authored_simulation
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF
+from trid3nt.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.runtime.sheet import fill
 
 _SIDE = 3
 _POINTS = [(x * 10.0, y * 10.0) for y in range(_SIDE + 1) for x in range(_SIDE + 1)]

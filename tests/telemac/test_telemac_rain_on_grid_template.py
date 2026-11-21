@@ -8,15 +8,15 @@ whose packets are the evidence.
 """
 
 from __future__ import annotations
-from trid3nt_server.workflows.telemac.authoring.selafin_io import (
+from trid3nt.workflows.telemac.authoring.selafin_io import (
     BOUNDARY_CONDITIONS_FILE,
     GEOMETRY_FILE,
 )
 
 import numpy as np
 import pytest
-from trid3nt_server.inputs.rain import rain
-from trid3nt_server.inputs.slots import BED, DOMAIN
+from trid3nt.inputs.rain import rain
+from trid3nt.inputs.slots import BED, DOMAIN
 from seated import value_inputs, row_inputs
 
 
@@ -24,12 +24,12 @@ def test_registered_on_the_model_surface():
     """The catchment front is LIVE, and the granularity it declares is the
     runtime's own lever at this question's own default."""
     import trid3nt_server.main as _main
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+    from trid3nt.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid,
     )
 
     _main._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     assert "telemac_rain_on_grid" in TOOL_REGISTRY
 
@@ -42,7 +42,7 @@ def test_registered_on_the_model_surface():
 
 
 def _rows():
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+    from trid3nt.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         INPUTS,
     )
 
@@ -68,7 +68,7 @@ def test_a_pond_beside_the_pour_point_is_not_this_question_s_catchment():
     """Hydrography is one class and many things: a 50 m NHD waterbody within
     the seed's own search distance is mapped water and no catchment, and the
     feature the row asks for is what keeps it off the slot."""
-    from trid3nt_server.tools.search.match import (
+    from trid3nt.tools.search.match import (
         Need, match, sources_with_coverage)
 
     domain = _rows()["domain"]
@@ -95,7 +95,7 @@ def test_the_outlet_rides_on_the_domain_since_no_runs_row_exists():
     """The catchment's one liquid boundary comes off the domain's own producer -
     the stretch of the divide it measured, typed rating_curve - since there is
     no runs row any more; a drawn basin carries its own runs or none."""
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+    from trid3nt.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         MESH,
     )
 
@@ -111,7 +111,7 @@ def test_the_mesh_is_a_band_whose_rim_is_locked_at_the_size_word():
     hillslopes, so this question states its own recipe; the rim is locked
     between the sizing and the gradation, because no sizing function the library
     has measures the domain's own outline."""
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+    from trid3nt.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         MESH,
     )
 
@@ -132,8 +132,8 @@ def test_the_mesh_is_a_band_whose_rim_is_locked_at_the_size_word():
 
 
 def test_docstring_carries_the_godara_envelope():
-    import trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid as rog_module
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+    import trid3nt.workflows.telemac.templates.rain_on_grid.rain_on_grid as rog_module
+    from trid3nt.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid,
     )
 
@@ -154,7 +154,7 @@ def test_corpus_yaml_present_and_routes():
 
     import yaml
 
-    import trid3nt_server.workflows.telemac.templates.rain_on_grid as pkg
+    import trid3nt.workflows.telemac.templates.rain_on_grid as pkg
 
     corpus = Path(pkg.__file__).parent / "corpus.yaml"
     assert corpus.exists()
@@ -168,8 +168,8 @@ def test_the_outputs_are_the_flux_across_the_outlet_the_user_placed():
     the user gives a place - the flux the engine printed across the outlet,
     charted and placed as the station that carries it, under the one name the
     calibration seam pairs against a gauge."""
-    from trid3nt_server.render.formats import quantity_of
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+    from trid3nt.render.formats import quantity_of
+    from trid3nt.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         CAPTIONS, OUTPUTS,
     )
 
@@ -184,7 +184,7 @@ def test_every_declared_param_and_the_two_slots_are_on_the_wire():
     prefers."""
     import inspect
 
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+    from trid3nt.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid as fn,
     )
 
@@ -199,7 +199,7 @@ def test_no_domain_twin_or_keyword_twin_is_declared():
     already describes: the AOI it used to carry is the domain slot, the clock,
     the cadence, the step, the storm's window and the ground's wetness are the
     deck's keywords, the granularity is the runtime's."""
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+    from trid3nt.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid as fn,
     )
 
@@ -256,9 +256,9 @@ def rog_run(monkeypatch, tmp_path):
 
     The DECK is real: every keyword and every file the template states is resolved
     here, without the container the serializer writes them through."""
-    import trid3nt_server.tools.mesh.shared.nodes as nodes_mod
-    from trid3nt_server.workflows.telemac.authoring import accepted_mesh as mesh_mod
-    from trid3nt_server.workflows.telemac.authoring import opening as asm_mod
+    import trid3nt.tools.mesh.shared.nodes as nodes_mod
+    from trid3nt.workflows.telemac.authoring import accepted_mesh as mesh_mod
+    from trid3nt.workflows.telemac.authoring import opening as asm_mod
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(nodes_mod, "read_accepted_mesh_nodes",
@@ -270,12 +270,12 @@ def rog_run(monkeypatch, tmp_path):
         lambda _path, lonlat, interp="nearest", fill_holes=True: np.array(
             [_CLASSES[(round(float(a), 2), round(float(b), 2))] for a, b in lonlat],
             dtype=float))
-    monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3",
+    monkeypatch.setattr("trid3nt.tools.cache.read_object_bytes_s3",
                         lambda _uri: b"")
 
     async def _fill(rain_record=None, duration_s=None, keywords=None, **params):
-        from trid3nt_server.workflows.telemac.modules import fill
-        from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+        from trid3nt.workflows.telemac.modules import fill
+        from trid3nt.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
             STEERING,
         )
 
@@ -421,7 +421,7 @@ async def test_a_measured_storm_s_routine_is_staged_and_passes_the_staged_check(
         rog_run, tmp_path):
     """The routine the block file is read by is a file of the run directory, so
     the deck names a directory the staged check finds beside it."""
-    from trid3nt_server.workflows.telemac.authoring import selafin_io, staged_check
+    from trid3nt.workflows.telemac.authoring import selafin_io, staged_check
 
     _settled, sheet = await rog_run(rain_series_mm=[3.0, 12.5, 0.0],
                                     duration_s=10800.0)

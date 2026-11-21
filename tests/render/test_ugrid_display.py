@@ -11,11 +11,11 @@ import subprocess
 import numpy as np
 import pytest
 
-from trid3nt_server.render.mesh_display import (
+from trid3nt.render.mesh_display import (
     MeshDisplayError,
     write_ugrid,
 )
-from trid3nt_server.tools.mesh.meshers import Mesh
+from trid3nt.tools.mesh.meshers import Mesh
 
 
 def _polygon_mesh() -> Mesh:

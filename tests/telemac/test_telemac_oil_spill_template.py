@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
+from trid3nt.inputs.slots import BED, DISCHARGE, DOMAIN
 from seated import REACH, SEATED
-from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.telemac.workflow import stated
-from trid3nt_server.workflows.telemac.templates.oil_spill import (
+from trid3nt.workflows.telemac.modules import T2D
+from trid3nt.workflows.telemac.workflow import stated
+from trid3nt.workflows.telemac.templates.oil_spill import (
     oil_spill as template,
 )
 from seated import value_inputs, row_inputs
@@ -35,7 +35,7 @@ def test_registered_on_the_model_surface():
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     assert _TOOL in TOOL_REGISTRY
 
@@ -132,7 +132,7 @@ def test_the_source_is_stated_as_the_four_source_keywords_by_name():
 def test_the_sources_composite_writes_only_the_sources_file():
     """``Sources(window_s=)`` reads the discharge and the tracer value
     off the sheet by the keywords stated above, and writes the SOURCES FILE."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import SOURCES_FILENAME
+    from trid3nt.workflows.telemac.modules.telemac2d import SOURCES_FILENAME
 
     slots, files = T2D.COMPOSITES["sources"].expand(
         {"window_s": 300.0, "settled": {"until_s": 3600.0},
@@ -153,7 +153,7 @@ def test_the_ex_release_params_are_gone_from_the_declared_wire():
     gets no such slot."""
     import inspect
 
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     declared = {p.name for p in value_inputs(_workflow())}
     wire = set(inspect.signature(TOOL_REGISTRY[_TOOL].fn).parameters)

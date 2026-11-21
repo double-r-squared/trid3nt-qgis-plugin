@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring import topology as T
-from trid3nt_server.workflows.telemac.authoring import selafin_io as D
-from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
+from trid3nt.workflows.telemac.authoring import topology as T
+from trid3nt.workflows.telemac.authoring import selafin_io as D
+from trid3nt.workflows.telemac.modules import T2D
+from trid3nt.workflows.telemac.modules.telemac2d import Boundaries
 
 
 # One contour whose SOUTH-WEST corner lies on a liquid face, which is the
@@ -165,7 +165,7 @@ def test_a_pinched_boundary_refuses_by_name(tmp_path):
     decides it is the daemon's own - nothing shells out to learn it."""
     import numpy as np
 
-    from trid3nt_server.tools.mesh.meshers import MeshToolError
+    from trid3nt.tools.mesh.meshers import MeshToolError
 
     x = np.array([0.0, 1.0, 0.0, 2.0, 1.0, 2.0])
     y = np.array([0.0, 1.0, 2.0, 0.0, 1.0, 2.0])

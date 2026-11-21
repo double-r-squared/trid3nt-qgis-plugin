@@ -16,18 +16,18 @@ from typing import Any
 import numpy as np
 import pytest
 
-import trid3nt_server.tools.cache as cache_mod
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._router import registration as reg
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.errors import (
+import trid3nt.tools.cache as cache_mod
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.fetchers._router import registration as reg
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.tools.fetchers._router.executors import animation_frames as EX
-from trid3nt_server.tools.fetchers._router.transport import TransportError
-from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_model_k import hooks as MK
+from trid3nt.tools.fetchers._router.executors import animation_frames as EX
+from trid3nt.tools.fetchers._router.transport import TransportError
+from trid3nt.tools.fetchers.hydrology.fetch_usgs_model_k import hooks as MK
 
 _SPEC = reg.get_spec("fetch_usgs_model_k")
 _FIX = Path(__file__).resolve().parents[1] / "fixtures" / "usgs_model_k"

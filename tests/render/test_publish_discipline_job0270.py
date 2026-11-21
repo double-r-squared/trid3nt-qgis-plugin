@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.model.adapters.model_selection import ModelSettings
+from trid3nt_harness.model.adapters.model_selection import ModelSettings
 from trid3nt_contracts import new_ulid
 
 

@@ -11,15 +11,15 @@ from types import SimpleNamespace
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.model.adapters.adapter import build_layers_present_note
-from trid3nt_server.render.uri_registry import (
+from trid3nt_harness.model.adapters.adapter import build_layers_present_note
+from trid3nt.render.uri_registry import (
     get_uri_registry,
     reset_uri_registries_for_tests,
 )
 from trid3nt_server.server.dispatch.emitter import _reusable_fetch_layer
-from trid3nt_server.tools.cache import cache_path, parse_cache_path
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.tools.fetchers._router.router import prospective_cache_key
+from trid3nt.tools.cache import cache_path, parse_cache_path
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.tools.fetchers._router.router import prospective_cache_key
 
 # Small enough for the buildings source's own area cap.
 AOI = [-81.90, 26.60, -81.80, 26.70]

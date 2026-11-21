@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from trid3nt_server.model.guards.context_budget import COMPACTING_LABEL, compaction_complete_label
+from trid3nt_harness.model.guards.context_budget import COMPACTING_LABEL, compaction_complete_label
 
 logger = logging.getLogger("trid3nt_server.server.turn.compaction")
 

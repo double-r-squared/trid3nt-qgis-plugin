@@ -14,10 +14,10 @@ from urllib.parse import parse_qs, urlsplit
 import geopandas as gpd
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import RouterInputError
-from trid3nt_server.tools.fetchers._router.executors import vector_ogr
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.search.match import Need, match, sources_with_coverage
+from trid3nt.tools.fetchers._router.errors import RouterInputError
+from trid3nt.tools.fetchers._router.executors import vector_ogr
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.search.match import Need, match, sources_with_coverage
 
 _FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "nhd_hr"
 _BOX = (-93.75, 41.45, -93.45, 41.70)

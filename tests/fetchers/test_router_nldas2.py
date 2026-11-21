@@ -13,9 +13,9 @@ import types
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.weather.fetch_nldas2_forcing import hooks as nldas2
+from trid3nt.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.weather.fetch_nldas2_forcing import hooks as nldas2
 
 _SPEC = compose_specs_from_tree()["fetch_nldas2_forcing"]
 _PARAMS = {"bbox": [-95.6, 29.6, -95.2, 30.0], "start_date": "2017-08-26",

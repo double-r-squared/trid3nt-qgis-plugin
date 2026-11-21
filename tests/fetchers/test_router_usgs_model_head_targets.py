@@ -10,11 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._router import registration as reg
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
-from trid3nt_server.tools.fetchers._router.hooks import resolve_hook
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.fetchers._router import registration as reg
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
+from trid3nt.tools.fetchers._router.hooks import resolve_hook
 
 _SPEC = reg.get_spec("fetch_usgs_model_head_targets")
 _ZIP = (Path(__file__).resolve().parents[1] / "fixtures" / "usgs_model_head_targets"

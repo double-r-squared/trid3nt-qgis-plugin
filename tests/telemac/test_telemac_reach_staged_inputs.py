@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.solver.staging import (
+from trid3nt.workflows.solver.staging import (
     _write_manifest,
 )
 
@@ -38,7 +38,7 @@ _SOLVE_INPUTS = [
 
 def _stage(monkeypatch, case: dict, *, outputs: list[str] | None = None,
            inputs: list[dict[str, str]] | None = None) -> dict:
-    from trid3nt_server.store import objects as storage
+    from trid3nt.store import objects as storage
 
     fake = _FakeS3()
     monkeypatch.setattr(storage, "client", lambda: fake)
@@ -63,9 +63,9 @@ def test_an_unstaged_manifest_carries_an_empty_inputs_list(monkeypatch):
 
 
 def test_writing_the_manifest_requires_a_cache_bucket(monkeypatch):
-    from trid3nt_server.store import objects as storage
+    from trid3nt.store import objects as storage
 
-    from trid3nt_server.workflows.solver.solver import SolverDispatchError
+    from trid3nt.workflows.solver.solver import SolverDispatchError
 
     monkeypatch.setattr(storage, "client", lambda: _FakeS3())
     monkeypatch.delenv("TRID3NT_CACHE_BUCKET", raising=False)
@@ -78,7 +78,7 @@ def test_writing_the_manifest_requires_a_cache_bucket(monkeypatch):
 def _results(name: str) -> tuple:
     """The files this template says its run has to write, unstated where the
     deck's own RESULTS statement is the one."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     return tuple(getattr(TOOL_REGISTRY[name].fn.workflow.template, "RESULTS", ()))
 
@@ -106,7 +106,7 @@ def test_oil_must_produce_the_track_the_slick_is_read_from():
 def test_a_waqtel_run_asks_only_for_the_carriers_own_result():
     """The Door restates no file the deck already names, so what a coupled run
     is asked for is the carrier result the steering body itself declares."""
-    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import STEERING
+    from trid3nt.workflows.telemac.templates.do_sag.do_sag import STEERING
 
     assert _results("telemac_do_sag") == ()
     assert STEERING.ASSERTED["RESULTS_FILE"] == "r2d_domain.slf"
@@ -120,7 +120,7 @@ def test_no_reach_run_declares_a_bed_cog_output():
 
 
 def test_the_case_section_names_the_engine_the_file_and_the_results():
-    from trid3nt_server.workflows.solver.staging import case_section
+    from trid3nt.workflows.solver.staging import case_section
 
     case = case_section(
         module="telemac2d", steering="t2d_river.cas",
@@ -154,7 +154,7 @@ def test_the_case_section_names_the_engine_the_file_and_the_results():
 
 def test_a_continued_case_names_the_staged_file_it_restarts_from():
     """Absent on a fresh run, so a present key is always a real continuation."""
-    from trid3nt_server.workflows.solver.staging import case_section
+    from trid3nt.workflows.solver.staging import case_section
 
     fresh = case_section(module="telemac2d", steering="t2d_river.cas",
                          results=[], server_facts={})
@@ -171,11 +171,11 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
 
     The engine writes its restart at its own last time step, which is neither the
     graphic period nor the duration asked for, so a derived instant is the wrong clock."""
-    import trid3nt_server.workflows.telemac.modules.outputs as reader
-    from trid3nt_server.workflows.telemac.authoring.initial_state import (
+    import trid3nt.workflows.telemac.modules.outputs as reader
+    from trid3nt.workflows.telemac.authoring.initial_state import (
         _continuation_state,
     )
-    from trid3nt_server.workflows.telemac.errors import TelemacError
+    from trid3nt.workflows.telemac.errors import TelemacError
 
     previous = tmp_path / "restart_river.slf"
     previous.write_bytes(b"selafin")
@@ -201,11 +201,11 @@ def test_a_previous_computation_on_this_mesh_is_accepted_and_another_refused(
         monkeypatch, tmp_path):
     """The previous-computation slot accepts a result whose header counts this
     run's mesh nodes, and refuses by name, with both counts, any other."""
-    import trid3nt_server.workflows.telemac.modules.outputs as reader
-    from trid3nt_server.workflows.telemac.authoring.initial_state import (
+    import trid3nt.workflows.telemac.modules.outputs as reader
+    from trid3nt.workflows.telemac.authoring.initial_state import (
         initial_state_of,
     )
-    from trid3nt_server.workflows.telemac.errors import TelemacError
+    from trid3nt.workflows.telemac.errors import TelemacError
 
     previous = tmp_path / "restart_river.slf"
     previous.write_bytes(b"selafin")
@@ -222,7 +222,7 @@ def test_a_previous_computation_on_this_mesh_is_accepted_and_another_refused(
 def test_the_case_names_the_module_the_DECK_says_it_couples_with():
     """WHICH runner can drive a coupled case is read off the deck's own COUPLING
     WITH rather than a second table beside it."""
-    from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, fill
+    from trid3nt.workflows.telemac.modules import T2D, WAQTEL, fill
 
     coupled = fill(T2D, produced={"substance": "sewage"}, coupling=[WAQTEL.degradation(
         substance="substance", presets={"sewage": {"law": 2, "coef": 0.173}})])
@@ -231,8 +231,8 @@ def test_the_case_names_the_module_the_DECK_says_it_couples_with():
 
 
 def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):
-    from trid3nt_server.store import objects as storage
-    from trid3nt_server.workflows.solver.staging import stage_manifest
+    from trid3nt.store import objects as storage
+    from trid3nt.workflows.solver.staging import stage_manifest
 
     fake = _FakeS3()
     monkeypatch.setattr(storage, "client", lambda: fake)
@@ -247,7 +247,7 @@ def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):
 
 
 def test_a_fresh_run_opened_flat_is_wet_only_where_the_bed_stands_under_its_level():
-    from trid3nt_server.workflows.telemac.authoring.initial_state import initial_state_of
+    from trid3nt.workflows.telemac.authoring.initial_state import initial_state_of
 
     state = initial_state_of(None, 3, bed=[289.33, 291.385, 292.28], level_m=291.385)
     assert list(state["wet"]) == [True, False, False]

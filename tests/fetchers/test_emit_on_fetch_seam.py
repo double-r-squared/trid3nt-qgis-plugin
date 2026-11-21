@@ -15,7 +15,7 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.tools.fetchers._router.emit_on_fetch import (
+from trid3nt.tools.fetchers._router.emit_on_fetch import (
     input_layer_name,
     maybe_emit_input_on_fetch,
 )
@@ -26,7 +26,7 @@ from trid3nt_server.render.pipeline_emitter import (
 )
 
 _PUBLISH_LAYER_TARGET = (
-    "trid3nt_server.render.publish.publish_layer"
+    "trid3nt.render.publish.publish_layer"
 )
 _COG_EXISTS_TARGET = "trid3nt_server.render.layer_uri_emit._cog_object_exists"
 

@@ -18,14 +18,14 @@ import pandas as pd
 import pytest
 from dataretrieval.nwis import _read_rdb
 
-from trid3nt_server.inputs.observation import Accuracy, Observation, observation
-from trid3nt_server.tools.fetchers._router import registration
-from trid3nt_server.tools.fetchers._router.executors.vector_fgb import apply_ingest_transforms
-from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels import hooks as gw_hooks
-from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges import hooks as nwis_hooks
-from trid3nt_server.workflows.pestpp import outputs, weights
-from trid3nt_server.workflows.pestpp.authoring.control import TABLES, Observed, Parameter, write_control
-from trid3nt_server.workflows.pestpp.errors import PestppError
+from trid3nt.inputs.observation import Accuracy, Observation, observation
+from trid3nt.tools.fetchers._router import registration
+from trid3nt.tools.fetchers._router.executors.vector_fgb import apply_ingest_transforms
+from trid3nt.tools.fetchers.hydrology.fetch_usgs_groundwater_levels import hooks as gw_hooks
+from trid3nt.tools.fetchers.hydrology.fetch_usgs_nwis_gauges import hooks as nwis_hooks
+from trid3nt.workflows.pestpp import outputs, weights
+from trid3nt.workflows.pestpp.authoring.control import TABLES, Observed, Parameter, write_control
+from trid3nt.workflows.pestpp.errors import PestppError
 
 _FIELDS = Path(__file__).resolve().parents[1] / "fixtures" / "fetcher_fields"
 _GLM = Path(__file__).resolve().parents[1] / "fixtures" / "pestpp" / "glm"
@@ -132,7 +132,7 @@ def _unit_and(basis: str) -> list[Observed]:
 
 @pytest.mark.parametrize("basis", [weights.CITED, weights.FLOOR])
 def test_a_unit_start_group_beside_a_cited_or_floor_group_states_the_warning(basis):
-    from trid3nt_server.errors import ACCURACY_UNIT_START, unit_start_warning
+    from trid3nt.errors import ACCURACY_UNIT_START, unit_start_warning
 
     assert weights.unit_started(_unit_and(basis)) == 1
     note = unit_start_warning(count=1)
@@ -188,8 +188,8 @@ def test_the_weight_written_is_one_over_sigma_and_balancing_is_off_unless_asked(
 
 
 def test_a_cited_gauge_zero_is_a_datum_parameter_and_leaves_sigma_counted_once(hwy_370, tmp_path):
-    from trid3nt_server.workflows.pestpp.authoring import telemac
-    from trid3nt_server.workflows.pestpp.authoring.control import prior
+    from trid3nt.workflows.pestpp.authoring import telemac
+    from trid3nt.workflows.pestpp.authoring.control import prior
 
     found = observation(hwy_370, fields=_row(_NWIS, "water level series").fields, producer=_NWIS)
     both = weights.observed("level_1", found.value * _FT, found, to_run=_to_m(found), group="levels")
@@ -223,7 +223,7 @@ def test_a_cited_gauge_zero_is_a_datum_parameter_and_leaves_sigma_counted_once(h
 
 
 def test_a_gauge_zero_citing_no_accuracy_stays_in_sigma_and_is_no_parameter(hwy_370, tmp_path):
-    from trid3nt_server.workflows.pestpp.authoring import telemac
+    from trid3nt.workflows.pestpp.authoring import telemac
 
     stated = hwy_370["features"][0]
     unstated = {**stated, "properties": {**stated["properties"], "site_no": "06610671", "alt_acy_va": None}}
@@ -239,7 +239,7 @@ def test_a_gauge_zero_citing_no_accuracy_stays_in_sigma_and_is_no_parameter(hwy_
 def _hwy_370_window():
     """Hwy 370's recorded day of gage height (15 min, CST), on its NAVD88 zero 936.34 ft, in metres on a clock from its
     first reading."""
-    from trid3nt_server.inputs.temporal import Series
+    from trid3nt.inputs.temporal import Series
 
     rows = [line.split("\t") for line in (_FIELDS / "nwis_iv_06610670.rdb").read_text().splitlines()
             if line.startswith("USGS\t")]
@@ -254,10 +254,10 @@ def _missouri_held_at(directory, found, *, zero=True):
     column, written by the product's own writer; and the finished run's record of that level input."""
     import shutil
 
-    from trid3nt_server.workflows.runtime.journal import build_record
-    from trid3nt_server.workflows.runtime.workflow import _accuracies
-    from trid3nt_server.workflows.telemac.authoring.boundaries import liquid_boundaries_file
-    from trid3nt_server.workflows.telemac.authoring.staged_check import read_steering
+    from trid3nt.workflows.runtime.journal import build_record
+    from trid3nt.workflows.runtime.workflow import _accuracies
+    from trid3nt.workflows.telemac.authoring.boundaries import liquid_boundaries_file
+    from trid3nt.workflows.telemac.authoring.staged_check import read_steering
 
     missouri = Path(__file__).resolve().parents[1] / "fixtures" / "telemac_missouri"
     steering = "telemac2d_telemac_dye_release.cas"
@@ -277,7 +277,7 @@ def _missouri_held_at(directory, found, *, zero=True):
 
 
 def test_the_run_records_the_measured_level_s_accuracy_and_its_gauge_zero_s(hwy_370):
-    from trid3nt_server.workflows.runtime.workflow import _accuracies
+    from trid3nt.workflows.runtime.workflow import _accuracies
 
     found = observation(hwy_370, fields=_row(_NWIS, "water level series").fields, producer=_NWIS, to_units="m")
     held = _accuracies(found)
@@ -289,8 +289,8 @@ def test_the_run_records_the_measured_level_s_accuracy_and_its_gauge_zero_s(hwy_
 
 
 def test_a_measured_outflow_level_citing_its_accuracy_is_an_offset_parameter(hwy_370, tmp_path):
-    from trid3nt_server.workflows.pestpp.authoring import telemac
-    from trid3nt_server.workflows.pestpp.authoring.control import prior
+    from trid3nt.workflows.pestpp.authoring import telemac
+    from trid3nt.workflows.pestpp.authoring.control import prior
 
     found = observation(hwy_370, fields=_row(_NWIS, "water level series").fields, producer=_NWIS, to_units="m")
     stated, finished = _missouri_held_at(tmp_path, found)
@@ -331,7 +331,7 @@ def test_a_measured_outflow_level_citing_its_accuracy_is_an_offset_parameter(hwy
 
 
 def test_a_measured_outflow_level_whose_zero_cites_none_is_no_parameter(hwy_370, tmp_path):
-    from trid3nt_server.workflows.pestpp.authoring import telemac
+    from trid3nt.workflows.pestpp.authoring import telemac
 
     found = observation(hwy_370, fields=_row(_NWIS, "water level series").fields, producer=_NWIS, to_units="m")
     stated, finished = _missouri_held_at(tmp_path, found, zero=False)

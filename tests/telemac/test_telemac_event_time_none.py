@@ -10,9 +10,9 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.inputs.instant import event_time, instant
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime.fill import Fill, fill
+from trid3nt.inputs.instant import event_time, instant
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.runtime.fill import Fill, fill
 
 _RING = [[-122.6769, 45.5153], [-122.6615, 45.5153], [-122.6615, 45.5198], [-122.6769, 45.5198]]
 _STATED = {"domain": _RING, "bed": 4.0, "release": [-122.669784, 45.518485],
@@ -46,7 +46,7 @@ def test_the_coercion_passes_none_through_and_still_parses_the_rest():
 
 
 def test_the_description_front_loads_the_three_forms():
-    from trid3nt_server.model.adapters.adapter import _tool_schema
+    from trid3nt_harness.model.adapters.adapter import _tool_schema
 
     schema = _tool_schema(TOOL_REGISTRY["telemac_dye_release"].fn)
     assert "event_time" in schema["required"]

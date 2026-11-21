@@ -12,11 +12,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import do_profile
+from trid3nt.workflows.telemac.templates.do_sag.streeter_phelps import do_profile
 from seated import REACH, SEATED, row_inputs, value_inputs, values_of
-from trid3nt_server.workflows.telemac.workflow import stated
-from trid3nt_server.workflows.runtime.primitives import Line, Profile
-from trid3nt_server.workflows.telemac.templates.do_sag.streeter_phelps import (
+from trid3nt.workflows.telemac.workflow import stated
+from trid3nt.workflows.runtime.primitives import Line, Profile
+from trid3nt.workflows.telemac.templates.do_sag.streeter_phelps import (
     overlay,
 )
 from seated import value_inputs, values_of
@@ -60,13 +60,13 @@ def test_waqtel_o2_reproduces_streeter_phelps():
 
 # --- the declaration --------------------------------------------------------- #
 def _workflow():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY["telemac_do_sag"].fn.workflow
 
 
 def _template():
-    from trid3nt_server.workflows.telemac.templates.do_sag import do_sag
+    from trid3nt.workflows.telemac.templates.do_sag import do_sag
 
     return do_sag
 
@@ -88,7 +88,7 @@ def test_the_data_rows_are_the_engine_neutral_slots_this_run_stands_on():
     """One domain needing a hydrography class, one bed the match composes, and
     the line the domain's own producer measures beside it - no ladder, no
     fetcher named on a row."""
-    from trid3nt_server.inputs.slots import BED, DOMAIN, LINE
+    from trid3nt.inputs.slots import BED, DOMAIN, LINE
 
     rows = row_inputs(_template().INPUTS)
     assert [d.name for d in rows] == ["domain", "line", "bed", "discharge",
@@ -110,7 +110,7 @@ def test_the_carrier_is_one_reading_ranked_against_the_domain():
     """The dilution the whole sag rests on is a NUMBER, so the row is the
     discharge slot: whichever record the match ranks nearest the water, with a
     stated number standing over any record."""
-    from trid3nt_server.inputs.slots import DISCHARGE
+    from trid3nt.inputs.slots import DISCHARGE
 
     carrier = {d.name: d for d in row_inputs(_template().INPUTS)}["discharge"]
     assert carrier.slot == DISCHARGE
@@ -123,7 +123,7 @@ def test_the_outfall_seeds_the_domain_match():
     spelling of the same point."""
     import inspect
 
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     domain = row_inputs(_template().INPUTS)[0]
     assert domain.coercion["near"] == "outfall_coords"
@@ -140,7 +140,7 @@ def test_the_ex_release_params_are_gone_from_the_declared_wire():
     wire the model is offered - a caller naming the old name gets no such slot."""
     import inspect
 
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     declared = {p.name for p in value_inputs(_workflow())}
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_do_sag"].fn).parameters)
@@ -152,7 +152,7 @@ def test_a_keyword_outside_the_modules_own_bounds_refuses_by_its_name():
     """The clock left the Params and its plausibility range went WITH it, onto
     the module's keyword table: a user setting DURATION by name is bounded
     there, and the refusal names the keyword rather than a param."""
-    from trid3nt_server.workflows.runtime.module import SlotRefused
+    from trid3nt.workflows.runtime.module import SlotRefused
 
     with pytest.raises(SlotRefused, match=r"DURATION=.* is outside the declared range"):
         _filled(keywords={"DURATION": 1.0})
@@ -176,7 +176,7 @@ async def test_malformed_outfall_coords_refuse_they_never_fall_back(bad):
 def test_an_absent_outfall_is_refused_naming_the_need():
     """The sag distance is measured FROM somewhere: unstated, the fill refuses
     naming outfall_coords - it is never derived from the domain's centreline."""
-    from trid3nt_server.workflows.runtime.fill import Fill, fill
+    from trid3nt.workflows.runtime.fill import Fill, fill
 
     state = asyncio.run(fill(Fill(workflow=_workflow()), {}))
     code, sentence = state.refusal()
@@ -184,8 +184,8 @@ def test_an_absent_outfall_is_refused_naming_the_need():
 
 
 def test_a_supplied_outfall_is_carried_as_a_user_row():
-    from trid3nt_server.inputs import Point
-    from trid3nt_server.workflows.runtime import provenance_entries
+    from trid3nt.inputs import Point
+    from trid3nt.workflows.runtime import provenance_entries
 
     supplied, err = asyncio.run(
         _normalized(_workflow(), {"outfall_coords": ["-122.6735", "45.5175"]}))
@@ -214,7 +214,7 @@ def test_the_outputs_list_charts_the_oxygen_along_the_domains_centerline():
                                "level": "a water level"}
     # the standard the sag is judged by is a LINE on the chart that plots the
     # oxygen, drawn at the param the sheet declares
-    from trid3nt_server.workflows.runtime.primitives import Line, Profile
+    from trid3nt.workflows.runtime.primitives import Line, Profile
 
     drawn = do_sag.OUTPUTS[0].reference(
         Profile(name="DO", units="mg/L", distance_m=[0.0, 100.0],
@@ -236,7 +236,7 @@ _SETTLED = {"keywords": {"TITLE": "willamette DOMAIN", "TIME_STEP": 1.0,
 
 
 def _filled(*, keywords=None, **supplied):
-    from trid3nt_server.workflows.telemac.workflow import fill_sheet
+    from trid3nt.workflows.telemac.workflow import fill_sheet
 
     resolved = _resolve(**supplied)
     return asyncio.run(fill_sheet(
@@ -306,8 +306,8 @@ def _profile(x, values, *, velocity=0.5, units="mg/L") -> Profile:
 
 
 def _load(x, values) -> dict:
-    from trid3nt_server.workflows.telemac.modules import field
-    from trid3nt_server.workflows.runtime.primitives import profile
+    from trid3nt.workflows.telemac.modules import field
+    from trid3nt.workflows.runtime.primitives import profile
 
     return {profile("T3", along="line"): _profile(x, values),
             field("T2"): None}
@@ -362,7 +362,7 @@ def test_the_overlay_reproduces_the_closed_form_it_is_graded_against():
 def test_the_reference_is_drawn_at_the_kinetics_the_deck_states():
     """A closed form computed at rates the run was not solved at grades nothing,
     so the chart's reference reads the deck's own O2 keywords."""
-    from trid3nt_server.workflows.telemac.templates.do_sag import do_sag
+    from trid3nt.workflows.telemac.templates.do_sag import do_sag
 
     xs = [0.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0]
     o2 = dict(_filled().files["t2d_river.waqtel"]["slots"])
@@ -396,7 +396,7 @@ def test_a_bare_coupled_keyword_only_one_body_spells_resolves_there():
 def test_a_name_two_bodies_spell_refuses_naming_both_qualified_spellings():
     """MASS-BALANCE is a keyword of the carrier AND of the coupled deck, and the
     two are read apart, so a bare name is not an answer."""
-    from trid3nt_server.workflows.runtime.module import SlotRefused
+    from trid3nt.workflows.runtime.module import SlotRefused
 
     with pytest.raises(SlotRefused) as caught:
         _filled(keywords={"MASS-BALANCE": True})
@@ -408,7 +408,7 @@ def test_a_name_two_bodies_spell_refuses_naming_both_qualified_spellings():
 def test_a_value_the_coupled_dictionary_refuses_refuses_at_the_fill():
     """The coupled slot is checked against WAQTEL's own dictionary, so a wrong
     type is named here rather than by the Fortran."""
-    from trid3nt_server.workflows.runtime.module import SlotRefused
+    from trid3nt.workflows.runtime.module import SlotRefused
 
     with pytest.raises(SlotRefused) as caught:
         _filled(keywords={"waqtel: K2 REAERATION COEFFICIENT": "fast"})
@@ -418,7 +418,7 @@ def test_a_value_the_coupled_dictionary_refuses_refuses_at_the_fill():
 def test_the_card_groups_the_coupled_deck_under_its_own_body():
     """One group per coupled deck, every row showing its body, its unit and the
     range it is taken inside."""
-    from trid3nt_server.workflows.runtime.review import card_rows
+    from trid3nt.workflows.runtime.review import card_rows
 
     sheet = _filled(keywords={"waqtel: K2 REAERATION COEFFICIENT": 6.0})
     rows = {row.name: row for row in card_rows(sheet)}
@@ -434,8 +434,8 @@ async def _normalized(workflow, args):
     the rows the fill produces are stood in for, so the params alone answer."""
     from unittest.mock import patch
 
-    from trid3nt_server.workflows.runtime import fill as fill_mod
-    from trid3nt_server.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
+    from trid3nt.workflows.runtime import fill as fill_mod
+    from trid3nt.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
 
     async def _held(env, decl):
         return decl.name

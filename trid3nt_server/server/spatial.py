@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from trid3nt_server.inputs.extent import as_bbox
+from trid3nt.inputs.extent import as_bbox
 
 logger = logging.getLogger("trid3nt_server.server")
 

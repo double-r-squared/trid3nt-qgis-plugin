@@ -13,9 +13,9 @@ import json
 import numpy as np
 import pytest
 
-from trid3nt_server.inputs.domain import domain as ingest
-from trid3nt_server.inputs.point import Point, PointNotViableError
-from trid3nt_server.workflows.telemac.authoring import release_point as D
+from trid3nt.inputs.domain import domain as ingest
+from trid3nt.inputs.point import Point, PointNotViableError
+from trid3nt.workflows.telemac.authoring import release_point as D
 
 _POND = {"type": "Polygon", "coordinates": [[
     [-122.70, 45.50], [-122.60, 45.50], [-122.60, 45.56], [-122.70, 45.56],

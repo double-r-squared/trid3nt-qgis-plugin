@@ -9,16 +9,16 @@ template's arithmetic.
 """
 
 from __future__ import annotations
-from trid3nt_server.workflows.telemac.authoring.selafin_io import (
+from trid3nt.workflows.telemac.authoring.selafin_io import (
     BOUNDARY_CONDITIONS_FILE,
     GEOMETRY_FILE,
 )
 
 import pytest
 
-from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, OBSERVE, WAVE
-from trid3nt_server.workflows.telemac.modules import WAC, fill
-from trid3nt_server.workflows.telemac.modules.tomawac import (
+from trid3nt.inputs.slots import BED, DOMAIN, EXTENT, LEVEL, OBSERVE, WAVE
+from trid3nt.workflows.telemac.modules import WAC, fill
+from trid3nt.workflows.telemac.modules.tomawac import (
     RESULT_FILENAME,
 )
 from seated import value_inputs, row_inputs
@@ -29,7 +29,7 @@ _HOUR_S = 3600.0
 
 
 def _workflow():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY[_TOOL].fn.workflow
 
@@ -67,7 +67,7 @@ def test_the_sea_state_is_a_row_on_the_reserved_wave_slot():
 def test_the_buoys_are_what_answers_the_sea_state_row():
     """The class the row states has to reach a source that measures it here; a
     row no source serves is a question that cannot be asked."""
-    from trid3nt_server.tools.search.match import (
+    from trid3nt.tools.search.match import (
         Need, match, sources_with_coverage)
 
     wave = _rows()["wave"]
@@ -82,7 +82,7 @@ def test_the_boundary_keywords_read_the_slot_by_name():
     """Three separate keywords, each reading the value the wave slot's ingestion
     made for it: a height as measured, a FREQUENCY off the period, and the
     bearing the waves run TOWARD. The deck states no conversion of its own."""
-    from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
+    from trid3nt.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
     deck = template.STEERING
@@ -98,7 +98,7 @@ def test_the_boundary_keywords_read_the_slot_by_name():
 def test_the_seaward_edge_is_opened_so_the_spectrum_has_somewhere_to_enter():
     """A wave run whose whole rim is wall is a domain no sea state can reach, so
     the recipe designates every ocean stretch of the outline open."""
-    from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
+    from trid3nt.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
     ops = {op.fn: op for op in template.MESH.ops}
@@ -122,9 +122,9 @@ async def test_a_window_whose_rim_is_all_wall_refuses_rather_than_solving_zeros(
     green zero. The settle names the deck and the depth it stated."""
     import numpy as np
 
-    from trid3nt_server.workflows.telemac.authoring import accepted_mesh as mesh_mod
-    from trid3nt_server.workflows.telemac.authoring import opening as asm_mod
-    from trid3nt_server.workflows.telemac.errors import TelemacError
+    from trid3nt.workflows.telemac.authoring import accepted_mesh as mesh_mod
+    from trid3nt.workflows.telemac.authoring import opening as asm_mod
+    from trid3nt.workflows.telemac.errors import TelemacError
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     # A synthetic mesh whose every boundary node is solid wall, which is what a
@@ -147,7 +147,7 @@ async def test_a_window_whose_rim_is_all_wall_refuses_rather_than_solving_zeros(
 
 def _closed_mesh():
     """A mesh record over a window nothing designated open."""
-    from trid3nt_server.tools.mesh.artifact import MeshArtifact
+    from trid3nt.tools.mesh.artifact import MeshArtifact
 
     artifact = MeshArtifact(
         mesh_id="M01", name="Duck, NC", mode="om2d",
@@ -186,7 +186,7 @@ def test_what_the_template_places_is_the_module_s_own_rows():
     """Every read this template places is one variable TOMAWAC wrote, so nothing
     here is a template's arithmetic over the engine's - and each stands at the
     matched buoy, never at the buoy the boundary was forced with."""
-    from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
+    from trid3nt.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
     for token in ("HM0", "TPD", "DMOY", "BETA", "DBR"):
@@ -219,7 +219,7 @@ def test_the_buoy_is_held_by_the_fill_that_fills_its_spectrum_printout():
 
 def test_every_charted_variable_is_captioned():
     """A chart titled by a token nobody named is a picture a reader cannot read."""
-    from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
+    from trid3nt.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
     assert all((p.variable or p.kind) in template.CAPTIONS
@@ -230,7 +230,7 @@ def _station_mesh(tmp_path, cx: float, cy: float) -> dict:
     """A 3x3 node lattice in the mesh's own UTM metres, two triangles per square,
     placed so a point at the site's own coordinates falls strictly inside one of
     them rather than on a node or an edge."""
-    from trid3nt_server.tools.mesh.artifact import MeshArtifact
+    from trid3nt.tools.mesh.artifact import MeshArtifact
 
     rows = ["MESH2D"]
     cell = 0
@@ -259,7 +259,7 @@ def _station_mesh(tmp_path, cx: float, cy: float) -> dict:
 
 
 def _buoy(**over):
-    from trid3nt_server.inputs.observation import Observation
+    from trid3nt.inputs.observation import Observation
 
     stated = {"value": 1.5, "units": "m", "site_id": "44056",
               "site_name": "Duck, NC", "lon": -75.714, "lat": 36.200}
@@ -271,7 +271,7 @@ def test_the_spectrum_printout_fills_from_the_buoy_site_in_the_mesh_s_metres(
     """A printout point is a station of the solved grid: the three keywords fill
     from where the matched buoy stands, in the zone's own metres, and the deck
     states none of them - the spectrum file's name is the module's own."""
-    from trid3nt_server.inputs.point import Point, as_utm
+    from trid3nt.inputs.point import Point, as_utm
 
     cx, cy = as_utm(Point(-75.714, 36.200), 32618)
     stated = dict(fill(WAC, produced={
@@ -287,8 +287,8 @@ def test_the_spectrum_printout_fills_nothing_where_the_mesh_does_not_hold_the_bu
     """A buoy the window does not stand over fills no printout point, so no
     punctual file is named either: all three keywords travel together, and a
     point the mesh does not hold reads as the miss it is."""
-    from trid3nt_server.inputs.point import Point, as_utm
-    from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
+    from trid3nt.inputs.point import Point, as_utm
+    from trid3nt.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
     cx, cy = as_utm(Point(-75.714, 36.200), 32618)
@@ -303,7 +303,7 @@ def test_the_spectrum_printout_fills_nothing_where_the_mesh_does_not_hold_the_bu
 
 
 def _deck():
-    from trid3nt_server.workflows.telemac.templates.nearshore_waves import (
+    from trid3nt.workflows.telemac.templates.nearshore_waves import (
         nearshore_waves as template)
 
     return template.STEERING

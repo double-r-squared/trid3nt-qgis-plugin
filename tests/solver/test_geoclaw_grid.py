@@ -16,20 +16,20 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.inputs.gate import pending
+from trid3nt_harness.inputs.gate import pending
 from trid3nt_server.render import pipeline_emitter as pe
-from trid3nt_server.tools.mesh import gate as mesh_gate
-from trid3nt_server.tools.mesh.meshers import MeshToolError
-from trid3nt_server.tools.mesh.session import MeshSession
-from trid3nt_server.tools.mesh.tool import mesh_op, tool
-from trid3nt_server.workflows.geoclaw.authoring import (
+from trid3nt.tools.mesh import gate as mesh_gate
+from trid3nt.tools.mesh.meshers import MeshToolError
+from trid3nt.tools.mesh.session import MeshSession
+from trid3nt.tools.mesh.tool import mesh_op, tool
+from trid3nt.workflows.geoclaw.authoring import (
     check_topofile,
     grid_keywords,
 )
-from trid3nt_server.workflows.geoclaw.authoring.rundata import serialize
-from trid3nt_server.workflows.geoclaw.errors import GeoclawError
-from trid3nt_server.workflows.geoclaw.modules import GEO
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.workflows.geoclaw.authoring.rundata import serialize
+from trid3nt.workflows.geoclaw.errors import GeoclawError
+from trid3nt.workflows.geoclaw.modules import GEO
+from trid3nt.workflows.runtime.sheet import fill
 
 _AUTHORING = Path(__file__).with_name("test_geoclaw_authoring.py")
 _spec = importlib.util.spec_from_file_location("geoclaw_authoring_sheet", _AUTHORING)
@@ -279,7 +279,7 @@ def _ruled_op(**over):
 def test_a_ruled_flagregion_lands_writes_with_clawpacks_file_and_reads_back(tmp_path):
     from clawpack.amrclaw.region_tools import RuledRectangle
 
-    from trid3nt_server.workflows.geoclaw.authoring.staged_check import check_staged_run
+    from trid3nt.workflows.geoclaw.authoring.staged_check import check_staged_run
 
     record = grid_keywords(_accepted(tmp_path, _ruled_op()))["FLAGREGION_FLAGREGIONS"]
     assert record == [["diag", 2, 3, 0.0, 1e9, 2, {"ixy": 1, "method": 1, "s": [-110.0, -70.0], "lower": [-50.0, -20.0],
@@ -320,7 +320,7 @@ def test_a_flagregion_states_exactly_one_of_extent_and_ruled(tmp_path):
 
 
 def test_a_run_states_its_own_flagregions_in_the_engines_record_shape_and_they_replace_the_recipes(tmp_path):
-    from trid3nt_server.workflows.geoclaw.workflow import _stated_regions
+    from trid3nt.workflows.geoclaw.workflow import _stated_regions
 
     ruled = {"ixy": 1, "s": [-80.0, -70.0], "lower": [-40.0, -35.0], "upper": [-30.0, -25.0], "method": 1,
              "filename": "RuledRectangle_coast.data"}
@@ -343,7 +343,7 @@ def test_a_run_states_its_own_flagregions_in_the_engines_record_shape_and_they_r
     [["coast", 2, 3, 0.0, 10.0, 3, [-77.0, -67.0, -40.0, -30.0]]],
     [["coast", 2, 3, 0.0, 10.0, 2, "RuledRectangle_coast.data"]]])
 def test_a_flagregion_record_the_engine_cannot_hold_refuses_by_name(records):
-    from trid3nt_server.workflows.geoclaw.workflow import _stated_regions
+    from trid3nt.workflows.geoclaw.workflow import _stated_regions
 
     with pytest.raises(GeoclawError) as caught:
         _stated_regions({"FLAGREGION_FLAGREGIONS": records}, GEO)

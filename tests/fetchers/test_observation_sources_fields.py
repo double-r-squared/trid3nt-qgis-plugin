@@ -18,10 +18,10 @@ import pyogrio
 import pytest
 
 from trid3nt_contracts.coverage import Coverage, Member
-from trid3nt_server.inputs.fields import FieldError, Measured, records
-from trid3nt_server.inputs.observation import observation
-from trid3nt_server.tools.fetchers._router import registration
-from trid3nt_server.tools.fetchers._router.executors import station_timeseries as st
+from trid3nt.inputs.fields import FieldError, Measured, records
+from trid3nt.inputs.observation import observation
+from trid3nt.tools.fetchers._router import registration
+from trid3nt.tools.fetchers._router.executors import station_timeseries as st
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "fetcher_fields"
 
@@ -98,7 +98,7 @@ def test_the_accuracy_the_sources_state_is_cited_and_the_model_output_states_non
 
 
 def test_a_forecast_gauge_reads_its_stage_series_by_nwps_keys_and_cites_no_accuracy():
-    from trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast import hooks as nws
+    from trid3nt.tools.fetchers.hydrology.fetch_nws_river_forecast import hooks as nws
 
     gauge = {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-91.0, 30.5]},
              "properties": {"lid": "CIDI4", "name": "Test gauge", "status": {
@@ -147,7 +147,7 @@ def test_a_high_water_mark_reads_the_accuracy_its_quality_rating_publishes_and_n
 
 
 def test_a_wqp_site_keeps_the_station_record_and_the_latest_results_whole_row(monkeypatch):
-    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality import hooks
+    from trid3nt.tools.fetchers.hydrology.fetch_usgs_water_quality import hooks
 
     header = next(__import__("csv").reader((_FIXTURES / "wqp_result_header.csv").open()))
     result = {name: None for name in header}
@@ -172,8 +172,8 @@ def test_a_wqp_site_keeps_the_station_record_and_the_latest_results_whole_row(mo
 
 
 def test_a_head_target_reads_its_value_quantity_and_frame_through_the_source_map_and_states_no_accuracy():
-    from trid3nt_server.tools.fetchers._router import router
-    from trid3nt_server.tools.fetchers._router.hooks import resolve_hook
+    from trid3nt.tools.fetchers._router import router
+    from trid3nt.tools.fetchers._router.hooks import resolve_hook
 
     spec = registration.get_spec("fetch_usgs_model_head_targets")
     zipped = (Path(__file__).resolve().parents[1] / "fixtures" / "usgs_model_head_targets" / "dm_targets_excerpt.zip").read_bytes()
@@ -210,9 +210,9 @@ def test_reading_keys_are_both_named_and_belong_to_a_window_member():
 def test_a_fetched_layer_holding_date_typed_columns_reads_back_with_their_instants_as_iso_text(monkeypatch, tmp_path):
     """B1's WQP layer carries the portal's ActivityStartDateTime as a date-typed column; every slot's reader must not
     fail on it nor drop it."""
-    from trid3nt_server.inputs.geometry import read_geometry_doc
-    from trid3nt_server.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
-    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality import hooks
+    from trid3nt.inputs.geometry import read_geometry_doc
+    from trid3nt.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
+    from trid3nt.tools.fetchers.hydrology.fetch_usgs_water_quality import hooks
 
     header = next(__import__("csv").reader((_FIXTURES / "wqp_result_header.csv").open()))
     result = {name: None for name in header}

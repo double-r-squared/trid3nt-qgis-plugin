@@ -14,12 +14,12 @@ import dataclasses
 
 import pytest
 
-from trid3nt_server.inputs.point import Point
-from trid3nt_server.workflows.runtime import fill
-from trid3nt_server.inputs.input import Input
+from trid3nt.inputs.point import Point
+from trid3nt.workflows.runtime import fill
+from trid3nt.inputs.input import Input
 from seated import resolve_params
-from trid3nt_server.workflows.runtime.errors import DeclarationError
-from trid3nt_server.inputs.slots import DOMAIN, OBSERVE, RAIN, WEATHER
+from trid3nt.workflows.runtime.errors import DeclarationError
+from trid3nt.inputs.slots import DOMAIN, OBSERVE, RAIN, WEATHER
 
 
 def _row(**need):
@@ -87,8 +87,8 @@ async def test_a_slot_asks_only_the_sources_its_ingestion_reads(
         slot, data_class, reads) -> None:
     """A gridded product serving the class is excluded before it is fetched: the
     station reader takes points and the hyetograph reader a record."""
-    import trid3nt_server.tools  # noqa: F401 - registers the fetcher rows
-    from trid3nt_server.tools.search.match import match, sources_with_coverage
+    import trid3nt.tools  # noqa: F401 - registers the fetcher rows
+    from trid3nt.tools.search.match import match, sources_with_coverage
 
     row = dataclasses.replace(Input(slot).need(data_class), name="row")
     need = dataclasses.replace(

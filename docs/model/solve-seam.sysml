@@ -336,7 +336,7 @@ package SolveSeam {
         through - a reach, a catchment, a basin - handing the same staging one
         case, so there is ONE writer of the server facts.
 
-        code: trid3nt_server/workflows/telemac/authoring/opening.py
+        code: trid3nt/workflows/telemac/authoring/opening.py
         */
         port serverFactsOut : ServerFactsOut;
         port topologyIn : TopologyIn;
@@ -348,20 +348,20 @@ package SolveSeam {
         measures it: the staged files, the nodes, the bed and the channel a
         boundary face cuts.
 
-        code: trid3nt_server/workflows/telemac/authoring/accepted_mesh.py
+        code: trid3nt/workflows/telemac/authoring/accepted_mesh.py
         */
         port meshIn : MeshIn;
     }
 
     part ratingCurve : Assembler {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/rating_curve.py
+        code: trid3nt/workflows/telemac/authoring/rating_curve.py
         */
     }
 
     part referenceSurface : Assembler {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/reference_surface.py
+        code: trid3nt/workflows/telemac/authoring/reference_surface.py
         */
     }
 
@@ -371,37 +371,37 @@ package SolveSeam {
         the water stands at, so it walks its own boundary and states its own
         server facts.
 
-        code: trid3nt_server/workflows/telemac/authoring/walked_boundary.py
+        code: trid3nt/workflows/telemac/authoring/walked_boundary.py
         */
     }
 
     part releasePoint : Assembler {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/release_point.py
+        code: trid3nt/workflows/telemac/authoring/release_point.py
         */
     }
 
     part initialState : Assembler {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/initial_state.py
+        code: trid3nt/workflows/telemac/authoring/initial_state.py
         */
     }
 
     part stagedCheck : StagedCheck {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/staged_check.py
+        code: trid3nt/workflows/telemac/authoring/staged_check.py
         */
     }
 
     part bedPainter : BedPainter {
         doc /*
-        code: trid3nt_server/tools/mesh/shared/primitives.py
+        code: trid3nt/tools/mesh/shared/primitives.py
         */
     }
 
     part steeringStatements : Serializer {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/serializer.py
+        code: trid3nt/workflows/telemac/authoring/serializer.py
         */
     }
 
@@ -412,27 +412,27 @@ package SolveSeam {
         write, and because two families read the same derivation: a reach reads
         it at one discharge, a catchment outlet reads it swept over a range.
 
-        code: trid3nt_server/workflows/telemac/helpers/uniform_flow.py
+        code: trid3nt/workflows/telemac/helpers/uniform_flow.py
         */
     }
 
     part manifestStager : ManifestStager {
         doc /*
-        code: trid3nt_server/workflows/solver/staging.py
+        code: trid3nt/workflows/solver/staging.py
         */
         port caseOut : CaseOut;
     }
 
     part solveStep : SolveStep {
         doc /*
-        code: trid3nt_server/workflows/telemac/engine.py
+        code: trid3nt/workflows/telemac/engine.py
         */
         port completionIn : CompletionIn;
     }
 
     part launcherArm : LauncherArm {
         doc /*
-        code: trid3nt_server/workflows/telemac/engine.py
+        code: trid3nt/workflows/telemac/engine.py
         */
         port metricsIn : MetricsIn;
         port completionOut : CompletionOut;
@@ -440,7 +440,7 @@ package SolveSeam {
 
     part supervisor : Supervisor {
         doc /*
-        code: trid3nt_server/workflows/solver/solver.py
+        code: trid3nt/workflows/solver/solver.py
         */
         port completionIn : CompletionIn;
         port completionOut : CompletionOut;
@@ -466,19 +466,19 @@ package SolveSeam {
 
     part runReader : RunReader {
         doc /*
-        code: trid3nt_server/workflows/telemac/modules/listing.py
+        code: trid3nt/workflows/telemac/modules/listing.py
         */
     }
 
     part resultReader : ResultReader {
         doc /*
-        code: trid3nt_server/workflows/telemac/modules/outputs.py
+        code: trid3nt/workflows/telemac/modules/outputs.py
         */
     }
 
     part diagnosticsReader : DiagnosticsReader {
         doc /*
-        code: trid3nt_server/workflows/telemac/diagnostics.py
+        code: trid3nt/workflows/telemac/diagnostics.py
         */
         port completionIn : CompletionIn;
         port listingIn : ListingIn;
@@ -486,14 +486,14 @@ package SolveSeam {
 
     part meshAcceptance : MeshAcceptance {
         doc /*
-        code: trid3nt_server/tools/mesh/step.py
+        code: trid3nt/tools/mesh/step.py
         */
         port meshOut : MeshOut;
     }
 
     part topologyWriter : TopologyWriter {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/topology.py
+        code: trid3nt/workflows/telemac/authoring/topology.py
         */
         port topologyOut : TopologyOut;
     }
@@ -650,15 +650,17 @@ package SolveSeam {
         on an exit and its wait. An executor that imports an engine has an
         engine's knowledge in it, and the next engine arrives as a branch.
 
-        forbid: trid3nt_server.workflows.solver -> trid3nt_server.workflows.telemac
+        forbid: trid3nt.workflows.solver -> trid3nt.workflows.telemac
         */
     }
 
     requirement def WorkersNeverImportServer {
         doc /*
         The container is the engine room: a worker that reaches into the
-        server package has an opinion, a default or a fetch in it.
+        product packages has an opinion, a default or a fetch in it.
 
+        forbid: workers -> trid3nt
+        forbid: workers -> trid3nt_harness
         forbid: workers -> trid3nt_server
         */
     }
@@ -669,8 +671,8 @@ package SolveSeam {
         uploaded. A reader importing worker code is a second computation of
         the same quantity, running outside the image that produced it.
 
-        forbid: trid3nt_server.workflows.telemac.modules.listing -> workers
-        forbid: trid3nt_server.workflows.solver.diagnostics -> workers
+        forbid: trid3nt.workflows.telemac.modules.listing -> workers
+        forbid: trid3nt.workflows.solver.diagnostics -> workers
         */
     }
 
@@ -691,11 +693,11 @@ package SolveSeam {
         worker's number, and converting it would make the cross-check agree
         with itself.
 
-        forbid: trid3nt_server.workflows.telemac.modules.outputs -> struct
-        forbid: trid3nt_server.workflows.telemac.modules.listing -> struct
-        forbid: trid3nt_server.workflows.telemac.authoring.opening -> struct
-        forbid: trid3nt_server.workflows.telemac.authoring.release_point -> struct
-        forbid: trid3nt_server.workflows.telemac.authoring.initial_state -> struct
+        forbid: trid3nt.workflows.telemac.modules.outputs -> struct
+        forbid: trid3nt.workflows.telemac.modules.listing -> struct
+        forbid: trid3nt.workflows.telemac.authoring.opening -> struct
+        forbid: trid3nt.workflows.telemac.authoring.release_point -> struct
+        forbid: trid3nt.workflows.telemac.authoring.initial_state -> struct
         */
     }
 

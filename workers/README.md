@@ -2,7 +2,7 @@
 
 Worker code for the engines the agent dispatches through the shared
 `run_solver` / `wait_for_completion` seam
-(`trid3nt_server/workflows/solver/solver.py`). This is a LOCAL-FIRST repo:
+(`trid3nt/workflows/solver/solver.py`). This is a LOCAL-FIRST repo:
 workers run on this machine, dispatched by the agent's local solver backend -
 there is no live Cloud Run / AWS Batch deploy here. A worker is the engine room:
 a staged run directory in, results out, no network and no opinions of its own.
@@ -27,6 +27,6 @@ a staged run directory in, results out, no network and no opinions of its own.
     docker build -t trid3nt-local/geoclaw:latest workers/geoclaw/
     docker build -t trid3nt-local/pestpp:latest workers/pestpp/
     docker build -t trid3nt-local/pestpp-telemac:latest -f workers/pestpp/Dockerfile.telemac \
-      --build-context engine=trid3nt_server/workflows/telemac/authoring/engine_scripts workers/pestpp/
+      --build-context engine=trid3nt/workflows/telemac/authoring/engine_scripts workers/pestpp/
 
 Env gates and measured runtimes: `docs/site/engines.md`.

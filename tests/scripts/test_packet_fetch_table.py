@@ -25,12 +25,12 @@ if not DEV.is_dir():
 SESSION = "01TESTSESSION"
 LOG = f"""\
 2026-09-20 14:47:54,100 INFO trid3nt_server.server dev-tool-invoke dispatch session={SESSION} tool=t
-2026-09-20 14:47:54,150 INFO trid3nt_server.tools.fetchers._router.router fetch fetch_dem ask={{'bbox': [-75.7, 36.1, -75.7, 36.2]}}
-2026-09-20 14:47:54,250 INFO trid3nt_server.tools.cache read_through hit (s3) tool=fetch_dem key=abc123 bytes=159549
-2026-09-20 14:47:55,000 INFO trid3nt_server.tools.fetchers._router.router fetch fetch_ndbc_buoys ask={{'bbox': [-75.7, 36.1, -75.7, 36.2]}}
+2026-09-20 14:47:54,150 INFO trid3nt.tools.fetchers._router.router fetch fetch_dem ask={{'bbox': [-75.7, 36.1, -75.7, 36.2]}}
+2026-09-20 14:47:54,250 INFO trid3nt.tools.cache read_through hit (s3) tool=fetch_dem key=abc123 bytes=159549
+2026-09-20 14:47:55,000 INFO trid3nt.tools.fetchers._router.router fetch fetch_ndbc_buoys ask={{'bbox': [-75.7, 36.1, -75.7, 36.2]}}
 2026-09-20 14:47:55,400 INFO httpx HTTP Request: GET https://www.ndbc.noaa.gov/data/realtime2/44100.txt "HTTP/1.1 200 OK"
-2026-09-20 14:47:55,500 INFO trid3nt_server.tools.fetchers._router.executors.vector_fgb router.vector_fgb: FlatGeobuf = 5104 bytes (1 feature(s), source=ndbc_buoys)
-2026-09-20 14:47:55,600 INFO trid3nt_server.tools.cache read_through miss-write (s3) tool=fetch_ndbc_buoys key=def456 bytes=5104
+2026-09-20 14:47:55,500 INFO trid3nt.tools.fetchers._router.executors.vector_fgb router.vector_fgb: FlatGeobuf = 5104 bytes (1 feature(s), source=ndbc_buoys)
+2026-09-20 14:47:55,600 INFO trid3nt.tools.cache read_through miss-write (s3) tool=fetch_ndbc_buoys key=def456 bytes=5104
 2026-09-20 14:47:56,000 INFO trid3nt_server.server ws-recv session={SESSION} type=case-command
 """
 

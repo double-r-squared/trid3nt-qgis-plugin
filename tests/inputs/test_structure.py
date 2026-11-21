@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.structure import StructureError, structure
+from trid3nt.inputs.structure import StructureError, structure
 
 
 def _line(*coords: list[float]) -> dict:

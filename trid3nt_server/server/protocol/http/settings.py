@@ -9,8 +9,8 @@ import asyncio
 
 from aiohttp import web
 
-from trid3nt_server.model.adapters import model_discovery
-from trid3nt_server.settings import listing
+from trid3nt_harness.model.adapters import model_discovery
+from trid3nt.settings import listing
 from trid3nt_server.server.protocol.http.transport import (
     HttpError, failure, json_reply, raw_reply,
 )
@@ -45,7 +45,7 @@ async def _provider_config(request: web.Request) -> web.Response:
 @failure("settings listing failed")
 async def _settings(_request: web.Request) -> web.Response:
     """``GET /api/settings``: every changeable setting with the value the daemon holds, its level (default, user), default, range, unit and source, and ``retrieval_backend``, the dense backend the tool-retrieval index was built with (null while the index is cold, "lexical" when it was built without a dense backend). The file is read on a worker thread."""
-    from trid3nt_server.tools.search.search_tools import search_tools
+    from trid3nt_harness.tools.search.search_tools import search_tools
 
     index = search_tools._INDEX
     backend = None if index is None else (getattr(index, "backend_name", None) or "lexical")

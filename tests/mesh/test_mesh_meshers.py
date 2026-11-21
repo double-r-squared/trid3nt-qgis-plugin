@@ -12,18 +12,18 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.mesh.artifact import (
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.mesh.artifact import (
     MeshArtifact,
     sidecar_key_for_mesh_uri,
 )
-from trid3nt_server.render.mesh_display import write_2dm_arrays
-from trid3nt_server.tools.mesh.meshers import (
+from trid3nt.render.mesh_display import write_2dm_arrays
+from trid3nt.tools.mesh.meshers import (
     MeshToolError,
     get_mesher,
     registered_meshers,
 )
-from trid3nt_server.tools.mesh.shared.nodes import MeshNodeError, read_2dm_mesh
+from trid3nt.tools.mesh.shared.nodes import MeshNodeError, read_2dm_mesh
 
 
 def _artifact(**over) -> MeshArtifact:
@@ -64,7 +64,7 @@ def _bed(tmp_path: Path, cell_deg: float) -> Path:
 
 
 def _lattice(tif: Path, **stated):
-    from trid3nt_server.tools.mesh.tool import MeshTool, mesh_op
+    from trid3nt.tools.mesh.tool import MeshTool, mesh_op
 
     recipe = MeshTool.build_mesh(
         mesher="reg_grid", kind="structured_grid",
@@ -82,7 +82,7 @@ def test_a_mesh_with_no_stated_edge_takes_the_bed_s_cell(tmp_path):
 
 
 def test_an_edge_far_finer_than_the_data_runs_and_says_so(tmp_path):
-    from trid3nt_server import settings
+    from trid3nt import settings
 
     token = settings.bind_run({"MESH_MAX_NODES": 10_000_000})
     try:
@@ -96,7 +96,7 @@ def test_an_edge_far_finer_than_the_data_runs_and_says_so(tmp_path):
 
 
 def test_no_edge_and_no_raster_is_asked_for_by_name():
-    from trid3nt_server.tools.mesh.tool import MeshTool
+    from trid3nt.tools.mesh.tool import MeshTool
 
     recipe = MeshTool.build_mesh(mesher="reg_grid", kind="structured_grid",
                                  extent=(-80.0, 25.99, -79.99, 26.0))
@@ -117,7 +117,7 @@ def test_each_mesher_declares_the_kinds_it_makes(mesher, expected):
 
 
 def test_an_op_a_mesher_never_registered_is_refused_by_name():
-    from trid3nt_server.tools.mesh.meshers import resolve_op
+    from trid3nt.tools.mesh.meshers import resolve_op
 
     with pytest.raises(MeshToolError) as excinfo:
         resolve_op(get_mesher("om2d"), "open_boundary_side")
@@ -164,9 +164,9 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced(tmp_p
     """A hand-edited layer is a different topology, so the per-solver geometry the
     mesher wrote and the probes measured on the old cells must not ride into the
     accepted artifact under the edited mesh's name."""
-    from trid3nt_server.tools.mesh.meshers import Mesh
-    from trid3nt_server.tools.mesh.session import MeshSession
-    from trid3nt_server.tools.mesh.tool import tool
+    from trid3nt.tools.mesh.meshers import Mesh
+    from trid3nt.tools.mesh.session import MeshSession
+    from trid3nt.tools.mesh.tool import tool
 
     pts = np.array([[500000.0, 3880000.0], [500100.0, 3880000.0],
                     [500000.0, 3880100.0], [500100.0, 3880100.0]])

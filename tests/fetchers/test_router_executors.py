@@ -15,19 +15,19 @@ import rasterio
 import rasterio.transform as rtransform
 
 from trid3nt_contracts.source_spec import SourceSpec
-from trid3nt_server.render.cog import array_to_cog_bytes
-from trid3nt_server.tools.fetchers._router.errors import (
+from trid3nt.render.cog import array_to_cog_bytes
+from trid3nt.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
     RouterNotAvailableError,
     RouterUpstreamError,
 )
-from trid3nt_server.tools.fetchers._router.executors import (
+from trid3nt.tools.fetchers._router.executors import (
     raster_cog,
     station_timeseries,
     vector_fgb,
 )
-from trid3nt_server.tools.fetchers._router.transforms import tiled_mosaic
+from trid3nt.tools.fetchers._router.transforms import tiled_mosaic
 
 
 
@@ -196,7 +196,7 @@ def test_imageserver_size_formula_and_clamp():
 
 
 def _patch_transport(monkeypatch, body: bytes, ct: str = "image/tiff"):
-    tp = "trid3nt_server.tools.fetchers._router.transport"
+    tp = "trid3nt.tools.fetchers._router.transport"
     monkeypatch.setattr(f"{tp}.get_client", lambda: object())
     monkeypatch.setattr(f"{tp}.get_bytes", lambda *a, **k: (body, ct, "x"))
 
@@ -241,7 +241,7 @@ def test_imageserver_export_all_zero_is_empty(monkeypatch):
 
 
 def test_imageserver_layer_uri_param_keyed_style_and_units():
-    from trid3nt_server.tools.fetchers._router import router as rmod
+    from trid3nt.tools.fetchers._router import router as rmod
     spec = _imageserver_spec()
     # layer "a": the mapped row overrides the base kind; units None (absent
     # from the units map), no bbox.
@@ -255,7 +255,7 @@ def test_imageserver_layer_uri_param_keyed_style_and_units():
 
 def test_payload_ceil_mb_clips():
     spec = _imageserver_spec()
-    from trid3nt_server.tools.fetchers._router import router as rmod
+    from trid3nt.tools.fetchers._router import router as rmod
     est = rmod.synthesize_payload_estimator(spec)
     # 0.5 MB/deg^2 * huge bbox would exceed 50 but ceil clips to 50.
     assert est(bbox=[-125.0, 25.0, -67.0, 49.0]) == 50.0
@@ -298,7 +298,7 @@ def test_features_to_fgb_empty_is_header_only_not_error():
 
 def test_max_features_caps_the_driver_read(monkeypatch):
     """The cap is the read's, not a page loop's: the driver stops at max_features."""
-    from trid3nt_server.tools.fetchers._router.executors import vector_ogr
+    from trid3nt.tools.fetchers._router.executors import vector_ogr
 
     spec = _vector_spec(page_size=2, max_features=5)
     spec = spec.model_copy(update={"ingest": {**(spec.ingest or {}),
@@ -319,7 +319,7 @@ def test_max_features_caps_the_driver_read(monkeypatch):
 def test_vector_ogr_staged_uri_is_typed_error_not_handed_to_a_driver():
     """A staged s3:// endpoint reaching the query builder is a closed trap: it needs
     the raster_cog direct_window bucket/key resolution, which no vector read has."""
-    from trid3nt_server.tools.fetchers._router.executors import vector_ogr
+    from trid3nt.tools.fetchers._router.executors import vector_ogr
 
     spec = _vector_spec()
     spec = spec.model_copy(update={
@@ -526,8 +526,8 @@ def test_resolve_endpoints_select_and_endpoint_fallback():
 
 
 def test_validate_int_range_and_date_compact():
-    from trid3nt_server.tools.fetchers._router import router as router_mod
-    from trid3nt_server.tools.fetchers._router.errors import RouterInputError
+    from trid3nt.tools.fetchers._router import router as router_mod
+    from trid3nt.tools.fetchers._router.errors import RouterInputError
 
     spec = _wave2_spec(params={
         "bbox": {"type": "bbox", "required": True},
@@ -637,7 +637,7 @@ def test_direct_window_url_by_param_selects_endpoint(monkeypatch):
     def _fake_open(url, signed=None):
         seen["url"] = url
         yield _FakeSrc(np.array([[70, 71], [72, 73]], dtype="uint8"), 255.0)
-    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
+    monkeypatch.setattr("trid3nt.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     spec = _dw_spec(url_by_param={"param": "amc", "map": {"dry": "https://h/d.tif", "wet": "https://h/w.tif"}})
     raster_cog._direct_window_to_array(spec, {"bbox": [0, 0, 1, 1], "amc": "wet"})
     assert seen["url"] == "https://h/w.tif"
@@ -649,7 +649,7 @@ def test_direct_window_nodata_gate_raises_empty(monkeypatch):
     @contextlib.contextmanager
     def _fake_open(url, signed=None):
         yield _FakeSrc(np.full((3, 3), 255, dtype="uint8"), 255.0)
-    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
+    monkeypatch.setattr("trid3nt.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     spec = _dw_spec(nodata_gate=True, default_nodata=255)
     with pytest.raises(RouterEmptyError) as ei:
         raster_cog._direct_window_to_array(spec, {"bbox": [0, 0, 1, 1], "amc": "average"})
@@ -662,7 +662,7 @@ def test_direct_window_nodata_gate_passes_with_data(monkeypatch):
     @contextlib.contextmanager
     def _fake_open(url, signed=None):
         yield _FakeSrc(np.array([[255, 80], [255, 255]], dtype="uint8"), 255.0)
-    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
+    monkeypatch.setattr("trid3nt.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     spec = _dw_spec(nodata_gate=True)
     arr, _tf, _crs = raster_cog._direct_window_to_array(spec, {"bbox": [0, 0, 1, 1], "amc": "average"})
     assert 80.0 in arr  # the one valid pixel survived; the gate did NOT fire
@@ -713,7 +713,7 @@ def test_multi_url_mosaic_pastes_members(monkeypatch):
     @contextlib.contextmanager
     def _fake_open(url, signed=None):
         yield _FakeMember(A if url == "A" else B)
-    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
+    monkeypatch.setattr("trid3nt.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     arr, tf, crs = raster_cog._multi_url_to_array(_mu_spec(), {"bbox": [0, 0, 4, 4]})
     assert arr.shape == (4, 4) and str(crs) == "EPSG:4326"
     assert list(arr[0]) == [1.0, 2.0, 3.0, 4.0]        # A pasted left, B pasted right
@@ -728,7 +728,7 @@ def test_multi_url_all_nodata_window_is_empty(monkeypatch):
     @contextlib.contextmanager
     def _fake_open(url, signed=None):
         yield _FakeMember(nan2)
-    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
+    monkeypatch.setattr("trid3nt.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     with pytest.raises(RouterEmptyError) as ei:
         raster_cog._multi_url_to_array(_mu_spec(), {"bbox": [0, 0, 4, 4]})
     assert ei.value.error_code == "DEMO_MU_EMPTY"
@@ -736,7 +736,7 @@ def test_multi_url_all_nodata_window_is_empty(monkeypatch):
 
 def test_multi_url_member_read_failure_is_upstream(monkeypatch):
     """ANY intersecting-member read failure -> typed UPSTREAM (never a silent partial)."""
-    from trid3nt_server.tools.fetchers._router import transport as _tp
+    from trid3nt.tools.fetchers._router import transport as _tp
     A = np.ones((4, 2), dtype="float64")
     monkeypatch.setattr(raster_cog, "_resolve_multi_url_members", lambda s, p: _two_tile_grid(A, A))
     import contextlib
@@ -744,7 +744,7 @@ def test_multi_url_member_read_failure_is_upstream(monkeypatch):
     def _boom_open(url):
         raise _tp.TransportNotFound("member 404")
         yield  # pragma: no cover
-    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _boom_open)
+    monkeypatch.setattr("trid3nt.tools.fetchers._router.transport.open_windowed_cog", _boom_open)
     with pytest.raises(RouterUpstreamError) as ei:
         raster_cog._multi_url_to_array(_mu_spec(), {"bbox": [0, 0, 4, 4]})
     assert ei.value.error_code == "DEMO_MU_UPSTREAM_ERROR"
@@ -777,7 +777,7 @@ def test_a_wqp_result_keeps_the_unit_its_own_column_names():
     and a reading with no unit is one no slot can convert."""
     import pandas as pd
 
-    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality.hooks import (
+    from trid3nt.tools.fetchers.hydrology.fetch_usgs_water_quality.hooks import (
         _latest_results_by_site,
     )
 
@@ -801,9 +801,9 @@ def test_a_wqp_well_carries_its_published_depth_through_to_the_layer(monkeypatch
 
     from pathlib import Path
 
-    from trid3nt_server.tools.fetchers._router.executors.vector_fgb import _out_columns, apply_ingest_transforms
-    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
-    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality import hooks
+    from trid3nt.tools.fetchers._router.executors.vector_fgb import _out_columns, apply_ingest_transforms
+    from trid3nt.tools.fetchers._router.spec import load_spec_from_path
+    from trid3nt.tools.fetchers.hydrology.fetch_usgs_water_quality import hooks
 
     sites = pd.DataFrame([
         {"MonitoringLocationIdentifier": "USGS-413800070330001",

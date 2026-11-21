@@ -20,18 +20,18 @@ import pytest
 import rasterio
 from rasterio.transform import from_origin
 
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.tools.fetchers.hazard.fetch_sift_unit_sources import hooks as sift_hooks
-from trid3nt_server.tools.mesh.session import MeshSession
-from trid3nt_server.tools.mesh.tool import tool
-from trid3nt_server.workflows.geoclaw.authoring import grid_keywords
-from trid3nt_server.workflows.geoclaw.authoring.dtopo import dtopo_axes, sift_subfaults
-from trid3nt_server.workflows.geoclaw.authoring.rundata import serialize
-from trid3nt_server.workflows.geoclaw.authoring.staged_check import check_staged_run
-from trid3nt_server.workflows.geoclaw.errors import GeoclawError
-from trid3nt_server.workflows.geoclaw.modules import GEO
-from trid3nt_server.workflows.geoclaw.templates.tsunami_inundation import tsunami_inundation as template
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.tools.fetchers.hazard.fetch_sift_unit_sources import hooks as sift_hooks
+from trid3nt.tools.mesh.session import MeshSession
+from trid3nt.tools.mesh.tool import tool
+from trid3nt.workflows.geoclaw.authoring import grid_keywords
+from trid3nt.workflows.geoclaw.authoring.dtopo import dtopo_axes, sift_subfaults
+from trid3nt.workflows.geoclaw.authoring.rundata import serialize
+from trid3nt.workflows.geoclaw.authoring.staged_check import check_staged_run
+from trid3nt.workflows.geoclaw.errors import GeoclawError
+from trid3nt.workflows.geoclaw.modules import GEO
+from trid3nt.workflows.geoclaw.templates.tsunami_inundation import tsunami_inundation as template
+from trid3nt.workflows.runtime.sheet import fill
 
 _AUTHORING = Path(__file__).with_name("test_geoclaw_authoring.py")
 _spec = importlib.util.spec_from_file_location("geoclaw_authoring_sheet", _AUTHORING)
@@ -193,14 +193,14 @@ def test_siftfault_with_no_slip_writes_no_dtopo_and_an_unstated_value_refuses_by
 
 
 def test_a_flagregion_label_is_a_word_and_an_extent_word_names_an_input():
-    from trid3nt_server.tools.mesh.recipe import input_names
+    from trid3nt.tools.mesh.recipe import input_names
 
     assert sorted(input_names(template.MESH)) == [
         "approach", "domain", "extent", "extent", "level1_cell_m", "source"]
 
 
 def test_the_template_declares_every_input_its_statements_read():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     assert "geoclaw_tsunami_inundation" in TOOL_REGISTRY
     steering = template.STEERING
@@ -213,7 +213,7 @@ def test_the_template_declares_every_input_its_statements_read():
 
 
 def test_the_staged_case_is_the_one_section_the_worker_reads(tmp_path):
-    from trid3nt_server.workflows.geoclaw import workflow
+    from trid3nt.workflows.geoclaw import workflow
 
     captured = {}
 
@@ -227,7 +227,7 @@ def test_the_staged_case_is_the_one_section_the_worker_reads(tmp_path):
     results = workflow._results(sheet)
 
     assert results == ["fgmax0001.txt", "gauge00007.txt", "fgout0001.b0005"]
-    from trid3nt_server.workflows.solver import staging
+    from trid3nt.workflows.solver import staging
 
     original = staging.stage_run
     staging.stage_run = fake_stage_run
@@ -248,7 +248,7 @@ def test_the_staged_case_is_the_one_section_the_worker_reads(tmp_path):
 
 
 def test_the_workflow_answers_for_its_own_fetch_rows_and_the_modules_keywords():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY["geoclaw_tsunami_inundation"].fn.workflow
 
@@ -261,7 +261,7 @@ def test_the_workflow_answers_for_its_own_fetch_rows_and_the_modules_keywords():
 
 def _data_fetches(monkeypatch, own, run):
     """The rows `_data` asks the world for, over a stand-in environment and a recording fetch."""
-    from trid3nt_server.workflows.geoclaw import workflow as gw
+    from trid3nt.workflows.geoclaw import workflow as gw
 
     asked = []
 
@@ -294,8 +294,8 @@ def test_a_stated_event_id_is_fetched_by_the_run_and_a_supplied_record_wins(monk
 
 
 def test_the_workflow_answers_for_the_finite_fault_row_and_names_its_product():
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.geoclaw import workflow as gw
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.workflows.geoclaw import workflow as gw
 
     workflow = TOOL_REGISTRY["geoclaw_tsunami_inundation"].fn.workflow
 
@@ -304,8 +304,8 @@ def test_the_workflow_answers_for_the_finite_fault_row_and_names_its_product():
 
 
 def test_a_run_stating_no_moment_counts_its_seconds_from_the_solve_start_and_says_so(monkeypatch):
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-    from trid3nt_server.workflows.geoclaw import workflow as gw
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.workflows.geoclaw import workflow as gw
 
     async def _box(*_args, **_kwargs):
         return {"run_id": "RUN1", "started_at": "2026-10-12T08:00:00+00:00"}
@@ -328,9 +328,9 @@ def _publish_over_stub(monkeypatch, outputs, captions):
     import numpy as np
 
     from trid3nt_contracts.execution import LayerURI
-    from trid3nt_server.render.formats import Published
-    from trid3nt_server.workflows.geoclaw import workflow as gw
-    from trid3nt_server.workflows.runtime.primitives import Series, series
+    from trid3nt.render.formats import Published
+    from trid3nt.workflows.geoclaw import workflow as gw
+    from trid3nt.workflows.runtime.primitives import Series, series
 
     seen: dict = {}
 
@@ -346,7 +346,7 @@ def _publish_over_stub(monkeypatch, outputs, captions):
         run = {}
         body = SimpleNamespace(READS={"series": _series})
 
-    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
+    monkeypatch.setattr("trid3nt.workflows.runtime.primitives.publish", _publish)
     monkeypatch.setattr(gw, "Solved", lambda *_a, **_k: _Solved())
     monkeypatch.setattr(gw, "_table", lambda _solved, _sheet: ([series("GAUGE_SURFACE", at=1).chart()], lambda *_a: None))
     monkeypatch.setattr(gw, "_record", lambda _solved, name: LayerURI(
@@ -358,7 +358,7 @@ def _publish_over_stub(monkeypatch, outputs, captions):
 
 
 def test_a_placed_series_is_published_beside_the_module_table_with_its_caption(monkeypatch):
-    from trid3nt_server.workflows.runtime.primitives import series, unanchored
+    from trid3nt.workflows.runtime.primitives import series, unanchored
 
     placed = unanchored(series("GAUGE_SURFACE", at=2).chart())
     items = _publish_over_stub(monkeypatch, [placed], {"GAUGE_SURFACE": "tide at the pier"})
@@ -372,14 +372,14 @@ def test_a_template_with_no_placed_reads_publishes_the_module_table_alone(monkey
 
 
 def _fixture_record(name: str) -> dict:
-    from trid3nt_server.tools.fetchers.hazard.fetch_finite_fault import hooks
+    from trid3nt.tools.fetchers.hazard.fetch_finite_fault import hooks
 
     fix = Path(__file__).parents[1] / "fixtures" / "geoclaw" / "finite_fault"
     return hooks.record(get_spec("fetch_finite_fault"), {"event_id": name}, [(fix / f"{name}.fsp").read_bytes()])
 
 
 def test_the_rupture_ends_at_its_last_dtopo_instant_or_its_largest_rupture_plus_rise_time():
-    from trid3nt_server.workflows.geoclaw.modules.module import rupture_end
+    from trid3nt.workflows.geoclaw.modules.module import rupture_end
 
     record = _fixture_record("chignik_2021")
     kinematic = {"finite_fault": "finite_fault", "rupture_type": "kinematic", "rise_shape": "quadratic", "times": 30.0}
@@ -393,7 +393,7 @@ def test_the_rupture_ends_at_its_last_dtopo_instant_or_its_largest_rupture_plus_
 
 
 def test_the_templates_rise_shape_fills_a_kinematic_statement_that_names_none_and_yields_to_one_that_does():
-    from trid3nt_server.workflows.geoclaw import workflow as gw
+    from trid3nt.workflows.geoclaw import workflow as gw
 
     standin = SimpleNamespace(steering=template.STEERING, _states=lambda name, default: getattr(template, name, default))
     kinematic = {"finite_fault": "finite_fault", "rupture_type": "kinematic", "times": 30.0}
@@ -407,7 +407,7 @@ def test_the_templates_rise_shape_fills_a_kinematic_statement_that_names_none_an
 
 
 def test_the_domain_is_the_level_one_box_and_one_polygon_per_flagregion():
-    from trid3nt_server.workflows.geoclaw.workflow import _domain_features
+    from trid3nt.workflows.geoclaw.workflow import _domain_features
 
     facts = {"lower": [-125.0, 46.0], "upper": [-124.0, 47.0], "levels": 3, "flagregions": [
         {"name": "coast", "minlevel": 2, "maxlevel": 3, "t1": 0.0, "t2": 1.0e9, "extent": (-124.6, 46.8, -124.5, 46.9)},
@@ -421,7 +421,7 @@ def test_the_domain_is_the_level_one_box_and_one_polygon_per_flagregion():
 
 
 def test_the_catalogue_epicentre_is_drawn_only_when_asked_and_only_for_a_named_event(monkeypatch):
-    from trid3nt_server.workflows.geoclaw import workflow as gw
+    from trid3nt.workflows.geoclaw import workflow as gw
 
     me = gw.GeoclawWorkflow.__new__(gw.GeoclawWorkflow)
     fetched = []

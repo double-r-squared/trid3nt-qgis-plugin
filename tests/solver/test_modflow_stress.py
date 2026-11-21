@@ -13,13 +13,13 @@ from pathlib import Path
 import pytest
 from pyproj import Transformer
 
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow.authoring import mesh_files as MF
-from trid3nt_server.workflows.modflow.authoring.simulation import serialize
-from trid3nt_server.workflows.modflow.authoring.stress import place
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow.authoring import mesh_files as MF
+from trid3nt.workflows.modflow.authoring.simulation import serialize
+from trid3nt.workflows.modflow.authoring.stress import place
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF
+from trid3nt.workflows.runtime.sheet import fill
 
 _POINTS = [(x, y) for y in (0.0, 10.0, 20.0) for x in (0.0, 10.0, 20.0)]
 _CELLS = [tri for r in range(2) for c in range(2)
@@ -190,7 +190,7 @@ def test_a_polygon_places_the_cells_whose_centres_it_holds():
 
 
 def test_a_point_off_the_mesh_refuses_with_the_shared_code_and_a_hint():
-    from trid3nt_server.inputs.point import PointNotViableError
+    from trid3nt.inputs.point import PointNotViableError
 
     with pytest.raises(PointNotViableError) as caught:
         _placed("Wells", _geo("Point", (500.0, 500.0)))
@@ -205,9 +205,9 @@ def test_a_line_off_the_mesh_refuses_by_name():
 
 
 def test_a_well_in_an_inactive_cell_refuses_naming_the_nearest_active_one():
-    from trid3nt_server.inputs.point import PointNotViableError
-    from trid3nt_server.workflows.modflow.authoring.stress import point_cell
-    from trid3nt_server.inputs.point import Point
+    from trid3nt.inputs.point import PointNotViableError
+    from trid3nt.workflows.modflow.authoring.stress import point_cell
+    from trid3nt.inputs.point import Point
 
     lon, lat = _geo("Point", (5.0, 2.0))["coordinates"]
     here = point_cell(Point(lon, lat), label="Wells", points=_POINTS, cells=_CELLS,
@@ -296,14 +296,14 @@ def test_a_list_of_statements_names_every_input_it_reads():
 
 
 def test_a_typed_point_places_the_one_cell_it_lies_in():
-    from trid3nt_server.inputs.point import Point
+    from trid3nt.inputs.point import Point
 
     rows = _placed("Wells", Point(*_TO_LONLAT(8.0, 2.0), "the well"))
     assert rows == [((0, 0), -5.0)]
 
 
 def test_a_typed_domain_places_the_cells_whose_centres_it_holds():
-    from trid3nt_server.inputs.domain import Domain
+    from trid3nt.inputs.domain import Domain
 
     rows = _placed("Recharge", Domain(geometry=_LEFT), layer=2)
     assert [row[0] for row in rows] == [(1, 0), (1, 1), (1, 4), (1, 5)]
@@ -312,7 +312,7 @@ def test_a_typed_domain_places_the_cells_whose_centres_it_holds():
 @pytest.mark.parametrize("frame,expected", [(("meters", "days"), -3.0),
                                             (("feet", "days"), -3.0 / 0.3048)])
 def test_a_bed_stated_as_a_depth_is_its_flat_surface_on_the_model_s_frame(frame, expected):
-    from trid3nt_server.inputs.bed import Bed
+    from trid3nt.inputs.bed import Bed
 
     rows = _placed("Drains", _LINE, frame=frame,
                    values={"elevation": Bed(kind="depth", depth_m=3.0),
@@ -364,7 +364,7 @@ _NINE = [(r * 4 + c, r * 4 + c + 1, r * 4 + c + 5, r * 4 + c + 4)
 
 
 def test_the_edge_is_the_cells_with_a_face_no_other_cell_shares():
-    from trid3nt_server.workflows.modflow.authoring.stress import edge_cells
+    from trid3nt.workflows.modflow.authoring.stress import edge_cells
 
     assert edge_cells(_NINE) == [0, 1, 2, 3, 5, 6, 7, 8]
 

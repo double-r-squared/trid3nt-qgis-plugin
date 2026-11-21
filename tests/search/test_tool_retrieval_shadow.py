@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.model.adapters.model_selection import ModelSettings
+from trid3nt_harness.model.adapters.model_selection import ModelSettings
 from trid3nt_contracts import new_ulid
 
 
@@ -39,8 +39,8 @@ def _non_template_names() -> set[str]:
     """The names in the DEFAULT declarable registry: ``TOOL_REGISTRY`` minus the
     pool-hidden ``internal`` tier and the data sources. What reaches
     ``build_tool_declarations`` is a NEW filtered dict, not the live registry."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.tools.fetchers._router.registration import registered_spec_names
 
     return {
         name
@@ -100,8 +100,8 @@ async def _drive_one_turn(
 
 @pytest.mark.asyncio
 async def test_fail_open_on_retrieval_error(fake_llm):
-    from trid3nt_server.tools import TOOL_REGISTRY
-    import trid3nt_server.tools.search.tool_retrieval as tr
+    from trid3nt.tools import TOOL_REGISTRY
+    import trid3nt_harness.tools.search.tool_retrieval as tr
 
     def _boom(*_a, **_k):
         raise RuntimeError("index exploded")
@@ -117,8 +117,8 @@ async def test_fail_open_on_retrieval_error(fake_llm):
 
 @pytest.mark.asyncio
 async def test_fail_open_on_empty_result(fake_llm):
-    from trid3nt_server.tools import TOOL_REGISTRY
-    import trid3nt_server.tools.search.tool_retrieval as tr
+    from trid3nt.tools import TOOL_REGISTRY
+    import trid3nt_harness.tools.search.tool_retrieval as tr
 
     # An empty would-be set must FAIL-OPEN (never empty / core-only catalog).
     with patch.object(tr, "retrieve_visible_tools", return_value=set()):
@@ -131,9 +131,9 @@ async def test_fail_open_on_empty_result(fake_llm):
 
 @pytest.mark.asyncio
 async def test_enforce_subsets_registry_and_keeps_core_floor(fake_llm):
-    from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
-    from trid3nt_server.tools import TOOL_REGISTRY
-    import trid3nt_server.tools.search.tool_retrieval as tr
+    from trid3nt_harness.tools.search.tool_retrieval import CORE_FLOOR
+    from trid3nt.tools import TOOL_REGISTRY
+    import trid3nt_harness.tools.search.tool_retrieval as tr
 
     # Pick a small real subset of registered tools that includes the core floor.
     floor = {t for t in CORE_FLOOR if t in TOOL_REGISTRY}
@@ -161,8 +161,8 @@ async def test_enforce_subsets_registry_and_keeps_core_floor(fake_llm):
 @pytest.mark.asyncio
 async def test_a_tool_offered_and_never_called_does_not_carry_to_the_next_turn(fake_llm):
     from trid3nt_server.server import SessionState
-    from trid3nt_server.tools import TOOL_REGISTRY
-    import trid3nt_server.tools.search.tool_retrieval as tr
+    from trid3nt.tools import TOOL_REGISTRY
+    import trid3nt_harness.tools.search.tool_retrieval as tr
 
     state = SessionState(session_id=new_ulid())
 

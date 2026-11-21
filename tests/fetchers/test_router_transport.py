@@ -17,8 +17,8 @@ import pytest
 import rasterio
 import rasterio.transform as rtransform
 
-from trid3nt_server.tools.fetchers._router import transport
-from trid3nt_server.tools.fetchers._router.transport import (
+from trid3nt.tools.fetchers._router import transport
+from trid3nt.tools.fetchers._router.transport import (
     TransportAuthError,
     TransportError,
     TransportNotFound,
@@ -257,11 +257,11 @@ def test_retried_waits_the_retry_after_a_library_429_carries(monkeypatch):
 # the router A.6 frame (this is the 404->EMPTY split the /vsicurl/ path lost).
 
 from trid3nt_contracts.source_spec import SourceSpec  # noqa: E402
-from trid3nt_server.tools.fetchers._router.errors import (  # noqa: E402
+from trid3nt.tools.fetchers._router.errors import (  # noqa: E402
     RouterEmptyError,
     RouterUpstreamError,
 )
-from trid3nt_server.tools.fetchers._router.executors import raster_cog  # noqa: E402
+from trid3nt.tools.fetchers._router.executors import raster_cog  # noqa: E402
 
 
 def _direct_window_spec(url: str) -> SourceSpec:
@@ -339,7 +339,7 @@ def _flaky_client(statuses: list[int], body: bytes, calls: list[str]):
 
 
 def test_post_bytes_503_is_retried_by_the_one_policy(monkeypatch):
-    from trid3nt_server.tools.fetchers._router.transport import client as transport_client
+    from trid3nt.tools.fetchers._router.transport import client as transport_client
     slept: list[int] = []
     monkeypatch.setattr(transport_client, "_sleep_backoff", lambda a, _h: slept.append(a))
     calls: list[str] = []
@@ -349,7 +349,7 @@ def test_post_bytes_503_is_retried_by_the_one_policy(monkeypatch):
 
 
 def test_post_bytes_exhaustion_carries_the_provider_body(monkeypatch, user_settings):
-    from trid3nt_server.tools.fetchers._router.transport import client as transport_client
+    from trid3nt.tools.fetchers._router.transport import client as transport_client
     monkeypatch.setattr(transport_client, "_sleep_backoff", lambda a, _h: None)
     calls: list[str] = []
     with pytest.raises(TransportUpstreamError) as ei:

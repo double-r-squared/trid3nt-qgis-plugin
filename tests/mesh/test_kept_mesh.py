@@ -6,10 +6,10 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.inputs.domain import Domain
-from trid3nt_server.tools.mesh import step as mesh_step
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.inputs import run_notes
+from trid3nt.inputs.domain import Domain
+from trid3nt.tools.mesh import step as mesh_step
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.inputs import run_notes
 from seated import value_inputs
 
 
@@ -72,12 +72,12 @@ def built(monkeypatch, tmp_path):
                             has_bathymetry=True, node_count=3, element_count=1,
                             bbox=(0, 0, 1, 1))
 
-    from trid3nt_server.tools.mesh import gate, session
+    from trid3nt.tools.mesh import gate, session
 
     monkeypatch.setattr(session, "MeshSession", lambda *a, **k: None)
     monkeypatch.setattr(gate, "gate_mesh_build", _gate)
     monkeypatch.setattr(mesh_step, "_mesh_coverage", lambda *a: None)
-    monkeypatch.setattr("trid3nt_server.tools.mesh.tool.recipe_from_plan_value",
+    monkeypatch.setattr("trid3nt.tools.mesh.tool.recipe_from_plan_value",
                         lambda value: type("R", (), {"mesher": "om2d",
                                                      "extent": None})())
     return builds
@@ -105,9 +105,9 @@ def test_the_second_run_reuses_the_kept_mesh_and_says_which(built, tmp_path):
 
 def _run_recipe(monkeypatch, bed: str, friction: float) -> dict:
     """The recipe the run hands its mesh stage, off a fill stating ``friction``."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
     from seated import resolve_params
-    from trid3nt_server.workflows.runtime.fill import Fill, production
+    from trid3nt.workflows.runtime.fill import Fill, production
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     seen: list = []
@@ -117,7 +117,7 @@ def _run_recipe(monkeypatch, bed: str, friction: float) -> dict:
         raise LookupError("the recipe is all this test reads")
 
     from trid3nt_contracts.common import Origin
-    from trid3nt_server.workflows.runtime.fill import ACCEPTED, Verdict
+    from trid3nt.workflows.runtime.fill import ACCEPTED, Verdict
 
     state = Fill(workflow=workflow,
                  inputs=asyncio.run(resolve_params(value_inputs(workflow), {})))

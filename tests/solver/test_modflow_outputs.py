@@ -17,15 +17,15 @@ import numpy as np
 import pytest
 from pyproj import Transformer
 
-from trid3nt_server.inputs.observation import Observation
-from trid3nt_server.render.formats import Mesh
-from trid3nt_server.store import objects as storage
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF
-from trid3nt_server.workflows.modflow.modules.outputs import Solved
-from trid3nt_server.workflows.runtime import primitives as P
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.inputs.observation import Observation
+from trid3nt.render.formats import Mesh
+from trid3nt.store import objects as storage
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF
+from trid3nt.workflows.modflow.modules.outputs import Solved
+from trid3nt.workflows.runtime import primitives as P
+from trid3nt.workflows.runtime.sheet import fill
 
 _FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "modflow" / "lattice_solved"
 _DAY = 86400.0
@@ -70,7 +70,7 @@ def solved(monkeypatch, tmp_path, fake_s3):
         shutil.copy(_FIXTURE / basename, dest)
         return str(dest)
 
-    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result", download)
+    monkeypatch.setattr("trid3nt.workflows.solver.solver.download_result", download)
 
     def build(**over) -> Solved:
         display = _lattice(tmp_path / "mesh.2dm")
@@ -163,7 +163,7 @@ def test_a_series_at_a_point_is_the_containing_cells_heads_in_seconds(solved):
 
 def test_a_point_off_the_mesh_refuses_by_name(solved):
     lon, lat = _TO_LONLAT(100.0, 100.0)
-    from trid3nt_server.inputs.point import PointNotViableError
+    from trid3nt.inputs.point import PointNotViableError
 
     with pytest.raises(PointNotViableError) as caught:
         GWF.READS["series"](P.series("HEAD", at=(lon, lat), plane=1), solved())
@@ -183,7 +183,7 @@ def test_the_budget_discrepancy_is_the_listings_own(solved):
 
 
 def test_a_package_that_never_closed_is_named_with_the_discrepancy_its_own_budget_prints():
-    from trid3nt_server.workflows.modflow.modules.outputs import _package_budgets
+    from trid3nt.workflows.modflow.modules.outputs import _package_budgets
 
     block = ("  {} BUDGET FOR ENTIRE MODEL AT END OF TIME STEP    1, STRESS PERIOD   1\n  ----\n"
              "            TOTAL IN =        1095.9405\n PERCENT DISCREPANCY =  {}     PERCENT DISCREPANCY =  {}\n\n")
@@ -194,7 +194,7 @@ def test_a_package_that_never_closed_is_named_with_the_discrepancy_its_own_budge
 
 
 def test_the_budget_read_journals_each_package_s_own_discrepancy(solved, monkeypatch, tmp_path):
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     def download(run_id, basename):
         dest = tmp_path / f"own_{basename}"
@@ -205,7 +205,7 @@ def test_the_budget_read_journals_each_package_s_own_discrepancy(solved, monkeyp
         return str(dest)
 
     run = solved()
-    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result", download)
+    monkeypatch.setattr("trid3nt.workflows.solver.solver.download_result", download)
     token = bind_notes()
     GWF.READS["mass_balance"](P.mass_balance(), run)
 
@@ -215,7 +215,7 @@ def test_the_budget_read_journals_each_package_s_own_discrepancy(solved, monkeyp
 
 
 def test_the_budget_read_is_quiet_when_every_package_is_within_the_threshold(solved, monkeypatch, tmp_path):
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     def download(run_id, basename):
         dest = tmp_path / f"quiet_{basename}"
@@ -228,7 +228,7 @@ def test_the_budget_read_is_quiet_when_every_package_is_within_the_threshold(sol
         return str(dest)
 
     run = solved()
-    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result", download)
+    monkeypatch.setattr("trid3nt.workflows.solver.solver.download_result", download)
     token = bind_notes()
     GWF.READS["mass_balance"](P.mass_balance(), run)
 
@@ -370,7 +370,7 @@ def test_a_reading_asked_at_an_instant_is_compared_at_the_saved_time_its_window_
 
 
 def test_an_instant_the_run_saved_no_time_near_reads_the_nearest_and_says_so(solved, monkeypatch):
-    from trid3nt_server.inputs import run_notes
+    from trid3nt.inputs import run_notes
 
     said: list[str] = []
     monkeypatch.setattr(run_notes, "journal_note", said.append)

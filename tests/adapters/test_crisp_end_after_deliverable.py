@@ -13,8 +13,8 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.settings import entry
+from trid3nt_harness.model.adapters.model_selection import ModelSettings
+from trid3nt.settings import entry
 from trid3nt_server.server import (
     SessionState,
     _POST_DELIVERABLE_WRAPUP_ROUNDS,

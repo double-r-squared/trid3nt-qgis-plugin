@@ -15,9 +15,9 @@ import pytest
 from botocore.exceptions import ClientError
 
 from trid3nt_server import server
-from trid3nt_server.store import objects as storage
-from trid3nt_server.store.cases import Persistence
-import trid3nt_server.inputs.user_layer as iul
+from trid3nt.store import objects as storage
+from trid3nt.store.cases import Persistence
+import trid3nt.inputs.user_layer as iul
 from trid3nt_contracts.case import CaseSummary
 from trid3nt_contracts.common import new_ulid
 
@@ -202,7 +202,7 @@ async def test_ingest_vector_happy_path(monkeypatch, fake_persistence):
 
 @pytest.mark.asyncio
 async def test_ingest_raster_happy_path(monkeypatch, fake_persistence):
-    from trid3nt_server.render import publish as publish_layer_mod
+    from trid3nt.render import publish as publish_layer_mod
 
     case_id = new_ulid()
     fake_persistence._cases[case_id] = _case(case_id)
@@ -250,7 +250,7 @@ async def test_ingest_raster_happy_path(monkeypatch, fake_persistence):
 async def test_ingest_raster_reprojects_non_4326_crs(monkeypatch, fake_persistence):
     """A raster in EPSG:3857 is reprojected to a EPSG:4326 bbox (proves the
     rasterio.warp.transform_bounds branch, not just the already-4326 path)."""
-    from trid3nt_server.render import publish as publish_layer_mod
+    from trid3nt.render import publish as publish_layer_mod
 
     case_id = new_ulid()
     fake_persistence._cases[case_id] = _case(case_id)
@@ -413,7 +413,7 @@ def test_an_upload_is_staged_under_the_cache_bucket(monkeypatch):
     monkeypatch.delenv("TRID3NT_CACHE_BUCKET", raising=False)
     puts = _mock_s3_object(monkeypatch, b"")
     uri = iul.upload_layer_file("../a b.geojson", b"{}")
-    from trid3nt_server.tools.cache import CACHE_BUCKET
+    from trid3nt.tools.cache import CACHE_BUCKET
 
     assert uri.startswith(f"s3://{CACHE_BUCKET}/{iul.USER_UPLOAD_PREFIX}/")
     assert uri.endswith("/a_b.geojson")

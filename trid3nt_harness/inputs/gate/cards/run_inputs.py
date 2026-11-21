@@ -1,0 +1,130 @@
+"""The card a direct run opens for the inputs its call left out or that refused.
+
+One row per open input of a tool no workflow stands behind, each dropdown listing what that input's accept rule takes. The
+card's proceed launches only when the run is READY; short of that it is drawn again.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import inspect
+from typing import Any, Mapping, Sequence
+
+from trid3nt_contracts.common import SyntheticInput
+from trid3nt_contracts.payload_warning import ParamOption, ParamSheet, ParamSheetRow
+
+from trid3nt.inputs.accept import InputRefused, accept, inputs_of, offers
+from trid3nt_harness.inputs.gate.errors import UserDeclinedError
+from trid3nt.inputs.user_input import UserInputError
+
+__all__ = ["RunInputsDeclinedError", "open_inputs", "review_run_inputs"]
+
+class RunInputsDeclinedError(UserDeclinedError):
+    """The person cancelled the inputs card a direct run opened."""
+
+    error_code: str = "USER_INPUT_CANCELLED"
+
+    def __init__(self, tool_name: str) -> None:
+        super().__init__(
+            f"{tool_name} was cancelled on its inputs card; it did not run.",
+            f"The user cancelled the inputs card for {tool_name}. It did not run.")
+
+
+async def open_inputs(fn: Any, args: Mapping[str, Any],
+                      layers: Sequence[Mapping[str, Any]]
+                      ) -> tuple[dict[str, Any], dict[str, str]]:
+    """``(taken, refused)``: the call's stated inputs through their accept rule,
+    each either taken as the tool reads it or refused with its reason."""
+    taken, refused = {}, {}
+    for name, value in args.items():
+        if name not in inputs_of(fn):
+            taken[name] = value
+            continue
+        try:
+            taken[name] = await asyncio.to_thread(accept, fn, name, value, layers)
+        except InputRefused as exc:
+            refused[name] = str(exc)
+    return taken, refused
+
+
+async def review_run_inputs(tool_name: str, fn: Any, args: Mapping[str, Any], *,
+                            layers: Sequence[Mapping[str, Any]],
+                            emitter: Any) -> dict[str, Any]:
+    """The args a direct run launches with -> after its card, where one opens.
+
+    A workflow opens none: its fill judges every input inside the run. Any other tool stating every
+    input acceptably, or run with AUTO on, opens none; else the card lists what is left out or refused."""
+    if getattr(fn, "workflow", None) is not None:
+        # A workflow's inputs answer in its own fill, once, inside the run.
+        return dict(args)
+    from trid3nt_harness.inputs.gate.input_review import gate_input_review, resolve_input_gate_mode
+
+    taken, refused = await open_inputs(fn, args, layers)
+    if resolve_input_gate_mode() == "auto" and not refused:
+        return taken
+    rows = [name for name in inputs_of(fn) if name not in taken]
+    if not rows:
+        return taken
+    picked: dict[str, Any] = {}
+    lists = {name: await asyncio.to_thread(offers, fn, name, layers)
+             for name in rows}
+    signature = inspect.signature(fn).parameters
+
+    def blocked() -> str | None:
+        waits = [f"{name} (refused)" if name in refused else f"{name} (required)"
+                 for name in rows if name in refused or (
+                     name not in taken
+                     and signature[name].default is inspect.Parameter.empty)]
+        return ", ".join(waits) or None
+
+    async def card() -> Any:
+        from trid3nt_harness.inputs.gate.input_review import GateCard
+
+        drawn = [_row(name, picked.get(name, args.get(name)), lists[name],
+                      refused.get(name)) for name in rows]
+        waits_on = blocked()
+        title = f"Supply the inputs of {tool_name}" + (
+            f" - Run waits on {waits_on}" if waits_on else "")
+        return GateCard(
+            lines=[f"{row.name} = {'' if row.value is None else row.value}"
+                   + (f" (refused: {row.note})" if row.note else "")
+                   for row in drawn],
+            param_sheet=ParamSheet(workflow=tool_name, rows=drawn,
+                                   title=title))
+
+    async def revise(revised: Mapping[str, Any]) -> None:
+        for name, value in revised.items():
+            if name not in rows:
+                continue
+            picked[name] = value
+            try:
+                taken[name] = await asyncio.to_thread(accept, fn, name, value,
+                                                      layers)
+                refused.pop(name, None)
+            except InputRefused as exc:
+                taken.pop(name, None)
+                refused[name] = str(exc)
+
+    outcome = await gate_input_review(
+        tool_name=tool_name, mode="user_gated",
+        entries=[SyntheticInput(param=name, value=None, basis="user")
+                 for name in rows],
+        params={}, present=card, apply_revision=revise, blocked=blocked,
+        emitter=emitter)
+    if outcome.proceed:
+        return taken
+    if outcome.cancel_code == "declined":
+        raise RunInputsDeclinedError(tool_name)
+    raise UserInputError(outcome.cancel_reason or f"{tool_name} did not run.",
+                         code="USER_INPUT_CANCELLED")
+
+
+def _row(name: str, value: Any, listed: list[tuple[Any, str]] | None,
+         refusal: str | None) -> ParamSheetRow:
+    """One open input as the card draws it: its dropdown where it is picked."""
+    shown = value if isinstance(value, (int, float, str, bool, list)) \
+        or value is None else str(value)
+    return ParamSheetRow(
+        name=name, value=shown, note=refusal, source_badge=(refusal or "")[:200],
+        options=None if listed is None else [
+            ParamOption(value=option, label=label) for option, label in listed])

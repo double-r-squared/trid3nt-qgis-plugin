@@ -9,7 +9,7 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.store import objects as storage
+from trid3nt.store import objects as storage
 
 _MINIO = ("AWS_ENDPOINT_URL=http://127.0.0.1:9000\n"
           "AWS_ACCESS_KEY_ID=minio-key\n"
@@ -38,7 +38,7 @@ def test_a_chart_spec_persists_on_the_store_s_settings_not_ambient_credentials(
         wrong_ambient, monkeypatch):
     from botocore.stub import ANY, Stubber
 
-    from trid3nt_server.workflows.runtime import run_output
+    from trid3nt.workflows.runtime import run_output
 
     wrong_ambient.write_text(_MINIO, encoding="utf-8")
     built = storage.client()

@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.telemac.modules.gaia import _bed
-from trid3nt_server.workflows.telemac.templates.bed_scour import bed_scour
-from trid3nt_server.workflows.telemac.templates.rain_on_grid import rain_on_grid
+from trid3nt.workflows.telemac.modules.gaia import _bed
+from trid3nt.workflows.telemac.templates.bed_scour import bed_scour
+from trid3nt.workflows.telemac.templates.rain_on_grid import rain_on_grid
 
 
 @pytest.mark.parametrize("module, names", [

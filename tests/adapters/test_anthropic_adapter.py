@@ -17,8 +17,8 @@ from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, 
 
 import anthropic
 
-from trid3nt_server.model.adapters import anthropic_adapter as aa
-from trid3nt_server.model.adapters.adapter import (
+from trid3nt_harness.model.adapters import anthropic_adapter as aa
+from trid3nt_harness.model.adapters.adapter import (
     FunctionCallEvent,
     TextDeltaEvent,
     UpstreamProviderError,
@@ -327,8 +327,8 @@ def test_transient_classification():
 
 @pytest.mark.asyncio
 async def test_transient_error_retries_then_raises_typed(monkeypatch):
-    monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_RETRIES", 2)
-    monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_BACKOFF_S", 0.001)
+    monkeypatch.setattr("trid3nt_harness.model.adapters.adapter.PROVIDER_RETRIES", 2)
+    monkeypatch.setattr("trid3nt_harness.model.adapters.adapter.PROVIDER_BACKOFF_S", 0.001)
     attempts: list[int] = []
 
     def _factory(n: int):
@@ -346,8 +346,8 @@ async def test_transient_error_retries_then_raises_typed(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_transient_error_recovers_on_retry(monkeypatch):
-    monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_RETRIES", 2)
-    monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_BACKOFF_S", 0.001)
+    monkeypatch.setattr("trid3nt_harness.model.adapters.adapter.PROVIDER_RETRIES", 2)
+    monkeypatch.setattr("trid3nt_harness.model.adapters.adapter.PROVIDER_BACKOFF_S", 0.001)
 
     def _factory(n: int):
         if n == 1:
@@ -361,7 +361,7 @@ async def test_transient_error_recovers_on_retry(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_non_transient_error_fails_fast(monkeypatch):
-    monkeypatch.setattr("trid3nt_server.model.adapters.adapter.PROVIDER_RETRIES", 3)
+    monkeypatch.setattr("trid3nt_harness.model.adapters.adapter.PROVIDER_RETRIES", 3)
     calls: list[int] = []
 
     def _factory(n: int):
@@ -390,7 +390,7 @@ def test_error_class_telemetry():
 
 @pytest.mark.asyncio
 async def test_dispatch_routes_to_anthropic(monkeypatch):
-    from trid3nt_server.model.adapters import adapter as ad
+    from trid3nt_harness.model.adapters import adapter as ad
 
     monkeypatch.setenv("MODEL_PROVIDER", "anthropic")
     _install_client(monkeypatch, lambda _n: _FakeStream([_text_event("routed")], _final_message()))
@@ -404,7 +404,7 @@ async def test_dispatch_routes_to_anthropic(monkeypatch):
 
 
 def test_selected_model_passes_through_on_anthropic(monkeypatch):
-    from trid3nt_server.model.adapters import model_selection as ms
+    from trid3nt_harness.model.adapters import model_selection as ms
 
     monkeypatch.setenv("MODEL_PROVIDER", "anthropic")
     assert ms.resolve_selected_model("claude-opus-5") == ("claude-opus-5", None)

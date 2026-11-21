@@ -14,14 +14,14 @@ from typing import Any
 import numpy as np
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._router import registration as reg
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.errors import RouterInputError
-from trid3nt_server.tools.fetchers._router.executors import animation_frames as EX
-from trid3nt_server.tools.fetchers._router.hooks import FrameDegraded
-from trid3nt_server.tools.fetchers.weather.fetch_glm_lightning import hooks as GLM
-from trid3nt_server.tools.fetchers.imagery._goes_archive_core import _grid_for_bbox
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.fetchers._router import registration as reg
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.errors import RouterInputError
+from trid3nt.tools.fetchers._router.executors import animation_frames as EX
+from trid3nt.tools.fetchers._router.hooks import FrameDegraded
+from trid3nt.tools.fetchers.weather.fetch_glm_lightning import hooks as GLM
+from trid3nt.tools.fetchers.imagery._goes_archive_core import _grid_for_bbox
 
 
 def _scrubs(layers) -> bool:
@@ -113,7 +113,7 @@ def test_glm_signature_matches_twin():
 
 
 def test_glm_in_corpus():
-    from trid3nt_server.tools.search.search_tools.search_tools import _load_corpus
+    from trid3nt_harness.tools.search.search_tools.search_tools import _load_corpus
 
     corpus = _load_corpus()
     assert "fetch_glm_lightning" in corpus and len(corpus["fetch_glm_lightning"]) >= 3

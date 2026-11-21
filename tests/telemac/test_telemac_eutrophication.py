@@ -7,16 +7,16 @@ reference files is the driver's job, not this file's."""
 
 import pytest
 
-from trid3nt_server.workflows.telemac.modules import (
+from trid3nt.workflows.telemac.modules import (
     T2D,
     WAQTEL,
     fill,
     waqtel,
 )
-from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.workflows.runtime.primitives import OutputEmpty
-from trid3nt_server.workflows.telemac.modules.outputs import Solved
-from trid3nt_server.inputs.slots import BED, DISCHARGE, LINE, OBSERVE
+from trid3nt.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.runtime.primitives import OutputEmpty
+from trid3nt.workflows.telemac.modules.outputs import Solved
+from trid3nt.inputs.slots import BED, DISCHARGE, LINE, OBSERVE
 from seated import value_inputs, row_inputs
 #: The two algal processes, their rows and the body, read off the wrapper that
 #: carries them.
@@ -113,8 +113,8 @@ def test_the_oxygen_row_is_ranged_over_the_wet_nodes_and_pins_no_bottom():
     a ramp pinned to zero would spend half a percent of its colours on it."""
     import numpy as np
 
-    from trid3nt_server.render import presets
-    from trid3nt_server.workflows.runtime.primitives import _drawn
+    from trid3nt.render import presets
+    from trid3nt.workflows.runtime.primitives import _drawn
 
     style = {row.name: row.style for row in APPENDED[EUTRO]}["DISSOLVED O2"]
     assert "range" not in style and "floor" not in style
@@ -131,7 +131,7 @@ def test_a_background_variable_declares_no_visible_edge():
     """A quantity the water already carries everywhere has no boundary to draw:
     masking it below a fraction of its own peak erases the field. A RELEASED
     quantity is the opposite case, and the micropollutant rows say so."""
-    from trid3nt_server.workflows.telemac.modules.outputs import _floor
+    from trid3nt.workflows.telemac.modules.outputs import _floor
 
     background = {row.name: row for row in APPENDED[EUTRO]}
     assert background["DISSOLVED O2"].has_edge is False
@@ -238,7 +238,7 @@ def test_a_biomass_carrier_carries_five():
 
 
 def _template():
-    from trid3nt_server.workflows.telemac.templates.eutrophication import (
+    from trid3nt.workflows.telemac.templates.eutrophication import (
         eutrophication,
     )
 
@@ -308,7 +308,7 @@ def test_each_longitudinal_chart_draws_the_water_it_entered_on():
     """The water the reach ARRIVED at is drawn as a reference line on the chart
     that plots that tracer, off the value the deck states for it - one number,
     not a second surface in front of it."""
-    from trid3nt_server.workflows.runtime.primitives import Line, Profile
+    from trid3nt.workflows.runtime.primitives import Line, Profile
 
     template = _template()
     entering = template.STEERING.ASSERTED["INITIAL_VALUES_OF_TRACERS"]
@@ -469,7 +469,7 @@ def test_the_longitudinal_reads_are_taken_along_the_line_slot():
 def test_the_stretch_the_producer_walks_is_the_templates_own_number():
     """The template states its opinion of how far the water runs as the domain row's span; the
     reach_length_km a call may state is the runtime's own input, seated, never declared here."""
-    from trid3nt_server.workflows.telemac.templates.eutrophication import (
+    from trid3nt.workflows.telemac.templates.eutrophication import (
         eutrophication,
     )
 

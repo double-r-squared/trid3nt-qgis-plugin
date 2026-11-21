@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.render import publish as pl
-from trid3nt_server.render.publish import (
+from trid3nt.render import publish as pl
+from trid3nt.render.publish import (
     PublishLayerError,
     pop_legend_for_uri,
     publish_layer,
@@ -62,7 +62,7 @@ def test_observe_registers_the_one_uri(monkeypatch: pytest.MonkeyPatch) -> None:
     """observe_published_layer records the s3 COG. A layer has one uri."""
     calls: list[tuple] = []
     monkeypatch.setattr(
-        "trid3nt_server.render.publish.observe_published_layer",
+        "trid3nt.render.publish.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
     publish_layer(layer_uri=S3_URI, layer_id="flood-demo")

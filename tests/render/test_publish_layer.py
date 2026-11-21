@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.render.publish import (
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.render.publish import (
     PublishLayerError,
     derive_readable_layer_name,
     publish_layer,

@@ -18,8 +18,8 @@ import pandas as pd
 import pyogrio
 import pytest
 
-from trid3nt_server.tools.fetchers._router import registration
-from trid3nt_server.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
+from trid3nt.tools.fetchers._router import registration
+from trid3nt.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
 
 _FIX = Path(__file__).resolve().parents[1] / "fixtures" / "fetcher_fields"
 
@@ -55,7 +55,7 @@ def _tags(row):
 # ---------------------------------------------------------------- faults
 
 def test_a_fault_keeps_the_gem_record_whole_and_produces_the_parsed_kinematics():
-    from trid3nt_server.tools.fetchers.hazard.fetch_fault_sources import hooks as faults
+    from trid3nt.tools.fetchers.hazard.fetch_fault_sources import hooks as faults
 
     spec = _spec("fetch_fault_sources")
     found = faults.parse_response(spec, {"bbox": [-122.6, 37.2, -121.6, 38.0]}, [_bytes("gem_faults_excerpt.geojson")])
@@ -72,7 +72,7 @@ def test_a_fault_keeps_the_gem_record_whole_and_produces_the_parsed_kinematics()
 
 
 def test_a_fault_the_source_gives_no_rake_is_kept_with_every_field_and_the_reason():
-    from trid3nt_server.tools.fetchers.hazard.fetch_fault_sources import hooks as faults
+    from trid3nt.tools.fetchers.hazard.fetch_fault_sources import hooks as faults
 
     spec = _spec("fetch_fault_sources")
     (ardrossan,) = faults.parse_response(spec, {"bbox": [138.0, -34.0, 138.5, -33.5]}, [_bytes("gem_faults_excerpt.geojson")])
@@ -83,7 +83,7 @@ def test_a_fault_the_source_gives_no_rake_is_kept_with_every_field_and_the_reaso
 # ---------------------------------------------------------------- tsunamis
 
 def test_a_tsunami_event_keeps_every_field_ncei_returns():
-    from trid3nt_server.tools.fetchers.hazard.fetch_tsunami_events import hooks as tsunami
+    from trid3nt.tools.fetchers.hazard.fetch_tsunami_events import hooks as tsunami
 
     spec = _spec("fetch_tsunami_events")
     found = tsunami.parse_response(spec, {"observation_type": "events"}, [_bytes("ncei_tsunami_events_2011.json")])
@@ -97,7 +97,7 @@ def test_a_tsunami_event_keeps_every_field_ncei_returns():
 
 
 def test_a_tsunami_runup_keeps_its_distance_and_source_fields():
-    from trid3nt_server.tools.fetchers.hazard.fetch_tsunami_events import hooks as tsunami
+    from trid3nt.tools.fetchers.hazard.fetch_tsunami_events import hooks as tsunami
 
     spec = _spec("fetch_tsunami_events")
     found = tsunami.parse_response(spec, {"observation_type": "runups"}, [_bytes("ncei_tsunami_runups_2011.json")])
@@ -109,7 +109,7 @@ def test_a_tsunami_runup_keeps_its_distance_and_source_fields():
 # ---------------------------------------------------------------- volcanoes
 
 def test_a_volcano_keeps_both_hans_records_whole_and_produces_its_ranks():
-    from trid3nt_server.tools.fetchers.hazard.fetch_usgs_volcano_alerts import hooks as volcano
+    from trid3nt.tools.fetchers.hazard.fetch_usgs_volcano_alerts import hooks as volcano
 
     spec = _spec("fetch_usgs_volcano_alerts")
     found = volcano.parse_response(spec, {}, [_bytes("hans_monitored_volcanoes.json"), _bytes("hans_us_volcanoes.json")])
@@ -130,7 +130,7 @@ _NA_BBOX = (-90.0, 16.0, -80.0, 30.0)
 
 
 def _ibtracs(monkeypatch):
-    from trid3nt_server.tools.fetchers.weather.fetch_storm_tracks import hooks as storms
+    from trid3nt.tools.fetchers.weather.fetch_storm_tracks import hooks as storms
 
     monkeypatch.setattr(storms, "_http_get", lambda url, timeout=0.0: _bytes("ibtracs_idalia_2023_excerpt.csv"))
     return storms
@@ -162,7 +162,7 @@ def test_a_storm_line_carries_the_storms_own_fields_and_its_summary(monkeypatch)
 
 
 def test_the_active_storm_record_and_its_forecast_points_keep_what_nhc_serves():
-    from trid3nt_server.tools.fetchers.weather.fetch_storm_tracks import hooks as storms
+    from trid3nt.tools.fetchers.weather.fetch_storm_tracks import hooks as storms
 
     body = json.dumps({"activeStorms": [{
         "id": "al092026", "binNumber": "AT4", "name": "Ida", "classification": "HU", "intensity": "85",
@@ -180,7 +180,7 @@ def test_the_active_storm_record_and_its_forecast_points_keep_what_nhc_serves():
 # ---------------------------------------------------------------- WFIGS
 
 def test_an_incident_record_keeps_every_field_wfigs_returns():
-    from trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident import hooks as wfigs
+    from trid3nt.tools.fetchers.hazard.fetch_wfigs_incident import hooks as wfigs
 
     spec = _spec("fetch_wfigs_incident")
     record = wfigs.record(spec, {"incident_name": "Ranger Road"}, [_bytes("wfigs_year_to_date_features.json")])
@@ -210,7 +210,7 @@ class _Recorded:
 
 
 def test_an_ehydro_survey_keeps_its_index_record_and_every_sounding_its_point_record(monkeypatch):
-    from trid3nt_server.tools.fetchers.hydrology.fetch_ehydro_surveys import hooks as eh
+    from trid3nt.tools.fetchers.hydrology.fetch_ehydro_surveys import hooks as eh
 
     spec = _spec("fetch_ehydro_surveys")
     index = json.loads(_bytes("ehydro_index_feature.json"))["features"]
@@ -249,7 +249,7 @@ def _inside(body):
 
 @pytest.mark.parametrize("name,mirror", [("nhd_waterbody_hr.json", "hr"), ("nhd_waterbody_medium.json", "medium")])
 def test_a_waterbody_keeps_the_nhd_record_whole_under_one_spelling_of_its_names(name, mirror):
-    from trid3nt_server.tools.fetchers.hydrology.fetch_nhd_waterbody_at_point import hooks as wb
+    from trid3nt.tools.fetchers.hydrology.fetch_nhd_waterbody_at_point import hooks as wb
 
     spec = _spec("fetch_nhd_waterbody_at_point")
     body = _bytes(name)
@@ -269,7 +269,7 @@ def test_a_waterbody_keeps_the_nhd_record_whole_under_one_spelling_of_its_names(
 def test_a_flowline_keeps_the_properties_nldi_serves(monkeypatch):
     import dataretrieval.nldi as nldi
 
-    from trid3nt_server.tools.fetchers.hydrology.fetch_nhdplus_nldi_navigate import hooks as walk
+    from trid3nt.tools.fetchers.hydrology.fetch_nhdplus_nldi_navigate import hooks as walk
 
     served = json.loads(_bytes("nldi_flowlines_comid13294314.json"))
     monkeypatch.setattr(nldi, "_query_nldi", lambda url, query: served)
@@ -282,7 +282,7 @@ def test_a_flowline_keeps_the_properties_nldi_serves(monkeypatch):
 # ---------------------------------------------------------------- OSM
 
 def test_a_river_way_keeps_every_osm_tag_it_carries(monkeypatch):
-    from trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry import hooks as rivers
+    from trid3nt.tools.fetchers.hydrology.fetch_river_geometry import hooks as rivers
 
     frame = _osm("waterway")
     monkeypatch.setattr(rivers, "overpass_features", lambda *_a, **_k: frame)
@@ -296,7 +296,7 @@ def test_a_river_way_keeps_every_osm_tag_it_carries(monkeypatch):
 
 
 def test_a_building_keeps_every_osm_tag_and_states_its_ids(monkeypatch):
-    from trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings import hooks as buildings
+    from trid3nt.tools.fetchers.socioeconomic.fetch_buildings import hooks as buildings
 
     frame = _osm("buildings")
     monkeypatch.setattr(buildings, "overpass_features", lambda *_a, **_k: frame)
@@ -312,7 +312,7 @@ def test_a_building_keeps_every_osm_tag_and_states_its_ids(monkeypatch):
 
 
 def test_osm_roads_points_and_edges_keep_their_tags(monkeypatch):
-    from trid3nt_server.tools.fetchers.socioeconomic.fetch_osm_features import hooks as osmf
+    from trid3nt.tools.fetchers.socioeconomic.fetch_osm_features import hooks as osmf
 
     spec = _spec("fetch_osm_features")
     roads = _osm("roads")
@@ -343,7 +343,7 @@ def test_the_osm_source_declares_no_column_projection():
 def test_a_field_keeps_every_column_of_the_fiboa_file(monkeypatch):
     import fsspec
 
-    from trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries import hooks as fields
+    from trid3nt.tools.fetchers.socioeconomic.fetch_field_boundaries import hooks as fields
 
     spec = _spec("fetch_field_boundaries")
 
@@ -362,7 +362,7 @@ def test_a_field_keeps_every_column_of_the_fiboa_file(monkeypatch):
 # ---------------------------------------------------------------- usSEABED
 
 def test_a_seabed_sample_keeps_every_column_with_the_services_sentinels_null():
-    from trid3nt_server.tools.fetchers.ocean.fetch_usseabed import hooks as seabed
+    from trid3nt.tools.fetchers.ocean.fetch_usseabed import hooks as seabed
 
     spec = _spec("fetch_usseabed")
     found = seabed.parse_response(spec, {}, [_bytes("usseabed_chesapeake_ext_excerpt.zip")])
@@ -379,8 +379,8 @@ def test_a_seabed_sample_keeps_every_column_with_the_services_sentinels_null():
 # ---------------------------------------------------------------- bed material
 
 def test_a_bed_sample_keeps_the_station_record_and_every_result_row(monkeypatch):
-    from trid3nt_server.tools.fetchers._router.hooks import dataretrieval
-    from trid3nt_server.tools.fetchers.hydrology.fetch_nwis_bed_material import hooks as bed
+    from trid3nt.tools.fetchers._router.hooks import dataretrieval
+    from trid3nt.tools.fetchers.hydrology.fetch_nwis_bed_material import hooks as bed
 
     spec = _spec("fetch_nwis_bed_material")
     sites = pd.read_csv(_FIX / "wqp_bed_material_sites.csv")
@@ -405,7 +405,7 @@ def test_a_bed_sample_keeps_the_station_record_and_every_result_row(monkeypatch)
 
 def test_an_lter_entity_keeps_every_column_in_the_window():
     """The entity is the documented delimited shape stated by hand: EDI's service answers no public request from this host."""
-    from trid3nt_server.tools.fetchers.hydrology.fetch_lter_records import hooks as lter
+    from trid3nt.tools.fetchers.hydrology.fetch_lter_records import hooks as lter
 
     spec = _spec("fetch_lter_records")
     text = "\n".join(["Date\tSite\tDischarge\tDischarge_flag\tNote",
@@ -421,7 +421,7 @@ def test_an_lter_entity_keeps_every_column_in_the_window():
 # ---------------------------------------------------------------- epicentre and moment tensor
 
 def test_the_epicentre_record_keeps_every_event_property_and_the_origin_products():
-    from trid3nt_server.tools.fetchers.hazard.fetch_earthquake_epicentre import hooks as epicentre
+    from trid3nt.tools.fetchers.hazard.fetch_earthquake_epicentre import hooks as epicentre
 
     record = epicentre.record(_spec("fetch_earthquake_epicentre"), {"event_id": "us6000qw60"},
                               [_bytes("comcat_event_us6000qw60.json")])
@@ -434,7 +434,7 @@ def test_the_epicentre_record_keeps_every_event_property_and_the_origin_products
 
 
 def test_a_moment_tensor_solution_keeps_its_product_and_the_numbers_read_off_it():
-    from trid3nt_server.tools.fetchers.hazard.fetch_moment_tensor import hooks as tensor
+    from trid3nt.tools.fetchers.hazard.fetch_moment_tensor import hooks as tensor
 
     record = tensor.record(_spec("fetch_moment_tensor"), {"event_id": "us6000qw60"}, [_bytes("comcat_event_us6000qw60.json")])
     (solution,) = record["solutions"]
@@ -448,7 +448,7 @@ def test_a_moment_tensor_solution_keeps_its_product_and_the_numbers_read_off_it(
 # ---------------------------------------------------------------- FEMA declarations
 
 def test_the_declarations_are_returned_whole_with_no_county_aggregate():
-    from trid3nt_server.tools.fetchers.hazard.fetch_openfema_disasters import hooks as fema
+    from trid3nt.tools.fetchers.hazard.fetch_openfema_disasters import hooks as fema
 
     spec = _spec("fetch_openfema_disasters")
     found = fema.parse_response(spec, {"state_code": "RI"}, [_bytes("openfema_declarations_ri.json")])

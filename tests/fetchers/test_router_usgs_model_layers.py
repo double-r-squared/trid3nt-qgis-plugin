@@ -16,19 +16,19 @@ from typing import Any
 import numpy as np
 import pytest
 
-import trid3nt_server.tools.cache as cache_mod
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._router import registration as reg
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.errors import (
+import trid3nt.tools.cache as cache_mod
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.fetchers._router import registration as reg
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.tools.fetchers._router.executors import animation_frames as EX
-from trid3nt_server.tools.fetchers._router.transport import TransportError
-from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_model_k import hooks as MK
-from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_model_layers import (
+from trid3nt.tools.fetchers._router.executors import animation_frames as EX
+from trid3nt.tools.fetchers._router.transport import TransportError
+from trid3nt.tools.fetchers.hydrology.fetch_usgs_model_k import hooks as MK
+from trid3nt.tools.fetchers.hydrology.fetch_usgs_model_layers import (
     hooks as ML,
 )
 
@@ -47,7 +47,7 @@ _SURVEY_FT = 1200.0 / 3937.0
 def _offset_field(lon: float, lat: float) -> float:
     """The NGVD29 -> NAVD88 offset the seam gives at a cell centre; the full VERTCON grid reads -0.2605 at
     the ring's south-west corner and -0.2606 at its north-east one, so the field is checked against that band."""
-    from trid3nt_server.tools.fetchers import _proj_grids
+    from trid3nt.tools.fetchers import _proj_grids
 
     value = _proj_grids.geodetic_offset("NGVD29", "NAVD88", lon, lat)
     assert -0.265 < value < -0.255
@@ -374,7 +374,7 @@ def test_des_moines_is_seven_planned_and_emitted_and_read_as_published(monkeypat
 
 def test_a_cell_no_grid_covers_refuses_by_name_and_returns_no_frames(monkeypatch):
     _wire(monkeypatch)
-    from trid3nt_server.tools.fetchers import _proj_grids
+    from trid3nt.tools.fetchers import _proj_grids
 
     def _gap(*args):
         raise _proj_grids.NoGridCoverage("no PROJ grid covers the cell")
@@ -389,7 +389,7 @@ def test_a_cell_no_grid_covers_refuses_by_name_and_returns_no_frames(monkeypatch
 
 def test_a_grid_outage_is_retryable_upstream(monkeypatch):
     _wire(monkeypatch)
-    from trid3nt_server.tools.fetchers import _proj_grids
+    from trid3nt.tools.fetchers import _proj_grids
 
     def _down(*args):
         raise _proj_grids.DatumGridUnavailable("cdn down")

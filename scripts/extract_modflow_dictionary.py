@@ -46,7 +46,7 @@ def _get(url: str) -> bytes:
 
 def module_input_dir() -> Path:
     """Where the committed module inputs live."""
-    return (Path(__file__).resolve().parents[1] / "trid3nt_server" / "workflows"
+    return (Path(__file__).resolve().parents[1] / "trid3nt" / "workflows"
             / "modflow" / "modules" / "module_input")
 
 

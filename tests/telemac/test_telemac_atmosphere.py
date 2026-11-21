@@ -14,17 +14,17 @@ import math
 import pytest
 
 from trid3nt_contracts.coverage import Member
-from trid3nt_server.inputs.weather import weather
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.workflows.telemac.authoring.atmosphere import (
+from trid3nt.inputs.weather import weather
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.workflows.telemac.authoring.atmosphere import (
     ATMOSPHERE_FILENAME,
     TELEMAC2D_COLUMNS as _T2D_COLUMNS,
     Atmosphere,
     atmospheric_data_file,
 )
-from trid3nt_server.workflows.telemac.errors import TelemacError
-from trid3nt_server.workflows.telemac.modules import T2D, T3D, WAQTEL, fill
-from trid3nt_server.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.telemac.errors import TelemacError
+from trid3nt.workflows.telemac.modules import T2D, T3D, WAQTEL, fill
+from trid3nt.workflows.runtime.module import SlotRefused
 
 _HOUR = 3600.0
 
@@ -223,7 +223,7 @@ def test_the_vapour_pressure_is_magnus_over_the_reported_dew_point():
 def test_one_reported_humidity_column_states_both_slots():
     """The 2D budget reads the vapour pressure and the 3D one the relative
     humidity, so a record carrying either drives either host."""
-    from trid3nt_server.workflows.telemac.authoring.atmosphere import (
+    from trid3nt.workflows.telemac.authoring.atmosphere import (
         TELEMAC3D_COLUMNS,
     )
 
@@ -278,7 +278,7 @@ def _airport(hour: int, **overrides):
 
 def _ice_columns():
     """The columns a run coupling KHIONE alone under TELEMAC-2D reads."""
-    from trid3nt_server.workflows.telemac.authoring.atmosphere import READS
+    from trid3nt.workflows.telemac.authoring.atmosphere import READS
 
     return tuple(name for name in _T2D_COLUMNS if name in READS["khione"])
 

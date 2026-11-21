@@ -15,13 +15,13 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.fetchers import _slab2_grids as slab2
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.tools.fetchers.hazard.fetch_moment_tensor import hooks as tensor_hooks
-from trid3nt_server.tools.fetchers.hazard.fetch_slab_geometry import hooks as slab_hooks
-from trid3nt_server.workflows.geoclaw.errors import GeoclawError
-from trid3nt_server.workflows.geoclaw.helpers.scaling import RELATIONS, rupture_dimensions
-from trid3nt_server.workflows.geoclaw.modules import GEO
+from trid3nt.tools.fetchers import _slab2_grids as slab2
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.tools.fetchers.hazard.fetch_moment_tensor import hooks as tensor_hooks
+from trid3nt.tools.fetchers.hazard.fetch_slab_geometry import hooks as slab_hooks
+from trid3nt.workflows.geoclaw.errors import GeoclawError
+from trid3nt.workflows.geoclaw.helpers.scaling import RELATIONS, rupture_dimensions
+from trid3nt.workflows.geoclaw.modules import GEO
 
 _FIX = Path(__file__).parents[1] / "fixtures" / "geoclaw"
 _RUN = {"GEO_COORDINATE_SYSTEM": 2}

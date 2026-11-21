@@ -16,11 +16,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.tools.fetchers.hazard.fetch_finite_fault import hooks
-from trid3nt_server.workflows.geoclaw.authoring.dtopo import SUBFAULT_FIELDS, finite_fault_subfaults
-from trid3nt_server.workflows.geoclaw.errors import GeoclawError
-from trid3nt_server.workflows.geoclaw.modules import GEO
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.tools.fetchers.hazard.fetch_finite_fault import hooks
+from trid3nt.workflows.geoclaw.authoring.dtopo import SUBFAULT_FIELDS, finite_fault_subfaults
+from trid3nt.workflows.geoclaw.errors import GeoclawError
+from trid3nt.workflows.geoclaw.modules import GEO
 
 _FIX = Path(__file__).parents[1] / "fixtures" / "geoclaw" / "finite_fault"
 _RUN = {"GEO_COORDINATE_SYSTEM": 2}
@@ -171,7 +171,7 @@ def test_a_record_without_rupture_times_refuses_a_kinematic_statement():
 @pytest.mark.parametrize("times, start", [([5.0, 0.0, 3.0], 2), ([0.0, 0.0, 0.0], None), ([0.0, 0.0, 4.0], None),
                                           ([1.0, 2.0], None), ([None, 0.0], None), ([2.0, 2.0], None)])
 def test_the_epicentre_is_the_one_subfault_breaking_at_zero_and_none_otherwise(times, start):
-    from trid3nt_server.workflows.geoclaw.authoring.dtopo import epicentre
+    from trid3nt.workflows.geoclaw.authoring.dtopo import epicentre
 
     assert epicentre(times) == start
 

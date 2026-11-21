@@ -29,10 +29,10 @@ def _unresolved(roster: dict[str, set[str]]) -> list[str]:
 
 def test_a_runner_whose_module_moved_is_named_rather_than_raised():
     """A module that is gone is the case the guard exists for."""
-    gone = "trid3nt_server.workflows.telemac.authoring.moved_away.settle_reach"
+    gone = "trid3nt.workflows.telemac.authoring.moved_away.settle_reach"
     assert _unresolved({"a_template": {gone}}) == [
         f"a_template: {gone} (No module named "
-        "'trid3nt_server.workflows.telemac.authoring.moved_away')"]
+        "'trid3nt.workflows.telemac.authoring.moved_away')"]
 
 
 def test_a_measurement_the_module_does_not_carry_refuses_where_it_is_stated():
@@ -40,11 +40,11 @@ def test_a_measurement_the_module_does_not_carry_refuses_where_it_is_stated():
     and it says so at the template rather than at the stage."""
     import pytest
 
-    from trid3nt_server.workflows.runtime import DeclarationError
-    from trid3nt_server.workflows.telemac.workflow import _signature
+    from trid3nt.workflows.runtime import DeclarationError
+    from trid3nt.workflows.telemac.workflow import _signature
 
     with pytest.raises(DeclarationError, match="carries no 'settle_nothing'"):
-        _signature("trid3nt_server.workflows.telemac.authoring.opening"
+        _signature("trid3nt.workflows.telemac.authoring.opening"
                    ".settle_nothing")
 
 
@@ -53,8 +53,8 @@ def test_a_name_the_module_carries_that_takes_nothing_refuses_by_name():
     measurement refuses under the module and the name, not as a type error."""
     import pytest
 
-    from trid3nt_server.workflows.runtime import DeclarationError
-    from trid3nt_server.workflows.telemac.workflow import _signature
+    from trid3nt.workflows.runtime import DeclarationError
+    from trid3nt.workflows.telemac.workflow import _signature
 
     with pytest.raises(DeclarationError, match="carries no 'FLAT'"):
-        _signature("trid3nt_server.workflows.telemac.authoring.opening.FLAT")
+        _signature("trid3nt.workflows.telemac.authoring.opening.FLAT")

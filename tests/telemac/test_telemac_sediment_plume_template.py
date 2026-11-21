@@ -11,11 +11,11 @@ from __future__ import annotations
 import pytest
 
 from seated import REACH, SEATED
-from trid3nt_server.workflows.telemac.workflow import stated
-from trid3nt_server.workflows.telemac.templates.sediment_plume import (
+from trid3nt.workflows.telemac.workflow import stated
+from trid3nt.workflows.telemac.templates.sediment_plume import (
     sediment_plume as template,
 )
-from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
+from trid3nt.inputs.slots import BED, DISCHARGE, DOMAIN
 from seated import value_inputs, row_inputs
 
 _TOOL = "telemac_sediment_plume"
@@ -32,7 +32,7 @@ def test_registered_on_the_model_surface():
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     assert _TOOL in TOOL_REGISTRY
 

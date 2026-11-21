@@ -19,9 +19,9 @@ import httpx
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from trid3nt_server.tools.fetchers._router.key_statement import (  # noqa: E402
+from trid3nt.tools.fetchers._router.key_statement import (  # noqa: E402
     arcgis_states_key, ogc_states_key, openapi_states_key)
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree  # noqa: E402
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree  # noqa: E402
 
 _TIMEOUT_S = 20.0
 

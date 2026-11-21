@@ -5,12 +5,12 @@ from __future__ import annotations
 import pytest
 from shapely.geometry import shape
 
-from trid3nt_server.inputs.domain import domain
-from trid3nt_server.inputs.slots import DOMAIN
-from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime.fill import _Env, _span_km
-from trid3nt_server.workflows.runtime.workflow import REACH_LENGTH
+from trid3nt.inputs.domain import domain
+from trid3nt.inputs.slots import DOMAIN
+from trid3nt.inputs.user_input import UserInputError
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.runtime.fill import _Env, _span_km
+from trid3nt.workflows.runtime.workflow import REACH_LENGTH
 
 _SPANS = {
     "telemac_bed_scour": 6.0, "telemac_dye_release": 6.0, "telemac_sediment_plume": 6.0,

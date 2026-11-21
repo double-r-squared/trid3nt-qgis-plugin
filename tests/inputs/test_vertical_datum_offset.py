@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.vertical_datum import (
+from trid3nt.inputs.vertical_datum import (
     DatumError,
     Offset,
     align,

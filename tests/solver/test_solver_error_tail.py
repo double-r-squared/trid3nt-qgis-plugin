@@ -11,12 +11,12 @@ from typing import Any
 
 import pytest
 
-import trid3nt_server.workflows.solver.solver as solver_mod
-from trid3nt_server.store import objects as storage
-from trid3nt_server.workflows.geoclaw.engine import _spec as geoclaw_spec
-from trid3nt_server.workflows.modflow.engine import _spec as modflow_spec
-from trid3nt_server.workflows.pestpp.engine import _spec as pestpp_spec
-from trid3nt_server.workflows.telemac.engine import _spec as telemac_spec
+import trid3nt.workflows.solver.solver as solver_mod
+from trid3nt.store import objects as storage
+from trid3nt.workflows.geoclaw.engine import _spec as geoclaw_spec
+from trid3nt.workflows.modflow.engine import _spec as modflow_spec
+from trid3nt.workflows.pestpp.engine import _spec as pestpp_spec
+from trid3nt.workflows.telemac.engine import _spec as telemac_spec
 
 _TELEMAC = (" ITERATION      500    TIME:  6 MN\n"
             " THE FOLLOWING KEYWORD IS MANDATORY: BOUNDARY CONDITIONS FILE\n"

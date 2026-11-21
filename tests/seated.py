@@ -5,9 +5,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, Mapping
 
-from trid3nt_server.inputs.input import declared as body_of
-from trid3nt_server.errors import GateRefusedError
-from trid3nt_server.workflows.runtime.fill import REJECTED, Fill, Verdict, _answer
+from trid3nt.inputs.input import declared as body_of
+from trid3nt.errors import GateRefusedError
+from trid3nt.workflows.runtime.fill import REJECTED, Fill, Verdict, _answer
 
 
 #: The inputs a TELEMAC template carries without restating them, in the order its

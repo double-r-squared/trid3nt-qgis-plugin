@@ -10,14 +10,14 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt.tools import TOOL_REGISTRY
 from seated import resolve_params
-from trid3nt_server.workflows.runtime.fill import (REJECTED, Fill, fill,
+from trid3nt.workflows.runtime.fill import (REJECTED, Fill, fill,
                                                    production)
-from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.runtime.module import _read
-from trid3nt_server.workflows.telemac.modules.telemac2d import Sources
-from trid3nt_server.workflows.telemac.workflow import (Measured, _names,
+from trid3nt.workflows.telemac.modules import T2D
+from trid3nt.workflows.runtime.module import _read
+from trid3nt.workflows.telemac.modules.telemac2d import Sources
+from trid3nt.workflows.telemac.workflow import (Measured, _names,
                                                     _read_named)
 from seated import value_inputs, row_inputs
 
@@ -52,8 +52,8 @@ def test_a_composite_expands_from_the_mapping_with_only_a_literal_passed():
 
 
 def test_a_misspelled_input_in_a_recipe_is_refused_by_name_at_fill(monkeypatch):
-    from trid3nt_server.tools.mesh.tool import mesh_op, tool
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid import (
+    from trid3nt.tools.mesh.tool import mesh_op, tool
+    from trid3nt.workflows.telemac.templates.rain_on_grid import (
         rain_on_grid as template)
 
     monkeypatch.setattr(template, "MESH", tool.build_mesh(
@@ -65,7 +65,7 @@ def test_a_misspelled_input_in_a_recipe_is_refused_by_name_at_fill(monkeypatch):
 
 def test_a_misspelled_input_in_a_measurement_is_refused_by_name_at_fill(
         monkeypatch):
-    from trid3nt_server.workflows.telemac.templates.channel_dredging import (
+    from trid3nt.workflows.telemac.templates.channel_dredging import (
         channel_dredging as template)
 
     monkeypatch.setattr(template, "_DREDGE", Measured(
@@ -77,7 +77,7 @@ def test_a_misspelled_input_in_a_measurement_is_refused_by_name_at_fill(
 
 def test_a_misspelled_input_in_a_composite_is_refused_by_name_at_fill(
         monkeypatch):
-    from trid3nt_server.workflows.telemac.templates.dye_release import (
+    from trid3nt.workflows.telemac.templates.dye_release import (
         dye_release as template)
 
     class MISSPELT(T2D):
@@ -88,7 +88,7 @@ def test_a_misspelled_input_in_a_composite_is_refused_by_name_at_fill(
 
 
 def test_a_measurement_reads_a_template_input_by_name():
-    from trid3nt_server.workflows.telemac.templates.channel_dredging import (
+    from trid3nt.workflows.telemac.templates.channel_dredging import (
         channel_dredging as template)
 
     workflow = _workflow("telemac_channel_dredging")
@@ -105,8 +105,8 @@ def test_a_measurement_reads_a_template_input_by_name():
 def test_every_template_names_only_what_its_run_is_called():
     """A word an op's own signature takes as a string - set_bed's condition -
     stays a word; every other name a template writes is one of its run's."""
-    from trid3nt_server.tools.mesh.recipe import input_names
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid import (
+    from trid3nt.tools.mesh.recipe import input_names
+    from trid3nt.workflows.telemac.templates.rain_on_grid import (
         rain_on_grid as template)
 
     names = input_names(template.MESH)
@@ -140,7 +140,7 @@ def _stated(workflow):
 
 
 def _filled_with(monkeypatch, workflow, produce):
-    from trid3nt_server.workflows.runtime import fill as fill_mod
+    from trid3nt.workflows.runtime import fill as fill_mod
 
     monkeypatch.setattr(fill_mod, "_produce", produce)
     return asyncio.run(fill(Fill(workflow=workflow), _stated(workflow)))
@@ -150,7 +150,7 @@ def test_a_row_only_a_composite_reads_is_in_the_mapping_after_the_fill(
         monkeypatch):
     """The weather is read by the atmosphere composite and by nothing on the way
     in, so the fill is what produces it; the composite then only looks it up."""
-    from trid3nt_server.workflows.runtime import fill as fill_mod
+    from trid3nt.workflows.runtime import fill as fill_mod
 
     async def _fetched(env, decl):
         return f"the {decl.name} record"
@@ -166,7 +166,7 @@ def test_a_row_only_a_composite_reads_is_in_the_mapping_after_the_fill(
 
 def test_a_row_its_producer_fails_is_refused_at_fill_before_any_stage(
         monkeypatch):
-    from trid3nt_server.workflows.runtime.errors import StepFailedError
+    from trid3nt.workflows.runtime.errors import StepFailedError
 
     async def _produce(env, decl):
         if decl.name == "weather":
@@ -191,7 +191,7 @@ def test_every_row_a_template_reads_is_in_the_mapping_after_the_fill(
     """What a composite, a recipe or a measurement reads is produced at the
     fill; a row asked near a point the run places is produced once that point
     is, by the read before the sheet."""
-    from trid3nt_server.tools.mesh.recipe import input_names
+    from trid3nt.tools.mesh.recipe import input_names
 
     async def _produce(env, decl):
         return decl.name

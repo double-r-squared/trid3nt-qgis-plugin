@@ -7,26 +7,26 @@ import logging
 from dataclasses import dataclass
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._fetch_common import KeyAskError, UpstreamAPIError
-from trid3nt_server.tools.search.fetch import FETCH, resolve_fetch
-from trid3nt_server.tools.tool_arg_normalizer import autofill_missing_bbox, normalize_args
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.fetchers._fetch_common import KeyAskError, UpstreamAPIError
+from trid3nt_harness.tools.search.fetch import FETCH, resolve_fetch
+from trid3nt_harness.tools.tool_arg_normalizer import autofill_missing_bbox, normalize_args
 from trid3nt_server.render.pipeline_emitter import PipelineEmitter, bind_turn_case
-from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry, get_uri_registry
-# The gate engine (trid3nt_server.inputs.gate.confirm) is imported function-locally in
+from trid3nt.render.uri_registry import activate_registry, deactivate_registry, get_uri_registry
+# The gate engine (trid3nt_harness.inputs.gate.confirm) is imported function-locally in
 # _invoke_tool_via_emitter -- deferred to break the server<->gates load cycle.
 from trid3nt_server.server.config import _env_flag
 from trid3nt_server.server.dispatch.aoi import pin_case_aoi_from_solve
 from trid3nt_server.server.dispatch.persist import _VALID_ERROR_CODES, _persist_chart_record, _persist_chat_turn, _persist_tool_card
 from trid3nt_server.server.dispatch.results import _run_to_completion_shielded
-from trid3nt_server.inputs.gate.cards.key_ask import ask_for_key
-from trid3nt_server.inputs.gate.cards.run_inputs import review_run_inputs
-from trid3nt_server.model.credentials.resolver import bind_session, unbind_session
-from trid3nt_server.inputs.gate.errors import CodeExecConfirmationCancelledError, GateConfirmationTimeoutError, PayloadWarningCancelledError, SolverConfirmationCancelledError, UserDeclinedError
+from trid3nt_harness.inputs.gate.cards.key_ask import ask_for_key
+from trid3nt_harness.inputs.gate.cards.run_inputs import review_run_inputs
+from trid3nt.credentials.resolver import bind_session, unbind_session
+from trid3nt_harness.inputs.gate.errors import CodeExecConfirmationCancelledError, GateConfirmationTimeoutError, PayloadWarningCancelledError, SolverConfirmationCancelledError, UserDeclinedError
 from trid3nt_server.server.errors import ToolNotFoundError
 from trid3nt_server.server.session.case_state import _persist_case_layer_handles, _persist_case_loaded_layers, _turn_case_bbox, _turn_case_id
 from trid3nt_server.server.session.state import SessionState
-from trid3nt_server.inputs.extent import as_bbox
+from trid3nt.inputs.extent import as_bbox
 from trid3nt_server.server.spatial import _last_zoom_to_bbox
 from trid3nt_server.server.turn.wire import _emit_turn_complete, _send_error
 from typing import Any, Awaitable, Callable
@@ -228,8 +228,8 @@ def _reusable_fetch_layer(
 ) -> LayerURI | None:
     """The layer already on this Case whose bytes THIS fetch would re-produce, by the cache key
     both address. ``None`` for an undeclared, uncacheable or unmatched source."""
-    from trid3nt_server.tools.fetchers._router.registration import get_spec
-    from trid3nt_server.tools.fetchers._router.router import prospective_cache_key
+    from trid3nt.tools.fetchers._router.registration import get_spec
+    from trid3nt.tools.fetchers._router.router import prospective_cache_key
 
     spec = get_spec(tool_name)
     if spec is None or state.emitter is None:
@@ -264,7 +264,7 @@ async def _invoke_tool_via_emitter(
     """The tool-call site: every registry ``fn(...)`` runs through this wrapper,
     so each transition emits a step, a ``LayerURI`` return re-emits session
     state, and a cancel propagates while any other exception becomes a wire code."""
-    from trid3nt_server.inputs.gate.confirm import (
+    from trid3nt_harness.inputs.gate.confirm import (
         _gate_on_code_exec,
         _gate_spec_for,
         _gate_with_turn_memory,

@@ -1,0 +1,331 @@
+"""Two-mode INPUT_REQUIRED review gate -- the shared helper templates call.
+
+``auto`` proceeds with every non-user input labeled; ``user_gated`` presents them for
+approval, bounded to ``max_rounds`` rounds then an honest cancel.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+from dataclasses import dataclass, field
+from typing import Any, Awaitable, Callable, Literal
+
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.common import ORIGIN_LABELS, Origin, SyntheticInput
+from trid3nt_contracts.payload_warning import ParamSheet, PayloadWarningEnvelopePayload
+from trid3nt.settings import setting
+
+logger = logging.getLogger("trid3nt_harness.inputs.gate.input_review")
+
+__all__ = [
+    "GateCard",
+    "InputGateMode",
+    "ReviewOutcome",
+    "resolve_input_gate_mode",
+    "render_input_review_lines",
+    "gate_input_review",
+    "no_session",
+]
+
+#: Run-mode lever for every gated thing. ``auto``
+#: proceeds immediately with labeled inputs; ``user_gated`` pauses for review.
+InputGateMode = Literal["auto", "user_gated"]
+
+
+def resolve_input_gate_mode(forced: InputGateMode | None = None) -> InputGateMode:
+    """The mode in force: ``forced`` where a gate must always ask, else ``auto`` where the person's AUTO setting is on.
+
+    The setting is the person's alone - no call and no run states it - so a ready run launches on an act the person chose to skip."""
+    return forced or ("auto" if setting("AUTO") else "user_gated")
+
+
+def _entry_field(e: Any, name: str) -> Any:
+    return e.get(name) if isinstance(e, dict) else getattr(e, name, None)
+
+
+def render_input_review_lines(entries: Any) -> list[str]:
+    """One compact line per resolved input: ``param = value [origin, source]``.
+
+    ``source`` names the fetcher or dataset only where there is one."""
+    lines: list[str] = []
+    for e in entries or []:
+        value = _entry_field(e, "value")
+        units = _entry_field(e, "units")
+        source = _entry_field(e, "real_source_if_any")
+        val_txt = "?" if value is None else f"{value}"
+        if units:
+            val_txt = f"{val_txt} {units}"
+        tag = ORIGIN_LABELS[Origin(_entry_field(e, "basis"))]
+        src = f", {source}" if source else ""
+        lines.append(f"{_entry_field(e, 'param')} = {val_txt} [{tag}{src}]")
+    return lines
+
+
+def _build_review_envelope(
+    *,
+    tool_name: str,
+    lines: list[str],
+    entries: list[SyntheticInput],
+    round_idx: int,
+    max_rounds: int,
+    ttl_seconds: int,
+    param_sheet: "ParamSheet | None" = None,
+    tool_args: dict[str, Any] | None = None,
+) -> PayloadWarningEnvelopePayload:
+    """Build the gate's ``tool-payload-warning`` round card.
+
+    ``param_sheet`` is the resolved sheet as an EDIT SURFACE; ``narrow_scope`` is "provide values"."""
+    # The card is carried twice on purpose: rendered into ``recommendation`` so
+    # a client with no rich renderer still surfaces it, and structured on
+    # ``param_sheet`` and ``synthetic_inputs`` for the ones that do.
+    header = f"Review {tool_name} before it runs (round {round_idx}/{max_rounds}):"
+    body = "\n".join(f"- {ln}" for ln in lines)
+    footer = (
+        "Reply 'proceed' to run as-is, 'provide values' to adjust an input, or "
+        "'cancel'."
+    )
+    recommendation = f"{header}\n{body}\n{footer}"
+    # Trim the body (never the header/footer) if the table overruns the cap.
+    if len(recommendation) > 512:
+        budget = 512 - len(header) - len(footer) - 2
+        recommendation = f"{header}\n{body[: max(0, budget)]}\n{footer}"[:512]
+    return PayloadWarningEnvelopePayload(
+        warning_id=new_ulid(),
+        tool_name=tool_name,
+        tool_args=dict(tool_args or {}),
+        estimated_mb=0.0,
+        threshold_mb=0.0,
+        recommendation=recommendation,
+        options=["proceed", "narrow_scope", "cancel"],
+        ttl_seconds=int(ttl_seconds),
+        synthetic_inputs=list(entries),
+        param_sheet=param_sheet,
+    )
+
+
+def _apply_revision(
+    entries: list[SyntheticInput],
+    params: dict[str, Any],
+    revised_args: dict[str, Any] | None,
+) -> tuple[list[SyntheticInput], dict[str, Any]]:
+    """Merge a ``provide values`` revision into the params + provenance entries.
+
+    A revised value is re-stamped as the user's, units preserved; an unknown key becomes a new entry."""
+    revised = revised_args or {}
+    if not revised:
+        return entries, params
+    merged_params = dict(params)
+    by_param = {str(_entry_field(e, "param")): e for e in entries}
+    merged_entries = list(entries)
+    for key, val in revised.items():
+        merged_params[key] = val
+        existing = by_param.get(str(key))
+        if existing is not None:
+            units = _entry_field(existing, "units")
+            new_entry = SyntheticInput(
+                param=str(key), value=val, units=units, basis=Origin.USER,
+                note="user-revised at review",
+            )
+            merged_entries = [
+                new_entry if str(_entry_field(e, "param")) == str(key) else e
+                for e in merged_entries
+            ]
+        else:
+            merged_entries.append(
+                SyntheticInput(param=str(key), value=val, basis=Origin.USER,
+                               note="user-supplied at review")
+            )
+    return merged_entries, merged_params
+
+
+@dataclass(frozen=True)
+class GateCard:
+    """What a gate's card says this round: the body lines, the sheet, the args.
+
+    A caller with a thing of its own under review builds this each round, so what
+    the person reads is measured now rather than when the gate opened."""
+
+    lines: list[str]
+    param_sheet: "ParamSheet | None" = None
+    tool_args: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ReviewOutcome:
+    """The result of an input-review gate.
+
+    ``proceed`` means run with ``params`` and stamp ``entries`` into the result;
+    ``cancelled`` means the template returns a typed cancel error and does NOT solve."""
+
+    proceed: bool
+    entries: list[SyntheticInput]
+    params: dict[str, Any]
+    cancelled: bool = False
+    cancel_reason: str | None = None
+    #: Which cancel this is - ``no_session``, ``timeout``, ``declined`` or
+    #: ``not_approved`` - so a caller can raise its own typed error by it.
+    cancel_code: str | None = None
+    mode: InputGateMode = "auto"
+    rounds_used: int = 0
+
+
+def no_session(tool_name: str, forced: InputGateMode | None = None) -> str | None:
+    """What a user-gated run with no live session refuses on, or ``None`` where it may launch: a workflow says it at its fill, the gate where a card would have opened."""
+    from trid3nt_server.render.pipeline_emitter import current_emitter
+
+    if resolve_input_gate_mode(forced) == "auto" or current_emitter() is not None:
+        return None
+    return (
+        f"NO_SESSION: {tool_name} did not run - it waits for a person "
+        "to proceed on its review card and no session is open. Open a "
+        "session to review and launch it, or turn AUTO on in "
+        "Settings to launch it at once.")
+
+
+async def gate_input_review(
+    *,
+    tool_name: str,
+    entries: list[SyntheticInput],
+    params: dict[str, Any],
+    mode: InputGateMode | None = None,
+    max_rounds: int | None = None,
+    ttl_seconds: int | None = None,
+    param_sheet: "ParamSheet | None" = None,
+    present: Callable[[], Awaitable[GateCard]] | None = None,
+    apply_revision: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+    blocked: Callable[[], str | None] | None = None,
+    emitter: Any = None,
+) -> ReviewOutcome:
+    """Present what is under review before it runs, and ask.
+
+    The mode is the AUTO setting unless ``mode`` forces one: ``auto`` proceeds at once; ``user_gated`` with no live session REFUSES. ``present``/``apply_revision``/``blocked`` let a caller that owns the
+    thing reviewed build the card, take a reply as a change, and name what blocks a proceed.
+    Unstated, ``max_rounds`` and ``ttl_seconds`` are the MAX_ROUNDS and TTL_S settings; a ``provide values`` reply consumes a round and running out of either is a typed cancel."""
+    max_rounds = max_rounds or setting("MAX_ROUNDS")
+    ttl_seconds = ttl_seconds or setting("TTL_S")
+    resolved_mode = resolve_input_gate_mode(mode)
+    if resolved_mode == "auto":
+        return ReviewOutcome(proceed=True, entries=list(entries),
+                             params=dict(params), mode="auto")
+
+    # user_gated: the proceed on the card IS the launch, so a call with no live
+    # session to present on refuses rather than runs.
+    from trid3nt_server.render.pipeline_emitter import current_emitter
+    from trid3nt_harness.inputs.gate.pending import _PENDING_CONFIRMATIONS
+
+    emitter = emitter or current_emitter()
+    if emitter is None:
+        logger.info("input-review gate REFUSE (user_gated, no session) tool=%s",
+                    tool_name)
+        return ReviewOutcome(
+            proceed=False, entries=list(entries), params=dict(params),
+            cancelled=True, mode="user_gated", cancel_code="no_session",
+            cancel_reason=no_session(tool_name, mode))
+
+    cur_entries = list(entries)
+    cur_params = dict(params)
+    for round_idx in range(1, max_rounds + 1):
+        card = (await present() if present is not None
+                else GateCard(lines=render_input_review_lines(cur_entries),
+                              param_sheet=param_sheet))
+        envelope = _build_review_envelope(
+            tool_name=tool_name, lines=card.lines, entries=cur_entries,
+            round_idx=round_idx, max_rounds=max_rounds, ttl_seconds=ttl_seconds,
+            param_sheet=card.param_sheet, tool_args=card.tool_args,
+        )
+        warning_id = envelope.warning_id
+        logger.info(
+            "input-review gate emitted session=%s tool=%s warning_id=%s "
+            "round=%d/%d entries=%d",
+            emitter.session_id, tool_name, warning_id, round_idx, max_rounds,
+            len(cur_entries),
+        )
+        try:
+            decision = await _PENDING_CONFIRMATIONS.park(
+                emitter.session_id, warning_id,
+                lambda: emitter.send_envelope("tool-payload-warning", envelope),
+                ttl_seconds)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "input-review gate timeout session=%s tool=%s warning_id=%s",
+                emitter.session_id, tool_name, warning_id,
+            )
+            return ReviewOutcome(
+                proceed=False, entries=cur_entries, params=cur_params,
+                cancelled=True, cancel_reason="review timed out; the solver did "
+                "not run", mode="user_gated", rounds_used=round_idx,
+                cancel_code="timeout",
+            )
+
+        waits_on = (blocked() if blocked is not None
+                    and decision.decision == "proceed" else None)
+        if waits_on:
+            # Ready is nothing refused and nothing required missing: a proceed
+            # short of it launches nothing and the card is drawn again.
+            logger.info(
+                "input-review gate proceed BLOCKED session=%s tool=%s on %s",
+                emitter.session_id, tool_name, waits_on)
+            if round_idx == max_rounds:
+                return ReviewOutcome(
+                    proceed=False, entries=cur_entries, params=cur_params,
+                    cancelled=True, cancel_reason=(
+                        f"{tool_name} did not run: it still waits on {waits_on}"),
+                    mode="user_gated", rounds_used=round_idx,
+                    cancel_code="not_approved")
+            continue
+        if decision.decision == "proceed":
+            logger.info(
+                "input-review gate proceed session=%s tool=%s round=%d",
+                emitter.session_id, tool_name, round_idx,
+            )
+            return ReviewOutcome(proceed=True, entries=cur_entries,
+                                 params=cur_params, mode="user_gated",
+                                 rounds_used=round_idx)
+        if decision.decision == "cancel":
+            return ReviewOutcome(
+                proceed=False, entries=cur_entries, params=cur_params,
+                cancelled=True, cancel_reason="declined by user at input review",
+                mode="user_gated", rounds_used=round_idx, cancel_code="declined",
+            )
+        # narrow_scope == "provide values": a caller owning the thing under review applies
+        # the reply to it and re-presents; otherwise the revision merges into the params.
+        if apply_revision is not None:
+            await apply_revision(decision.revised_args or {})
+            if round_idx == max_rounds:
+                return ReviewOutcome(
+                    proceed=False, entries=cur_entries, params=cur_params,
+                    cancelled=True, cancel_reason=(
+                        f"not approved after {max_rounds} rounds; {tool_name} "
+                        "did not run"
+                    ), mode="user_gated", rounds_used=round_idx,
+                    cancel_code="not_approved")
+            continue
+        cur_entries, cur_params = _apply_revision(
+            cur_entries, cur_params, decision.revised_args
+        )
+        if param_sheet is not None:
+            # The form card showed the WHOLE sheet, so submitting it IS the approval and
+            # the gate proceeds instead of re-presenting. Without a sheet the text card
+            # re-presents, since the user could not see the revision in full.
+            logger.info(
+                "input-review gate submit-with-edits session=%s tool=%s revised=%s",
+                emitter.session_id, tool_name,
+                sorted(decision.revised_args or {}),
+            )
+            return ReviewOutcome(proceed=True, entries=cur_entries,
+                                 params=cur_params, mode="user_gated",
+                                 rounds_used=round_idx)
+        if round_idx == max_rounds:
+            return ReviewOutcome(
+                proceed=False, entries=cur_entries, params=cur_params,
+                cancelled=True, cancel_reason=(
+                    f"input review not approved after {max_rounds} rounds; the "
+                    "solver did not run"
+                ), mode="user_gated", rounds_used=round_idx,
+                cancel_code="not_approved",
+            )
+    # Unreachable (loop always returns), but keep a definite outcome.
+    return ReviewOutcome(proceed=False, entries=cur_entries, params=cur_params,
+                         cancelled=True, cancel_reason="input review not approved",
+                         mode="user_gated", rounds_used=max_rounds,
+                         cancel_code="not_approved")

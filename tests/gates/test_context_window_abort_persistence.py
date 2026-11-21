@@ -13,16 +13,16 @@ import logging
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.model.adapters.adapter import TextDeltaEvent, FunctionCallEvent
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.model.guards.context_budget import (
+from trid3nt_harness.model.adapters.model_selection import ModelSettings
+from trid3nt_harness.model.adapters.adapter import TextDeltaEvent, FunctionCallEvent
+from trid3nt import tools as agent_tools
+from trid3nt_harness.model.guards.context_budget import (
     CONTEXT_WINDOW_ABORT_NOTE,
     ContextWindowExceededError,
     FABRICATION_CAVEAT,
 )
-from trid3nt_server.store.cases import make_file_persistence
-from trid3nt_server.tools import RegisteredTool
+from trid3nt.store.cases import make_file_persistence
+from trid3nt.tools import RegisteredTool
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.tool_registry import AtomicToolMetadata

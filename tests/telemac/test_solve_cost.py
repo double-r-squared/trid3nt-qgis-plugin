@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.telemac.helpers.solve_cost import (
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.telemac.helpers.solve_cost import (
     SECONDS_PER_NODE_STEP, SERIAL_FRACTION, solve_wall_seconds)
-from trid3nt_server.workflows.telemac.helpers.time_step import suggest_time_step_s
+from trid3nt.workflows.telemac.helpers.time_step import suggest_time_step_s
 
 
 def _workflow(name="telemac_dye_release"):
@@ -64,9 +64,9 @@ def test_a_module_with_no_measured_estimate_hands_none():
 
 @pytest.mark.asyncio
 async def test_the_mesh_step_hands_the_estimate_to_the_session(monkeypatch):
-    from trid3nt_server.tools.mesh import gate as gate_mod
-    from trid3nt_server.tools.mesh import session as session_mod
-    from trid3nt_server.tools.mesh import step as mesh_step
+    from trid3nt.tools.mesh import gate as gate_mod
+    from trid3nt.tools.mesh import session as session_mod
+    from trid3nt.tools.mesh import step as mesh_step
 
     seen = {}
 

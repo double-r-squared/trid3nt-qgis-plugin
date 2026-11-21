@@ -13,13 +13,13 @@ import tempfile
 import geopandas as gpd
 import pytest
 
-from trid3nt_server.tools.fetchers._router import field_map
-from trid3nt_server.tools.fetchers._router.executors import http_json
-from trid3nt_server.tools.fetchers._router.executors.vector_fgb import (
+from trid3nt.tools.fetchers._router import field_map
+from trid3nt.tools.fetchers._router.executors import http_json
+from trid3nt.tools.fetchers._router.executors.vector_fgb import (
     features_to_fgb_bytes,
 )
-from trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire import hooks as fh
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.hazard.fetch_firms_active_fire import hooks as fh
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
 _HEADER = (
     "latitude,longitude,brightness,scan,track,acq_date,acq_time,"
@@ -75,7 +75,7 @@ def test_missing_key_asks_pre_network(spec, monkeypatch):
 
 
 def test_the_session_key_is_the_one_in_the_url(spec, monkeypatch):
-    from trid3nt_server.model.credentials import resolver
+    from trid3nt.credentials import resolver
 
     monkeypatch.setenv("TRID3NT_FIRMS_MAP_KEY", "ENVKEY")
     resolver.set_session_credential("s-firms", "firms", "SESSIONKEY")

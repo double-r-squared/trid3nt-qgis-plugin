@@ -6,15 +6,15 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime import fill as fill_mod
-from trid3nt_server.workflows.runtime.fill import Fill
-from trid3nt_server.workflows.runtime import journal
+from trid3nt.inputs.run_notes import bind_notes, drain_notes
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.runtime import fill as fill_mod
+from trid3nt.workflows.runtime.fill import Fill
+from trid3nt.workflows.runtime import journal
 from seated import resolve_params, value_inputs
-from trid3nt_server.workflows.telemac import workflow as tw
-from trid3nt_server.workflows.telemac.authoring import mesh_files, opening, release_point
-from trid3nt_server.tools.mesh import step as mesh_step
+from trid3nt.workflows.telemac import workflow as tw
+from trid3nt.workflows.telemac.authoring import mesh_files, opening, release_point
+from trid3nt.tools.mesh import step as mesh_step
 
 
 def _launched(monkeypatch, *, carried, settled=None):
@@ -42,8 +42,8 @@ def _launched(monkeypatch, *, carried, settled=None):
     state = Fill(workflow=workflow, carried=carried,
                  inputs=asyncio.run(resolve_params(value_inputs(workflow), {})))
     from trid3nt_contracts.common import Origin
-    from trid3nt_server.inputs.point import Point
-    from trid3nt_server.workflows.runtime.fill import ACCEPTED, Verdict
+    from trid3nt.inputs.point import Point
+    from trid3nt.workflows.runtime.fill import ACCEPTED, Verdict
 
     state.inputs["release"] = Verdict(ACCEPTED, Point(-122.65, 45.53), origin=Origin.USER)
     token = bind_notes()
@@ -87,7 +87,7 @@ def test_unset_is_a_normal_run(monkeypatch):
 
 def test_a_variable_time_step_refuses_naming_the_control():
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
-    from trid3nt_server.workflows.telemac.errors import TelemacError
+    from trid3nt.workflows.telemac.errors import TelemacError
 
     with pytest.raises(TelemacError, match="check_steps"):
         workflow._checked({tw._SETTLED: {"server_facts": {"duration_s": 3600.0}, "keywords": {"TIME_STEP": 1.0}}}, {"VARIABLE TIME-STEP": True}, 5)
@@ -127,7 +127,7 @@ def test_the_journal_record_says_it_is_a_check_run():
 
 def test_a_check_shorter_than_the_duration_range_refuses_naming_the_steps_it_needs():
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
-    from trid3nt_server.workflows.telemac.errors import TelemacError
+    from trid3nt.workflows.telemac.errors import TelemacError
 
     with pytest.raises(TelemacError, match=r"check_steps of 86 or more") as raised:
         workflow._checked({tw._SETTLED: {"server_facts": {"duration_s": 3600.0}, "keywords": {"TIME_STEP": 0.7, "DURATION": 3600.0}}}, {}, 40)

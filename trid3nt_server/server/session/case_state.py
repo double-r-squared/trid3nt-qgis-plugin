@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from trid3nt_server.model.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
-from trid3nt_server.inputs.extent import as_bbox
-from trid3nt_server.render.uri_registry import get_uri_registry
+from trid3nt.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
+from trid3nt.inputs.extent import as_bbox
+from trid3nt.render.uri_registry import get_uri_registry
 from trid3nt_server.server.session.persistence_ref import get_persistence
 from trid3nt_server.server.session.state import SessionState, _SESSION_ACTIVE_CASE, _set_session_active_case
 from typing import Any

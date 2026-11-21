@@ -12,10 +12,10 @@ import math
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring import opening as D
-from trid3nt_server.workflows.telemac.authoring import rating_curve as CURVE
-from trid3nt_server.workflows.telemac.helpers import uniform_flow as U
-from trid3nt_server.workflows.telemac.errors import TelemacError
+from trid3nt.workflows.telemac.authoring import opening as D
+from trid3nt.workflows.telemac.authoring import rating_curve as CURVE
+from trid3nt.workflows.telemac.helpers import uniform_flow as U
+from trid3nt.workflows.telemac.errors import TelemacError
 
 #: A trapezoid: 40 m bed at 97 m, banks rising 3 m over 10 m either side.
 _SECTION = [[0.0, 100.0], [10.0, 97.0], [50.0, 97.0], [60.0, 100.0]]
@@ -209,7 +209,7 @@ def test_the_curve_file_is_written_in_the_engines_own_block_format():
     """The engine's reader takes a header naming the boundary, a units line it skips,
     then two columns until a blank; under Q(n) the first column is the discharge. The
     file is the RATING composite's, beside the two keywords that name it."""
-    from trid3nt_server.workflows.telemac.modules import T2D
+    from trid3nt.workflows.telemac.modules import T2D
 
     slots, files = T2D.COMPOSITES["rating"].expand({"measured": {
         "at_boundary": 2, "of_boundaries": 3,
@@ -249,8 +249,8 @@ def test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area():
     assert ceiling == pytest.approx(0.036 / 3600.0 * 1.0e6)
     assert "1.000 km2" in basis and "36 mm/h" in basis
 
-    from trid3nt_server.inputs.rain import Rain
-    from trid3nt_server.workflows.telemac.modules.telemac2d import storm_rain
+    from trid3nt.inputs.rain import Rain
+    from trid3nt.workflows.telemac.modules.telemac2d import storm_rain
 
     # A stated series is hourly; a record's rate is over its OWN interval.
     stated = storm_rain([3.0, 12.5, 0.0], Rain.every(900.0, [1.0, 1.0]))

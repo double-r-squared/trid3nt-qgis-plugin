@@ -19,18 +19,18 @@ from pyproj import Transformer
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-from trid3nt_server.render.formats import Mesh, Published
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow.authoring import mesh_files as MF
-from trid3nt_server.workflows.modflow.authoring import simulation as SIM
-from trid3nt_server.workflows.modflow.authoring.staged_check import check_staged_run
-from trid3nt_server.workflows.modflow.authoring.simulation import serialize
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF, GWT
-from trid3nt_server.workflows.modflow.modules.outputs import Solved
-from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.inputs.run_notes import bind_notes, drain_notes
+from trid3nt.render.formats import Mesh, Published
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow.authoring import mesh_files as MF
+from trid3nt.workflows.modflow.authoring import simulation as SIM
+from trid3nt.workflows.modflow.authoring.staged_check import check_staged_run
+from trid3nt.workflows.modflow.authoring.simulation import serialize
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF, GWT
+from trid3nt.workflows.modflow.modules.outputs import Solved
+from trid3nt.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.runtime.sheet import fill
 
 #: p01, as the spike's reference grid states it: one row of 101 cells, 10 m each, top 0 bottom -1.
 _NCOL = 101
@@ -201,7 +201,7 @@ def test_a_run_created_body_missing_a_required_keyword_refuses_by_name(
         strip, staged_beside, tmp_path):
     """A body the run's own qualified keywords create is held to the same required
     set at the write: mf6's own unstated refusal, naming the keyword."""
-    from trid3nt_server.workflows.modflow.workflow import _compose_coupled, _floor
+    from trid3nt.workflows.modflow.workflow import _compose_coupled, _floor
 
     sheet = _sheet()
     assert sheet.coupled == ()
@@ -223,9 +223,9 @@ def test_a_run_created_body_serializes_and_mf6_validates(
     """The body the run's own qualified keywords create writes and validates like a
     template's: its name file and solution over the same DISV, the exchange, and
     mf6's own --mode validate accepting the directory."""
-    from trid3nt_server.workflows.modflow.authoring.validate import (
+    from trid3nt.workflows.modflow.authoring.validate import (
         validate_authored_simulation)
-    from trid3nt_server.workflows.modflow.workflow import _compose_coupled, _floor
+    from trid3nt.workflows.modflow.workflow import _compose_coupled, _floor
 
     sheet = _sheet()
     _, coupled = _floor(sheet.body,
@@ -316,7 +316,7 @@ def test_each_transport_value_left_unstated_refuses_by_name(
 
 
 def test_cnc_at_a_point_off_the_mesh_refuses(strip, staged_beside, tmp_path):
-    from trid3nt_server.inputs.point import PointNotViableError
+    from trid3nt.inputs.point import PointNotViableError
 
     transport = _transport()
     transport["slots"]["CNC_STRESS_PERIOD_DATA"] = {
@@ -384,8 +384,8 @@ def publish(monkeypatch, tmp_path, fake_s3):
         shutil.copy(_FIXTURE / basename, dest)
         return str(dest)
 
-    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result", download)
-    from trid3nt_server.workflows.modflow.modules import outputs as out_mod
+    monkeypatch.setattr("trid3nt.workflows.solver.solver.download_result", download)
+    from trid3nt.workflows.modflow.modules import outputs as out_mod
     quads = ([(x, y) for y in (0.0, 1.0) for x in (0.0, 10.0, 20.0, 30.0)],
              [[c, 4 + c, 5 + c, c + 1] for c in range(3)], None, None)
     monkeypatch.setattr(out_mod, "mesh_nodes", lambda _mesh: quads)
@@ -399,7 +399,7 @@ def publish(monkeypatch, tmp_path, fake_s3):
                      uri=f"s3://runs/{run_id}/{item.product.file}")
             for rank, item in enumerate(items) if isinstance(item.product, Mesh)))
 
-    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
+    monkeypatch.setattr("trid3nt.workflows.runtime.primitives.publish", _publish)
 
     def run(outputs=(), anchors=(), captions=None, **over):
         display = _fixture_display(tmp_path / "mesh.2dm")
@@ -413,7 +413,7 @@ def publish(monkeypatch, tmp_path, fake_s3):
                   "mesh": {"artifact": art, "display_uri": str(display)}, **over}
         token = bind_notes()
         try:
-            from trid3nt_server.workflows.modflow import workflow as door
+            from trid3nt.workflows.modflow import workflow as door
             record = asyncio.run(door.publish_outputs(
                 run=handle, sheet=_fixture_sheet(), outputs=list(outputs),
                 captions=dict(captions or {}), params={}, anchors=list(anchors)))
@@ -425,7 +425,7 @@ def publish(monkeypatch, tmp_path, fake_s3):
 
 
 def test_the_fixture_s_concentration_publishes_as_its_temporal_group(publish, fake_s3):
-    from trid3nt_server.store import objects as storage
+    from trid3nt.store import objects as storage
 
     record, items, _notes = publish()
 
@@ -457,8 +457,8 @@ def test_the_fixture_s_concentration_read_directly_is_its_saved_frames(
         shutil.copy(_FIXTURE / basename, dest)
         return str(dest)
 
-    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result", download)
-    from trid3nt_server.workflows.modflow.modules import outputs as out_mod
+    monkeypatch.setattr("trid3nt.workflows.solver.solver.download_result", download)
+    from trid3nt.workflows.modflow.modules import outputs as out_mod
     quads = ([(x, y) for y in (0.0, 1.0) for x in (0.0, 10.0, 20.0, 30.0)],
              [[c, 4 + c, 5 + c, c + 1] for c in range(3)], None, None)
     monkeypatch.setattr(out_mod, "mesh_nodes", lambda _mesh: quads)
@@ -473,14 +473,14 @@ def test_the_fixture_s_concentration_read_directly_is_its_saved_frames(
     gwt_body = _fixture_sheet().coupled[0]
     from trid3nt_contracts.common import Origin
 
-    from trid3nt_server.workflows.runtime.sheet import Filled, Provenance
+    from trid3nt.workflows.runtime.sheet import Filled, Provenance
     wrapper = GWT
     solved = Solved(run, wrapper, filled={
         name: Filled(slot=wrapper.slot(name),
                      value=wrapper.slot(name).check(value),
                      provenance=Provenance(Origin.DERIVED, "the coupled deck"))
         for name, value in gwt_body["slots"].items()})
-    from trid3nt_server.workflows.runtime import primitives as P
+    from trid3nt.workflows.runtime import primitives as P
 
     read = GWT.READS["field"](P.field("CONCENTRATION", t="every"), solved)
 
@@ -494,7 +494,7 @@ def test_the_fixture_s_concentration_read_directly_is_its_saved_frames(
 
 
 def _sample(site_id, x, value, units="ug/L"):
-    from trid3nt_server.inputs.observation import Observation
+    from trid3nt.inputs.observation import Observation
 
     lon, lat = _TO_LONLAT(x, 0.5)
     return Observation(value=value, units=units, site_id=site_id, lon=lon, lat=lat,
@@ -510,9 +510,9 @@ def gwt_solved(monkeypatch, tmp_path, fake_s3):
         shutil.copy(_FIXTURE / basename, dest)
         return str(dest)
 
-    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result", download)
-    from trid3nt_server.workflows.modflow import workflow as door
-    from trid3nt_server.workflows.modflow.modules import outputs as out_mod
+    monkeypatch.setattr("trid3nt.workflows.solver.solver.download_result", download)
+    from trid3nt.workflows.modflow import workflow as door
+    from trid3nt.workflows.modflow.modules import outputs as out_mod
     quads = ([(x, y) for y in (0.0, 1.0) for x in (0.0, 10.0, 20.0, 30.0)],
              [[c, 4 + c, 5 + c, c + 1] for c in range(3)], None, None)
     monkeypatch.setattr(out_mod, "mesh_nodes", lambda _mesh: quads)
@@ -527,7 +527,7 @@ def gwt_solved(monkeypatch, tmp_path, fake_s3):
                "reference_time": "2024-06-01T00:00:00Z", "vertical_frame": "NAVD88",
                "mesh": {"artifact": art, "display_uri": str(display)}, **over}
         sheet = run["sheet"]
-        from trid3nt_server.workflows.modflow.authoring.simulation import coupled_sheet
+        from trid3nt.workflows.modflow.authoring.simulation import coupled_sheet
 
         return Solved({**run}, GWT, filled=coupled_sheet(sheet, sheet.coupled[0]).filled)
 
@@ -535,7 +535,7 @@ def gwt_solved(monkeypatch, tmp_path, fake_s3):
 
 
 def test_a_measured_concentration_is_checked_in_the_unit_the_run_states(gwt_solved):
-    from trid3nt_server.workflows.runtime import primitives as P
+    from trid3nt.workflows.runtime import primitives as P
 
     read = GWT.READS["series"](P.series("CONCENTRATION", at=_sample("W-0", 5.0, 900.0)),
                                gwt_solved(published_units={"CONCENTRATION": "mg/L"}))
@@ -546,7 +546,7 @@ def test_a_measured_concentration_is_checked_in_the_unit_the_run_states(gwt_solv
 
 
 def test_a_concentration_the_run_states_no_unit_for_refuses_naming_it(gwt_solved):
-    from trid3nt_server.workflows.runtime import primitives as P
+    from trid3nt.workflows.runtime import primitives as P
 
     with pytest.raises(ModflowError) as caught:
         GWT.READS["series"](P.series("CONCENTRATION", at=_sample("W-0", 5.0, 900.0)),
@@ -556,7 +556,7 @@ def test_a_concentration_the_run_states_no_unit_for_refuses_naming_it(gwt_solved
 
 
 def test_a_reading_no_conversion_reaches_the_run_s_unit_refuses(gwt_solved):
-    from trid3nt_server.workflows.runtime import primitives as P
+    from trid3nt.workflows.runtime import primitives as P
 
     with pytest.raises(ModflowError) as caught:
         GWT.READS["series"](P.series("CONCENTRATION",
@@ -566,8 +566,8 @@ def test_a_reading_no_conversion_reaches_the_run_s_unit_refuses(gwt_solved):
 
 
 def test_a_set_of_sites_publishes_one_comparison_and_drops_the_one_off_the_mesh(publish):
-    from trid3nt_server.render.formats import Chart
-    from trid3nt_server.workflows.runtime import primitives as P
+    from trid3nt.render.formats import Chart
+    from trid3nt.workflows.runtime import primitives as P
 
     wells = (_sample("W-0", 5.0, 900.0), _sample("W-1", 15.0, 20.0),
              _sample("FAR-OUT", 500.0, 5.0))

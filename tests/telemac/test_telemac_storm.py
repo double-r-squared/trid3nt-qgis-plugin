@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.telemac.modules import telemac2d as T
+from trid3nt.workflows.telemac.modules import telemac2d as T
 
 
 def _storm(**over):
@@ -64,7 +64,7 @@ def test_a_measured_record_becomes_the_blocks_the_engine_reads_per_timestep():
 def test_an_ingested_record_is_written_at_its_own_cadence_from_the_run_s_zero():
     """The record states its instants, so a quarter-hourly one is four blocks an
     hour and one that closed before the run opened is not this run's rain."""
-    from trid3nt_server.inputs.rain import rain
+    from trid3nt.inputs.rain import rain
 
     record = rain({"times": ["2020-06-01T00:00", "2020-06-01T00:15",
                              "2020-06-01T00:30", "2020-06-01T00:45"],
@@ -80,7 +80,7 @@ def test_an_ingested_record_is_written_at_its_own_cadence_from_the_run_s_zero():
 def test_a_block_open_across_the_run_s_zero_gives_the_share_that_falls_after_it():
     """A run opening off the record's stamps starts inside an interval: a third
     of that quarter hour is this run's, so a third of its depth is."""
-    from trid3nt_server.inputs.rain import rain
+    from trid3nt.inputs.rain import rain
 
     record = rain({"times": ["2020-06-01T00:00", "2020-06-01T00:15",
                              "2020-06-01T00:30"],

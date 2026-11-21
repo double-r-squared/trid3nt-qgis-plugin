@@ -33,7 +33,7 @@ def _auto_input_mode(user_settings):
 
 def _resolve_bare(tool_name: str, location: str):
     """The door-1 sheet a BARE ``{"location": ...}`` invocation resolves to."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
     from seated import resolve_params
 
     workflow = TOOL_REGISTRY[tool_name].fn.workflow
@@ -47,9 +47,9 @@ def test_an_unsupplied_moment_is_no_verdict_and_never_invented(
         tool_name: str, location: str) -> None:
     """Nobody sent a moment: a template reading a record refuses naming event_time and holds none;
     one reading no record proceeds with none."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime import fill as fill_mod
-    from trid3nt_server.workflows.runtime.fill import Fill, fill
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.workflows.runtime import fill as fill_mod
+    from trid3nt.workflows.runtime.fill import Fill, fill
 
     async def _held(env, decl):
         return decl.name
@@ -71,7 +71,7 @@ def test_an_unsupplied_moment_leaves_no_provenance_row(tool_name: str,
                                                        location: str) -> None:
     """No moment stated: no derived row for the LAYER or the input-review gate
     to read - an unstated moment is no input."""
-    from trid3nt_server.workflows.runtime import provenance_entries
+    from trid3nt.workflows.runtime import provenance_entries
 
     workflow, sheet = _resolve_bare(tool_name, location)
     entries = [e for e in provenance_entries(sheet, value_inputs(workflow))
@@ -81,7 +81,7 @@ def test_an_unsupplied_moment_leaves_no_provenance_row(tool_name: str,
 
 def test_a_supplied_moment_still_reads_as_the_users() -> None:
     """The abstention is about ABSENCE only: a sent moment is still the user's."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
     from seated import resolve_params
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
@@ -95,8 +95,8 @@ def test_a_supplied_moment_still_reads_as_the_users() -> None:
 async def _normalized(workflow, args):
     """The accepted params of one fill, and the refusal where one was rejected;
     the rows the fill produces are stood in for, so the params alone answer."""
-    from trid3nt_server.workflows.runtime import fill as fill_mod
-    from trid3nt_server.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
+    from trid3nt.workflows.runtime import fill as fill_mod
+    from trid3nt.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
 
     async def _held(env, decl):
         return decl.name

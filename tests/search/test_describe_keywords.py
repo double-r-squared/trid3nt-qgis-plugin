@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.tools.search.describe_keywords.describe_keywords import (
+from trid3nt.tools.search.describe_keywords.describe_keywords import (
     DescribeKeywordsError,
     describe_keywords,
 )
@@ -107,7 +107,7 @@ def test_a_module_with_no_catalog_refuses_naming_the_ones_there_are():
 
 
 def _carried() -> list[str]:
-    from trid3nt_server.tools.search.describe_keywords.describe_keywords import (
+    from trid3nt.tools.search.describe_keywords.describe_keywords import (
         _carried as carried)
 
     return sorted(carried())
@@ -125,8 +125,8 @@ def test_an_empty_module_lists_every_carried_dictionary():
 def test_describing_a_keyword_of_every_carried_module_returns_its_entry():
     """Each carried module's FIRST dictionary keyword, asked by its exact
     name, comes back as that dictionary's own entry - no module is special."""
-    from trid3nt_server.workflows.runtime.module import load_module_input
-    from trid3nt_server.tools.search.describe_keywords.describe_keywords import (
+    from trid3nt.workflows.runtime.module import load_module_input
+    from trid3nt.tools.search.describe_keywords.describe_keywords import (
         _carried as carried)
 
     for module, directory in carried().items():
@@ -187,7 +187,7 @@ def test_the_tool_is_registered_read_only_and_reaches_the_retrieval_pool():
     import trid3nt_server.main as main
 
     main._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY["describe_keywords"]
     assert entry.metadata.read_only_hint is True
@@ -201,9 +201,9 @@ def test_every_corpus_phrasing_surfaces_the_tool_model_free():
     import yaml
 
     import trid3nt_server.main as main
-    from trid3nt_server.tools.search.describe_keywords.describe_keywords import (
+    from trid3nt.tools.search.describe_keywords.describe_keywords import (
         __file__ as here)
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
+    from trid3nt_harness.tools.search.tool_retrieval import retrieve_visible_tools
 
     main._import_tools_registry()
     from pathlib import Path
@@ -239,7 +239,7 @@ def test_the_model_reads_a_question_s_matches_whole_not_their_keys():
     """The result reaches the model as rows it can read, never as collapsed keys."""
     import json
 
-    from trid3nt_server.model.adapters.adapter import summarize_tool_result
+    from trid3nt_harness.model.adapters.adapter import summarize_tool_result
 
     seen = json.dumps(summarize_tool_result("describe_keywords", describe_keywords(
         module="telemac2d", query="bottom friction", limit=3)))

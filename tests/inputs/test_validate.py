@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.validate import scalar
+from trid3nt.inputs.validate import scalar
 
 
 def test_a_number_string_is_coerced_and_returned_as_a_float():

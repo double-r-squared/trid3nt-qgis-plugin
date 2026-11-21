@@ -14,13 +14,13 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.solver.code_provenance import (
+from trid3nt.workflows.solver.code_provenance import (
     engine_paths,
     resolve_engine,
 )
-from trid3nt_server.workflows.solver.diagnostics import _PARSERS
-from trid3nt_server.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
-from trid3nt_server.workflows.modflow.engine import (
+from trid3nt.workflows.solver.diagnostics import _PARSERS
+from trid3nt.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
+from trid3nt.workflows.modflow.engine import (
     DEFAULT_MODFLOW_IMAGE,
     MODFLOW_SOLVER_NAME,
     _build_argv,
@@ -46,7 +46,7 @@ def test_the_engine_holds_its_three_registry_rows():
     assert _PARSERS["modflow"].__name__ == "parse_modflow"
     assert resolve_engine("modflow") == "modflow"
     assert engine_paths("modflow") == (
-        "workers/modflow/", "trid3nt_server/workflows/modflow/")
+        "workers/modflow/", "trid3nt/workflows/modflow/")
 
 
 def test_the_spec_is_local_docker_with_network_none():

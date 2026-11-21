@@ -14,13 +14,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.render.charts import (
+from trid3nt.render.charts import (
     ChartToolError,
     _MAX_ROWS,
     build_chart_payload,
     is_chart_emission_result,
 )
-from trid3nt_server.tools.derive.charts.generate_chart.generate_chart import (
+from trid3nt.tools.derive.charts.generate_chart.generate_chart import (
     generate_chart,
 )
 from trid3nt_contracts.chart_contracts import (
@@ -250,7 +250,7 @@ class TestChartEmissionDiscriminator:
 
 class TestSummarizeChartEmission:
     def test_spec_stripped_for_chart(self):
-        from trid3nt_server.model.adapters.adapter import summarize_tool_result
+        from trid3nt_harness.model.adapters.adapter import summarize_tool_result
 
         payload = generate_chart(vega_lite_spec=_bar_spec(), title="t", caption="cap",
                                  records=[{"label": "a", "count": 1}, {"label": "b", "count": 2}])
@@ -268,7 +268,7 @@ class TestSummarizeChartEmission:
         assert res["chart_type"] == "bar"
 
     def test_ordinary_dict_preserved(self):
-        from trid3nt_server.model.adapters.adapter import summarize_tool_result
+        from trid3nt_harness.model.adapters.adapter import summarize_tool_result
 
         ordinary = {"columns": ["count"], "rows": [[9]], "row_count": 1, "count": 9}
         summary = summarize_tool_result("probe_point", ordinary)
@@ -305,7 +305,7 @@ class TestEmitChart:
 
     async def test_emits_envelope_and_persists(self, monkeypatch):
         import trid3nt_server.server as server
-        from trid3nt_server.store.cases import Persistence
+        from trid3nt.store.cases import Persistence
         from trid3nt_contracts import new_ulid
 
         fake_mcp = _FakeMCP()
@@ -343,7 +343,7 @@ class TestEmitChart:
 
     async def test_persist_keyed_by_session_when_no_case(self, monkeypatch):
         import trid3nt_server.server as server
-        from trid3nt_server.store.cases import Persistence
+        from trid3nt.store.cases import Persistence
 
         fake_mcp = _FakeMCP()
         persistence = Persistence(fake_mcp)
@@ -383,12 +383,12 @@ def test_dispatch_detection_signal(tmp_path):
 
 class TestRegistration:
     def test_in_tool_registry(self):
-        from trid3nt_server.tools import TOOL_REGISTRY
+        from trid3nt.tools import TOOL_REGISTRY
 
         assert "generate_chart" in TOOL_REGISTRY
 
     def test_metadata(self):
-        from trid3nt_server.tools import TOOL_REGISTRY
+        from trid3nt.tools import TOOL_REGISTRY
 
         m = TOOL_REGISTRY["generate_chart"].metadata
         assert m.ttl_class == "dynamic-1h"
@@ -396,7 +396,7 @@ class TestRegistration:
         assert m.read_only_hint is True
 
     def test_culled_chart_tools_absent(self):
-        from trid3nt_server.tools import TOOL_REGISTRY
+        from trid3nt.tools import TOOL_REGISTRY
 
         for dead in ("generate_histogram", "generate_choropleth_legend",
                      "generate_time_series", "generate_damage_distribution"):

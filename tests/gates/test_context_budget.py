@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
-from trid3nt_server.model.guards.context_budget import (
+from trid3nt_harness.model.guards.context_budget import (
     CompactionResult,
     CONTEXT_WINDOW_ABORT_NOTE,
     ContextWindowExceededError,
@@ -124,7 +124,7 @@ class TestBudget:
         """The proactive budget's output reserve IS the max-tokens cap sent on the wire.
 
         One source of truth, not two knobs that can drift apart."""
-        from trid3nt_server.model.guards import context_budget
+        from trid3nt_harness.model.guards import context_budget
 
         assert reserve_output_tokens() == openai_max_output_tokens() == 4096
         monkeypatch.setattr(context_budget, "OPENAI_MAX_TOKENS_DEFAULT", 777)
@@ -325,7 +325,7 @@ class TestStillOverAfterStepABug:
         huge_note = case_state_note_content("s" * 50_000)
         current_question = user_content("small question")
         contents = [huge_note, current_question]
-        with caplog.at_level("WARNING", logger="trid3nt_server.model.guards.context_budget"):
+        with caplog.at_level("WARNING", logger="trid3nt_harness.model.guards.context_budget"):
             result = compact_contents(contents, budget_tokens=200, target_ratio=1.0)
         assert any(
             "protected content alone exceeds target" in r.message

@@ -13,11 +13,11 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import shape
 
-from trid3nt_server.inputs.domain import domain
-from trid3nt_server.inputs.slots import DOMAIN
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime import fill
-from trid3nt_server.workflows.runtime.workflow import BANKS
+from trid3nt.inputs.domain import domain
+from trid3nt.inputs.slots import DOMAIN
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.runtime import fill
+from trid3nt.workflows.runtime.workflow import BANKS
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 _WATER = _FIXTURES / "nhd_water_surface" / "missouri_release_7_5km.fgb"

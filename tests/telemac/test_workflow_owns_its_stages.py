@@ -12,13 +12,13 @@ from types import SimpleNamespace
 import pytest
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.inputs.input import Input
-from trid3nt_server.workflows.runtime import DeclarationError, tool
+from trid3nt.inputs.input import Input
+from trid3nt.workflows.runtime import DeclarationError, tool
 from seated import REACH, SEATED
-from trid3nt_server.tools.mesh.recipe import RESOLUTION
-from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
-from trid3nt_server.inputs.slots import BED, DOMAIN
+from trid3nt.tools.mesh.recipe import RESOLUTION
+from trid3nt.workflows.telemac.modules import T2D
+from trid3nt.workflows.telemac.workflow import TelemacWorkflow
+from trid3nt.inputs.slots import BED, DOMAIN
 from seated import value_inputs, row_inputs
 
 _METADATA = AtomicToolMetadata(
@@ -97,8 +97,8 @@ def test_a_sizing_input_is_the_meshers_and_seated_only_where_the_ask_names_it():
     """The grade and the coarsest edge are declared once, by the mesher, with no
     default of their own: an ask that names one seats it REQUIRED, a template's
     restatement gives it the template's number, and an ask naming neither seats none."""
-    from trid3nt_server.tools.mesh.recipe import GRADE, MAX_EDGE
-    from trid3nt_server.tools.mesh.tool import mesh_op
+    from trid3nt.tools.mesh.recipe import GRADE, MAX_EDGE
+    from trid3nt.tools.mesh.tool import mesh_op
 
     def asking(inputs: type) -> TelemacWorkflow:
         named = SimpleNamespace(
@@ -129,7 +129,7 @@ def test_a_sizing_input_is_the_meshers_and_seated_only_where_the_ask_names_it():
 def test_the_frame_is_the_beds_and_every_reader_reads_that_one():
     """The bed's type declares the frame; the match's need and the level read
     the value the run stated for it, and the bed's own default without one."""
-    from trid3nt_server.workflows.runtime import fill
+    from trid3nt.workflows.runtime import fill
 
     frame, = BED.states
     assert (frame.name, frame.default) == ("vertical_frame", "NAVD88")
@@ -166,7 +166,7 @@ def test_a_template_with_no_bed_refuses_at_import():
 
 
 def _built(kind: str, **fields):
-    from trid3nt_server.tools.mesh.artifact import MeshArtifact
+    from trid3nt.tools.mesh.artifact import MeshArtifact
 
     return MeshArtifact(**{**dict(
         mesh_id="01MINE", name="ring", mode="om2d",
@@ -183,8 +183,8 @@ _RING = [[-122.6769, 45.5153], [-122.6615, 45.5153],
 def _filled_with(monkeypatch, mesh, **stated):
     import asyncio
 
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.fill import Fill, fill
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.workflows.runtime.fill import Fill, fill
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     # Only what the call states is filled: the rows the template names go out to sources.
@@ -229,7 +229,7 @@ def test_a_supplied_mesh_that_shares_no_ground_with_the_domain_is_refused(
 
 def test_what_only_the_mesh_build_reads_is_named_when_a_mesh_is_supplied(
         monkeypatch):
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     state = _filled_with(monkeypatch, _built("unstructured_tri"),
                          mesh_resolution_m=15.0, spill_duration_s=600.0)
@@ -246,8 +246,8 @@ def test_a_drawn_geometry_handed_to_a_row_is_the_rows_value(monkeypatch):
     canvas drew is taken whole, never dropped for a fetch."""
     import asyncio
 
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.fill import Fill, fill
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.workflows.runtime.fill import Fill, fill
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     monkeypatch.setattr(workflow, "named_rows", lambda held=(): ())
@@ -268,10 +268,10 @@ def test_the_fill_holds_a_mesh_to_the_kind_the_engine_states(monkeypatch):
 def test_a_row_named_by_a_layer_handle_is_read_at_its_uri(monkeypatch, tmp_path):
     import asyncio
     import json
-    from trid3nt_server.render.uri_registry import (
+    from trid3nt.render.uri_registry import (
         activate_registry, deactivate_registry, get_uri_registry)
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.fill import Fill, fill
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.workflows.runtime.fill import Fill, fill
 
     outline = tmp_path / "outline.geojson"
     outline.write_text(json.dumps({"type": "Polygon", "coordinates": [[*_RING, _RING[0]]]}))
@@ -290,7 +290,7 @@ def test_a_row_named_by_a_layer_handle_is_read_at_its_uri(monkeypatch, tmp_path)
 
 
 def test_two_level_rows_are_legal_and_two_bed_rows_refuse():
-    from trid3nt_server.inputs.slots import LEVEL
+    from trid3nt.inputs.slots import LEVEL
 
     class TWO_LEVELS:
         domain = Input(DOMAIN).need("hydrography", at="seed")
@@ -312,7 +312,7 @@ def test_two_level_rows_are_legal_and_two_bed_rows_refuse():
 def test_a_composite_naming_the_mesh_stage_does_not_fill_the_seated_mesh_row():
     """Infiltration reads the mesh the stage builds; were the unstated seat
     filled for it, the launch would find a mesh key and build none."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY["telemac_rain_on_grid"].fn.workflow
     assert "mesh" in workflow._named()
@@ -322,7 +322,7 @@ def test_a_composite_naming_the_mesh_stage_does_not_fill_the_seated_mesh_row():
 def test_the_moment_is_the_engines_input_and_no_template_seats_or_coerces_it():
     """The skeleton declares no moment; the engine seats the row and reads it
     through its own coercion, so a template with no coercion still pins one."""
-    from trid3nt_server.workflows.runtime import Workflow
+    from trid3nt.workflows.runtime import Workflow
 
     bare = Workflow(metadata=_METADATA, inputs=DATA, template=_template())
     assert "event_time" not in {prm.name for prm in value_inputs(bare)}
@@ -335,9 +335,9 @@ def test_the_moment_is_the_engines_input_and_no_template_seats_or_coerces_it():
 def test_every_registered_template_carries_the_moment_and_the_beds_frame():
     """Agitation among them: it has a bed, so it has the bed's frame. A study over a finished run states no
     bed: it stands on that run's frame, and carries the moment its wells are asked at."""
-    from trid3nt_server.inputs.slots import RUN
-    from trid3nt_server.tools import TOOL_REGISTRY
-    import trid3nt_server.workflows.telemac.templates  # noqa: F401
+    from trid3nt.inputs.slots import RUN
+    from trid3nt.tools import TOOL_REGISTRY
+    import trid3nt.workflows.telemac.templates  # noqa: F401
 
     templates = [tool.fn.workflow for tool in TOOL_REGISTRY.values()
                  if hasattr(tool.fn, "workflow")]
@@ -351,14 +351,14 @@ def test_every_registered_template_carries_the_moment_and_the_beds_frame():
 def _filled_by(workflow, values):
     import asyncio
 
-    from trid3nt_server.workflows.runtime.fill import Fill, fill
+    from trid3nt.workflows.runtime.fill import Fill, fill
 
     return asyncio.run(fill(Fill(workflow=workflow), values))
 
 
 def test_a_previous_computation_a_measured_settle_cannot_open_on_is_refused_at_the_fill(
         monkeypatch):
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     monkeypatch.setattr(workflow, "_settled_by",
@@ -375,7 +375,7 @@ def test_a_deck_stating_no_cadence_is_refused_at_the_fill_and_stating_it_clears_
         monkeypatch):
     from types import MappingProxyType
 
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     body = workflow.steering
@@ -392,7 +392,7 @@ def test_a_deck_stating_no_cadence_is_refused_at_the_fill_and_stating_it_clears_
 
 
 def test_the_bed_only_a_mesh_build_reads_is_not_produced_under_a_supplied_mesh():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     assert "bed" in workflow.named_rows()

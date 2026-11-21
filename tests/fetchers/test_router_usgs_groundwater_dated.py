@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router import registration as reg
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
-from trid3nt_server.tools.fetchers._router.hooks import resolve_hook
+from trid3nt.tools.fetchers._router import registration as reg
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
+from trid3nt.tools.fetchers._router.hooks import resolve_hook
 
 _SPEC = reg.get_spec("fetch_usgs_groundwater_levels")
 _BODY = (Path(__file__).resolve().parents[1] / "fixtures" / "usgs_groundwater_levels"

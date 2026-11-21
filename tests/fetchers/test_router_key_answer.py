@@ -7,15 +7,15 @@ import inspect
 import httpx
 import pytest
 
-from trid3nt_server.model.credentials import resolver
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._fetch_common import KeyRejectedError, KeyRequiredError
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.key_answer import key_error_from
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.tools.fetchers._router.router import route
-from trid3nt_server.tools.fetchers._router.transport import TransportAuthError
-from trid3nt_server.tools.fetchers._router.transport.client import _body
+from trid3nt.credentials import resolver
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.fetchers._fetch_common import KeyRejectedError, KeyRequiredError
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.key_answer import key_error_from
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.tools.fetchers._router.router import route
+from trid3nt.tools.fetchers._router.transport import TransportAuthError
+from trid3nt.tools.fetchers._router.transport.client import _body
 
 KEYED = "fetch_airnow_air_quality"
 PUBLIC = "fetch_usgs_earthquakes"

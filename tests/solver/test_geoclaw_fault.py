@@ -18,13 +18,13 @@ import pytest
 import rasterio
 from rasterio.transform import from_origin
 
-from trid3nt_server.workflows.geoclaw.authoring.rundata import serialize
-from trid3nt_server.workflows.geoclaw.authoring.staged_check import (
+from trid3nt.workflows.geoclaw.authoring.rundata import serialize
+from trid3nt.workflows.geoclaw.authoring.staged_check import (
     check_staged_run,
 )
-from trid3nt_server.workflows.geoclaw.errors import GeoclawError
-from trid3nt_server.workflows.geoclaw.modules import GEO
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.workflows.geoclaw.errors import GeoclawError
+from trid3nt.workflows.geoclaw.modules import GEO
+from trid3nt.workflows.runtime.sheet import fill
 
 _AUTHORING = Path(__file__).with_name("test_geoclaw_authoring.py")
 _spec = importlib.util.spec_from_file_location("geoclaw_authoring_sheet", _AUTHORING)
@@ -224,7 +224,7 @@ def test_a_cartesian_run_refuses(tmp_path):
 
 
 def test_the_rupture_on_the_map_is_the_subfault_outline_and_the_final_uplift(tmp_path):
-    from trid3nt_server.workflows.geoclaw.authoring.dtopo import rupture_on_map
+    from trid3nt.workflows.geoclaw.authoring.dtopo import rupture_on_map
 
     rundir, sheet, _ = _written(tmp_path, _fault())
     shown = rupture_on_map(sheet, rundir)["dtopo_01.tt3"]
@@ -241,8 +241,8 @@ def test_the_rupture_on_the_map_is_the_subfault_outline_and_the_final_uplift(tmp
 def test_the_rupture_publishes_its_subfaults_and_uplift_as_context(tmp_path, fake_s3):
     import asyncio
 
-    from trid3nt_server.workflows.geoclaw.workflow import publish_rupture
-    from trid3nt_server.workflows.runtime.journal import bind_outputs, drain_outputs
+    from trid3nt.workflows.geoclaw.workflow import publish_rupture
+    from trid3nt.workflows.runtime.journal import bind_outputs, drain_outputs
 
     rundir, sheet, _ = _written(tmp_path, _fault())
     token = bind_outputs()
@@ -263,7 +263,7 @@ def _timed(times):
 def test_a_timed_rupture_draws_its_epicentre_at_the_breaking_subfaults_centroid_and_a_static_one_draws_none(tmp_path):
     from clawpack.geoclaw import dtopotools
 
-    from trid3nt_server.workflows.geoclaw.authoring.dtopo import rupture_on_map
+    from trid3nt.workflows.geoclaw.authoring.dtopo import rupture_on_map
 
     for case in ("timed", "together", "static"):
         (tmp_path / case).mkdir()
@@ -285,8 +285,8 @@ def test_a_timed_rupture_draws_its_epicentre_at_the_breaking_subfaults_centroid_
 def test_the_epicentre_and_a_fetched_catalogue_epicentre_publish_beside_the_rupture(tmp_path, fake_s3):
     import asyncio
 
-    from trid3nt_server.workflows.geoclaw.workflow import publish_rupture
-    from trid3nt_server.workflows.runtime.journal import bind_outputs, drain_outputs
+    from trid3nt.workflows.geoclaw.workflow import publish_rupture
+    from trid3nt.workflows.runtime.journal import bind_outputs, drain_outputs
 
     rundir, sheet, _ = _written(tmp_path, _timed([0.0, 20.0]))
     catalogue = {"type": "Feature", "properties": {"kind": "catalogue epicentre", "event_id": "e"},

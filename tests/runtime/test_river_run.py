@@ -12,11 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.inputs.bound_domain import bind_domain, reset_domain
-from trid3nt_server.inputs.domain import kind_under
-from trid3nt_server.inputs.input import Input
-from trid3nt_server.inputs.slots import DOMAIN
-from trid3nt_server.workflows.runtime import fill
+from trid3nt.inputs.bound_domain import bind_domain, reset_domain
+from trid3nt.inputs.domain import kind_under
+from trid3nt.inputs.input import Input
+from trid3nt.inputs.slots import DOMAIN
+from trid3nt.workflows.runtime import fill
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 _SURFACE = _FIXTURES / "nhd_water_surface"
@@ -115,7 +115,7 @@ def test_a_lake_run_s_domain_is_the_waterbody_it_stands_in(asked):
         "fetch_nhd_water_surface", "fetch_nhd_waterbody_at_point", "fetch_nhd_waterbody_at_point"]
     from shapely.geometry import Point, shape
 
-    from trid3nt_server.inputs.geometry import read_geometry_doc
+    from trid3nt.inputs.geometry import read_geometry_doc
 
     lake = shape(read_geometry_doc(str(_BODIES / "allatoona_lake.fgb"))["features"][0]["geometry"])
     assert shape(found.geometry).covers(Point(*_ALLATOONA_LAKE))
@@ -140,7 +140,7 @@ def _spanless_row() -> Input:
 @pytest.fixture
 def mode(monkeypatch):
     """The AUTO setting, and the review card a person answers: what it showed, and the reach they give."""
-    from trid3nt_server.inputs.gate import input_review
+    from trid3nt_harness.inputs.gate import input_review
 
     held = {"mode": "auto", "answer": None, "cards": []}
     monkeypatch.setattr(input_review, "resolve_input_gate_mode", lambda forced=None: forced or held["mode"])

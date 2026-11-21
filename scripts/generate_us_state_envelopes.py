@@ -1,4 +1,4 @@
-"""Regenerate ``trid3nt_server/tools/fetchers/us_state_envelopes.py`` from the Census cartographic boundary file.
+"""Regenerate ``trid3nt/tools/fetchers/us_state_envelopes.py`` from the Census cartographic boundary file.
 
 Each state's envelope is the bounding box of its polygons, rounded outward to a thousandth of a degree, so it
 always holds the boundary it was read from. A state whose polygons straddle the antimeridian (Alaska's Aleutians)
@@ -19,7 +19,7 @@ from shapely.geometry import MultiPolygon
 
 VINTAGE = 2025
 URL = f"https://www2.census.gov/geo/tiger/GENZ{VINTAGE}/shp/cb_{VINTAGE}_us_state_500k.zip"
-OUT = Path(__file__).resolve().parents[1] / "trid3nt_server" / "tools" / "fetchers" / "us_state_envelopes.py"
+OUT = Path(__file__).resolve().parents[1] / "trid3nt" / "tools" / "fetchers" / "us_state_envelopes.py"
 
 #: The states outside the conterminous United States; everything else in the file, DC included, is in it.
 _NOT_CONTERMINOUS = {"AK", "HI", "PR", "VI", "GU", "AS", "MP"}

@@ -6,10 +6,10 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime import fill as fill_mod
-from trid3nt_server.workflows.runtime.fill import Fill
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.runtime import fill as fill_mod
+from trid3nt.workflows.runtime.fill import Fill
+from trid3nt.workflows.runtime.sheet import fill
 
 _STATED = {
     "drain_conductance": 100.0, "source_rate": 0.04, "source_concentration": 0.45,

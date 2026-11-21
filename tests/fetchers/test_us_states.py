@@ -1,4 +1,4 @@
-"""Tests for ``trid3nt_server.tools.fetchers.us_states``.
+"""Tests for ``trid3nt.tools.fetchers.us_states``.
 
 The state-name → NWS area-code mapping is the linchpin of the "weather
 alerts for Texas must not spill into surrounding states" fix: both NWS
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.tools.fetchers.us_states import (
+from trid3nt.tools.fetchers.us_states import (
     NWS_AREA_CODES,
     STATE_CODE_TO_NAME,
     STATE_NAME_TO_CODE,
@@ -105,7 +105,7 @@ def test_state_display_name_marine_zone_echoes_code() -> None:
 
 
 def test_every_named_state_has_a_census_envelope_and_the_table_names_its_source() -> None:
-    from trid3nt_server.tools.fetchers import us_state_envelopes
+    from trid3nt.tools.fetchers import us_state_envelopes
 
     assert set(STATE_NAME_TO_CODE.values()) <= set(us_state_envelopes.STATE_ENVELOPES)
     assert us_state_envelopes.SOURCE.startswith("https://www2.census.gov/geo/tiger/GENZ")
@@ -120,12 +120,12 @@ def test_every_named_state_has_a_census_envelope_and_the_table_names_its_source(
     ((10.0, 45.0, 11.0, 46.0), []),
 ])
 def test_a_bbox_selects_the_states_whose_envelope_it_touches(bbox, expected) -> None:
-    from trid3nt_server.tools.fetchers.us_states import states_intersecting_bbox
+    from trid3nt.tools.fetchers.us_states import states_intersecting_bbox
 
     assert states_intersecting_bbox(bbox) == expected
 
 
 def test_a_source_keeps_only_the_states_it_serves() -> None:
-    from trid3nt_server.tools.fetchers.us_states import states_intersecting_bbox
+    from trid3nt.tools.fetchers.us_states import states_intersecting_bbox
 
     assert states_intersecting_bbox((-87.6, 30.3, -87.4, 30.5), among=("FL", "GA")) == ["FL"]

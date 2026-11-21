@@ -12,17 +12,17 @@ import json
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.tools.mesh.meshers import MeshToolError, get_mesher
-from trid3nt_server.render.mesh_display import write_2dm
-from trid3nt_server.tools.mesh.session import (
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.tools.mesh.meshers import MeshToolError, get_mesher
+from trid3nt.render.mesh_display import write_2dm
+from trid3nt.tools.mesh.session import (
     MeshSession,
     mesh_digest,
     replay_recipe,
 )
-from trid3nt_server.inputs.mesh import mesh as supplied_mesh
-from trid3nt_server.tools.mesh.tool import (
+from trid3nt.inputs.mesh import mesh as supplied_mesh
+from trid3nt.tools.mesh.tool import (
     MeshRecipe,
     mesh_op,
     tool,
@@ -73,9 +73,9 @@ def test_build_mesh_surfaces_in_top8():
 
     import yaml
 
-    import trid3nt_server.tools as t
-    from trid3nt_server.tools.search.search_tools import search_tools as dd
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
+    import trid3nt.tools as t
+    from trid3nt_harness.tools.search.search_tools import search_tools as dd
+    from trid3nt_harness.tools.search.tool_retrieval import retrieve_visible_tools
 
     dd._get_index()
     corpus_path = Path(t.__file__).resolve().parent / "mesh" / "corpus.yaml"
@@ -136,7 +136,7 @@ def test_a_supplied_mesh_carrying_no_engine_file_is_taken_rather_than_judged():
 
 
 def test_a_supplied_mesh_with_no_readable_record_refuses(monkeypatch):
-    from trid3nt_server.store import objects as storage
+    from trid3nt.store import objects as storage
 
     monkeypatch.setattr(storage, "client", _FailingReader)
     with pytest.raises(MeshToolError) as excinfo:
@@ -179,7 +179,7 @@ def test_a_supplied_mesh_that_states_no_kind_refuses():
 
 
 def test_every_template_of_the_engine_takes_a_supplied_mesh():
-    from trid3nt_server.inputs.slots import MESH
+    from trid3nt.inputs.slots import MESH
 
     for name in ("artemis_harbor_agitation", "telemac_dye_release",
                  "telemac_rain_on_grid", "telemac3d_stratified_flow"):
@@ -262,7 +262,7 @@ def test_reset_puts_the_recipe_back_to_the_declaration(tmp_path):
 def test_a_hand_edit_is_recorded_flagged_and_refuses_to_replay(tmp_path):
     import numpy as np
 
-    from trid3nt_server.tools.mesh.meshers import Mesh
+    from trid3nt.tools.mesh.meshers import Mesh
 
     edited = tmp_path / "edited.2dm"
     edited.write_text(write_2dm(Mesh(
@@ -289,7 +289,7 @@ def test_a_hand_edit_is_recorded_flagged_and_refuses_to_replay(tmp_path):
 def test_a_recipe_edit_after_a_hand_edit_refuses_rather_than_discarding_it(tmp_path):
     import numpy as np
 
-    from trid3nt_server.tools.mesh.meshers import Mesh
+    from trid3nt.tools.mesh.meshers import Mesh
 
     edited = tmp_path / "edited.2dm"
     edited.write_text(write_2dm(Mesh(
@@ -350,7 +350,7 @@ def test_the_accepted_artifact_carries_what_was_measured_on_it(tmp_path):
 
 
 def test_the_measured_minimum_edge_is_read_off_the_artifact(tmp_path):
-    from trid3nt_server.tools.mesh.artifact import measured_min_edge_m
+    from trid3nt.tools.mesh.artifact import measured_min_edge_m
 
     art = MeshSession(_recipe(), workdir=tmp_path).accept()
     assert measured_min_edge_m(art) == pytest.approx(
@@ -364,7 +364,7 @@ def test_the_measured_minimum_edge_is_read_off_the_artifact(tmp_path):
     _artifact(probes={"edge_length_m": {"min": 0.0}}),  # a degenerate measurement
 ])
 def test_an_unmeasured_mesh_reports_no_minimum_edge(art):
-    from trid3nt_server.tools.mesh.artifact import measured_min_edge_m
+    from trid3nt.tools.mesh.artifact import measured_min_edge_m
 
     assert measured_min_edge_m(art) is None
 
@@ -374,7 +374,7 @@ def test_the_timestep_follows_the_measured_edge_not_the_requested_one():
 
     The ask stays coarse and the mesh BUILT is finer, so the CFL-safe step comes off
     the mesh; reading the ask hands the solver a step it cannot carry."""
-    from trid3nt_server.workflows.telemac.helpers.time_step import suggest_time_step_s
+    from trid3nt.workflows.telemac.helpers.time_step import suggest_time_step_s
 
     requested = suggest_time_step_s(40.0)
     refined = suggest_time_step_s(
@@ -385,7 +385,7 @@ def test_the_timestep_follows_the_measured_edge_not_the_requested_one():
 
 def test_the_timestep_falls_back_to_the_ask_when_no_mesh_exists_yet():
     """An estimate made before any mesh exists has only the ask to go on."""
-    from trid3nt_server.workflows.telemac.helpers.time_step import suggest_time_step_s
+    from trid3nt.workflows.telemac.helpers.time_step import suggest_time_step_s
 
     assert suggest_time_step_s(10.0) == suggest_time_step_s(10.0, mesh=None)
     assert suggest_time_step_s(10.0, mesh=_artifact()) == 0.5
@@ -394,7 +394,7 @@ def test_the_timestep_falls_back_to_the_ask_when_no_mesh_exists_yet():
 @pytest.mark.asyncio
 async def test_a_bbox_at_the_door_becomes_the_recipes_extent(monkeypatch, user_settings):
     user_settings(AUTO=True)
-    from trid3nt_server.tools.mesh.meshers import MeshToolError
+    from trid3nt.tools.mesh.meshers import MeshToolError
 
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
     seen: dict = {}
@@ -415,7 +415,7 @@ async def test_a_bbox_at_the_door_becomes_the_recipes_extent(monkeypatch, user_s
 async def test_wire_ops_become_recipe_entries(monkeypatch, user_settings):
     user_settings(AUTO=True)
     """The ops list off the wire is the same ordered program a template writes."""
-    from trid3nt_server.tools.mesh.meshers import MeshToolError
+    from trid3nt.tools.mesh.meshers import MeshToolError
 
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
     seen: dict = {}

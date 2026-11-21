@@ -10,10 +10,10 @@ from typing import Annotated, Any, Literal
 import pytest
 
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
-from trid3nt_server.inputs.gate import pending
-from trid3nt_server.inputs.gate.cards.run_inputs import (
+from trid3nt_harness.inputs.gate import pending
+from trid3nt_harness.inputs.gate.cards.run_inputs import (
     RunInputsDeclinedError, review_run_inputs)
-from trid3nt_server.inputs.slots import EXTENT
+from trid3nt.inputs.slots import EXTENT
 
 
 def _tool(mesher: Literal["om2d", "reg_grid"] = "reg_grid",
@@ -197,7 +197,7 @@ def _bang_run(monkeypatch, layers, *answers) -> tuple[list, list]:
     from trid3nt_contracts.tool_registry import AtomicToolMetadata
     from trid3nt_server.server import SessionState, _dispatch_tool_and_persist
     from trid3nt_server.server.dispatch.emitter import _ensure_emitter
-    from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
+    from trid3nt.tools import TOOL_REGISTRY, RegisteredTool
 
     calls: list = []
 
@@ -247,8 +247,8 @@ def test_a_bang_run_launches_only_through_the_card(monkeypatch, layers) -> None:
 
 
 def test_a_workflow_is_judged_by_its_fill_and_opens_no_card(monkeypatch, layers) -> None:
-    from trid3nt_server.inputs.gate.cards import run_inputs
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_harness.inputs.gate.cards import run_inputs
+    from trid3nt.tools import TOOL_REGISTRY
 
     def judged(*_a, **_k):
         raise AssertionError("the card judged a workflow's input")
@@ -265,9 +265,9 @@ def test_a_workflow_is_judged_by_its_fill_and_opens_no_card(monkeypatch, layers)
 def test_build_mesh_lists_the_registered_meshers() -> None:
     """The mesher dropdown is the mesher registry: every registered one, and a
     name it does not hold is refused by the same rule."""
-    from trid3nt_server.inputs.accept import InputRefused, accept, offers
-    from trid3nt_server.tools.mesh.meshers import registered_meshers
-    from trid3nt_server.tools.mesh.tool import build_mesh
+    from trid3nt.inputs.accept import InputRefused, accept, offers
+    from trid3nt.tools.mesh.meshers import registered_meshers
+    from trid3nt.tools.mesh.tool import build_mesh
 
     fn = getattr(build_mesh, "__wrapped__", build_mesh)
     roster = registered_meshers()
@@ -279,8 +279,8 @@ def test_build_mesh_lists_the_registered_meshers() -> None:
 
 def test_build_mesh_types_its_extent_so_the_card_lists_what_it_takes(layers) -> None:
     """A tool no workflow stands behind states the slot on the parameter itself."""
-    from trid3nt_server.inputs.accept import offers
-    from trid3nt_server.tools.mesh.tool import build_mesh
+    from trid3nt.inputs.accept import offers
+    from trid3nt.tools.mesh.tool import build_mesh
 
     fn = getattr(build_mesh, "__wrapped__", build_mesh)
     assert offers(fn, "extent", layers) == [("L-poly", "harbour outline")]

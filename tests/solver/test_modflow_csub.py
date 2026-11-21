@@ -14,18 +14,18 @@ import numpy as np
 import pytest
 from pyproj import Transformer
 
-from trid3nt_server.inputs.point import PointNotViableError
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow.authoring import mesh_files as MF
-from trid3nt_server.workflows.modflow.authoring.movers import mover_rows
-from trid3nt_server.workflows.modflow.authoring.simulation import serialize
-from trid3nt_server.workflows.modflow.authoring.stress import place_interbeds
-from trid3nt_server.workflows.modflow.authoring.validate import validate_authored_simulation
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF
-from trid3nt_server.workflows.modflow.modules.outputs import Solved
-from trid3nt_server.workflows.runtime import primitives as P
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.inputs.point import PointNotViableError
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow.authoring import mesh_files as MF
+from trid3nt.workflows.modflow.authoring.movers import mover_rows
+from trid3nt.workflows.modflow.authoring.simulation import serialize
+from trid3nt.workflows.modflow.authoring.stress import place_interbeds
+from trid3nt.workflows.modflow.authoring.validate import validate_authored_simulation
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF
+from trid3nt.workflows.modflow.modules.outputs import Solved
+from trid3nt.workflows.runtime import primitives as P
+from trid3nt.workflows.runtime.sheet import fill
 
 _SIDE = 3
 _N = _SIDE * _SIDE
@@ -358,7 +358,7 @@ def _solved(tmp_path, monkeypatch, fake_s3, **over):
     compaction = [[[0.1 * n * (cell + 1) for cell in range(_N)]] for n in (1, 2)]
     _binary(tmp_path / "compaction.bin", "CSUB-COMPACTION", compaction)
     _binary(tmp_path / "zdisp.bin", "CSUB-ZDISPLACE", [[[-v for v in layer] for layer in step] for step in compaction])
-    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result",
+    monkeypatch.setattr("trid3nt.workflows.solver.solver.download_result",
                         lambda run_id, basename: str(shutil.copy(tmp_path / basename, tmp_path / f"dl_{basename}")))
     sheet = _csub({"Interbeds": {"geometry": "centre", **_NODELAY}, "CSUB_COMPACTION_FILERECORD": "compaction.bin",
                    "CSUB_ZDISPLACEMENT_FILERECORD": "zdisp.bin", **over})

@@ -64,7 +64,7 @@ def publish_recorder(monkeypatch):
         calls.append(kwargs)
         return _published(kwargs["layer_uri"])
 
-    from trid3nt_server.render import publish as publish_mod
+    from trid3nt.render import publish as publish_mod
 
     monkeypatch.setattr(publish_mod, "publish_layer", _publish)
     return calls
@@ -182,7 +182,7 @@ async def test_gs_raster_is_still_dropped_by_the_guardrail(publish_recorder) -> 
 
 @pytest.mark.asyncio
 async def test_publish_that_raises_fails_open_to_the_raw_cog(monkeypatch) -> None:
-    from trid3nt_server.render import publish as publish_mod
+    from trid3nt.render import publish as publish_mod
 
     def _boom(**kwargs):
         raise publish_mod.PublishLayerError("no", error_code="PUBLISH_FAILED")
@@ -203,7 +203,7 @@ async def test_publish_that_raises_fails_open_to_the_raw_cog(monkeypatch) -> Non
 @pytest.mark.asyncio
 @pytest.mark.parametrize("bad", ["", None, "PUBLISH_FAILED", "gs://bucket/x.tif"])
 async def test_non_renderable_publish_return_fails_open(monkeypatch, bad) -> None:
-    from trid3nt_server.render import publish as publish_mod
+    from trid3nt.render import publish as publish_mod
 
     monkeypatch.setattr(publish_mod, "publish_layer", lambda **kw: bad)
 
@@ -225,7 +225,7 @@ async def test_publish_for_emission_is_the_only_seam() -> None:
     assert not hasattr(results, "_auto_publish_droppable_raster")
     assert not hasattr(results, "_emit_auto_publish_failure")
 
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     assert "publish_layer" not in TOOL_REGISTRY, (
         "publish_layer is a mechanism in emission/, never a tool again"

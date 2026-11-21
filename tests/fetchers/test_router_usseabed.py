@@ -10,9 +10,9 @@ import zipfile
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.ocean.fetch_usseabed import hooks as us
+from trid3nt.tools.fetchers._router.errors import RouterEmptyError
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.ocean.fetch_usseabed import hooks as us
 
 _HEADER = ("latitude,longitude,waterdepth,obsvntop,obsvnbot,locnname,datasetkey,"
            "locnkey,obsvnkey,device,datatypes,gravel,sand,mud,clay,grainsze,"
@@ -103,7 +103,7 @@ def test_an_empty_body_refuses_by_name(spec):
 
 
 def test_a_body_that_is_not_a_zip_is_an_upstream_error(spec):
-    from trid3nt_server.tools.fetchers._router.errors import RouterUpstreamError
+    from trid3nt.tools.fetchers._router.errors import RouterUpstreamError
 
     with pytest.raises(RouterUpstreamError):
         us.parse_response(spec, {}, [b"<h1>error</h1>"])

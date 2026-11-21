@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring import topology as T
+from trid3nt.workflows.telemac.authoring import topology as T
 
 
 def test_the_walk_carries_the_roles_and_the_measured_order():

@@ -8,8 +8,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from trid3nt_server.model.guards.circuit_breaker import ToolCircuitBreaker
-from trid3nt_server.render.uri_registry import SESSIONS_HELD
+from trid3nt_harness.model.guards.circuit_breaker import ToolCircuitBreaker
+from trid3nt.render.uri_registry import SESSIONS_HELD
 
 if TYPE_CHECKING:
     import asyncio

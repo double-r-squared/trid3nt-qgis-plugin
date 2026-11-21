@@ -14,13 +14,13 @@ import pytest
 
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_server.render import pipeline_emitter as pe
-from trid3nt_server.inputs.gate import pending
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.mesh import gate as mesh_gate
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.tools.mesh.meshers import MeshToolError
-from trid3nt_server.tools.mesh.session import MeshSession
-from trid3nt_server.tools.mesh.tool import mesh_op, tool
+from trid3nt_harness.inputs.gate import pending
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.mesh import gate as mesh_gate
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.tools.mesh.meshers import MeshToolError
+from trid3nt.tools.mesh.session import MeshSession
+from trid3nt.tools.mesh.tool import mesh_op, tool
 
 _AOI = (-83.50, 35.00, -83.40, 35.09)
 
@@ -159,9 +159,9 @@ def test_mesh_op_surfaces_in_top8():
 
     import yaml
 
-    import trid3nt_server.tools as t
-    from trid3nt_server.tools.search.search_tools import search_tools as dd
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
+    import trid3nt.tools as t
+    from trid3nt_harness.tools.search.search_tools import search_tools as dd
+    from trid3nt_harness.tools.search.tool_retrieval import retrieve_visible_tools
 
     dd._get_index()
     corpus_path = Path(t.__file__).resolve().parent / "mesh" / "corpus.yaml"
@@ -194,8 +194,8 @@ async def test_adopting_a_hand_edited_layer_is_a_row_on_the_card(
     """A mesh reshaped by hand comes back in on the card, and is FLAGGED."""
     import numpy as np
 
-    from trid3nt_server.render.mesh_display import write_2dm
-    from trid3nt_server.tools.mesh.meshers import Mesh
+    from trid3nt.render.mesh_display import write_2dm
+    from trid3nt.tools.mesh.meshers import Mesh
 
     monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
     edited = tmp_path / "edited.2dm"
@@ -466,7 +466,7 @@ async def test_the_shipped_client_parses_the_card_and_its_reply_routes_home(
 
 def _gate_answering(cancel_code):
     """A review gate that answers with the outcome a cancel of this code produces."""
-    from trid3nt_server.inputs.gate.input_review import ReviewOutcome
+    from trid3nt_harness.inputs.gate.input_review import ReviewOutcome
 
     async def _gate(**kwargs):
         return ReviewOutcome(proceed=False, entries=[], params={}, cancelled=True,
@@ -545,7 +545,7 @@ async def test_over_the_limit_proceed_builds_as_stated(tmp_path, monkeypatch, us
 @pytest.mark.asyncio
 async def test_over_the_limit_fit_builds_the_derived_edge_and_notes_it(
         tmp_path, monkeypatch, user_settings):
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     user_settings(MESH_MAX_NODES=1000)
     fake = _FakeEmitter()

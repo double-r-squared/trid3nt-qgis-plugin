@@ -7,9 +7,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.render.formats import Published
-from trid3nt_server.workflows.runtime import primitives as P
-from trid3nt_server.workflows.runtime.module import SlotRefused
+from trid3nt.render.formats import Published
+from trid3nt.workflows.runtime import primitives as P
+from trid3nt.workflows.runtime.module import SlotRefused
 
 
 def test_a_run_publishing_nothing_names_why_each_read_held_nothing(monkeypatch):

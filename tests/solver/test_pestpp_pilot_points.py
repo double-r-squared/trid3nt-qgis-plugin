@@ -18,11 +18,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.pestpp.authoring import modflow as piece
-from trid3nt_server.workflows.pestpp.authoring import telemac
-from trid3nt_server.workflows.pestpp.authoring.control import Observed, Parameter, prior, write_control
-from trid3nt_server.workflows.pestpp.errors import PestppError
-from trid3nt_server.workflows.pestpp.helpers.geostat import covariance, kriging_factors
+from trid3nt.workflows.pestpp.authoring import modflow as piece
+from trid3nt.workflows.pestpp.authoring import telemac
+from trid3nt.workflows.pestpp.authoring.control import Observed, Parameter, prior, write_control
+from trid3nt.workflows.pestpp.errors import PestppError
+from trid3nt.workflows.pestpp.helpers.geostat import covariance, kriging_factors
 
 _DECK = Path(__file__).resolve().parents[1] / "fixtures" / "pestpp" / "des_moines_deck"
 _TRIAL = Path(__file__).resolve().parents[2] / "workers" / "pestpp" / "modflow_trial.py"
@@ -95,7 +95,7 @@ def test_unstated_pilot_points_count_ten_of_the_grid_s_median_edges(deck_dir):
 
 
 def test_an_ensemble_study_over_pilot_points_localizes_unless_the_run_states_otherwise():
-    from trid3nt_server.workflows.pestpp.workflow import LOCALIZED, localized
+    from trid3nt.workflows.pestpp.workflow import LOCALIZED, localized
 
     field = {"NPF_K": {"spacing": 1000.0}}
     assert localized({"NOPTMAX": 3}, "ies", field) == ({"NOPTMAX": 3, "IES_AUTOADALOC": True}, True)
@@ -109,9 +109,9 @@ def test_the_calibrated_points_at_their_bounds_are_counted_per_group_as_pest_hol
     """The recorded pilot-point study (221 points at the minimum edge's spacing, 19 realizations): its prior ensemble
     holds 208 of 4218 values at a bound (PEST++ truncates its draws there), its last 1559, and the base realization
     pins 37 points low, 51 high and SFR_RHK high."""
-    from trid3nt_server.errors import PARAMETERS_AT_BOUNDS, parameters_at_bounds_warning
-    from trid3nt_server.workflows.pestpp import outputs
-    from trid3nt_server.workflows.pestpp.authoring.control import at_bounds
+    from trid3nt.errors import PARAMETERS_AT_BOUNDS, parameters_at_bounds_warning
+    from trid3nt.workflows.pestpp import outputs
+    from trid3nt.workflows.pestpp.authoring.control import at_bounds
 
     recorded = _DECK.parent / "pilot_points"
     counts = {}
@@ -226,7 +226,7 @@ def test_the_prior_pest_draws_from_correlates_the_points_and_leaves_the_rest_alo
 
 
 def test_the_record_states_the_prior_and_the_ensembles_pest_drew_from_it():
-    from trid3nt_server.workflows.pestpp.workflow import _priors
+    from trid3nt.workflows.pestpp.workflow import _priors
 
     recorded = _DECK.parent / "pilot_points"
     with (recorded / "pestpp.0.par.csv").open() as fh:

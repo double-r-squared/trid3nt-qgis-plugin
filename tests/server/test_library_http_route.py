@@ -37,7 +37,7 @@ def listing():
 
 def test_every_registered_tool_is_listed_once(listing):
     """The listing is the registry: no tool missing, none listed twice."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     listed = [t["name"] for sub in listing["subsystems"] for t in sub["tools"]]
     assert sorted(listed) == sorted(TOOL_REGISTRY)
@@ -63,7 +63,7 @@ def test_subsystems_are_named_and_ordered(listing):
 
 def test_every_row_is_listed_under_its_own_class_and_kind(listing):
     """No row without a class, and the fetcher is named beside it."""
-    from trid3nt_server.tools.search.match import sources_with_coverage
+    from trid3nt.tools.search.match import sources_with_coverage
 
     declared = sorted((name, str(row.data_class), str(row.kind))
                       for name, row in sources_with_coverage())
@@ -142,7 +142,7 @@ def test_a_class_the_ask_never_names_brings_no_rows():
 
 def test_the_class_index_is_built_once_however_many_asks(monkeypatch):
     """The search reads its rows off the cached listing, never a fresh walk."""
-    from trid3nt_server.tools.search import match
+    from trid3nt.tools.search import match
 
     walked = []
     real = match.sources_with_coverage
@@ -187,7 +187,7 @@ def test_a_route_fault_answers_that_route_s_one_message(monkeypatch):
 def test_every_declared_credential_is_listed_once_with_no_key_material(listing):
     """The keys form's names are the library's: one per credential a row
     declares, carrying its label and env var and nothing else."""
-    from trid3nt_server.model.credentials.resolver import keyed_credentials
+    from trid3nt.credentials.resolver import keyed_credentials
 
     listed = listing["credentials"]
     assert [c["name"] for c in listed] == sorted(keyed_credentials())
@@ -216,7 +216,7 @@ def test_the_settings_door_lists_every_setting_with_the_level_it_resolves_at(use
 
 def test_the_settings_door_names_the_retrieval_backend_the_index_was_built_with(monkeypatch):
     from door_client import drive
-    from trid3nt_server.tools.search.search_tools import search_tools
+    from trid3nt_harness.tools.search.search_tools import search_tools
 
     class _Index:
         backend_name = "sentence_transformers"

@@ -10,9 +10,9 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime import fill
-from trid3nt_server.workflows.runtime.errors import StepFailedError
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.runtime import fill
+from trid3nt.workflows.runtime.errors import StepFailedError
 
 _RELEASE = (-122.65, 45.53)
 
@@ -20,7 +20,7 @@ _RELEASE = (-122.65, 45.53)
 @pytest.fixture
 def asked(monkeypatch):
     import trid3nt_server.main as _main
-    from trid3nt_server.inputs.bound_domain import bind_domain, reset_domain
+    from trid3nt.inputs.bound_domain import bind_domain, reset_domain
 
     _main._import_tools_registry()
     calls = []
@@ -69,7 +69,7 @@ def test_with_neither_a_point_nor_a_domain_the_domain_is_never_guessed(asked):
 
 
 def test_a_row_with_no_span_asks_the_ground_the_point_stands_on():
-    from trid3nt_server.tools.search.match import AROUND_PLACE_DEG
+    from trid3nt.tools.search.match import AROUND_PLACE_DEG
 
     west, south, east, north = fill._about(-100.0, 0.0, None)
     assert north - south == pytest.approx(2 * AROUND_PLACE_DEG)

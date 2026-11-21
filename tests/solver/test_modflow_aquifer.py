@@ -11,12 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow.authoring import mesh_files as MF
-from trid3nt_server.workflows.modflow.authoring.simulation import serialize
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow.authoring import mesh_files as MF
+from trid3nt.workflows.modflow.authoring.simulation import serialize
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF
+from trid3nt.workflows.runtime.sheet import fill
 
 _POINTS = [(x, y) for y in (0.0, 10.0, 20.0) for x in (0.0, 10.0, 20.0)]
 _CELLS = [tri for r in range(2) for c in range(2)
@@ -101,7 +101,7 @@ _FULL = {"thickness": "thick", "water_table_depth": "depth",
 
 
 def _layering(sheet, tmp_path):
-    from trid3nt_server.workflows.modflow.authoring.accepted_mesh import mesh_nodes
+    from trid3nt.workflows.modflow.authoring.accepted_mesh import mesh_nodes
 
     mesh = _mesh(tmp_path)
     points, cells, bed, _ = mesh_nodes(mesh)
@@ -124,7 +124,7 @@ def test_a_stated_layer_count_splits_the_aquifer_and_confines_all_but_the_top(tm
     # Only layer 1 is convertible; the layers below it are confined.
     assert sheet.filled["NPF_ICELLTYPE"].value == [1, 0, 0]
     # The bottoms split the total depth into three equal layers.
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     top, _, _ = _layering(sheet, tmp_path)
     botm = place(sheet.filled["DISV_BOTM"].value, slot=sheet.filled["DISV_BOTM"].slot,
@@ -194,7 +194,7 @@ def test_the_bottom_lies_a_thickness_below_the_top_and_the_head_a_depth_below_it
     assert top == pytest.approx(_TOP)
     assert botm == [pytest.approx([t - d for t, d in zip(_TOP, _per_cell(_THICKNESS))])]
 
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     strt = place(sheet.filled["IC_STRT"].value, slot=sheet.filled["IC_STRT"].slot,
                  nlay=1, run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
@@ -210,7 +210,7 @@ def test_a_stated_top_is_the_one_the_bottom_lies_below(tmp_path):
 
 
 def test_a_transmissivity_over_a_thickness_is_the_conductivity_per_cell(tmp_path):
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     sheet = _fill(_inputs(tmp_path), _FULL)
     k = place(sheet.filled["NPF_K"].value, slot=sheet.filled["NPF_K"].slot, nlay=1,
@@ -221,7 +221,7 @@ def test_a_transmissivity_over_a_thickness_is_the_conductivity_per_cell(tmp_path
 
 
 def test_feet_squared_over_feet_onto_a_metre_model_gives_the_same_conductivity(tmp_path):
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     in_feet = _inputs(tmp_path, thickness="ft", transmissivity="ft2/day",
                       thickness_pixels=[[v / 0.3048 for v in row] for row in _THICKNESS])
@@ -246,7 +246,7 @@ def test_a_thickness_at_or_below_zero_refuses_naming_the_count(tmp_path):
 
 
 def test_a_thickness_at_or_below_zero_refuses_the_conductivity_too(tmp_path):
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     sheet = _fill(_inputs(tmp_path, thickness_pixels=[[10.0, 0.0], [30.0, 40.0]]), _FULL)
     with pytest.raises(ModflowError) as caught:
@@ -264,7 +264,7 @@ def test_a_raster_without_a_unit_refuses(tmp_path):
 
 
 def test_cells_below_the_top_on_a_grid_of_two_layers_split_equally(tmp_path):
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     sheet = _fill(_inputs(tmp_path), _FULL)
     botm = place(sheet.filled["DISV_BOTM"].value, slot=sheet.filled["DISV_BOTM"].slot,
@@ -333,7 +333,7 @@ def test_stated_numbers_are_the_model_frame_s_own_at_every_cell(tmp_path):
     top, botm, _ = _layering(sheet, tmp_path)
     assert botm == [pytest.approx([t - 30.0 for t in top])]
 
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     k = place(sheet.filled["NPF_K"].value, slot=sheet.filled["NPF_K"].slot,
               nlay=1, run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
@@ -347,7 +347,7 @@ def test_a_saturated_thickness_lies_below_the_water_table_not_the_land_surface(t
     top, botm, _ = _layering(sheet, tmp_path)
     assert botm == [pytest.approx([t - 2.0 - 28.0 for t in top])]
 
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     k = place(sheet.filled["NPF_K"].value, slot=sheet.filled["NPF_K"].slot,
               nlay=1, run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
@@ -356,7 +356,7 @@ def test_a_saturated_thickness_lies_below_the_water_table_not_the_land_surface(t
 
 
 def test_layers_split_the_saturated_thickness_under_the_water_table(tmp_path):
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     sheet = _fill({}, {"saturated_thickness": 28.0, "water_table_depth": 2.0,
                        "transmissivity": 140.0, "layers": 2})
@@ -383,7 +383,7 @@ def test_one_thickness_and_only_one_is_stated(stated):
 
 
 def _k_by_layer(sheet, nlay):
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     return place(sheet.filled["NPF_K"].value, slot=sheet.filled["NPF_K"].slot, nlay=nlay,
                  run=sheet.run, points=_POINTS, cells=_CELLS, utm_epsg=32617,
@@ -470,7 +470,7 @@ def _by_depth(source_k, source_s, **aquifer):
 
 def _depth_k(sheet, *, tops, botms, run=None):
     """NPF_K placed against a grid whose top and bottoms are stated, every cell alike."""
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     return place(sheet.filled["NPF_K"].value, slot=sheet.filled["NPF_K"].slot,
                  nlay=len(botms), run={**sheet.run, **(_VERTICAL if run is None else run)},
@@ -613,11 +613,11 @@ class _Held:
 
 def _ring_frames(monkeypatch):
     """The Des Moines fetchers' own frames over the ring excerpt, offline: K layers 1-2 and surfaces 0-2, as COG bytes by layer."""
-    import trid3nt_server.tools.cache as cache_mod
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.tools.fetchers._router.executors import animation_frames as EX
-    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_model_k import hooks as MK
-    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_model_layers import hooks as ML
+    import trid3nt.tools.cache as cache_mod
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.tools.fetchers._router.executors import animation_frames as EX
+    from trid3nt.tools.fetchers.hydrology.fetch_usgs_model_k import hooks as MK
+    from trid3nt.tools.fetchers.hydrology.fetch_usgs_model_layers import hooks as ML
 
     archive = (_FIXTURES / "dm_ring_excerpt.zip").read_bytes()
     inner, held = {}, {}
@@ -652,8 +652,8 @@ def test_a_fetched_layered_model_is_read_by_depth_at_a_cell(monkeypatch, tmp_pat
     import rasterio
     from pyproj import Transformer
 
-    from trid3nt_server.tools.fetchers._router import registration as reg
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.tools.fetchers._router import registration as reg
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     k_layers, surface_layers, held = _ring_frames(monkeypatch)
     datum = reg.get_spec("fetch_usgs_model_layers").vertical_datum
@@ -700,7 +700,7 @@ def test_a_fetched_layered_model_is_read_by_depth_at_a_cell(monkeypatch, tmp_pat
                   DISV_TOP=top)
     run = {**sheet.run, "vertical_frame": "NAVD88"}
     art = type("Art", (), {"utm_epsg": 32615})()
-    from trid3nt_server.workflows.modflow.authoring import mesh_files as mf
+    from trid3nt.workflows.modflow.authoring import mesh_files as mf
 
     placed_top = mf.top_of(sheet, nlay=2, art=art, bed=None, points=points, cells=cells)
     botm = mf.botm_of(sheet, nlay=2, art=art, points=points, cells=cells, top=placed_top)
@@ -732,7 +732,7 @@ def test_a_gap_layer_of_the_fetched_ring_is_unmeasured_and_the_layers_around_it_
     from pyproj import Transformer
     import rasterio
 
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     k_layers, surface_layers, held = _ring_frames(monkeypatch)
     assert sorted(l.model_layer for l in k_layers) == [1, 2, 4, 5, 6]
@@ -798,7 +798,7 @@ def test_a_by_depth_conductivity_serializes_one_k_array_per_grid_layer(staged_be
 
 
 def _placed(sheet, keyword, *, nlay=1, top=None, run=None):
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
 
     return place(sheet.filled[keyword].value, slot=sheet.filled[keyword].slot, nlay=nlay,
                  run={**sheet.run, **(_VERTICAL if run is None else run)}, points=_POINTS, cells=_CELLS,
@@ -868,8 +868,8 @@ def test_a_water_table_depth_still_lies_below_the_top():
 
 
 def test_a_raster_named_by_its_handle_reads_the_unit_its_producer_stated(tmp_path, monkeypatch):
-    import trid3nt_server.inputs.geometry as geometry
-    import trid3nt_server.render.uri_registry as registry
+    import trid3nt.inputs.geometry as geometry
+    import trid3nt.render.uri_registry as registry
 
     inputs = _inputs(tmp_path)
     held = {"lyr-thick": inputs["thick"]}

@@ -10,11 +10,11 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._router.errors import router_empty_error
-from trid3nt_server.tools.search.match import Need
-from trid3nt_server.workflows.runtime import fill
+from trid3nt.inputs.run_notes import bind_notes, drain_notes
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.fetchers._router.errors import router_empty_error
+from trid3nt.tools.search.match import Need
+from trid3nt.workflows.runtime import fill
 
 _CAPE_COD = (-70.56, 41.635)
 _NOWHERE = (-100.0, 35.0)

@@ -12,11 +12,11 @@ import os
 
 import pytest
 
-from trid3nt_server.store import objects as storage
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.solver import solver
-from trid3nt_server.workflows.solver import diagnostics as _diag
-from trid3nt_server.workflows.solver.diagnostics import (
+from trid3nt.store import objects as storage
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.solver import solver
+from trid3nt.workflows.solver import diagnostics as _diag
+from trid3nt.workflows.solver.diagnostics import (
     DiagnosticsEngineUnknown,
     DiagnosticsParseError,
     DiagnosticsRunNotFound,

@@ -3,7 +3,7 @@
 Offline only - every runner here is a local stub; no solve, no network.
 """
 from __future__ import annotations
-from trid3nt_server.workflows.telemac.authoring.selafin_io import (
+from trid3nt.workflows.telemac.authoring.selafin_io import (
     BOUNDARY_CONDITIONS_FILE,
     GEOMETRY_FILE,
 )
@@ -18,8 +18,8 @@ from types import MappingProxyType, SimpleNamespace
 import pytest
 from pydantic import BaseModel
 
-from trid3nt_server.inputs.input import Input
-from trid3nt_server.workflows.runtime import (
+from trid3nt.inputs.input import Input
+from trid3nt.workflows.runtime import (
     DeclarationError,
     StepFailedError,
     SuppliedGeometryError,
@@ -29,7 +29,7 @@ from trid3nt_server.workflows.runtime import (
     provenance_entries,
     render_docstring,
 )
-from trid3nt_server.inputs.bound_domain import Domain
+from trid3nt.inputs.bound_domain import Domain
 from seated import resolve_params
 
 _HERE = "tests.runtime.test_declarative_library"
@@ -91,7 +91,7 @@ async def stub_producer(**kwargs):
 async def stub_noting(**kwargs):
     """A step that MEASURES something the reader has to know and has no result
     field to say it in - the note channel's whole reason to exist."""
-    from trid3nt_server.inputs.run_notes import journal_note
+    from trid3nt.inputs.run_notes import journal_note
 
     _CALLS.append("stub_noting")
     journal_note("measured 42.0% coverage")
@@ -106,7 +106,7 @@ async def stub_mesh_step(**kwargs):
     Its consumers read the artifact by attribute, so what the replay hands back
     has to be the artifact and not a mapping that merely holds its fields.
     """
-    from trid3nt_server.tools.mesh.artifact import MeshArtifact
+    from trid3nt.tools.mesh.artifact import MeshArtifact
 
     _CALLS.append("stub_mesh_step")
     art = MeshArtifact(
@@ -301,7 +301,7 @@ def test_one_author_word_declares_every_producer():
     """There is no fetch/build role on the declaration: what a runner does to the
     world is the REGISTRY's knowledge, so both runners are declared the same way
     and both carry the same modifiers."""
-    from trid3nt_server.workflows.runtime import Producer
+    from trid3nt.workflows.runtime import Producer
 
     fetcher, builder = tool("fetch_dem"), tool("build_mesh")
     assert type(fetcher) is type(builder) is Producer
@@ -313,8 +313,8 @@ def _params():
 
 
 def test_the_wire_refuses_an_input_declared_twice():
-    from trid3nt_server.inputs.user_input import WireArgsError
-    from trid3nt_server.workflows.runtime.workflow import _wire_signature
+    from trid3nt.inputs.user_input import WireArgsError
+    from trid3nt.workflows.runtime.workflow import _wire_signature
 
     decl = [Input(name="base", desc="d", default=1.0, type=float),
             Input(name="base", desc="other", default=2.0, type=float)]
@@ -329,7 +329,7 @@ def test_the_wire_refuses_an_input_declared_twice():
 def test_one_body_names_values_and_rows_alike_and_keeps_their_order():
     """The attribute name IS the input's name and the body's order IS the order;
     a value and a row are one class, told apart by what each states."""
-    from trid3nt_server.inputs.input import declared
+    from trid3nt.inputs.input import declared
 
     class INPUTS:
         depth_m = Input(default=1.0, bounds=(0.0, 9.0), desc="a depth")
@@ -351,7 +351,7 @@ def test_one_body_names_values_and_rows_alike_and_keeps_their_order():
 
 
 def test_the_old_declaration_names_are_gone():
-    import trid3nt_server.workflows.runtime as runtime
+    import trid3nt.workflows.runtime as runtime
 
     for gone in ("Param", "Data", "DataDecl", "param_rows", "data_rows",
                  "ResolvedParams"):
@@ -359,7 +359,7 @@ def test_the_old_declaration_names_are_gone():
 
 
 def test_a_value_with_no_desc_refuses_the_declaration():
-    from trid3nt_server.inputs.input import declared
+    from trid3nt.inputs.input import declared
 
     with pytest.raises(DeclarationError, match="declares no desc"):
         declared([Input(name="depth_m", default=1.0, bounds=(0.0, 9.0))])
@@ -442,8 +442,8 @@ def test_every_registered_template_fits_the_truncation_budget():
     """The budget is the routing view's own: a tool whose front block outgrows
     it is a tool the model never routes on, so every registered template is
     measured, not one chosen in advance."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.docstring import GATHERS_OWN
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.workflows.runtime.docstring import GATHERS_OWN
 
     over = {}
     for name, entry in TOOL_REGISTRY.items():
@@ -459,8 +459,8 @@ def test_every_registered_template_fits_the_truncation_budget():
 def test_a_template_package_without_a_routing_yaml_refuses_at_import(tmp_path):
     """The prose is the declaration: a package that declares none is not a mute
     tool waiting to be filled in, it is refused where it is registered."""
-    from trid3nt_server.inputs.input import DeclarationError
-    from trid3nt_server.workflows.runtime.workflow import _routing_doc
+    from trid3nt.inputs.input import DeclarationError
+    from trid3nt.workflows.runtime.workflow import _routing_doc
 
     package = tmp_path / "silent"
     package.mkdir()
@@ -471,8 +471,8 @@ def test_a_template_package_without_a_routing_yaml_refuses_at_import(tmp_path):
 
 
 def test_a_routing_yaml_missing_its_required_keys_refuses(tmp_path):
-    from trid3nt_server.inputs.input import DeclarationError
-    from trid3nt_server.workflows.runtime.workflow import _routing_doc
+    from trid3nt.inputs.input import DeclarationError
+    from trid3nt.workflows.runtime.workflow import _routing_doc
 
     package = tmp_path / "partial"
     package.mkdir()
@@ -485,7 +485,7 @@ def test_a_routing_yaml_missing_its_required_keys_refuses(tmp_path):
 
 
 def test_do_sag_publishes_both_docstring_views():
-    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
+    from trid3nt.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
 
     assert "Params:" in (telemac_do_sag.__doc__ or "")
     assert "Params:" not in telemac_do_sag.routing_doc
@@ -532,7 +532,7 @@ def test_the_store_cycle_is_locked_across_processes(tmp_path):
     every writer's document survives, because none writes a stale whole store."""
     import threading
 
-    from trid3nt_server.store.cases import FileMCPClient
+    from trid3nt.store.cases import FileMCPClient
 
     client = FileMCPClient(base_dir=tmp_path)
     path = client._collection_path("db", "coll")

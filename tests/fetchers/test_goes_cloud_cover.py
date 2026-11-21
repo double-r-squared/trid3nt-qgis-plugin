@@ -18,13 +18,13 @@ import netCDF4
 import pytest
 
 from trid3nt_contracts.coverage import Member
-from trid3nt_server.errors import CLOUD_COVER_FROM_ASOS, cloud_cover_from_asos_warning
-from trid3nt_server.inputs import run_notes
-from trid3nt_server.inputs.cloud import cloud
-from trid3nt_server.inputs.fields import FieldError, Record
-from trid3nt_server.inputs.observation import ObservationError
-from trid3nt_server.tools.fetchers._router import registration
-from trid3nt_server.tools.fetchers.weather.fetch_goes_cloud_cover import hooks as goes
+from trid3nt.errors import CLOUD_COVER_FROM_ASOS, cloud_cover_from_asos_warning
+from trid3nt.inputs import run_notes
+from trid3nt.inputs.cloud import cloud
+from trid3nt.inputs.fields import FieldError, Record
+from trid3nt.inputs.observation import ObservationError
+from trid3nt.tools.fetchers._router import registration
+from trid3nt.tools.fetchers.weather.fetch_goes_cloud_cover import hooks as goes
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "fetcher_fields"
 _SCAN = _FIXTURES / "goes19_acmc_conus_des_moines_crop.nc"
@@ -140,7 +140,7 @@ class _Client:
 
 
 def _read(monkeypatch, data, **params):
-    monkeypatch.setattr("trid3nt_server.tools.fetchers._public_s3.public_s3_client", lambda *a: _Client(data))
+    monkeypatch.setattr("trid3nt.tools.fetchers._public_s3.public_s3_client", lambda *a: _Client(data))
     lon, lat = _lonlat(1092, 299)
     asked = {"seed_point": [lon, lat], "start_time": "2026-11-19T21:00:00+00:00",
              "end_time": "2026-11-19T21:00:00+00:00", **params}
@@ -275,7 +275,7 @@ def test_a_box_with_no_cloud_cover_is_a_missing_reading_not_a_clear_one():
 # -- the match -------------------------------------------------------------------------------------------------------- #
 
 def _ranked(lon, lat, opens="2026-11-19T21:00:00+00:00", until="2026-11-19T22:00:00+00:00"):
-    from trid3nt_server.tools.search.match import Need, match, sources_with_coverage
+    from trid3nt.tools.search.match import Need, match, sources_with_coverage
 
     need = Need(slot="cloud", data_class="cloud cover", lon=lon, lat=lat, geometry="point", opens=opens, until=until)
     return match(need, sources_with_coverage())
@@ -297,7 +297,7 @@ def test_a_window_before_goes_holds_anything_is_left_to_asos():
 
 
 def test_the_goes_row_is_asked_by_the_point_and_the_window():
-    from trid3nt_server.tools.search.match import Need, base_ask
+    from trid3nt.tools.search.match import Need, base_ask
 
     choice = _ranked(-93.6, 41.6)
     ask = base_ask(choice, "cloud", None, -93.6, 41.6, "2026-11-19T21:00:00+00:00", "2026-11-19T22:00:00+00:00")
@@ -309,18 +309,18 @@ def test_the_goes_row_is_asked_by_the_point_and_the_window():
 
 @pytest.mark.parametrize("template", ["water_temperature", "ice_cover"])
 def test_the_templates_that_read_cloud_state_a_cloud_cover_need_and_hand_it_to_the_atmosphere(template):
-    from trid3nt_server.inputs.slots import CLOUD
+    from trid3nt.inputs.slots import CLOUD
     import importlib
 
-    module = importlib.import_module(f"trid3nt_server.workflows.telemac.templates.{template}.{template}")
+    module = importlib.import_module(f"trid3nt.workflows.telemac.templates.{template}.{template}")
     row = module.INPUTS.cloud
     assert row.slot is CLOUD and row.data_class == "cloud cover"
     assert module.STEERING.atmosphere["cloud_octas"] == "cloud"
 
 
 def test_the_atmosphere_reads_the_cloud_record_on_the_station_records_clock():
-    from trid3nt_server.inputs.weather import weather
-    from trid3nt_server.workflows.telemac.authoring.atmosphere import _resolved
+    from trid3nt.inputs.weather import weather
+    from trid3nt.workflows.telemac.authoring.atmosphere import _resolved
 
     station_fields = {"site": Member(field="s"), "time": Member(field="t"),
                       "air_temperature": Member(field="a", unit="degC")}
@@ -337,7 +337,7 @@ def test_the_atmosphere_reads_the_cloud_record_on_the_station_records_clock():
                       at=opens, window_s=3600.0)
     cloudy = cloud(rows(lambda h: {"c": 2.0 * (h - 21)}), fields=cloud_fields, near={"lon": -93.6, "lat": 41.6},
                    at=opens, window_s=3600.0)
-    from trid3nt_server.workflows.telemac.authoring.atmosphere import Atmosphere
+    from trid3nt.workflows.telemac.authoring.atmosphere import Atmosphere
 
     times, stated, _note = _resolved(Atmosphere(observed=station, cloud_octas=cloudy), ("air_temp_c", "cloud_octas"))
     assert stated["cloud_octas"] == [0.0, 2.0, 4.0][: len(times)] or stated["cloud_octas"] == pytest.approx(

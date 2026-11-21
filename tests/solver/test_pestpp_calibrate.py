@@ -15,12 +15,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.inputs.observation import Observation
-from trid3nt_server.workflows.pestpp import outputs
-from trid3nt_server.workflows.pestpp.authoring import modflow as study_deck
-from trid3nt_server.workflows.pestpp.charts import fit_chart, parameter_chart, phi_chart, residual_chart
-from trid3nt_server.workflows.pestpp.errors import PestppError
-from trid3nt_server.workflows.pestpp.workflow import _bounds, ranked
+from trid3nt.inputs.observation import Observation
+from trid3nt.workflows.pestpp import outputs
+from trid3nt.workflows.pestpp.authoring import modflow as study_deck
+from trid3nt.workflows.pestpp.charts import fit_chart, parameter_chart, phi_chart, residual_chart
+from trid3nt.workflows.pestpp.errors import PestppError
+from trid3nt.workflows.pestpp.workflow import _bounds, ranked
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "pestpp"
 _CALIBRATE = _FIXTURES / "calibrate"
@@ -132,10 +132,10 @@ def test_heads_are_observed_through_an_obs_file_the_model_names(deck_dir):
 
 def test_a_reading_is_a_head_at_its_cell_once_per_site(monkeypatch, deck_dir):
     the_deck = dataclasses.replace(study_deck.deck(deck_dir), top=(10.0, 20.0, 30.0))
-    monkeypatch.setattr("trid3nt_server.workflows.modflow.authoring.accepted_mesh.mesh_nodes",
+    monkeypatch.setattr("trid3nt.workflows.modflow.authoring.accepted_mesh.mesh_nodes",
                         lambda mesh: (None, None, None, None))
     cells = {(-1.0, 1.0): 0, (-2.0, 2.0): 1, (-3.0, 3.0): 2}
-    monkeypatch.setattr("trid3nt_server.workflows.modflow.authoring.stress.at_cell",
+    monkeypatch.setattr("trid3nt.workflows.modflow.authoring.stress.at_cell",
                         lambda at, **_: cells[tuple(at["coordinates"])])
     wells = [Observation(value=20.13, units="ft", quantity="water_table_depth", site_id="A", lon=-1.0, lat=1.0),
              Observation(value=38.33, units="ft", quantity="groundwater_head", datum="NAVD88", site_id="A",
@@ -177,7 +177,7 @@ def test_an_unstated_noptmax_refuses_the_study():
     import trid3nt_server.main as main
 
     main._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY["calibrate"].fn.workflow
     refused = workflow.judged(SimpleNamespace(keywords={}, carried={}))
@@ -236,7 +236,7 @@ def test_a_list_column_stating_two_values_or_a_value_outside_its_bounds_refuses(
 
 
 def test_the_run_s_engine_picks_its_piece_and_an_engine_with_none_refuses_naming_them():
-    from trid3nt_server.workflows.pestpp.workflow import ENGINES, piece
+    from trid3nt.workflows.pestpp.workflow import ENGINES, piece
 
     assert piece("modflow") is study_deck
     with pytest.raises(PestppError, match="a study calibrates a run of modflow") as refused:

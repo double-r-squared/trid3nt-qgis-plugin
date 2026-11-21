@@ -1,0 +1,399 @@
+"""NOAA BlueTopo delegate hooks: AOI to tiles to merge.
+
+BlueTopo is BATHYMETRY ONLY, with no land in it, and is published on NAVD88 -- an
+orthometric datum rather than a tidal one -- which is what lets it merge with a NAVD88
+land DEM with no vertical transformation."""
+
+# The bespoke step this delegate owns is DISCOVERY. The bucket's tile scheme is a
+# GeoPackage of tile polygons carrying each delivered tile's raster link, its resolution
+# tier and its UTM zone. That file is the coverage truth -- a tile row with no link is a
+# tile the programme defined and has not delivered -- so the AOI is intersected against
+# it rather than against any assumption about the grid.
+#
+# The warp-merge onto one target grid is NOT bespoke and is not reimplemented here:
+# the shared tile mosaic owns it.
+#
+# ``read`` records the fetch-time provenance -- datum, tiles, tiers, measured coverage
+# -- on the provenance channel, so it survives a cache hit and ``envelope`` can replay
+# it into the result.
+
+from __future__ import annotations
+
+import atexit
+import logging
+import math
+import os
+import tempfile
+import time
+from typing import Any
+
+from trid3nt.tools.cache import record_provenance
+from trid3nt.tools.fetchers._public_s3 import public_s3_client
+
+from ..._fetch_common import MAX_TILES, FetchError
+from ..._tile_mosaic import VSICURL_ENV, MosaicEmpty, mosaic, own_utm, painted_fraction
+from ..._router.hooks import register_hook
+
+logger = logging.getLogger(__name__)
+
+__all__ = [
+    "BlueTopoError",
+    "BlueTopoInputError",
+    "BlueTopoUpstreamError",
+    "BlueTopoDatumError",
+    "BlueTopoCoverageGapError",
+    "BLUETOPO_BUCKET",
+    "BLUETOPO_TILE_SCHEME_PREFIX",
+    "latest_tile_scheme_key",
+    "select_bluetopo_tiles",
+    "assert_navd88_tile",
+    "validate_bluetopo",
+    "read_bluetopo",
+    "envelope_bluetopo",
+]
+
+
+
+
+class BlueTopoError(FetchError):
+    """Base class for fetch_bluetopo failures."""
+
+    error_code: str = "BLUETOPO_ERROR"
+    retryable: bool = True
+
+
+class BlueTopoInputError(BlueTopoError):
+    """Bad inputs (bbox shape, non-finite numbers, outside the US envelope)."""
+
+    error_code = "BLUETOPO_INPUT_INVALID"
+    retryable = False
+
+
+class BlueTopoUpstreamError(BlueTopoError):
+    """Tile-scheme listing / download / tile read / merge failure."""
+
+    error_code = "BLUETOPO_UPSTREAM_ERROR"
+    retryable = True
+
+
+class BlueTopoDatumError(BlueTopoError):
+    """A selected tile does not state NAVD88. It is refused rather than merged onto a
+    NAVD88 bed, because a silent cross-datum merge is exactly the substitution the
+    correct-data-class law forbids."""
+
+    error_code = "BLUETOPO_DATUM_MISMATCH"
+    retryable = False
+
+
+class BlueTopoCoverageGapError(BlueTopoError):
+    """No delivered tile intersects the AOI. The source concentrates on navigationally
+    significant water, so a minor creek legitimately has none, and the terminal answer
+    is this refusal rather than a surface built from something else."""
+
+    error_code = "BLUETOPO_COVERAGE_GAP"
+    retryable = False
+
+
+
+#: The AWS Open Data bucket, anonymous read, us-east-1.
+BLUETOPO_BUCKET = "noaa-ocs-nationalbathymetry-pds"
+
+#: Where the tile scheme GeoPackage lives. The programme republishes it under a
+#: timestamped name, so the key is DISCOVERED by listing rather than pinned.
+BLUETOPO_TILE_SCHEME_PREFIX = "BlueTopo/_BlueTopo_Tile_Scheme/"
+
+#: Public https base for the objects the tile scheme's links point at.
+BLUETOPO_HTTPS_ROOT = f"https://{BLUETOPO_BUCKET}.s3.amazonaws.com/"
+
+#: Band 1 of a BlueTopo tile. The three bands are Elevation, Uncertainty and
+#: Contributor; only the first is a bed.
+_ELEVATION_BAND = 1
+
+#: US envelope (incl. AK, HI and the territories BlueTopo covers) -- a coarse
+#: pre-screen so a foreign bbox fails before the tile scheme is downloaded.
+_US_BBOX: tuple[float, float, float, float] = (-180.0, -15.0, -64.0, 72.0)
+
+#: How long a downloaded tile scheme is reused within one process. The file is
+#: ~6.5 MB and is republished on the programme's own cadence, not per request.
+_SCHEME_MEMO_TTL_S = 3600.0
+
+
+_scheme_memo: tuple[float, str] | None = None
+
+
+def _drop_scheme() -> None:
+    if _scheme_memo is not None:
+        try:
+            os.unlink(_scheme_memo[1])
+        except OSError:
+            pass
+
+
+atexit.register(_drop_scheme)
+
+
+
+
+def latest_tile_scheme_key(*, timeout_s: float = 60.0) -> str:
+    """The newest tile-scheme GeoPackage key under the scheme prefix, LISTED rather than
+    pinned: the key carries a publish timestamp, so a pinned one goes stale silently
+    and a stale scheme reports coverage that has moved."""
+    client = public_s3_client()
+    try:
+        resp = client.list_objects_v2(
+            Bucket=BLUETOPO_BUCKET, Prefix=BLUETOPO_TILE_SCHEME_PREFIX
+        )
+    except Exception as exc:  # noqa: BLE001 -- listing is the upstream
+        raise BlueTopoUpstreamError(
+            f"could not list the BlueTopo tile scheme prefix "
+            f"s3://{BLUETOPO_BUCKET}/{BLUETOPO_TILE_SCHEME_PREFIX}: {exc}"
+        ) from exc
+    keys = [
+        str(o["Key"]) for o in (resp.get("Contents") or [])
+        if str(o.get("Key", "")).lower().endswith(".gpkg")
+    ]
+    if not keys:
+        raise BlueTopoUpstreamError(
+            f"no tile-scheme GeoPackage under s3://{BLUETOPO_BUCKET}/"
+            f"{BLUETOPO_TILE_SCHEME_PREFIX} -- BlueTopo coverage cannot be resolved"
+        )
+    return sorted(keys)[-1]
+
+
+def _tile_scheme_path(*, timeout_s: float) -> str:
+    """A local copy of the newest tile scheme, memoized for this process."""
+    global _scheme_memo
+    now = time.monotonic()
+    if _scheme_memo is not None and now - _scheme_memo[0] < _SCHEME_MEMO_TTL_S:
+        if os.path.exists(_scheme_memo[1]):
+            return _scheme_memo[1]
+
+    key = latest_tile_scheme_key(timeout_s=timeout_s)
+    client = public_s3_client()
+    with tempfile.NamedTemporaryFile(
+        suffix=".gpkg", delete=False, prefix="trid3nt_bluetopo_scheme_"
+    ) as fh:
+        path = fh.name
+    try:
+        client.download_file(BLUETOPO_BUCKET, key, path)
+    except Exception as exc:  # noqa: BLE001
+        os.unlink(path)
+        raise BlueTopoUpstreamError(
+            f"could not download the BlueTopo tile scheme {key}: {exc}"
+        ) from exc
+    _drop_scheme()
+    _scheme_memo = (now, path)
+    logger.info("fetch_bluetopo: tile scheme %s staged at %s", key, path)
+    return path
+
+
+def select_bluetopo_tiles(
+    bbox: tuple[float, float, float, float], *, timeout_s: float = 120.0
+) -> list[dict[str, Any]]:
+    """Tiles whose footprint intersects the AOI, as id, link, tier and UTM zone. A row
+    the scheme defines but has NOT delivered is dropped: a defined tile is not data."""
+
+    # A footprint is a SELECTION, never a coverage measure. The source publishes bed for
+    # navigationally significant water only, so a delivered tile over a coastal AOI is
+    # mostly nodata; how much of the AOI carries a bed is measured off the painted grid,
+    # not off these polygons.
+    import geopandas as gpd
+    from shapely.geometry import box
+
+    path = _tile_scheme_path(timeout_s=timeout_s)
+    aoi = box(*bbox)
+    try:
+        frame = gpd.read_file(path, bbox=bbox)
+    except Exception as exc:  # noqa: BLE001
+        raise BlueTopoUpstreamError(
+            f"could not read the BlueTopo tile scheme at {path}: {exc}"
+        ) from exc
+
+    rows: list[dict[str, Any]] = []
+    for _, row in frame.iterrows():
+        link = row.get("GeoTIFF_Link")
+        geom = row.get("geometry")
+        if not link or geom is None or geom.is_empty:
+            continue
+        if not geom.intersects(aoi):
+            continue
+        rows.append({
+            "tile": str(row.get("tile") or ""),
+            "url": str(link),
+            "resolution": str(row.get("Resolution") or ""),
+            "utm": str(row.get("UTM") or ""),
+            "delivered": str(row.get("Delivered_Date") or ""),
+        })
+
+    # Coarsest tier FIRST so the finest tier paints LAST: the compositor is
+    # last-wins, and where two tiers overlap the finer cell is the better bed.
+    rows.sort(key=lambda r: -_tier_metres(r["resolution"]))
+    return rows
+
+
+def _tier_metres(label: str) -> float:
+    """Metres from a tile-scheme ``Resolution`` label (``4m``), or 0 when unread."""
+    try:
+        return float(str(label).strip().lower().rstrip("m"))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+
+
+def assert_navd88_tile(vsicurl_path: str) -> str:
+    """Return the tile's stated vertical datum, or refuse. It is carried twice -- in the
+    compound CRS's vertical component and in a private tag -- and BOTH are read; a tile
+    stating neither is refused, since a known datum is why this source is on a ladder."""
+    import rasterio
+
+    text = ""
+    try:
+        with rasterio.Env(**VSICURL_ENV):
+            with rasterio.open(vsicurl_path) as ds:
+                crs = ds.crs
+                if crs is not None:
+                    text += " " + (crs.to_wkt() or "")
+                text += " " + str((ds.tags() or {}).get("VERTICALDATUMWKT", ""))
+    except Exception as exc:  # noqa: BLE001
+        raise BlueTopoUpstreamError(
+            f"could not read the BlueTopo tile header for the datum check "
+            f"({vsicurl_path}): {exc}"
+        ) from exc
+
+    lowered = text.lower()
+    if "navd88" in lowered or "navd 88" in lowered or "navd_88" in lowered:
+        return "NAVD88"
+    raise BlueTopoDatumError(
+        f"BlueTopo tile {vsicurl_path} does not state NAVD88 in its vertical CRS "
+        f"or its VERTICALDATUMWKT tag (read: {text.strip()[:200]!r}); refusing to "
+        "merge a bed whose datum is unknown"
+    )
+
+
+
+
+@register_hook("bluetopo.validate")
+def validate_bluetopo(spec: Any, params: dict[str, Any]) -> None:
+    """Bbox finiteness + ordering + the US envelope, raised before any fetch."""
+    raw = params.get("bbox")
+    try:
+        bbox = tuple(float(v) for v in raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise BlueTopoInputError(f"bbox must be four numbers; got {raw!r}") from exc
+    if len(bbox) != 4 or not all(math.isfinite(v) for v in bbox):
+        raise BlueTopoInputError(f"bbox must be four finite numbers; got {raw!r}")
+    west, south, east, north = bbox
+    if east <= west or north <= south:
+        raise BlueTopoInputError(
+            f"degenerate bbox (min must be strictly less than max); got {bbox!r}"
+        )
+    uw, us, ue, un = _US_BBOX
+    if east < uw or west > ue or north < us or south > un:
+        raise BlueTopoInputError(
+            f"bbox {bbox!r} is outside the US envelope {_US_BBOX!r} -- NOAA "
+            "BlueTopo covers US waters only"
+        )
+    t_s = params.get("timeout_s")
+    if t_s is not None and (not math.isfinite(float(t_s)) or float(t_s) <= 0):
+        raise BlueTopoInputError(f"timeout_s must be > 0 and finite; got {t_s!r}")
+    res = params.get("resolution_m")
+    if res is not None and (not math.isfinite(float(res)) or float(res) <= 0):
+        raise BlueTopoInputError(f"resolution_m must be > 0 and finite; got {res!r}")
+
+
+
+
+@register_hook("bluetopo.read")
+def read_bluetopo(
+    spec: Any, params: dict[str, Any], *, timeout_s: float
+) -> tuple[Any, Any, Any]:
+    """AOI -> tile-scheme select -> per-tile NAVD88 gate -> merged bed."""
+    bbox = tuple(float(v) for v in params["bbox"])
+    target_crs = str(params.get("target_crs") or own_utm(bbox)).strip()
+    fetch_timeout = float(params.get("timeout_s") or 120.0)
+    res = params.get("resolution_m")
+    resolution_m = float(res) if res is not None else None
+
+    rows = select_bluetopo_tiles(bbox, timeout_s=fetch_timeout)
+    if not rows:
+        raise BlueTopoCoverageGapError(
+            f"no delivered NOAA BlueTopo tile intersects {bbox!r}. BlueTopo covers "
+            "navigationally significant US waters; this AOI is outside what the "
+            "programme has delivered. Supply your own bed, or let the bed "
+            "ladder lay a source that reaches this water."
+        )
+    if len(rows) > MAX_TILES:
+        raise BlueTopoInputError(
+            f"AOI {bbox!r} intersects {len(rows)} BlueTopo tiles, over the "
+            f"{MAX_TILES}-tile ceiling; narrow the bbox"
+        )
+
+    sources: list[str] = []
+    for row in rows:
+        path = f"/vsicurl/{row['url']}"
+        assert_navd88_tile(path)
+        sources.append(path)
+
+    try:
+        array, transform, crs, painted = mosaic(
+            sources, target_crs, bbox, resolution_m=resolution_m,
+            source="fetch_bluetopo",
+        )
+    except MosaicEmpty as exc:
+        raise BlueTopoCoverageGapError(
+            f"the BlueTopo tiles selected for {bbox!r} produced no bed: {exc}"
+        ) from exc
+
+    painted_rows = [row for row, ok in zip(rows, painted) if ok]
+    # PAINTED BED, not delivered footprint. A tile can intersect the whole AOI
+    # and still leave a quarter of it nodata -- BlueTopo publishes bed for
+    # navigationally significant water only -- and the ladder's gap gate reads
+    # this number to decide whether another rung has to fill the rest.
+    coverage = painted_fraction(array)
+    record_provenance({
+        "vertical_datum": "NAVD88",
+        "tile_count": len(painted_rows),
+        "resolution_tiers": sorted({r["resolution"] for r in painted_rows if r["resolution"]}),
+        "coverage_fraction": coverage,
+        "rung_coverage": {"bluetopo": coverage},
+    })
+    logger.info(
+        "fetch_bluetopo: %d/%d tiles painted, tiers=%s, painted bed over the AOI "
+        "%.3f", len(painted_rows), len(rows),
+        sorted({r["resolution"] for r in painted_rows}), coverage,
+    )
+    return array, transform, crs
+
+
+
+
+@register_hook("bluetopo.envelope")
+def envelope_bluetopo(
+    spec: Any,
+    params: dict[str, Any],
+    layer: Any,
+    data: bytes | None,
+    provenance: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the ``BlueTopoResult`` fields from the recorded fetch provenance."""
+    b = tuple(float(v) for v in params["bbox"])
+    prov = provenance or {}
+    coverage = prov.get("rung_coverage")
+    tiers = prov.get("resolution_tiers") or []
+    return {
+        "layer_id": f"bluetopo-{b[0]:.4f}-{b[1]:.4f}-{b[2]:.4f}-{b[3]:.4f}",
+        "name": (
+            "NOAA BlueTopo bathymetry (NAVD88 m, positive-up) -- bbox "
+            f"({b[0]:.2f},{b[1]:.2f},{b[2]:.2f},{b[3]:.2f})"
+        ),
+        "vertical_datum": str(prov.get("vertical_datum", "NAVD88")),
+        "tile_count": int(prov.get("tile_count", 0)),
+        "resolution_tiers": [str(t) for t in tiers],
+        "coverage_fraction": float(prov.get("coverage_fraction", 0.0)),
+        "rung_coverage": (
+            {str(k): float(v) for k, v in coverage.items()}
+            if isinstance(coverage, dict) and coverage
+            else None
+        ),
+    }

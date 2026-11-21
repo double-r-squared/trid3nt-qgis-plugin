@@ -13,21 +13,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from trid3nt_contracts.message import Message, Part, ToolCall, ToolDeclaration, ToolResponse
 
-from trid3nt_server.model.guards.context_budget import ContextWindow, WINDOW_SOURCE_ENV
-from trid3nt_server.model.adapters.openai_adapter import (
+from trid3nt_harness.model.guards.context_budget import ContextWindow, WINDOW_SOURCE_ENV
+from trid3nt_harness.model.adapters.openai_adapter import (
     _TOOL_DISCIPLINE_SYSTEM,
     contents_to_openai_messages,
     stream_openai,
     tool_declarations_to_openai_tools,
 )
-from trid3nt_server.model.adapters.adapter import (
+from trid3nt_harness.model.adapters.adapter import (
     CompactionCompleteEvent,
     CompactionStartEvent,
     FunctionCallEvent,
     TextDeltaEvent,
     UsageMetadataEvent,
 )
-from trid3nt_server.model.guards.context_budget import (
+from trid3nt_harness.model.guards.context_budget import (
     ContextWindowExceededError,
     openai_max_output_tokens,
     reserve_output_tokens,
@@ -424,7 +424,7 @@ class TestStreamOpenai:
         mock_stream.__aexit__ = AsyncMock(return_value=False)
         mock_create = AsyncMock(return_value=mock_stream)
 
-        from trid3nt_server.model.adapters.openai_adapter import stream_openai
+        from trid3nt_harness.model.adapters.openai_adapter import stream_openai
         with patch("openai.AsyncOpenAI") as mock_cls:
             mock_client = MagicMock()
             mock_client.chat.completions.create = mock_create
@@ -520,7 +520,7 @@ class TestStreamOpenai:
             captured_kwargs.update(kwargs)
             return mock_stream
 
-        from trid3nt_server.model.adapters.openai_adapter import stream_openai
+        from trid3nt_harness.model.adapters.openai_adapter import stream_openai
         with patch("openai.AsyncOpenAI") as mock_cls:
             mock_client = MagicMock()
             mock_client.chat.completions.create = _capture_create
@@ -537,32 +537,32 @@ class TestOpenaiModelPrecedence:
     """Per-turn session model overrides the TRID3NT_OPENAI_MODEL default."""
 
     def test_session_model_overrides_env_default(self, monkeypatch):
-        from trid3nt_server.model.adapters.openai_adapter import openai_model
+        from trid3nt_harness.model.adapters.openai_adapter import openai_model
 
         monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "qwen3:8b-16k")
         assert openai_model("llama3.2:3b") == "llama3.2:3b"
 
     def test_env_default_used_when_no_session_model(self, monkeypatch):
-        from trid3nt_server.model.adapters.openai_adapter import openai_model
+        from trid3nt_harness.model.adapters.openai_adapter import openai_model
 
         monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "qwen3:8b-16k")
         assert openai_model(None) == "qwen3:8b-16k"
 
     def test_session_model_passes_through_whatever_its_shape(self, monkeypatch):
-        from trid3nt_server.model.adapters.openai_adapter import openai_model
+        from trid3nt_harness.model.adapters.openai_adapter import openai_model
 
         monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "qwen3:8b-16k")
         for session_model in ("qwen3:0.6b", "us.anthropic.claude-x", "anthropic.y"):
             assert openai_model(session_model) == session_model
 
     def test_session_model_works_with_no_env_default(self, monkeypatch):
-        from trid3nt_server.model.adapters.openai_adapter import openai_model
+        from trid3nt_harness.model.adapters.openai_adapter import openai_model
 
         monkeypatch.delenv("TRID3NT_OPENAI_MODEL", raising=False)
         assert openai_model("llama3.2:3b") == "llama3.2:3b"
 
     def test_nothing_configured_raises(self, monkeypatch):
-        from trid3nt_server.model.adapters.openai_adapter import openai_model
+        from trid3nt_harness.model.adapters.openai_adapter import openai_model
 
         monkeypatch.delenv("TRID3NT_OPENAI_MODEL", raising=False)
         with pytest.raises(RuntimeError):
@@ -654,7 +654,7 @@ class TestContextBudgetWiring:
             return _make_stream([_text_chunk("ok"), _usage_chunk(100), _final_empty_chunk()])
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("trid3nt_server.model.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
+             patch("trid3nt_harness.model.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _capture_create
             mock_cls.return_value = mock_client
@@ -687,7 +687,7 @@ class TestContextBudgetWiring:
             )
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("trid3nt_server.model.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
+             patch("trid3nt_harness.model.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
             mock_client = MagicMock()
 
             async def _create(**kwargs):
@@ -735,7 +735,7 @@ class TestContextBudgetWiring:
             return stream
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("trid3nt_server.model.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
+             patch("trid3nt_harness.model.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _create
             mock_cls.return_value = mock_client
@@ -786,7 +786,7 @@ class TestContextBudgetWiring:
             return stream
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("trid3nt_server.model.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
+             patch("trid3nt_harness.model.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _create
             mock_cls.return_value = mock_client
@@ -833,7 +833,7 @@ class TestMaxTokensCap:
             return _make_stream([_text_chunk("hi"), _usage_chunk(50), _final_empty_chunk()])
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("trid3nt_server.model.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
+             patch("trid3nt_harness.model.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _capture_create
             mock_cls.return_value = mock_client
@@ -847,7 +847,7 @@ class TestMaxTokensCap:
     async def test_max_tokens_stays_coupled_to_reserve(
         self, monkeypatch
     ):
-        from trid3nt_server.model.guards import context_budget
+        from trid3nt_harness.model.guards import context_budget
 
         self._env(monkeypatch)
         monkeypatch.setattr(context_budget, "OPENAI_MAX_TOKENS_DEFAULT", 512)
@@ -865,7 +865,7 @@ class TestMaxTokensCap:
             return _make_stream([_text_chunk("hi"), _usage_chunk(50), _final_empty_chunk()])
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("trid3nt_server.model.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
+             patch("trid3nt_harness.model.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _capture_create
             mock_cls.return_value = mock_client
@@ -907,7 +907,7 @@ class TestTransientUpstreamRetry:
         return client
 
     async def _run(self, side_effects, monkeypatch):
-        import trid3nt_server.model.adapters.openai_adapter as oa
+        import trid3nt_harness.model.adapters.openai_adapter as oa
 
         async def _nosleep(_seconds):  # noqa: ANN001, ANN202
             return None
@@ -996,7 +996,7 @@ class TestTransientUpstreamRetry:
     def test_is_transient_upstream_classification(self):
         """Unit-level truth table for _is_transient_upstream."""
         import openai
-        from trid3nt_server.model.adapters.openai_adapter import _is_transient_upstream
+        from trid3nt_harness.model.adapters.openai_adapter import _is_transient_upstream
 
         req = self._req()
         # Transient:

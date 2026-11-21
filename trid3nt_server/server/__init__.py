@@ -29,10 +29,10 @@ from .protocol import loop as _protocol_loop
 from . import config as _config
 from . import errors as _errors
 from . import spatial as _spatial
-from ..inputs.gate import confirm as _gates_confirm
-from ..inputs.gate import pending as _gates_pending
-from ..inputs.gate import errors as _gates_errors
-from ..inputs.gate.cards import fetch_resolution as _gates_cards_confirm
+from trid3nt_harness.inputs.gate import confirm as _gates_confirm
+from trid3nt_harness.inputs.gate import pending as _gates_pending
+from trid3nt_harness.inputs.gate import errors as _gates_errors
+from trid3nt_harness.inputs.gate.cards import fetch_resolution as _gates_cards_confirm
 
 # Facade read order; monkeypatch writes propagate to EVERY leaf already binding
 # the name (so a leaf reading it as its own global sees the patch).

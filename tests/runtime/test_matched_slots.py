@@ -20,26 +20,26 @@ from trid3nt_contracts.coverage import (
     Member,
 )
 
-from trid3nt_server.tools.fetchers._router.errors import (
+from trid3nt.tools.fetchers._router.errors import (
     router_upstream_error,
 )
-from trid3nt_server.inputs.input import Input, declared
-from trid3nt_server.workflows.runtime import fill
-from trid3nt_server.inputs.bound_domain import (
+from trid3nt.inputs.input import Input, declared
+from trid3nt.workflows.runtime import fill
+from trid3nt.inputs.bound_domain import (
     Domain,
     bind_domain,
     current_domain,
     reset_domain,
 )
-from trid3nt_server.workflows.runtime.journal import (
+from trid3nt.workflows.runtime.journal import (
     bind_choices,
     drain_choices,
     run_choices,
 )
-from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, OBSERVE
+from trid3nt.inputs.slots import BED, DISCHARGE, DOMAIN, LEVEL, OBSERVE
 
 def _hole(code="BED_WET_HOLE"):
-    from trid3nt_server.inputs.user_input import UserInputError
+    from trid3nt.inputs.user_input import UserInputError
 
     return UserInputError("49.4% of the water in this domain is measured by nothing in the bed", code=code)
 
@@ -76,7 +76,7 @@ def test_a_wet_hole_walks_to_the_next_surface_and_hands_the_ordered_list(world, 
 
 
 def test_every_surface_leaving_a_hole_refuses_the_last_hole_naming_each_surface(world, monkeypatch):
-    from trid3nt_server.inputs.user_input import UserInputError
+    from trid3nt.inputs.user_input import UserInputError
 
     env, bed, ingest, seen = _walk(world, monkeypatch, [_hole(), _hole()])
     with pytest.raises(UserInputError) as refused:
@@ -87,7 +87,7 @@ def test_every_surface_leaving_a_hole_refuses_the_last_hole_naming_each_surface(
 
 
 def test_a_refusal_other_than_a_wet_hole_is_not_walked_past(world, monkeypatch):
-    from trid3nt_server.inputs.user_input import UserInputError
+    from trid3nt.inputs.user_input import UserInputError
 
     env, bed, ingest, seen = _walk(world, monkeypatch, [_hole("BED_CLIFF")])
     with pytest.raises(UserInputError) as refused:
@@ -97,7 +97,7 @@ def test_a_refusal_other_than_a_wet_hole_is_not_walked_past(world, monkeypatch):
 
 
 def test_an_engine_laying_its_own_bed_takes_the_one_row_and_never_walks(world, monkeypatch):
-    from trid3nt_server.inputs.user_input import UserInputError
+    from trid3nt.inputs.user_input import UserInputError
 
     env, bed, ingest, seen = _walk(world, monkeypatch, [_hole()], own_bed=True)
     with pytest.raises(UserInputError):
@@ -128,7 +128,7 @@ def test_two_surfaces_each_measuring_half_the_water_make_a_bed_through_the_slot(
     monkeypatch.setattr(fill, "_call_runner", _runner)
     water = {"type": "Polygon", "coordinates": [[
         [-122.72, 45.50], [-122.62, 45.50], [-122.62, 45.56], [-122.72, 45.56], [-122.72, 45.50]]]}
-    from trid3nt_server.settings import bind_run, reset_run
+    from trid3nt.settings import bind_run, reset_run
 
     token = bind_domain(Domain(bbox=WILLAMETTE, geometry=water, label="reach"))
     reach = bind_run({"FILL_MAX_DISTANCE": 3})
@@ -235,7 +235,7 @@ def world(monkeypatch):
     monkeypatch.setattr(fill, "_spec_of", lambda name: SPECS[name])
     # The ask closes through the match, which reads the source's own params off
     # the router's registry: the stubs stand in there too.
-    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt.tools.fetchers._router import registration
 
     monkeypatch.setattr(registration, "_SPEC_REGISTRY", dict(SPECS))
     token = bind_domain(Domain(bbox=WILLAMETTE, geometry={}, label="reach"))
@@ -283,8 +283,8 @@ def test_a_wet_hole_past_the_fill_s_reach_is_refused_naming_the_setting(world,
     """The matched row measures the east half of water cut over the whole of
     it, so the west half is a WET hole the fill reaches only so far: past the
     stated reach the fill refuses by name, naming the setting and a further surface."""
-    from trid3nt_server.inputs.user_input import UserInputError
-    from trid3nt_server.settings import bind_run, reset_run
+    from trid3nt.inputs.user_input import UserInputError
+    from trid3nt.settings import bind_run, reset_run
 
     monkeypatch.setitem(SPECS, "fetch_soundings",
                         _Spec(coverage("bathymetry", res=1.0), "raster",
@@ -336,7 +336,7 @@ def test_an_ordered_list_handed_the_bed_fetches_each_named_source_in_order(
     import numpy as np
     import rasterio
 
-    from trid3nt_server.tools.derive import _hydrology_common as common
+    from trid3nt.tools.derive import _hydrology_common as common
 
     real = common.write_cog
     monkeypatch.setattr(common, "write_cog", lambda band, **kw: real(
@@ -362,7 +362,7 @@ def test_an_ordered_list_handed_the_bed_fetches_each_named_source_in_order(
 
 def test_a_named_source_serving_no_bed_class_refuses_rather_than_another_taking_its_place(
         world):
-    from trid3nt_server.workflows.runtime.errors import StepFailedError
+    from trid3nt.workflows.runtime.errors import StepFailedError
 
     env = _env()
     row = _row(Input(BED).need("bathymetry"), "bed")
@@ -376,7 +376,7 @@ def test_no_measurement_over_this_domain_refuses_rather_than_reaching_a_class(
         world, monkeypatch):
     """A bed whose own class measured nothing here is not a bed the terrain
     quietly becomes: the slot refuses, and naming the terrain is the person's."""
-    from trid3nt_server.workflows.runtime.errors import StepFailedError
+    from trid3nt.workflows.runtime.errors import StepFailedError
 
     async def _runner(runner, kwargs, label):
         world.append((runner, dict(kwargs)))
@@ -457,7 +457,7 @@ def test_the_fill_reads_the_moment_under_the_name_the_workflow_states(world):
 
 
 def test_a_need_and_a_producer_on_one_row_is_refused_at_declaration():
-    from trid3nt_server.workflows.runtime import DeclarationError, tool
+    from trid3nt.workflows.runtime import DeclarationError, tool
 
     with pytest.raises(DeclarationError, match="a row is satisfied one way"):
         class DATA:
@@ -550,7 +550,7 @@ def test_one_column_name_in_two_units_is_read_off_the_row_that_was_matched(
 def _reach_source(monkeypatch):
     """A hydrography source called by a seed and a distance, whose row
     maps the question's generic span onto its own param."""
-    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt.tools.fetchers._router import registration
 
     spec = _Spec(coverage("hydrography", res=5.0, datum=None).model_copy(
         update={"ask": {"distance_km": "need:span_km"}}),
@@ -648,9 +648,9 @@ def test_each_handed_surface_on_another_frame_is_asked_its_own_offset_off_its_re
     import rasterio
 
     from trid3nt_contracts.execution import LayerURI
-    from trid3nt_server.render.uri_registry import (
+    from trid3nt.render.uri_registry import (
         activate_registry, deactivate_registry, get_uri_registry)
-    from trid3nt_server.tools.derive import _hydrology_common as common
+    from trid3nt.tools.derive import _hydrology_common as common
 
     real = common.write_cog
     monkeypatch.setattr(common, "write_cog", lambda band, **kw: real(
@@ -695,7 +695,7 @@ _REACH = {"type": "Polygon", "coordinates": [[
 @pytest.fixture
 def hydrography(world, monkeypatch):
     """Two hydrography rows over one place: a coastline row (no cell stated) and a river-area row (5 m)."""
-    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt.tools.fetchers._router import registration
 
     answers = {"fetch_coastline": _NOTHING, "fetch_reach": _REACH}
     coast = coverage("hydrography", res=None, datum=None, latest=None).model_copy(
@@ -738,7 +738,7 @@ def test_a_domain_need_falls_to_the_next_ranked_row_when_the_first_holds_zero_fe
 
 
 def test_every_row_empty_is_one_refusal_naming_each_row_tried(hydrography):
-    from trid3nt_server.workflows.runtime.errors import StepFailedError
+    from trid3nt.workflows.runtime.errors import StepFailedError
 
     _called, answers = hydrography
     answers["fetch_reach"] = _NOTHING
@@ -769,7 +769,7 @@ def test_a_gauge_row_naming_no_point_takes_the_site_nearest_the_question_s_seed(
     """The river templates' level and discharge rows state no ``at``: their sites
     rank against the point the domain is found from, never the source's own row
     order, whose first site here is Richland Creek 30 km up a tributary."""
-    from trid3nt_server.tools.fetchers._router.registration import get_spec
+    from trid3nt.tools.fetchers._router.registration import get_spec
 
     row = next(r for r in get_spec("fetch_usgs_nwis_gauges").coverage
                if r.data_class == need)

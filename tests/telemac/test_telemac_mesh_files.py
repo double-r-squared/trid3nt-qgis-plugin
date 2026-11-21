@@ -13,13 +13,13 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.telemac.authoring import mesh_files as MF
-from trid3nt_server.workflows.telemac.authoring.selafin_io import (
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.telemac.authoring import mesh_files as MF
+from trid3nt.workflows.telemac.authoring.selafin_io import (
     BOUNDARY_CONDITIONS_FILE,
     GEOMETRY_FILE,
 )
-from trid3nt_server.workflows.telemac.errors import TelemacError
+from trid3nt.workflows.telemac.errors import TelemacError
 
 
 def _lattice(tmp_path: Path) -> Path:

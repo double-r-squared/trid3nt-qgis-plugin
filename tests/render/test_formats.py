@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from trid3nt_server.render.formats import (
+from trid3nt.render.formats import (
     Chart,
     Deliverable,
     Mesh,

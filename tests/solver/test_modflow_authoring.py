@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow.authoring import mesh_files as MF
-from trid3nt_server.workflows.modflow.authoring.simulation import serialize
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF
-from trid3nt_server.workflows.runtime.sheet import Sheet, fill
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow.authoring import mesh_files as MF
+from trid3nt.workflows.modflow.authoring.simulation import serialize
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF
+from trid3nt.workflows.runtime.sheet import Sheet, fill
 
 #: One square cell's worth of mesh the placements place against: two triangles.
 _POINTS = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0),
@@ -79,7 +79,7 @@ def staged_beside(monkeypatch, tmp_path):
 
 
 def _place(value, *, name="NPF_K", nlay=2, run=None, cells=_CELLS, utm=None):
-    from trid3nt_server.workflows.modflow.authoring.griddata import place
+    from trid3nt.workflows.modflow.authoring.griddata import place
 
     return place(value, slot=GWF.slot(name), nlay=nlay,
                  run=run if run is not None else {}, points=_POINTS,
@@ -91,8 +91,8 @@ def test_a_constant_passes_through():
 
 
 def test_an_input_holding_a_number_is_that_constant_and_never_sampled():
-    from trid3nt_server.workflows.modflow.modules.gwt import GWT
-    from trid3nt_server.workflows.modflow.authoring.griddata import place
+    from trid3nt.workflows.modflow.modules.gwt import GWT
+    from trid3nt.workflows.modflow.authoring.griddata import place
 
     assert place("porosity", slot=GWT.slot("MST_POROSITY"), nlay=2,
                  run={"porosity": 0.39}, points=None, cells=None,
@@ -150,7 +150,7 @@ def test_a_name_no_input_of_this_run_carries_refuses_by_name():
 
 
 def test_a_name_sampled_with_no_mesh_refuses_by_name():
-    from trid3nt_server.workflows.modflow.authoring.griddata import place
+    from trid3nt.workflows.modflow.authoring.griddata import place
 
     with pytest.raises(ModflowError) as caught:
         place("bed_raster", slot=GWF.slot("NPF_K"), nlay=2,
@@ -210,7 +210,7 @@ def test_the_directory_is_written_around_the_staged_disv_and_checked(
                             "mfsim.nam", "trid3nt.tdis"}
     assert "mesh.disv" in (rundir / "gwf.nam").read_text()
 
-    from trid3nt_server.workflows.modflow.authoring.staged_check import (
+    from trid3nt.workflows.modflow.authoring.staged_check import (
         check_staged_run)
 
     read = check_staged_run(
@@ -283,7 +283,7 @@ def _cp(returncode: int, stdout: str = "", stderr: str = "") -> subprocess.Compl
 
 def test_the_validate_caller_hands_the_directory_to_the_images_own_mf6(
         monkeypatch, tmp_path):
-    from trid3nt_server.workflows.modflow.authoring import validate as V
+    from trid3nt.workflows.modflow.authoring import validate as V
 
     seen: dict = {}
 
@@ -300,7 +300,7 @@ def test_the_validate_caller_hands_the_directory_to_the_images_own_mf6(
 
 def test_a_parser_that_refuses_the_directory_carries_its_own_words(
         monkeypatch, tmp_path):
-    from trid3nt_server.workflows.modflow.authoring import validate as V
+    from trid3nt.workflows.modflow.authoring import validate as V
 
     monkeypatch.setattr(
         V, "run_image_script",
@@ -312,7 +312,7 @@ def test_a_parser_that_refuses_the_directory_carries_its_own_words(
 
 
 def test_the_refusal_leads_with_mf6_s_error_report_not_its_banner(monkeypatch, tmp_path):
-    from trid3nt_server.workflows.modflow.authoring import validate as V
+    from trid3nt.workflows.modflow.authoring import validate as V
 
     banner = "MODFLOW 6 banner line\n" * 100
     report = "ERROR REPORT:\n\n  1. RIV BOUNDARY (1) RIVER STAGE ( 5.6) IS LESS THAN RIVER BOTTOM ( 30.5)\n"
@@ -323,7 +323,7 @@ def test_the_refusal_leads_with_mf6_s_error_report_not_its_banner(monkeypatch, t
 
 
 def test_a_clean_exit_that_never_finished_refuses(monkeypatch, tmp_path):
-    from trid3nt_server.workflows.modflow.authoring import validate as V
+    from trid3nt.workflows.modflow.authoring import validate as V
 
     monkeypatch.setattr(V, "run_image_script", lambda **_: _cp(0, stdout=""))
     with pytest.raises(ModflowError) as caught:

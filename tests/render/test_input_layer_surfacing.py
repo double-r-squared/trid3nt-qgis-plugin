@@ -143,7 +143,7 @@ async def test_publish_input_layer_swallows_add_loaded_layer_failure():
 #      The bathymetry-consuming coastal templates surface their
 #      fetched topobathy the same way the flood DEM path does.
 _PUBLISH_LAYER_TARGET = (
-    "trid3nt_server.render.publish.publish_layer"
+    "trid3nt.render.publish.publish_layer"
 )
 _COG_EXISTS_TARGET = "trid3nt_server.render.layer_uri_emit._cog_object_exists"
 
@@ -195,7 +195,7 @@ async def test_publish_raster_input_cog_publish_failure_non_fatal():
     """A publish_layer PublishLayerError is swallowed (best-effort): returns
     False, surfaces nothing, NEVER raises -- a failed input can never fail the
     solve."""
-    from trid3nt_server.render.publish import (
+    from trid3nt.render.publish import (
         PublishLayerError,
     )
 
@@ -268,7 +268,7 @@ async def test_publish_raster_input_cog_none_emitter_or_uri_noop():
 async def test_surfaced_input_layer_resolves_by_its_id_and_registers_once():
     """A layer loaded through publish_input_layer is in the session registry, so a later
     call names it by id or short handle; one already registered keeps its handle."""
-    from trid3nt_server.render.uri_registry import (
+    from trid3nt.render.uri_registry import (
         activate_registry, deactivate_registry, get_uri_registry,
         lookup_uri_for_handle, reset_uri_registries_for_tests)
 

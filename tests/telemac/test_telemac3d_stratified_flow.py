@@ -15,7 +15,7 @@ from seated import value_inputs, row_inputs
 
 
 def _module():
-    from trid3nt_server.workflows.telemac.templates.stratified_flow import (
+    from trid3nt.workflows.telemac.templates.stratified_flow import (
         stratified_flow,
     )
 
@@ -23,7 +23,7 @@ def _module():
 
 
 def _workflow():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY["telemac3d_stratified_flow"].fn.workflow
 
@@ -35,7 +35,7 @@ def test_the_data_rows_are_the_engine_neutral_slots_this_run_stands_on():
     picked, or a layer the caller already holds. One bed the match composes, and
     no runs row - a lake IS a closed body, and the mesh takes its roles from the
     domain, which measures none."""
-    from trid3nt_server.inputs.slots import BED, DOMAIN, LEVEL
+    from trid3nt.inputs.slots import BED, DOMAIN, LEVEL
 
     rows = row_inputs(_module().INPUTS)
     assert [d.name for d in rows] == ["domain", "bed", "level"]
@@ -57,7 +57,7 @@ def test_the_data_rows_are_the_engine_neutral_slots_this_run_stands_on():
 def test_the_seed_names_which_body_of_water_and_is_a_point_never_a_place():
     """A place name is geocoded to a point before it reaches the match, so what
     ranks the domain is a lon/lat off the Point the seed was ingested into."""
-    from trid3nt_server.inputs import Point
+    from trid3nt.inputs import Point
 
     domain = {d.name: d for d in row_inputs(_module().INPUTS)}["domain"]
     assert domain.coercion["near"] == "seed"
@@ -94,7 +94,7 @@ def test_a_stated_plane_count_replans_the_grid_and_the_initial_column():
     """The fill binds the composites' read to whatever the sheet holds, so the
     stretch the grid achieves follows the keyword whether the deck stated the
     count or the user did."""
-    from trid3nt_server.workflows.runtime.sheet import fill
+    from trid3nt.workflows.runtime.sheet import fill
 
     produced = {"settled": {"title": "basin", "time_step_s": 1.0,
                             "level_m": 100.0, "max_depth_m": 120.0}}
@@ -114,7 +114,7 @@ def test_the_deck_is_calm_and_states_no_wind_keyword_at_all():
     """CALM is the half of the pair the thermocline survives in, and a zero speed
     writes nothing: TELEMAC-3D has no combined speed-and-direction keyword, so the
     wind a user asks for is the engine's own components, set by their names."""
-    from trid3nt_server.workflows.runtime.sheet import fill
+    from trid3nt.workflows.runtime.sheet import fill
 
     asserted = _module().STEERING.ASSERTED
     assert not {"WIND", "WIND_VELOCITY_ALONG_X", "WIND_VELOCITY_ALONG_Y"} & set(asserted)
@@ -163,7 +163,7 @@ def test_the_dissolved_params_are_gone(gone):
 def test_the_model_surface_takes_a_body_of_water_and_never_a_place():
     """Nothing on the wire names a place or a box: the domain IS the argument, and
     a place name is geocoded to a shape before it gets here."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["telemac3d_stratified_flow"].fn
     args = set(inspect.signature(fn).parameters)

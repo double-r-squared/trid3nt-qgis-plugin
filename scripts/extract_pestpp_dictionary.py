@@ -37,7 +37,7 @@ MANUAL_URL = (f"https://raw.githubusercontent.com/pestpp/pestpp/{PESTPP_VERSION}
 #: ``names.pst``, each name it does not read warned).
 RECORDS = ROOT / "tests" / "fixtures" / "pestpp" / "defaults"
 
-OUT = ROOT / "trid3nt_server" / "workflows" / "pestpp" / "modules" / "module_input" / "pestpp.json"
+OUT = ROOT / "trid3nt" / "workflows" / "pestpp" / "modules" / "module_input" / "pestpp.json"
 
 #: Each table's section and the tool reading the options it lists; an option in several tables is read by each.
 _TABLES = {"s10-2-3": "pestpp-glm", "s11-2-3": "pestpp-sen", "s11-3-2": "pestpp-sen", "s12-4": "pestpp-opt",

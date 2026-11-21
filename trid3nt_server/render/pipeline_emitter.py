@@ -36,7 +36,7 @@ from trid3nt_contracts.ws import (
 )
 
 from .layer_uri_emit import emit_layer_uri, publish_for_emission
-from .uri_registry import observe_published_layer
+from trid3nt.render.uri_registry import observe_published_layer
 
 __all__ = [
     "EmitterError",
@@ -304,7 +304,7 @@ def _legend_for_layer_uri(uri: str | None) -> Any:
     if not uri:
         return None
     try:
-        from trid3nt_server.render.publish import pop_legend_for_uri
+        from trid3nt.render.publish import pop_legend_for_uri
 
         return pop_legend_for_uri(uri)
     except Exception:  # noqa: BLE001 - legend lift is best-effort, never fatal
@@ -1079,7 +1079,7 @@ class PipelineEmitter:
 
     def _classify_exception(self, exc: Exception) -> tuple[str, str]:
         """Deliberately conservative: an ambiguous shape buckets into ``INTERNAL_ERROR`` rather than a fabricated code."""
-        from trid3nt_server.tools.fetchers._fetch_common import UpstreamAPIError
+        from trid3nt.tools.fetchers._fetch_common import UpstreamAPIError
 
         message = str(exc) or exc.__class__.__name__
         # An upstream provider's failure keeps the upstream code, the source's code leading the provider's message.

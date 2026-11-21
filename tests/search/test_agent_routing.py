@@ -13,8 +13,8 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.model.adapters.adapter import (
+from trid3nt import tools as agent_tools
+from trid3nt_harness.model.adapters.adapter import (
     FunctionCallEvent,
     TextDeltaEvent,
     build_tool_declarations,
@@ -32,7 +32,7 @@ _TEMPLATE = "telemac_dye_release"
 
 def test_engine_template_in_registry():
     """The template must be registered and every dissolved DOOR name gone."""
-    import trid3nt_server.tools  # noqa: F401 -- template registration side-effect
+    import trid3nt.tools  # noqa: F401 -- template registration side-effect
 
     assert _TEMPLATE in agent_tools.TOOL_REGISTRY, f"{_TEMPLATE} must be registered"
     for door in ("run_sfincs", "run_model_flood_scenario", "run_telemac"):
@@ -45,7 +45,7 @@ def test_engine_template_in_registry():
 
 def test_build_tool_declarations_includes_the_template():
     """The declaration list must carry the template (no concierge in front)."""
-    import trid3nt_server.tools  # noqa: F401 -- template registration side-effect
+    import trid3nt.tools  # noqa: F401 -- template registration side-effect
 
     decls = build_tool_declarations(agent_tools.TOOL_REGISTRY)
     names = [d.name for d in decls]
@@ -115,7 +115,7 @@ async def test_stream_events_yields_text_delta_event(fake_llm):
 
 def test_template_docstring_covers_user_intent():
     """The docstring must carry the question's own words - it is the routing signal."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get(_TEMPLATE)
     assert entry is not None

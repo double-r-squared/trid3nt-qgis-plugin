@@ -12,10 +12,10 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_contracts.coverage import Member
-from trid3nt_server.inputs.observation import ObservationError
-from trid3nt_server.inputs.slots import ingest_slot
-from trid3nt_server.inputs.wave import wave
-from trid3nt_server.inputs.slots import WAVE
+from trid3nt.inputs.observation import ObservationError
+from trid3nt.inputs.slots import ingest_slot
+from trid3nt.inputs.wave import wave
+from trid3nt.inputs.slots import WAVE
 
 #: The sea-state source's field map: each quantity is the window it reports it over, in its own unit.
 _FIELDS = {"height": Member(field="wave_height_series_csv", unit="m"),
@@ -119,8 +119,8 @@ def test_the_slot_reserves_the_name_and_reads_the_class_the_buoys_publish():
 def test_the_wave_row_is_told_the_record_s_own_columns_and_the_run_s_window():
     from types import SimpleNamespace
 
-    from trid3nt_server.workflows.runtime.fill import _what_the_record_reports
-    from trid3nt_server.inputs.input import Input
+    from trid3nt.workflows.runtime.fill import _what_the_record_reports
+    from trid3nt.inputs.input import Input
 
     row = SimpleNamespace(fields=_FIELDS, data_class="wave series")
     told = _what_the_record_reports(SimpleNamespace(window_s=7200.0, run={}, moment=""),

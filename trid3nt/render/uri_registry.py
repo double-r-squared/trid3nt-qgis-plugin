@@ -1,0 +1,785 @@
+"""Session-scoped layer-URI registry - layer-handle indirection.
+
+One store, one scheme: a layer has exactly ONE ``s3://`` uri, so a record is a
+single handle-to-uri binding. The registry is SESSION-scoped and survives a
+reconnect; a NON-store string is never blocked, whatever it names.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import posixpath
+import re
+from collections import OrderedDict
+from contextvars import ContextVar, Token
+from dataclasses import dataclass, field
+from typing import Any
+from urllib.parse import urlparse
+
+logger = logging.getLogger("trid3nt.render.uri_registry")
+
+__all__ = [
+    "RESOLVABLE_URI_PARAMS",
+    "SESSIONS_HELD",
+    "SHORT_HANDLE_RE",
+    "SOURCE_HANDLE_RE",
+    "SessionUriRegistry",
+    "UriResolutionError",
+    "activate_registry",
+    "deactivate_registry",
+    "get_uri_registry",
+    "held_source_request",
+    "lookup_layer_for_handle",
+    "lookup_uri_for_handle",
+    "mint_source_handle",
+    "observe_published_layer",
+    "reset_uri_registries_for_tests",
+]
+
+
+#: Param names that consume layer/raster/vector URIs and resolve through the registry at dispatch. Destination params
+#: (where a tool writes) and server-owned params (``project_qgs_uri``) must not be listed: branch 4 would reject a not-yet-existing output path.
+RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset({"layer_uri", "model_setup_uri"})
+
+
+#: The short per-case layer-handle shape minted at the emit seam; case-insensitive on resolve, leading zeros normalize (``L07`` == ``L7``).
+SHORT_HANDLE_RE = re.compile(r"^[Ll](\d+)$")
+
+#: The per-case source-row handle shape find_sources mints; case-insensitive on resolve, leading zeros normalize.
+SOURCE_HANDLE_RE = re.compile(r"^[Ss](\d+)$")
+
+#: Guard against pathological mint growth; records themselves cap at 1024.
+_SHORT_HANDLES_CAP = 4096
+
+#: Minimum shared basename-stem prefix (chars) for the hash-prefix fuzzy branch: ~14 hex chars survive before the
+#: tail hallucination starts; 12 keeps headroom while staying collision-safe for 32-hex cache keys.
+_HASH_PREFIX_MIN = 12
+
+#: How many sessions an in-memory map keyed by session holds before it evicts the oldest.
+SESSIONS_HELD = 4096
+
+_RECORDS_PER_SESSION_CAP = 1024
+_WALK_MAX_DEPTH = 8
+_WALK_MAX_ITEMS = 64
+_ANNOUNCE_CAP = 8
+_ERROR_HANDLES_CAP = 10
+
+
+class UriResolutionError(RuntimeError):
+    """An LLM-supplied URI param matched nothing the session ever produced.
+
+    ``error_code``/``retryable`` are the class-attribute typed-error contract.
+    """
+
+    error_code = "URI_HANDLE_UNRESOLVED"
+    retryable = True
+
+    def __init__(self, param_name: str, value: str, inventory: str) -> None:
+        self.param_name = param_name
+        self.value = value
+        super().__init__(
+            f"{param_name}={value!r} does not match any layer this session "
+            f"produced — do NOT construct storage paths/URIs. Pass a layer "
+            f"handle (the short L<n> handle or the layer_id) from a prior "
+            f"tool result instead. {inventory}"
+        )
+
+
+@dataclass
+class UriRecord:
+    """One registered layer/artifact: handle -> its one exact URI, and where the
+    layer came from - the tool that produced it, and for a FETCHED one the dataset
+    and the cache key its bytes are addressed by."""
+
+    handle: str
+    uri: str | None = None  # the object-store uri; a layer has exactly one
+    tool_name: str | None = None  # producer (for the inventory message)
+    dataset: str | None = None  # the fetch source class; None for a produced layer
+    cache_key: str | None = None  # the fetch key; None for a produced layer
+    seq: int = 0  # registration order (recency tie-breaks)
+    #: What the layer says about its values (datum, quantity, band-2 inputs) as its producer returned it, so a layer named by id carries them onward.
+    summary: dict[str, Any] = field(default_factory=dict)
+
+
+_SUMMARY = ("name", "quantity", "vertical_datum", "units", "sources",
+            "datum_offset_m", "datum_offset_frame")
+
+
+def _is_object_store(value: str) -> bool:
+    """An unknown one in a layer-consuming param is a typed reject, not a pass-through."""
+    return value.startswith("s3://")
+
+
+_URI_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
+
+
+def _is_uri_shaped(value: str) -> bool:
+    """A uri-shaped value is never placeholder-resolved."""
+    return bool(_URI_SCHEME_RE.match(value)) or value.startswith("/vsi")
+
+
+def _basename(uri: str) -> str:
+    return posixpath.basename(urlparse(uri).path if "://" in uri else uri)
+
+
+def _stem(uri: str) -> str:
+    base = _basename(uri)
+    stem, _dot, _ext = base.rpartition(".")
+    return stem if stem else base
+
+
+def _parent_dir(uri: str) -> str:
+    return uri.rsplit("/", 1)[0] if "/" in uri else uri
+
+
+def _path_segments(uri: str) -> list[str]:
+    """Bucket + path segments of a store URI (for overlap scoring)."""
+    body = uri[len("s3://"):] if uri.startswith("s3://") else uri
+    return [seg for seg in body.split("/") if seg]
+
+
+def _common_prefix_len(a: str, b: str) -> int:
+    n = min(len(a), len(b))
+    i = 0
+    while i < n and a[i] == b[i]:
+        i += 1
+    return i
+
+
+@dataclass
+class SessionUriRegistry:
+    """Handle -> URI indirection table for ONE session.
+    Additive: a registered data uri is never clobbered by ``None``. Every method
+    is synchronous and in-memory - the registry sits on the dispatch path.
+    """
+
+    session_id: str
+    _records: OrderedDict[str, UriRecord] = field(default_factory=OrderedDict)
+    _uri_to_handle: dict[str, str] = field(default_factory=dict)
+    _seq: int = 0
+    _pending_announcements: OrderedDict[str, str] = field(
+        default_factory=OrderedDict
+    )
+    # Short per-case layer handles (``L<n>``), minted monotonically when a record gains a DATA uri and persisted with the
+    # Case so a reconnect resolves the handles the model already saw. ``_short_to_uri`` keys are canonical: uppercase, no zero padding.
+    _short_to_uri: OrderedDict[str, str] = field(default_factory=OrderedDict)
+    _uri_to_short: dict[str, str] = field(default_factory=dict)
+    _short_seq: int = 0
+    _shorts_dirty: bool = False
+    # Source-row handles (``S<n>``), each holding the request find_sources filled and showed. Minted and persisted
+    # beside the layer shorts, in the same map, so a number the model has seen is never reused within the Case.
+    _requests: OrderedDict[str, dict] = field(default_factory=OrderedDict)
+    _request_seq: int = 0
+
+
+    def record(
+        self,
+        handle: str,
+        *,
+        uri: str | None = None,
+        tool_name: str | None = None,
+        announce: bool = True,
+    ) -> None:
+        """Register/merge one ``handle → URI`` association."""
+        if not handle:
+            return
+        rec = self._records.get(handle)
+        if rec is None:
+            self._seq += 1
+            rec = UriRecord(handle=handle, seq=self._seq)
+            self._records[handle] = rec
+            self._evict_if_needed()
+        if uri:
+            # The uri IS the cache-key address of the fetch that landed it, so the key a repeat fetch computes is matchable here.
+            # Imported here: the tool package pulls the server in at import time.
+            from trid3nt.tools.cache import parse_cache_path
+
+            fetched = parse_cache_path(uri)
+            if fetched is not None:
+                rec.dataset, rec.cache_key = fetched
+            if rec.uri and rec.uri != uri:
+                logger.info(
+                    "uri_registry[%s]: handle %r uri updated %s -> %s",
+                    self.session_id,
+                    handle,
+                    rec.uri,
+                    uri,
+                )
+            # A layer published again under another id is the same layer; what its producer said rides along.
+            prior = self._records.get(self._uri_to_handle.get(uri, ""))
+            if prior is not None and not rec.summary:
+                rec.summary = dict(prior.summary)
+            rec.uri = uri
+            self._uri_to_handle[uri] = handle
+            self._mint_short(uri)
+        if tool_name:
+            rec.tool_name = tool_name
+        if announce and rec.uri:
+            self._pending_announcements[handle] = rec.uri
+            while len(self._pending_announcements) > _ANNOUNCE_CAP:
+                self._pending_announcements.popitem(last=False)
+
+    def _evict_if_needed(self) -> None:
+        while len(self._records) > _RECORDS_PER_SESSION_CAP:
+            evicted_handle, evicted = self._records.popitem(last=False)
+            if evicted.uri and self._uri_to_handle.get(evicted.uri) == evicted_handle:
+                self._uri_to_handle.pop(evicted.uri, None)
+            # Short handles survive record eviction: an announced L<n> must keep resolving for the life of the Case.
+
+
+    def _mint_short(self, uri: str) -> str | None:
+        """Mint the next ``L<n>`` for a DATA uri (idempotent per uri)."""
+        existing = self._uri_to_short.get(uri)
+        if existing is not None:
+            return existing
+        if len(self._short_to_uri) >= _SHORT_HANDLES_CAP:
+            return None
+        self._short_seq += 1
+        short = f"L{self._short_seq}"
+        self._short_to_uri[short] = uri
+        self._uri_to_short[uri] = short
+        self._shorts_dirty = True
+        return short
+
+    def mint_request(self, held: dict[str, Any]) -> str | None:
+        """Hold one filled source request under the next ``S<n>``."""
+        if len(self._requests) >= _SHORT_HANDLES_CAP:
+            return None
+        self._request_seq += 1
+        handle = f"S{self._request_seq}"
+        self._requests[handle] = dict(held)
+        self._shorts_dirty = True
+        return handle
+
+    def held_request(self, handle: str | None) -> dict[str, Any] | None:
+        """The request an ``S<n>`` holds, as a copy, or None."""
+        m = SOURCE_HANDLE_RE.match(str(handle or "").strip())
+        held = self._requests.get(f"S{int(m.group(1))}") if m else None
+        return json.loads(json.dumps(held)) if held is not None else None
+
+    def short_for_uri(self, uri: str | None) -> str | None:
+        """``uri`` -> its ``L<n>`` handle, or None."""
+        if not uri:
+            return None
+        return self._uri_to_short.get(uri.strip())
+
+    def export_short_handles(self) -> dict[str, str]:
+        """The persistable ``{L<n>: uri, S<n>: request as JSON}`` map (mint order preserved)."""
+        return {**self._short_to_uri,
+                **{handle: json.dumps(held, default=str) for handle, held in self._requests.items()}}
+
+    def import_short_handles(self, mapping: dict[str, str] | None) -> None:
+        """Restore a persisted ``{L<n>: uri}`` map; malformed entries are skipped.
+        Mint numbers are honoured verbatim and the counter resumes PAST the imported
+        maximum, so a fresh layer never re-uses a number the model has already seen.
+        """
+        if not mapping:
+            return
+        for raw_short, raw_uri in mapping.items():
+            if not isinstance(raw_short, str) or not isinstance(raw_uri, str):
+                continue
+            held = SOURCE_HANDLE_RE.match(raw_short.strip())
+            if held is not None:
+                self._import_request(int(held.group(1)), raw_uri)
+                continue
+            m = SHORT_HANDLE_RE.match(raw_short.strip())
+            uri = raw_uri.strip()
+            if m is None or not uri:
+                continue
+            n = int(m.group(1))
+            short = f"L{n}"
+            self._short_to_uri[short] = uri
+            self._uri_to_short.setdefault(uri, short)
+            self._short_seq = max(self._short_seq, n)
+
+    def _import_request(self, n: int, raw: str) -> None:
+        try:
+            held = json.loads(raw)
+        except ValueError:
+            return
+        if isinstance(held, dict):
+            self._requests[f"S{n}"] = held
+            self._request_seq = max(self._request_seq, n)
+
+    @property
+    def shorts_dirty(self) -> bool:
+        """True when the short-handle map has mints not yet persisted."""
+        return self._shorts_dirty
+
+    def mark_shorts_persisted(self) -> None:
+        self._shorts_dirty = False
+
+    def rewrite_result_for_llm(self, node: Any) -> Any:
+        """Emit seam: registered URIs -> short handles, LLM-only.
+        A rewritten COPY - the input is never mutated. An unregistered string
+        passes through untouched, and a failure falls back to the input.
+        """
+        try:
+            mapping: dict[str, str] = dict(self._uri_to_short)
+            if not mapping:
+                return node
+            faces = sorted(mapping, key=len, reverse=True)
+            return self._rewrite_node(node, mapping, faces, depth=0)
+        except Exception:  # noqa: BLE001 -- the rewrite must never break emit
+            logger.exception(
+                "uri_registry[%s]: rewrite_result_for_llm failed",
+                self.session_id,
+            )
+            return node
+
+    def _rewrite_node(
+        self, node: Any, mapping: dict[str, str], faces: list[str], depth: int
+    ) -> Any:
+        if depth > _WALK_MAX_DEPTH or node is None:
+            return node
+        if isinstance(node, str):
+            hit = mapping.get(node)
+            if hit is not None:
+                return hit
+            if "://" in node or node.startswith("/vsi"):
+                out = node
+                for face in faces:
+                    if face in out:
+                        out = out.replace(face, mapping[face])
+                return out
+            return node
+        if isinstance(node, dict):
+            return {
+                k: self._rewrite_node(v, mapping, faces, depth + 1)
+                for k, v in node.items()
+            }
+        if isinstance(node, (list, tuple)):
+            seq = [
+                self._rewrite_node(v, mapping, faces, depth + 1) for v in node
+            ]
+            return type(node)(seq)
+        return node
+
+    def register_tool_result(self, tool_name: str, result: Any) -> dict[str, str]:
+        """Walk a tool result and register every URI-bearing structure.
+        Returns only the announceable ``{handle: uri}`` pairs from THIS result;
+        a minted bare-uri handle serves fuzzy matching and is never announced.
+        """
+        before = dict(self._pending_announcements)
+        try:
+            self._walk(result, tool_name, depth=0, seen=set())
+        except Exception:  # noqa: BLE001 -- registration must never break dispatch
+            logger.exception(
+                "uri_registry[%s]: register_tool_result failed tool=%s",
+                self.session_id,
+                tool_name,
+            )
+        return {
+            h: u for h, u in self._pending_announcements.items() if before.get(h) != u
+        }
+
+    def _walk(self, node: Any, tool_name: str, depth: int, seen: set[int]) -> None:
+        if depth > _WALK_MAX_DEPTH or node is None:
+            return
+        # Pydantic models to dict.
+        if hasattr(node, "model_dump") and callable(node.model_dump):
+            try:
+                node = node.model_dump(mode="json")
+            except Exception:  # noqa: BLE001 -- non-pydantic duck; skip
+                return
+        if isinstance(node, str):
+            self._register_bare_string(node, tool_name)
+            return
+        if isinstance(node, dict):
+            if id(node) in seen:
+                return
+            seen.add(id(node))
+            layer_id = node.get("layer_id")
+            uri = node.get("uri")
+            if isinstance(layer_id, str) and layer_id and isinstance(uri, str) and uri:
+                self.record(layer_id, uri=uri, tool_name=tool_name)
+                self._records[layer_id].summary.update(
+                    {k: node[k] for k in _SUMMARY if node.get(k) is not None})
+            for key, value in list(node.items())[:_WALK_MAX_ITEMS]:
+                if key in {"features", "geometry", "chat_history"}:
+                    continue  # huge / URI-free subtrees
+                self._walk(value, tool_name, depth + 1, seen)
+            return
+        if isinstance(node, (list, tuple)):
+            if id(node) in seen:
+                return
+            seen.add(id(node))
+            for item in list(node)[:_WALK_MAX_ITEMS]:
+                self._walk(item, tool_name, depth + 1, seen)
+
+    def _register_bare_string(self, value: str, tool_name: str) -> None:
+        """So a verbatim echo resolves, a mangled one fuzzy-matches, and the emit rewrite has a short handle."""
+        value = value.strip()
+        if not value or not _is_object_store(value) or value in self._uri_to_handle:
+            return
+        # Mint a stable handle from the basename stem; a stem that is already a layer handle gets the URI attached there.
+        stem = _stem(value)
+        if stem in self._records:
+            self.record(stem, uri=value, tool_name=tool_name, announce=False)
+        else:
+            self.record(
+                f"uri:{_basename(value)}",
+                uri=value,
+                tool_name=tool_name,
+                announce=False,
+            )
+
+    def clear(self) -> None:
+        """Drop every registered handle, uri and pending announcement.
+
+        The short-handle map and its counter clear too: shorts are PER-CASE state.
+        """
+        self._records.clear()
+        self._uri_to_handle.clear()
+        self._pending_announcements.clear()
+        self._short_to_uri.clear()
+        self._uri_to_short.clear()
+        self._short_seq = 0
+        self._shorts_dirty = False
+        self._requests.clear()
+        self._request_seq = 0
+
+    def replace_from_layers(
+        self, layers: Any, short_handles: dict[str, str] | None = None
+    ) -> None:
+        """Reset this registry to EXACTLY ``layers`` (case-switch seed).
+
+        REPLACES, never merges: the registry reflects only the now-active Case.
+        """
+        # A registry is keyed by session, not Case, so a case switch reuses this object; a merge would leak a
+        # handle or stale uri across Cases.
+        self.clear()
+        # The persisted map is imported before the layer seed so announced handles keep their numbers.
+        self.import_short_handles(short_handles)
+        try:
+            self._walk(layers, "case-rehydration", depth=0, seen=set())
+        except Exception:  # noqa: BLE001 -- best-effort seam
+            logger.exception("uri_registry[%s]: seed failed", self.session_id)
+
+
+    def drain_announcements(self) -> dict[str, str]:
+        """Pop the handles registered since the last drain ({handle: uri})."""
+        out = dict(self._pending_announcements)
+        self._pending_announcements.clear()
+        return out
+
+
+    def resolve_params(self, tool_name: str, params: dict) -> dict:
+        """Resolve every ``RESOLVABLE_URI_PARAMS`` member of ``params``.
+
+        A fresh dict; a param outside the allowlist passes through untouched.
+        """
+        if not params:
+            return params
+        out = dict(params)
+        for name, value in params.items():
+            if name not in RESOLVABLE_URI_PARAMS or not isinstance(value, str):
+                continue
+            resolved = self._resolve_one(tool_name, name, value)
+            if resolved != value:
+                logger.warning(
+                    "uri_registry[%s]: %s.%s resolved %r -> %r",
+                    self.session_id,
+                    tool_name,
+                    name,
+                    value,
+                    resolved,
+                )
+                out[name] = resolved
+        return out
+
+    def _resolve_one(self, tool_name: str, param_name: str, value: str) -> str:
+        v = value.strip()
+
+        # Branch 2a: value IS a registered handle.
+        rec = self._records.get(v)
+        if rec is not None and rec.uri:
+            return rec.uri
+
+        # Branch 1: exact URI known, pass through verbatim.
+        if v in self._uri_to_handle:
+            return v
+
+        # Branch 2b: a short layer handle (L<n>, case-insensitive); an unknown one is a typed reject carrying the real inventory so the retry self-corrects.
+        m = SHORT_HANDLE_RE.match(v)
+        if m is not None:
+            short_uri = self._short_to_uri.get(f"L{int(m.group(1))}")
+            if short_uri is not None:
+                return short_uri
+            raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
+
+        # Placeholder resolution for a model that emits producer and consumer in one iteration with a stand-in like
+        # 'LayerURI_from_fetch_dem'. Calls dispatch sequentially, so the producer's uri is registered by then; only a
+        # non-uri-shaped, non-path string naming exactly one producing tool with exactly one distinct uri resolves.
+        placeholder_hit = self._resolve_placeholder(v)
+        if placeholder_hit is not None:
+            resolved_uri, producer = placeholder_hit
+            logger.info(
+                "uri_registry[%s]: placeholder resolved tool=%s param=%s "
+                "placeholder=%r -> %r (producer=%s)",
+                self.session_id,
+                tool_name,
+                param_name,
+                value,
+                resolved_uri,
+                producer,
+            )
+            return resolved_uri
+
+        # Non-store strings (https COG, local path, opaque token) fail open; the consuming tool's own typed error follows.
+        if not _is_object_store(v):
+            return value
+
+        # Branch 3: unknown store URI, fuzzy-match the mangle classes.
+        substituted = self._fuzzy_match(v)
+        if substituted is not None:
+            return substituted
+
+        # Branch 4: unknown store URI with no plausible match where a LAYER is expected is a typed reject. The session never
+        # produced the path, so passing it through can only 404 or read the wrong object; the handle inventory feeds the retry.
+        logger.warning(
+            "uri_registry[%s]: rejecting unregistered store uri "
+            "%s.%s=%r",
+            self.session_id,
+            tool_name,
+            param_name,
+            value,
+        )
+        raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
+
+    def _resolve_placeholder(self, value: str) -> tuple[str, str] | None:
+        """``(uri, producer)`` only on an unambiguous match, else ``None``."""
+        # All required: not uri-shaped and not a path (a well-formed unknown uri keeps the fuzzy/typed-reject treatment); it
+        # contains the name of exactly one tool that registered a uri this session (longest name wins when two nest); and that
+        # tool registered exactly one distinct uri - an ambiguity is never guessed at.
+        if _is_uri_shaped(value) or value.startswith(("/", "\\")):
+            return None
+        lowered = value.lower()
+        by_producer: dict[str, list[UriRecord]] = {}
+        for rec in self._records.values():
+            if rec.uri and rec.tool_name and rec.tool_name != "case-rehydration":
+                by_producer.setdefault(rec.tool_name, []).append(rec)
+        matched = [name for name in by_producer if name.lower() in lowered]
+        if len(matched) > 1:
+            # Nested tool names: drop a match that is a substring of a longer one ('fetch_dem' loses to 'fetch_dem_hires').
+            matched = [
+                n
+                for n in matched
+                if not any(m != n and n.lower() in m.lower() for m in matched)
+            ]
+        if len(matched) != 1:
+            return None
+        producer = matched[0]
+        uris = {rec.uri for rec in by_producer[producer] if rec.uri}
+        if len(uris) != 1:
+            return None  # ambiguous - never guess between two layers
+        return next(iter(uris)), producer
+
+    def _fuzzy_match(self, v: str) -> str | None:
+        """Every sub-branch needs a unique winner; an ambiguity falls through to the typed reject."""
+        known = [
+            rec.uri
+            for rec in self._records.values()
+            if rec.uri and _is_object_store(rec.uri)
+        ]
+        if not known:
+            return None
+        base = _basename(v)
+        stem = _stem(v)
+        ext = base.rpartition(".")[2] if "." in base else ""
+
+        # (a) layer_id grafted on as the basename.
+        rec = self._records.get(stem)
+        if rec is not None and rec.uri:
+            return rec.uri
+
+        # (b) exact basename elsewhere -- path-segment mangle.
+        same_base = [u for u in known if _basename(u) == base]
+        if len(same_base) == 1:
+            return same_base[0]
+        if len(same_base) > 1:
+            v_segs = set(_path_segments(v))
+            scored = sorted(
+                same_base,
+                key=lambda u: len(v_segs & set(_path_segments(u))),
+                reverse=True,
+            )
+            top = len(v_segs & set(_path_segments(scored[0])))
+            second = len(v_segs & set(_path_segments(scored[1])))
+            if top > second:
+                return scored[0]
+            return None  # ambiguous -- branch 4 lists the handles
+
+        # (c) hash-prefix: tail hallucinated past >= _HASH_PREFIX_MIN chars.
+        prefixed = [
+            (u, _common_prefix_len(_stem(u), stem))
+            for u in known
+            if (_basename(u).rpartition(".")[2] if "." in _basename(u) else "") == ext
+        ]
+        prefixed = [(u, n) for (u, n) in prefixed if n >= _HASH_PREFIX_MIN]
+        if prefixed:
+            prefixed.sort(key=lambda t: t[1], reverse=True)
+            if len(prefixed) == 1 or prefixed[0][1] > prefixed[1][1]:
+                return prefixed[0][0]
+            return None  # two equally-plausible hashes -- refuse to guess
+
+        # (d) unique same-directory candidate.
+        parent = _parent_dir(v)
+        same_dir = [u for u in known if _parent_dir(u) == parent]
+        if len(same_dir) == 1:
+            return same_dir[0]
+        return None
+
+
+    def _inventory_text(self, tool_name: str | None = None) -> str:
+        """Tool-aware only when the registry has no layers; otherwise the handle listing, capped at ``_ERROR_HANDLES_CAP``."""
+        layer_recs = [
+            r
+            for r in self._records.values()
+            if r.uri and not r.handle.startswith("uri:")
+        ]
+        layer_recs.sort(key=lambda r: r.seq, reverse=True)
+        if not layer_recs:
+            return (
+                "No layers have been produced this session yet - run the "
+                "tool that produces the layer first."
+            )
+        def _one(r: UriRecord) -> str:
+            # Lead with the short handle so the retry passes ``L<n>``, the cheapest unmangleable form.
+            short = self._uri_to_short.get(r.uri) if r.uri else None
+            base = f"{r.handle} (from {r.tool_name or 'unknown'})"
+            return f"{short} = {base}" if short else base
+
+        lines = ", ".join(_one(r) for r in layer_recs[:_ERROR_HANDLES_CAP])
+        return f"Known handles: {lines}."
+
+    def handle_for_cache_key(self, cache_key: str | None) -> str | None:
+        """The LAYER handle whose fetch landed under ``cache_key``, newest first.
+        Exact key: two fetches share it only when the same source was asked the
+        same question inside one TTL window, which is the same bytes."""
+        if not cache_key:
+            return None
+        for handle, rec in reversed(list(self._records.items())):
+            if rec.cache_key == cache_key and not handle.startswith("uri:"):
+                return handle
+        return None
+
+
+# Module-level session store: survives reconnects and is shared across a session's sibling WebSocket connections.
+
+_SESSION_URI_REGISTRIES: OrderedDict[str, SessionUriRegistry] = OrderedDict()
+
+
+def get_uri_registry(session_id: str) -> SessionUriRegistry:
+    """Return (creating if needed) the registry for ``session_id``."""
+    reg = _SESSION_URI_REGISTRIES.get(session_id)
+    if reg is None:
+        while len(_SESSION_URI_REGISTRIES) >= SESSIONS_HELD:
+            _SESSION_URI_REGISTRIES.popitem(last=False)
+        reg = SessionUriRegistry(session_id=session_id)
+        _SESSION_URI_REGISTRIES[session_id] = reg
+    return reg
+
+
+def reset_uri_registries_for_tests() -> None:
+    """Test hook -- wipe the module-level store."""
+    _SESSION_URI_REGISTRIES.clear()
+
+
+_ACTIVE_REGISTRY: ContextVar[SessionUriRegistry | None] = ContextVar(
+    "trid3nt_active_uri_registry", default=None
+)
+
+
+def activate_registry(reg: SessionUriRegistry) -> Token:
+    """Bind ``reg`` as the ambient registry for the current dispatch."""
+    return _ACTIVE_REGISTRY.set(reg)
+
+
+def deactivate_registry(token: Token) -> None:
+    _ACTIVE_REGISTRY.reset(token)
+
+
+def lookup_uri_for_handle(handle: str) -> str | None:
+    """The DATA uri a layer handle stands for - a short ``L<n>``, a full layer id,
+    or the uri itself, which names its layer as well as either.
+
+    ``None`` outside an active dispatch, or for a handle nothing published.
+    """
+    reg = _ACTIVE_REGISTRY.get()
+    if reg is None or not handle:
+        return None
+    key = handle.strip()
+    if key in reg._uri_to_handle or key in reg._uri_to_short:
+        return key
+    short = reg._short_to_uri.get(key.upper())
+    if short:
+        return short
+    record = reg._records.get(key)
+    return record.uri if record is not None else None
+
+
+def mint_source_handle(held: dict[str, Any]) -> str | None:
+    """Hold a filled source request under the next ``S<n>`` of this dispatch's Case; ``None`` outside a dispatch."""
+    reg = _ACTIVE_REGISTRY.get()
+    return reg.mint_request(held) if reg is not None else None
+
+
+def held_source_request(handle: str, reg: SessionUriRegistry | None = None) -> dict[str, Any] | None:
+    """The request an ``S<n>`` holds in ``reg``, else in this dispatch's registry; ``None`` where neither holds it."""
+    reg = reg if reg is not None else _ACTIVE_REGISTRY.get()
+    return reg.held_request(handle) if reg is not None else None
+
+
+def case_layers() -> list[dict[str, str]]:
+    """The layers the active session holds, newest first, as ``{layer_id, uri, name}``; the id is
+    the short handle the model reads where one is minted. Empty outside an active dispatch."""
+    reg = _ACTIVE_REGISTRY.get()
+    if reg is None:
+        return []
+    held = sorted((r for r in reg._records.values()
+                   if r.uri and not r.handle.startswith("uri:")),
+                  key=lambda r: r.seq, reverse=True)
+    return [{"layer_id": reg._uri_to_short.get(r.uri) or r.handle, "uri": r.uri,
+             "name": r.handle} for r in held]
+
+
+def lookup_layer_for_handle(handle: str) -> dict[str, Any] | None:
+    """The layer a handle stands for - its uri and what its producer said about
+    it - or ``None`` where nothing published it."""
+    uri = lookup_uri_for_handle(handle)
+    if not uri:
+        return None
+    reg = _ACTIVE_REGISTRY.get()
+    record = reg._records.get(handle.strip()) or reg._records.get(
+        reg._uri_to_handle.get(uri, ""))
+    return {"name": handle.strip(), **(record.summary if record else {}),
+            "uri": uri}
+
+
+def producer_of_handle(handle: str) -> str | None:
+    """The tool that produced the layer a handle (or its uri) stands for, or ``None`` where nothing recorded one."""
+    uri = lookup_uri_for_handle(handle)
+    reg = _ACTIVE_REGISTRY.get()
+    if not uri or reg is None:
+        return None
+    record = reg._records.get(handle.strip()) or reg._records.get(reg._uri_to_handle.get(uri, ""))
+    return record.tool_name if record else None
+
+
+def observe_published_layer(layer_id: str, uri: str | None = None) -> None:
+    """Record a loaded layer's handle and the one uri it carries; a handle already recorded keeps its producer.
+
+    A no-op outside an active dispatch, and it never raises into its caller.
+    """
+    reg = _ACTIVE_REGISTRY.get()
+    if reg is None:
+        return
+    try:
+        reg.record(layer_id, uri=uri,
+                   tool_name=None if layer_id in reg._records else "publish_layer")
+    except Exception:  # noqa: BLE001 -- observation must never break the tool
+        logger.exception("observe_published_layer failed layer_id=%s", layer_id)
+
+

@@ -15,10 +15,10 @@ import pytest
 
 from trid3nt_contracts.coverage import UnitField, Member
 
-from trid3nt_server.inputs.input import Input, declared
-from trid3nt_server.workflows.runtime import DeclarationError, tool
-from trid3nt_server.workflows.runtime.data import refuse_wrong_shape
-from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN, LINE, OBSERVE
+from trid3nt.inputs.input import Input, declared
+from trid3nt.workflows.runtime import DeclarationError, tool
+from trid3nt.workflows.runtime.data import refuse_wrong_shape
+from trid3nt.inputs.slots import BED, DISCHARGE, DOMAIN, LINE, OBSERVE
 
 
 def test_a_domain_row_is_one_slot_however_it_is_filled():
@@ -95,7 +95,7 @@ class _RIVER:
 
 
 def _env_over(value, monkeypatch, body=_RIVER):
-    from trid3nt_server.workflows.runtime import fill
+    from trid3nt.workflows.runtime import fill
 
     async def _answered(env, producer, label):
         return value
@@ -140,8 +140,8 @@ def test_a_malformed_ask_on_a_producer_row_refuses_rather_than_reading_absent(
     """A window, a bbox or a unit the caller stated wrong is the ASK being wrong,
     and a run that swallowed it would report "nothing was there" about a question
     nobody managed to put."""
-    from trid3nt_server.tools.fetchers._router.errors import router_input_error
-    from trid3nt_server.workflows.runtime import fill
+    from trid3nt.tools.fetchers._router.errors import router_input_error
+    from trid3nt.workflows.runtime import fill
 
     class DATA:
         survey = Input(tool("fetch_ehydro_surveys"))
@@ -160,8 +160,8 @@ def test_a_malformed_ask_on_a_producer_row_refuses_rather_than_reading_absent(
 
 def test_a_malformed_value_handed_to_a_producer_rows_slot_refuses_too(monkeypatch):
     """A value the slot cannot read as what it is asked for is the same wrong ask."""
-    from trid3nt_server.inputs.user_input import UserInputError
-    from trid3nt_server.workflows.runtime import fill
+    from trid3nt.inputs.user_input import UserInputError
+    from trid3nt.workflows.runtime import fill
 
     class DATA:
         sample = Input(tool("fetch_usgs_water_quality"))
@@ -179,7 +179,7 @@ def test_a_malformed_value_handed_to_a_producer_rows_slot_refuses_too(monkeypatc
 
 
 def test_a_hard_producer_row_still_refuses_when_its_source_is_empty(monkeypatch):
-    from trid3nt_server.workflows.runtime import fill
+    from trid3nt.workflows.runtime import fill
 
     class DATA:
         sample = tool("fetch_usgs_water_quality")
@@ -196,7 +196,7 @@ def test_a_hard_producer_row_still_refuses_when_its_source_is_empty(monkeypatch)
 def _skeleton(*inputs: Any) -> Any:
     from types import SimpleNamespace
 
-    from trid3nt_server.workflows.runtime import Workflow
+    from trid3nt.workflows.runtime import Workflow
 
     return Workflow(metadata=SimpleNamespace(name="probe", engine=""),
                     inputs=inputs, template=SimpleNamespace())
@@ -220,7 +220,7 @@ def test_a_bed_row_declares_the_frame_and_a_templates_own_row_wins():
 
 
 def test_one_lookup_answers_for_a_value_and_a_row_and_refuses_the_rest():
-    from trid3nt_server.inputs.user_input import WireArgsError
+    from trid3nt.inputs.user_input import WireArgsError
 
     bed = Input(BED, name="bed").need("bathymetry")
     wf = _skeleton(bed)
@@ -243,7 +243,7 @@ class _OBSERVED:
 
 
 def _answered(monkeypatch, value: Any):
-    from trid3nt_server.workflows.runtime import fill
+    from trid3nt.workflows.runtime import fill
 
     async def _found(env, producer, label):
         return value
@@ -279,7 +279,7 @@ def test_the_coercion_a_row_declares_is_bound_before_the_ingestion_runs():
 
 
 def test_a_supplied_number_supersedes_the_record_through_the_same_slot(monkeypatch):
-    from trid3nt_server.workflows.runtime import fill
+    from trid3nt.workflows.runtime import fill
 
     env = fill._Env(data={}, run={},
                            slot_units={OBSERVE: "degC"},
@@ -291,7 +291,7 @@ def test_a_supplied_number_supersedes_the_record_through_the_same_slot(monkeypat
 def _no_moment_env(**over):
     """A run standing on a place with NO moment stated - the one fact these two
     rows turn on."""
-    from trid3nt_server.workflows.runtime import fill
+    from trid3nt.workflows.runtime import fill
 
     _standing_on()
     return fill._Env(run={"event_time": None}, data={}, **over)
@@ -300,9 +300,9 @@ def _no_moment_env(**over):
 def test_a_required_series_need_with_no_moment_stated_refuses_naming_the_slot():
     """A run that cannot stand without the record refuses instead: the slot by
     name, and that no moment was stated."""
-    from trid3nt_server.workflows.runtime import fill
-    from trid3nt_server.workflows.runtime.errors import StepFailedError
-    from trid3nt_server.tools.search.match import NO_MOMENT
+    from trid3nt.workflows.runtime import fill
+    from trid3nt.workflows.runtime.errors import StepFailedError
+    from trid3nt.tools.search.match import NO_MOMENT
 
     class DATA:
         discharge = Input(DISCHARGE).need("discharge series")
@@ -316,14 +316,14 @@ def test_a_required_series_need_with_no_moment_stated_refuses_naming_the_slot():
 
 def _standing_on(bbox=(-123.22, 45.48, -123.19, 45.50)):
     """The domain the run is standing on - the point an offset row is asked at."""
-    from trid3nt_server.inputs.bound_domain import Domain, bind_domain
+    from trid3nt.inputs.bound_domain import Domain, bind_domain
 
     return bind_domain(Domain(bbox=tuple(bbox), geometry={}, label="the lake"))
 
 
 def _elevation_slot(slot):
     """A row that STATES the slot it is - which is the only way to be one."""
-    from trid3nt_server.inputs.input import Input
+    from trid3nt.inputs.input import Input
 
     return Input(name=slot.name, slot=slot)
 
@@ -331,8 +331,8 @@ def _elevation_slot(slot):
 def test_every_elevation_slot_is_read_on_the_runs_own_vertical_frame():
     """One frame per run, stated once as a runtime lever: the bed is read on it
     and the level is read on it, and nothing else a run ingests is an elevation."""
-    from trid3nt_server.workflows.runtime import fill
-    from trid3nt_server.inputs.slots import BED, DISCHARGE, LEVEL
+    from trid3nt.workflows.runtime import fill
+    from trid3nt.inputs.slots import BED, DISCHARGE, LEVEL
 
     def _told(env, role, source=None):
         return asyncio.run(fill._on_the_run_s_frame(
@@ -353,9 +353,9 @@ def test_the_runtime_declares_the_offset_row_a_differing_source_owes(monkeypatch
     declares the DATA row, asks it where that source MEASURED - the point of its
     own footprint nearest the question's seed - and the row is journaled like any
     producer, with what the slot is told the value it produced."""
-    from trid3nt_server.workflows.runtime import fill
-    from trid3nt_server.inputs.input import Input
-    from trid3nt_server.inputs.slots import BED
+    from trid3nt.workflows.runtime import fill
+    from trid3nt.inputs.input import Input
+    from trid3nt.inputs.slots import BED
 
     record = {"offset_m": -1.054, "from_frame": "NAVD88", "to_frame": "EGM2008",
               "source": "NOAA VDatum", "uncertainty_m": 0.165}
@@ -388,9 +388,9 @@ def test_an_offset_row_is_asked_where_the_source_measured_not_at_the_seed(
         monkeypatch, tmp_path):
     """The seed falls on the half of the DEM that measured nothing, so the ask
     walks to the nearest point the source actually holds."""
-    from trid3nt_server.workflows.runtime import fill
-    from trid3nt_server.inputs.input import Input
-    from trid3nt_server.inputs.slots import BED
+    from trid3nt.workflows.runtime import fill
+    from trid3nt.inputs.input import Input
+    from trid3nt.inputs.slots import BED
 
     asked: list[dict] = []
 
@@ -434,8 +434,8 @@ def _half_measured(tmp_path) -> str:
 
 
 def test_a_source_on_the_runs_own_frame_declares_no_offset_row(monkeypatch):
-    from trid3nt_server.workflows.runtime import fill
-    from trid3nt_server.inputs.slots import BED
+    from trid3nt.workflows.runtime import fill
+    from trid3nt.inputs.slots import BED
 
     async def _never(runner, kwargs, label):
         raise AssertionError("an offset row was declared for one frame")
@@ -465,7 +465,7 @@ def _gauges(tmp_path, datums) -> str:
 
 
 def _level_told(fill, tmp_path, datums, monkeypatch, *, record_datum=None):
-    from trid3nt_server.inputs.slots import LEVEL
+    from trid3nt.inputs.slots import LEVEL
 
     asked: list[dict] = []
 
@@ -487,7 +487,7 @@ def _level_told(fill, tmp_path, datums, monkeypatch, *, record_datum=None):
 
 def test_a_level_gauge_stating_its_own_datum_is_bridged_though_the_record_states_two(
         monkeypatch, tmp_path):
-    from trid3nt_server.workflows.runtime import fill
+    from trid3nt.workflows.runtime import fill
 
     told, asked = _level_told(fill, tmp_path, ["NGVD29", "NAVD88"], monkeypatch)
     assert told["offset"]["offset_m"] == 0.1
@@ -497,7 +497,7 @@ def test_a_level_gauge_stating_its_own_datum_is_bridged_though_the_record_states
 
 
 def test_a_level_gauge_stating_no_datum_asks_no_offset(monkeypatch, tmp_path):
-    from trid3nt_server.workflows.runtime import fill
+    from trid3nt.workflows.runtime import fill
 
     told, asked = _level_told(fill, tmp_path, ["", "NAVD88"], monkeypatch)
     assert told == {"to_datum": "NAVD88"} and not asked
@@ -505,7 +505,7 @@ def test_a_level_gauge_stating_no_datum_asks_no_offset(monkeypatch, tmp_path):
 
 def test_a_level_record_stating_one_datum_on_the_layer_is_still_bridged(
         monkeypatch, tmp_path):
-    from trid3nt_server.workflows.runtime import fill
+    from trid3nt.workflows.runtime import fill
 
     _standing_on()
     told, asked = _level_told(fill, tmp_path, ["", ""], monkeypatch,

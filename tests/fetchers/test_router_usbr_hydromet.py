@@ -12,9 +12,9 @@ import json
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.hydrology.fetch_usbr_hydromet import hooks as uh
+from trid3nt.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.hydrology.fetch_usbr_hydromet import hooks as uh
 
 #: Recorded from ``GET /rise/api/location?itemsPerPage=100&page=1`` (trimmed to
 #: three locations: two coded, one stating no code at all).
@@ -266,7 +266,7 @@ def test_the_source_is_found_through_its_class(class_routes_to_the_match):
 
 
 def test_the_elevation_reads_through_the_row_with_the_zero_each_station_states_and_no_accuracy(spec, monkeypatch):
-    from trid3nt_server.inputs.observation import observation
+    from trid3nt.inputs.observation import observation
 
     monkeypatch.setattr(uh, "get_client", lambda: object())
     monkeypatch.setattr(

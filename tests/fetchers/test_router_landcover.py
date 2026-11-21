@@ -15,15 +15,15 @@ import rasterio
 from rasterio.io import MemoryFile
 
 from trid3nt_contracts.execution import LandcoverResult
-from trid3nt_server.tools.fetchers._fetch_common import (
+from trid3nt.tools.fetchers._fetch_common import (
     PixelBudgetExceededError,
     round_bbox_to_resolution,
 )
 from trid3nt_contracts.ws import LayerResponsePayload
-from trid3nt_server.tools.fetchers._router import router as _router
-from trid3nt_server.tools.fetchers._router.executors import qgis_provider as qp
-from trid3nt_server.tools.fetchers.terrain.fetch_landcover import hooks as lch
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers._router import router as _router
+from trid3nt.tools.fetchers._router.executors import qgis_provider as qp
+from trid3nt.tools.fetchers.terrain.fetch_landcover import hooks as lch
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
 _FORT_MYERS = [-81.95, 26.55, -81.80, 26.70]
 
@@ -69,7 +69,7 @@ def _patch_session(monkeypatch, exported: bytes) -> list:
 
 
 def _patch_router_cache(monkeypatch, store):
-    from trid3nt_server.tools.cache import (
+    from trid3nt.tools.cache import (
         CACHE_BUCKET, ReadThroughResult, cache_path, compute_cache_key as ck, is_cacheable,
     )
 

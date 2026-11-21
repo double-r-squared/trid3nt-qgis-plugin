@@ -16,7 +16,7 @@
 # Build context = THIS worker dir, plus the steering driver as the named context `engine` (a trial restates its
 # outflow level through the same TelemacCas driver the server writes steering files with):
 #   docker build -t trid3nt-local/pestpp-telemac:latest -f workers/pestpp/Dockerfile.telemac \
-#     --build-context engine=trid3nt_server/workflows/telemac/authoring/engine_scripts workers/pestpp/
+#     --build-context engine=trid3nt/workflows/telemac/authoring/engine_scripts workers/pestpp/
 
 FROM trid3nt-local/telemac:latest
 

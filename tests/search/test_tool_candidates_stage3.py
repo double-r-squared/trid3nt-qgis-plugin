@@ -15,11 +15,11 @@ import pytest
 
 import trid3nt_server.main as agent_main
 from trid3nt_server import server as agent_server
-from trid3nt_server.inputs.gate.pending import _PENDING_TOOL_CHOICES
-from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.model.adapters.scripted_adapter import set_script
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.search import tool_retrieval as tr
+from trid3nt_harness.inputs.gate.pending import _PENDING_TOOL_CHOICES
+from trid3nt_harness.model.adapters.model_selection import ModelSettings
+from trid3nt_harness.model.adapters.scripted_adapter import set_script
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt_harness.tools.search import tool_retrieval as tr
 from trid3nt_contracts import new_ulid
 
 # The pin test asserts against real registry names.

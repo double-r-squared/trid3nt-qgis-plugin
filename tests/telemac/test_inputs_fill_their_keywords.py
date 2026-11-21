@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from trid3nt_server.workflows.telemac.modules import T2D, WAC
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.workflows.telemac.modules import T2D, WAC
+from trid3nt.workflows.runtime.sheet import fill
 
 
 class _Release(T2D):
@@ -56,7 +56,7 @@ def test_the_fetched_level_and_sea_state_fill_a_wave_deck():
 def test_the_engine_says_the_two_turns_it_makes_of_a_measured_sea_state():
     """A record reports a period and where the waves come FROM; the deck states
     a frequency and where they run TOWARD, and the run's journal says so."""
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     token = bind_notes()
     try:
@@ -70,7 +70,7 @@ def test_the_engine_says_the_two_turns_it_makes_of_a_measured_sea_state():
 
 
 def test_a_coupled_wave_body_takes_the_sea_state_and_not_the_level():
-    from trid3nt_server.workflows.telemac.modules.sheet import _coupled_filled
+    from trid3nt.workflows.telemac.modules.sheet import _coupled_filled
 
     body = WAC.wave(geometry="g.slf", boundary="b.cli",
                     BOUNDARY_PEAK_FREQUENCY=0.2)
@@ -84,7 +84,7 @@ def test_a_coupled_wave_body_takes_the_sea_state_and_not_the_level():
 
 
 def test_the_run_reads_the_input_a_coupled_body_fills_itself_from():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY["tomawac_wave_driven_currents"].fn.workflow
     assert "wave" in workflow._fills()

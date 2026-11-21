@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from trid3nt_server.server import SessionState, _handle_max_turns_reached
-from trid3nt_server.settings import setting
+from trid3nt.settings import setting
 
 MAX_TURNS_PER_SESSION = 25
 

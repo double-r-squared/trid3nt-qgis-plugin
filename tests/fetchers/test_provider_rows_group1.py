@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 
 from trid3nt_server.server.processing import SessionUnavailableError
-from trid3nt_server.tools import TOOL_REGISTRY, fetchers
-from trid3nt_server.tools.fetchers._router.executors import qgis_provider
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools import TOOL_REGISTRY, fetchers
+from trid3nt.tools.fetchers._router.executors import qgis_provider
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
 _BBOX = (-95.8, 29.5, -95.0, 30.1)
 

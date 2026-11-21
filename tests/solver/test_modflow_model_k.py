@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules.gwf import _paired
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules.gwf import _paired
+from trid3nt.workflows.runtime.sheet import fill
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "usgs_model_k"
 _DM_BBOX = [-93.6729, 41.6625, -93.6369, 41.6895]
@@ -119,10 +119,10 @@ class _Held:
 
 def _ring_frames(monkeypatch):
     """The Des Moines fetchers' own frames over the ring excerpt, offline, with each frame's COG bytes by uri."""
-    import trid3nt_server.tools.cache as cache_mod
-    from trid3nt_server.tools.fetchers._router.executors import animation_frames as EX
-    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_model_k import hooks as MK
-    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_model_layers import hooks as ML
+    import trid3nt.tools.cache as cache_mod
+    from trid3nt.tools.fetchers._router.executors import animation_frames as EX
+    from trid3nt.tools.fetchers.hydrology.fetch_usgs_model_k import hooks as MK
+    from trid3nt.tools.fetchers.hydrology.fetch_usgs_model_layers import hooks as ML
 
     archive = (_FIXTURES / "dm_ring_excerpt.zip").read_bytes()
     inner, held = {}, {}
@@ -153,8 +153,8 @@ def test_des_moines_pairs_by_stated_layer_across_its_gap_and_places_the_layers_a
     import rasterio
     from pyproj import Transformer
 
-    from trid3nt_server.workflows.modflow.authoring.griddata import frame_of, place
-    from trid3nt_server.workflows.modflow.modules import GWF
+    from trid3nt.workflows.modflow.authoring.griddata import frame_of, place
+    from trid3nt.workflows.modflow.modules import GWF
 
     k_frames, surface_frames, held = _ring_frames(monkeypatch)
 

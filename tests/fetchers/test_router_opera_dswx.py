@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
 _EDL_HOST = "urs.earthdata.nasa.gov"
 #: Peace River / Charlotte Harbor, FL -- a US basin the DSWx-HLS tiles cover.

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from trid3nt_server.model.adapters.adapter import system_prompt
+from trid3nt_harness.model.adapters.adapter import system_prompt
 
 SYSTEM_PROMPT = system_prompt()
 
@@ -34,7 +34,7 @@ def test_system_prompt_names_no_absent_tool() -> None:
 
     Two locks: no purged engine family by name, and every token sharing a first
     segment with a registered tool must itself be registered."""
-    import trid3nt_server.tools as agent_tools
+    import trid3nt.tools as agent_tools
 
     flat = SYSTEM_PROMPT.lower()
     for name in _RETIRED_ENGINE_NAMES:

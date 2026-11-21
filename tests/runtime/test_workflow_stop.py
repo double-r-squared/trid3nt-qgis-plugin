@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-from trid3nt_server.workflows.runtime.workflow import RunResult, Workflow
-from trid3nt_server.workflows.solver.stop import SolveStopped, Stopped
+from trid3nt.inputs.run_notes import bind_notes, drain_notes
+from trid3nt.workflows.runtime.workflow import RunResult, Workflow
+from trid3nt.workflows.solver.stop import SolveStopped, Stopped
 
 _STAND_IN = SimpleNamespace(solve_step="solve", name="probe")
 
@@ -54,7 +54,7 @@ def test_a_stop_with_no_stated_step_says_so():
 
 
 def test_the_journal_record_states_the_stop_and_a_finished_run_states_none():
-    from trid3nt_server.workflows.runtime import journal
+    from trid3nt.workflows.runtime import journal
 
     kept = dict(run_id="R", engine="telemac", module="telemac2d", inputs={}, result=None,
                 wall_seconds=1.0, origin="live", notes=[])

@@ -14,21 +14,21 @@ import inspect
 
 import pytest
 
-from trid3nt_server.inputs.weather import weather
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.inputs.observation import Observation, ObservationError
-from trid3nt_server.workflows.telemac.authoring.atmosphere import (
+from trid3nt.inputs.weather import weather
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.inputs.observation import Observation, ObservationError
+from trid3nt.workflows.telemac.authoring.atmosphere import (
     ATMOSPHERE_FILENAME,
 )
-from trid3nt_server.workflows.telemac.modules import fill
-from trid3nt_server.workflows.telemac.modules.khione import (
+from trid3nt.workflows.telemac.modules import fill
+from trid3nt.workflows.telemac.modules.khione import (
     RESULT_FILENAME,
     STEERING_FILENAME,
 )
-from trid3nt_server.workflows.telemac.templates.ice_cover import (
+from trid3nt.workflows.telemac.templates.ice_cover import (
     ice_cover as template,
 )
-from trid3nt_server.inputs.slots import BED, DISCHARGE, OBSERVE
+from trid3nt.inputs.slots import BED, DISCHARGE, OBSERVE
 from seated import value_inputs, row_inputs
 
 #: The week the deck states as DURATION, as the hourly record that has to span
@@ -64,7 +64,7 @@ def test_every_slot_this_run_stands_on_reaches_the_wire_as_the_slot_it_is():
     """What the user hands in supersedes the match the template needs, so a pond
     outline, a stated depth, a stated opening temperature and a weather record
     the user already holds run this question with no fetch at all."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_ice_cover"].fn).parameters)
     assert {"domain", "bed", "discharge", "observe", "weather"} <= wire
@@ -262,7 +262,7 @@ def test_the_question_places_the_two_series_the_cover_is_read_as():
 def test_the_cover_chart_draws_the_threshold_the_ask_states():
     """WHAT COUNTS AS FROZEN is the user's lever, so the cover chart draws it as
     a reference line beside the series rather than reducing the run to a verdict."""
-    from trid3nt_server.workflows.runtime.primitives import Line, Series
+    from trid3nt.workflows.runtime.primitives import Line, Series
 
     cover = next(p for p in template.OUTPUTS if p.variable == "DYNCOVC")
     read = Series(name="COVER", units="", times=[0.0, 3600.0], values=[0.0, 0.9],
@@ -282,7 +282,7 @@ def test_the_deprecated_slots_the_file_carries_are_rowed_by_nothing():
     """The engine's printouts keyword may fold the two deprecated work arrays
     into a prefix so the token list fits its 72 columns, which puts them in the
     result file. The TABLE is what publishes, and it rows neither."""
-    from trid3nt_server.workflows.telemac.modules.khione import KHIONE
+    from trid3nt.workflows.telemac.modules.khione import KHIONE
 
     stated = {"HEAT_BUDGET": True, "DYNAMIC_ICE_COVER": True,
               "NUMBER_OF_CLASSES_FOR_SUSPENDED_FRAZIL_ICE": 2}

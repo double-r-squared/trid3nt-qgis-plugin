@@ -19,14 +19,14 @@ import json
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import (
+from trid3nt.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.tools.fetchers._router.hooks import station_tie
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.ocean.fetch_vertical_datum_offset import hooks as vd
+from trid3nt.tools.fetchers._router.hooks import station_tie
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.ocean.fetch_vertical_datum_offset import hooks as vd
 
 _GAUGE = [-122.6691667, 45.5175]
 #: The Scripps nearshore water off La Jolla, CA, and the Duck FRF pier, NC: one
@@ -52,7 +52,7 @@ def spec():
 @pytest.fixture
 def vdatum_only(monkeypatch):
     """The grids answer nowhere, so every pair reaches the service."""
-    from trid3nt_server.tools.fetchers import _proj_grids
+    from trid3nt.tools.fetchers import _proj_grids
 
     vd._local.cache_clear()
     monkeypatch.setattr(vd, "_local", lambda *args: None)
@@ -154,7 +154,7 @@ def test_the_service_s_own_refusal_arrives_under_http_200(spec, vdatum_only):
 
 
 def test_an_uncheckable_grid_probe_is_not_read_as_nothing_served(spec, vdatum_only, monkeypatch):
-    from trid3nt_server.tools.fetchers import _proj_grids
+    from trid3nt.tools.fetchers import _proj_grids
 
     # An outage at the PROJ CDN must never replace the primary refusal with a
     # claim that nothing converts at the point.
@@ -253,7 +253,7 @@ def test_the_sentinel_refusal_at_a_sand_point_names_the_pair_the_grids_serve(spe
     # The live shape the Chignik sea-level row hits: a tidal frame VDatum's
     # Alaska grids leave as their sentinel, refusing while naming the pair the
     # local grids DO convert at the point, so the run can state that frame.
-    from trid3nt_server.tools.fetchers import _proj_grids
+    from trid3nt.tools.fetchers import _proj_grids
 
     proj_grids("alaska")
     vd._local.cache_clear()
@@ -266,7 +266,7 @@ def test_the_sentinel_refusal_at_a_sand_point_names_the_pair_the_grids_serve(spe
 
 
 def test_the_error_envelope_refusal_at_a_sand_point_names_the_pair_the_grids_serve(spec, proj_grids):
-    from trid3nt_server.tools.fetchers import _proj_grids
+    from trid3nt.tools.fetchers import _proj_grids
 
     proj_grids("alaska")
     vd._local.cache_clear()
@@ -288,7 +288,7 @@ def test_a_tidal_pair_never_asks_the_grids(spec, monkeypatch):
 
 
 def test_a_grid_that_cannot_be_fetched_is_a_retryable_upstream_error(spec, monkeypatch):
-    from trid3nt_server.tools.fetchers import _proj_grids
+    from trid3nt.tools.fetchers import _proj_grids
 
     def down(*args):
         raise _proj_grids.DatumGridUnavailable("cdn down")
@@ -300,7 +300,7 @@ def test_a_grid_that_cannot_be_fetched_is_a_retryable_upstream_error(spec, monke
 
 
 def test_the_record_executor_runs_the_hook_when_no_request_is_planned(spec, proj_grids):
-    from trid3nt_server.tools.fetchers._router.executors import record as record_executor
+    from trid3nt.tools.fetchers._router.executors import record as record_executor
 
     proj_grids("capecod")
     body = record_executor.execute(spec, _params(point=[-70.62, 41.59]))
@@ -452,7 +452,7 @@ def test_a_tie_the_grids_cannot_step_with_refuses_naming_the_gap(spec, monkeypat
 
 
 def test_a_grid_outage_during_the_tie_seam_is_a_retryable_upstream_error(spec, monkeypatch):
-    from trid3nt_server.tools.fetchers import _proj_grids
+    from trid3nt.tools.fetchers import _proj_grids
 
     def down(*args):
         raise _proj_grids.DatumGridUnavailable("cdn down")

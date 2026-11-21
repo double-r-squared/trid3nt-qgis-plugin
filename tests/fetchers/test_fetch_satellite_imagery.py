@@ -11,15 +11,15 @@ from datetime import datetime, timezone
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._router import registration as reg
-from trid3nt_server.tools.fetchers._router.errors import (
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.fetchers._router import registration as reg
+from trid3nt.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
 )
-from trid3nt_server.tools.fetchers._router.executors import animation_frames as EX
-from trid3nt_server.tools.fetchers.imagery.fetch_satellite_imagery import hooks as SI
-from trid3nt_server.tools.fetchers.imagery._satellite_slider import (
+from trid3nt.tools.fetchers._router.executors import animation_frames as EX
+from trid3nt.tools.fetchers.imagery.fetch_satellite_imagery import hooks as SI
+from trid3nt.tools.fetchers.imagery._satellite_slider import (
     SliderEmptyError,
     ts_int_to_iso,
 )

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.gate.confirm import _code_exec_approval_timeout_s
-from trid3nt_server.workflows.runtime.module import SlotRefused
+from trid3nt_harness.inputs.gate.confirm import _code_exec_approval_timeout_s
+from trid3nt.workflows.runtime.module import SlotRefused
 from trid3nt_server.server.config import _tool_choice_timeout_s
-from trid3nt_server.settings import setting
+from trid3nt.settings import setting
 from trid3nt_server.server.processing import _timeout_s
 
 SETTING_WAITS = [

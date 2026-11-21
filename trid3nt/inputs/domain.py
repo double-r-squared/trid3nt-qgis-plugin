@@ -1,0 +1,646 @@
+"""THE DOMAIN: the closed polygon the equations are solved over.
+
+One slot, geometry only. A polygon drawn on the canvas, the user's own layer, a
+fetched waterbody and a reach section between two ends all enter through
+``domain`` and read the same after, so nothing downstream branches on which way
+it was filled. A body of water that exists in no fetcher is filled the same way.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import dataclass, field
+from types import MappingProxyType
+from typing import Any, Mapping
+
+from .boundary import RUN_TYPES, WALL, BoundaryRun, boundary_runs
+from .geometry import flatten_geometries, read_geometry_doc, source_uri
+from .user_input import EmptyResultError, UserInputError, polygon_ring
+
+__all__ = ["REACH_FETCH", "Domain", "above_on", "domain", "domain_ring", "flowline_ids", "kind_under",
+           "measured_footprint", "needs_beside", "place_kind", "walked_bbox"]
+
+logger = logging.getLogger("trid3nt.inputs.domain")
+
+_CODE = "DOMAIN_INVALID"
+_LAYER_SCHEMES = ("s3://", "gs://", "file://", "/", "./")
+
+#: The raster suffixes this slot reads a MEASURED FOOTPRINT off instead of a
+#: polygon. Anything else handed in is read as a vector document.
+_RASTER_SUFFIXES = (".tif", ".tiff", ".vrt", ".img", ".asc", ".jp2")
+
+#: WHAT A PLACE IS, in the word the hydrography sources publish that feature under, by
+#: the word the service that resolved the place used for it. Only water: a word absent
+#: here is absent on purpose, since guessing the water would fill a domain with the
+#: wrong shape.
+_PLACE_KINDS: Mapping[str, str] = MappingProxyType({
+    "river": "flowline",
+    "stream": "flowline",
+    "creek": "flowline",
+    "brook": "flowline",
+    "canal": "flowline",
+    "waterway": "flowline",
+    "water": "waterbody",
+    "lake": "waterbody",
+    "pond": "waterbody",
+    "reservoir": "waterbody",
+    "lagoon": "waterbody",
+    "coastline": "coastline",
+    "beach": "coastline",
+})
+
+
+@dataclass(frozen=True, slots=True)
+class Domain:
+    """One closed polygon in EPSG:4326, the name it was given, and where it came
+    from as an ADDRESS - never as a branch: a consumer reads the geometry.
+
+    ``geometry`` is GeoJSON Polygon or MultiPolygon."""
+
+    geometry: dict[str, Any]
+    name: str | None = None
+    uri: str | None = None
+    #: The stretches of this domain's edge its PRODUCER measured, where one did.
+    runs: tuple[BoundaryRun, ...] = ()
+    #: The geometries a producer measured BESIDE the polygon, under its own names
+    #: - a reach's centerline, a catchment's snapped outlet. A drawn outline
+    #: carries none.
+    companions: Mapping[str, dict[str, Any]] = field(default_factory=dict)
+
+    def __getattr__(self, name: str) -> Any:
+        """A named companion geometry, read as an attribute of the domain.
+
+        Only what the producer measured: anything else is an AttributeError, so
+        a ref to a companion this domain has not got refuses at binding."""
+        try:
+            return object.__getattribute__(self, "companions")[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
+    def __str__(self) -> str:
+        """What a reader CALLS this domain: the name it came with, else the word.
+
+        Layer titles and run names are written from this, never from the coordinates."""
+        return self.name or "domain"
+
+    @property
+    def centroid(self) -> tuple[float, float]:
+        """A lon/lat point INSIDE this polygon - what a nearest-site query ranks
+        against. A representative point, never the average of the vertices: a
+        crescent bay's mean vertex sits on land."""
+        from shapely.geometry import shape as _shape
+
+        point = _shape(self.geometry).representative_point()
+        return (float(point.x), float(point.y))
+
+    @property
+    def bbox(self) -> tuple[float, float, float, float]:
+        """The lon/lat box this polygon spans."""
+        xs, ys = [], []
+        for ring in _rings(self.geometry):
+            xs += [float(v[0]) for v in ring]
+            ys += [float(v[1]) for v in ring]
+        return (min(xs), min(ys), max(xs), max(ys))
+
+    def as_feature_collection(self) -> dict[str, Any]:
+        """This domain as the one collection every geometry reader opens.
+
+        WHOLE (polygon, runs, companions), so the round trip back through ``domain`` is lossless."""
+        return {"type": "FeatureCollection", "features": [
+            {"type": "Feature", "properties": {"role": "domain", "part": "domain",
+                                               "name": self.name},
+             "geometry": dict(self.geometry)},
+            *(run.feature for run in self.runs),
+            *({"type": "Feature", "properties": {"part": name},
+               "geometry": dict(geometry)}
+              for name, geometry in self.companions.items())]}
+
+
+def place_kind(seed: Any) -> str:
+    """WHICH FEATURE the seed is a place on, in the word a source publishes it
+    under - "flowline", "waterbody", "coastline" - or "" where nothing said.
+
+    Read off what the seed arrived with, never guessed."""
+    kind = getattr(seed, "kind", None)
+    if kind is None and isinstance(seed, Mapping):
+        kind = seed.get("place_type")
+    return _PLACE_KINDS.get(str(kind or "").strip().lower(), "")
+
+
+#: The kind of place each NHD feature type a seed can stand IN is: a river's own mapped water
+#: (StreamRiver) a flowline, a lake or a reservoir (LakePond, Reservoir) a waterbody. A canal, a
+#: harbour, an estuary or a marsh is another type, and says nothing here.
+_KIND_OF_FTYPE: Mapping[int, str] = MappingProxyType({460: "flowline", 390: "waterbody", 436: "waterbody"})
+
+
+def kind_under(water: Any, seed: Any) -> str:
+    """WHICH FEATURE a seed that arrived with no kind stands IN, off the mapped water around it:
+    "flowline" inside an NHD StreamRiver area, "waterbody" inside a LakePond or Reservoir, else "".
+
+    The seed is tested where it stands, never moved onto the water."""
+    from shapely.geometry import Point, shape
+
+    from .point import lonlat_of
+
+    place = lonlat_of(seed)
+    if place is None:
+        return ""
+    point = Point(*place)
+    doc = read_geometry_doc(water)
+    for feature in (doc.get("features") or ()) if isinstance(doc, Mapping) else ():
+        properties = (feature or {}).get("properties") or {}
+        geometry = (feature or {}).get("geometry")
+        try:
+            kind = _KIND_OF_FTYPE.get(int(properties.get("ftype")), "")
+        except (TypeError, ValueError):
+            kind = ""
+        if kind and geometry and shape(geometry).covers(point):
+            return kind
+    return ""
+
+
+#: The fetch that walks the NHDPlus network: a river run's main stem from its release, and a
+#: gauge's own reach off NLDI's NWIS index. The runtime declares these rows; nothing here calls it.
+REACH_FETCH = "fetch_nhdplus_nldi_navigate"
+
+
+def flowline_ids(layer: Any) -> frozenset[int]:
+    """The NHDPlus COMIDs a walked flowline layer carries."""
+    doc = read_geometry_doc(layer)
+    found = set()
+    for feature in (doc.get("features") or ()) if isinstance(doc, Mapping) else ():
+        comid = ((feature or {}).get("properties") or {}).get("nhdplus_comid")
+        if comid is not None:
+            found.add(int(comid))
+    return frozenset(found)
+
+
+def walked_bbox(layer: Any) -> tuple[float, float, float, float] | None:
+    """The box a walked flowline layer spans, or ``None`` where it holds no line."""
+    from shapely.geometry import shape
+    from shapely.ops import unary_union
+
+    doc = read_geometry_doc(layer)
+    lines = [shape(f["geometry"]) for f in ((doc.get("features") or ()) if isinstance(doc, Mapping) else ())
+             if (f or {}).get("geometry")]
+    return tuple(unary_union(lines).bounds) if lines else None
+
+
+def above_on(layer: Any, comid: int, site: tuple[float, float], release: tuple[float, float]) -> bool:
+    """Whether a site stands ABOVE the release along their one shared flowline of a walked layer.
+
+    NHDPlus digitizes a flowline in the direction it flows, so the smaller measure along it is
+    the higher; each point is measured where it stands, never moved onto the line."""
+    from shapely.geometry import Point, shape
+
+    doc = read_geometry_doc(layer)
+    for feature in (doc.get("features") or ()) if isinstance(doc, Mapping) else ():
+        if ((feature or {}).get("properties") or {}).get("nhdplus_comid") == comid:
+            line = shape(feature["geometry"])
+            return line.project(Point(*site)) < line.project(Point(*release))
+    return False
+
+
+#: WHAT A DOMAIN OF EACH KIND DECLARES BESIDE the row its own class matched, by the word
+#: that kind is published under: the name it reads the row back under, what that row
+#: asks its class for, and the shape it is read as. A flowline is a line, so a place on
+#: one needs the water surface it runs between; declaring a need is not fetching.
+_BESIDE: Mapping[str, tuple[tuple[str, str, str], ...]] = MappingProxyType({
+    "flowline": (("banks", "water surface", "polygon"),)})
+
+
+def needs_beside(kind: str) -> tuple[tuple[str, str, str], ...]:
+    """The rows a domain of this KIND needs produced under it, or ``()``.
+
+    Nothing for every kind that already arrives closed - a waterbody, a basin,
+    an edge cut against a window."""
+    return _BESIDE.get(str(kind or "").strip().lower(), ())
+
+
+def domain(value: Any, *, label: str = "domain", code: str = _CODE,
+           extent: Any = None, banks: Any = None, span_km: Any = None,
+           near: Any = None, window: Any = None, above_m: Any = None) -> Domain | None:
+    """THE ingestion: a drawing, a layer, a fetched polygon, a ring -> Domain.
+
+    ``None`` only when nothing came; anything not a closed polygon refuses typed.
+    ``extent`` cuts a land-water edge; ``banks``, ``span_km``, ``near`` and ``above_m`` close a line;
+    ``window`` is the box a searched polygon is cut to."""
+    if value is None or isinstance(value, Domain):
+        return value
+    if banks is not None:
+        return _between_the_ends(value, banks, near, span_km, label, code, above_m)
+    uri = getattr(value, "uri", None) or (value if isinstance(value, str) else None)
+    if isinstance(uri, str) and uri.strip().lower().endswith(_RASTER_SUFFIXES):
+        # A SURVEY handed in as the domain: the ground it sounded is the ground
+        # that can be solved over, and the file still spans a whole rectangle.
+        return Domain(measured_footprint(uri.strip(), label=label, code=code),
+                      _named(value), uri.strip())
+    if isinstance(uri, str) and uri.strip().startswith(_LAYER_SCHEMES):
+        doc = read_geometry_doc(uri.strip())
+        logger.info("%s: read from %s", label, uri)
+        return _carried_by(doc, _named(value), uri.strip(),
+                           _runs_of(value, label, code), extent, label, code, window)
+    if isinstance(value, Mapping):
+        return _carried_by(value, _named(value), _uri_of(value),
+                           _runs_of(value, label, code), extent, label, code, window)
+    ring = polygon_ring(value, label=label, code=code)
+    return Domain(_closed(ring or []))
+
+
+def measured_footprint(raster: Any, *, label: str = "domain",
+                       code: str = _CODE) -> dict[str, Any]:
+    """Where a raster ACTUALLY measured anything, as one polygon in EPSG:4326.
+
+    Read off the raster's own MASK, never off a threshold on values, so a real
+    zero is inside the footprint and an untouched cell is not."""
+    import geopandas as gpd
+    import rasterio
+    from rasterio.features import shapes as raster_shapes
+    from shapely.geometry import mapping, shape as _shape
+    from shapely.ops import unary_union
+
+    uri = str(source_uri(raster) or "").strip()
+    with rasterio.open(uri) as src:
+        mask = src.dataset_mask()
+        parts = [_shape(geom) for geom, value in
+                 raster_shapes(mask, mask=mask.astype(bool), transform=src.transform)
+                 if value]
+        crs = src.crs
+    if not parts:
+        raise UserInputError(
+            f"every cell of the {label} raster {uri!r} is nodata, so it measured "
+            "nothing anywhere and there is no footprint to solve over.", code=code)
+    merged = gpd.GeoSeries([unary_union(parts)], crs=crs).to_crs(4326).union_all()
+    return dict(mapping(merged))
+
+
+def domain_ring(dom: Domain) -> list[list[float]]:
+    """The OUTER ring of the domain, open - what a mesher's extent reads."""
+    rings = _rings(dom.geometry)
+    return [[float(v[0]), float(v[1])] for v in rings[0][:-1]]
+
+
+def _rings(geometry: Mapping[str, Any]) -> list[list[Any]]:
+    kind = str(geometry.get("type") or "")
+    coords = geometry.get("coordinates") or []
+    if kind == "Polygon":
+        return [list(ring) for ring in coords]
+    if kind == "MultiPolygon":
+        return [list(ring) for polygon in coords for ring in polygon]
+    return []
+
+
+def _carried_by(doc: Any, name: str | None, uri: str | None,
+                stated: tuple[BoundaryRun, ...], extent: Any, label: str,
+                code: str, window: Any = None) -> Domain:
+    """The domain one document carries; a document of LINES is a land-water edge cut against ``extent``."""
+    geometries = list(flatten_geometries(read_geometry_doc(doc)))
+    polygons = [g for g in geometries
+                if str(g.get("type")) in ("Polygon", "MultiPolygon")]
+    if polygons and window is not None:
+        polygons = _cut_to(polygons, window)
+        if not polygons:
+            raise EmptyResultError(
+                f"the {label} produced by {uri} holds no water inside the box it was searched in.", code=code)
+    if polygons:
+        return Domain(_one_polygon(polygons), name, uri,
+                      stated or _prescribed(doc, label, code), _companions(doc))
+    if not any(str(g.get("type")) in ("LineString", "MultiLineString")
+               for g in geometries):
+        if not geometries:
+            raise EmptyResultError(_nothing_closed(geometries, uri, label), code=code)
+        raise UserInputError(_nothing_closed(geometries, uri, label), code=code)
+    return Domain(_water_left_by(doc, extent, label, code), name, uri)
+
+
+def _cut_to(polygons: list[dict[str, Any]], window: Any) -> list[dict[str, Any]]:
+    """Each polygon's part inside the window, as polygons; a part that is not an area is dropped."""
+    from shapely.geometry import box, mapping, shape
+
+    cut = box(*(float(v) for v in window))
+    out: list[dict[str, Any]] = []
+    for g in polygons:
+        part = shape(g).intersection(cut)
+        for piece in getattr(part, "geoms", [part]):
+            if piece.geom_type == "Polygon" and not piece.is_empty and piece.area > 0:
+                out.append(json.loads(json.dumps(mapping(piece))))
+    return out
+
+
+def _nothing_closed(geometries: list[dict[str, Any]], uri: str | None,
+                    label: str) -> str:
+    """Why a document closes nothing: a producer that ran and returned nothing, or the wrong shape."""
+    closed = ("A domain is the CLOSED outline the equations are solved over: "
+              "draw it, name a polygon layer, or let the template's own "
+              "producer find one.")
+    if not uri:
+        return f"the {label} carries no polygon geometry. {closed}"
+    if not geometries:
+        return (f"the {label} was produced by {uri} and that artifact carries "
+                "ZERO features: the producer RAN and found nothing, which is "
+                "not the same as no producer running. Read that row's own "
+                f"refusal for what the service answered. {closed}")
+    kinds = sorted({str(g.get("type")) for g in geometries})
+    return (f"the {label} came from {uri}, which carries {len(geometries)} "
+            f"geometries of kind {', '.join(kinds)} - no polygon and no "
+            f"land-water edge among them. {closed}")
+
+
+def _one_polygon(polygons: list[dict[str, Any]]) -> dict[str, Any]:
+    """The polygon a document carries; several are the one they cover together."""
+    if len(polygons) == 1:
+        return dict(polygons[0])
+    # SEVERAL polygons are one domain with parts - a lake with islands cut out, a
+    # two-basin harbour - and the mesher meshes the union; picking the largest would drop the rest.
+    return {"type": "MultiPolygon",
+            "coordinates": [g["coordinates"] if str(g["type"]) == "Polygon"
+                            else part
+                            for g in polygons
+                            for part in ([g["coordinates"]]
+                                         if str(g["type"]) == "Polygon"
+                                         else g["coordinates"])]}
+
+
+def _water_left_by(doc: Any, extent: Any, label: str,
+                   code: str) -> dict[str, Any]:
+    """The water a LAND-WATER EDGE leaves inside the window this question was asked in.
+
+    Without a window there is nothing to cut against; a cut that does not close refuses."""
+    from trid3nt.tools.mesh.meshers import MeshToolError
+    from trid3nt.tools.mesh.water import water_polygon
+
+    if extent is None:
+        raise UserInputError(
+            f"the {label} carries lines and no polygon, and this run states no "
+            "window to cut them against. A land-water edge divides a box into "
+            "land and water: draw the box this question is asked inside, or "
+            "supply the outline itself.", code=code)
+    try:
+        return dict(water_polygon(doc, extent))
+    except MeshToolError as exc:
+        raise UserInputError(str(exc), code=exc.error_code) from exc
+
+
+def _closed(ring: list[list[float]]) -> dict[str, Any]:
+    """An OPEN ring as a closed polygon; the minimum vertex count is checked before this."""
+    return {"type": "Polygon", "coordinates": [[*ring, list(ring[0])]]}
+
+
+def _runs_of(value: Any, label: str, code: str) -> tuple[BoundaryRun, ...]:
+    """The runs a producer stated ON the artifact; a drawn outline states none."""
+    stated = (value.get("runs") if isinstance(value, Mapping)
+              else getattr(value, "runs", None))
+    return boundary_runs(stated, label=f"{label} runs", code=code)
+
+
+def _prescribed(doc: Any, label: str, code: str) -> tuple[BoundaryRun, ...]:
+    """The run rows a producer wrote INTO the artifact beside its polygon.
+
+    A row naming a stretch that prescribes nothing is the wall, not a run; the
+    producer's own ``part`` word names the row."""
+    if not isinstance(doc, Mapping) or doc.get("type") != "FeatureCollection":
+        return ()
+    rows = []
+    for feature in (doc.get("features") or ()):
+        properties = dict((feature or {}).get("properties") or {})
+        kind = str(properties.get("type") or properties.get("part") or "").strip()
+        geometry = (feature or {}).get("geometry") or {}
+        if kind in RUN_TYPES and kind != WALL \
+                and str(geometry.get("type")) == "LineString":
+            rows.append({**feature, "properties": {**properties, "type": kind}})
+    return boundary_runs(rows, label=f"{label} runs", code=code) if rows else ()
+
+
+def _companions(doc: Any) -> dict[str, dict[str, Any]]:
+    """The geometries a producer wrote beside its polygon, by the name it gave.
+
+    A row naming a run type is a boundary run and is read as one."""
+    if not isinstance(doc, Mapping) or doc.get("type") != "FeatureCollection":
+        return {}
+    found: dict[str, dict[str, Any]] = {}
+    for feature in (doc.get("features") or ()):
+        properties = dict((feature or {}).get("properties") or {})
+        name = str(properties.get("part") or properties.get("name") or "").strip()
+        geometry = (feature or {}).get("geometry") or {}
+        kind = str(geometry.get("type") or "")
+        if not name or name in RUN_TYPES or not kind \
+                or kind in ("Polygon", "MultiPolygon"):
+            continue
+        found.setdefault(name, dict(geometry))
+    return found
+
+
+def _named(value: Any) -> str | None:
+    name = value.get("name") if isinstance(value, Mapping) else getattr(
+        value, "name", None)
+    text = str(name).strip() if name is not None else ""
+    return text or None
+
+
+def _uri_of(value: Mapping[str, Any]) -> str | None:
+    uri = value.get("uri")
+    return str(uri) if uri else None
+
+
+#: How far apart the two ends of the span must stand before the cut planes have
+#: a direction to be square to, in metres. Below it the two ends are one point.
+_MIN_CHORD_M = 1.0
+
+#: How far off a cut plane a vertex may stand and still BE on it, in metres: the
+#: clip's double-precision residue, against metres of real geometry.
+_ON_CUT_M = 1.0e-6
+
+
+def _between_the_ends(line_doc: Any, banks: Any, near: Any, span_km: Any,
+                      label: str, code: str, above_m: Any = None) -> Domain:
+    """The WATER SURFACE cut square to a line, between the two ends of the span.
+
+    The two end transects are the runs the water crosses; the centerline rides along
+    as a companion."""
+    from shapely.geometry import mapping
+
+    centre = _clipped(_one_line(line_doc, label, code), near, span_km, label,
+                      code, above_m)
+    polygon, faces = _cut_square(_surfaces(banks, label, code), centre, label,
+                                 code)
+    runs = boundary_runs(
+        [{"type": "Feature", "properties": {"type": kind},
+          "geometry": {"type": "LineString", "coordinates": face}}
+         for kind, face in zip(("inflow", "outflow"), faces)],
+        label=f"{label} runs", code=code)
+    return Domain(polygon, _named(line_doc), source_uri(line_doc) or None, runs,
+                  {"centerline": dict(mapping(centre))})
+
+
+def _one_line(doc: Any, label: str, code: str) -> Any:
+    """Every line the row carries, joined into ONE running the way the water does.
+
+    NHD digitizes downstream, so the merged line takes the vertex order of its
+    longest part and the first vertex is the upstream end."""
+    from shapely.geometry import LineString, Point, shape
+    from shapely.ops import linemerge
+
+    parts = [shape(g) for g in flatten_geometries(read_geometry_doc(doc))
+             if str(g.get("type")) in ("LineString", "MultiLineString")]
+    if not parts:
+        raise UserInputError(
+            f"the {label} row carries no line at all, so there is nothing to "
+            "cut the water surface square to. Supply the outline itself.",
+            code=code)
+    merged = parts[0] if len(parts) == 1 else linemerge(parts)
+    pieces = sorted(getattr(merged, "geoms", [merged]), key=lambda g: -g.length)
+    line = pieces[0]
+    longest = max(parts, key=lambda part: part.length)
+    if line.project(Point(longest.coords[0])) \
+            > line.project(Point(longest.coords[-1])):
+        line = LineString(list(line.coords)[::-1])
+    return line
+
+
+def _clipped(line: Any, near: Any, span_km: Any, label: str, code: str, above_m: Any = None) -> Any:
+    """``span_km`` of the line DOWNSTREAM of the seed, in the line's flow order, starting ``above_m`` above it.
+
+    Measured on the ground, not in degrees; a run stating no seed takes the line as it came. The inflow face stands
+    ``above_m`` above the seed, so a source at the seed is off the rim the face is meshed on."""
+    from pyproj import Transformer
+    from shapely.geometry import Point
+    from shapely.ops import substring, transform as _transform
+
+    from .geometry import utm_epsg_for
+    from .point import lonlat_of
+
+    seed = lonlat_of(near)
+    if seed is None or not span_km:
+        return line
+    epsg = utm_epsg_for(float(line.centroid.x), float(line.centroid.y))
+    forward = Transformer.from_crs(4326, epsg, always_xy=True)
+    back = Transformer.from_crs(epsg, 4326, always_xy=True)
+    metric = _transform(forward.transform, line)
+    at_seed = metric.project(_transform(forward.transform, Point(*seed)))
+    available = metric.length - at_seed
+    if available < float(span_km) * 1000.0:
+        raise UserInputError(
+            f"the {label} states a reach of {float(span_km):g} km below the seed, but the mapped "
+            f"network runs only {available / 1000.0:.3f} km on from where the seed stands (a "
+            "terminal flowline, a coast or a sink ends it). State a reach no longer than that, or "
+            "supply the outline itself.", code="DOMAIN_REACH_PAST_NETWORK_END")
+    above = float(above_m or 0.0)
+    if above > at_seed:
+        raise UserInputError(
+            f"the {label} starts {above:g} m above the seed so a source there is off the inflow face, but the mapped "
+            f"network runs only {at_seed:.1f} m above where the seed stands (the network begins there). Seed a point "
+            "further down the line, or supply the outline itself.", code="DOMAIN_SEED_AT_NETWORK_START")
+    cut = substring(metric, at_seed - above, at_seed + float(span_km) * 1000.0)
+    if cut.is_empty or cut.length <= 0.0:
+        raise UserInputError(
+            f"the {label} seed stands at the far end of the line it was given, "
+            "so no stretch of it runs on from there. Seed the upstream end of "
+            "the stretch this question is about.", code=code)
+    return _transform(back.transform, cut)
+
+
+def _surfaces(banks: Any, label: str, code: str) -> list[Any]:
+    """The valid water-surface polygons the declared row carries."""
+    from shapely.geometry import shape
+
+    found = []
+    for geometry in flatten_geometries(read_geometry_doc(banks)):
+        geom = shape(geometry)
+        for part in getattr(geom, "geoms", [geom]):
+            if part.geom_type == "Polygon" and not part.is_empty:
+                found.append(part if part.is_valid else part.buffer(0))
+    if not found:
+        raise UserInputError(
+            f"nothing maps a water SURFACE along this {label}, so it has no "
+            "banks to solve between - the channel here is a centreline only. "
+            "Model a mapped channel, or supply the domain polygon yourself.",
+            code=code)
+    return found
+
+
+def _cut_square(surfaces: list[Any], centre: Any, label: str,
+                code: str) -> tuple[dict[str, Any], list[list[list[float]]]]:
+    """The surfaces cut square to the line's two ends -> the polygon and the two transects.
+
+    Square is measured in the local UTM zone; square in degrees is not square on the ground."""
+    import numpy as np
+    from pyproj import Transformer
+    from shapely.geometry import LineString, mapping
+    from shapely.ops import transform as _transform, unary_union
+
+    from .geometry import utm_epsg_for
+
+    union_ll = unary_union(surfaces)
+    epsg = utm_epsg_for(float(union_ll.centroid.x), float(union_ll.centroid.y))
+    forward = Transformer.from_crs(4326, epsg, always_xy=True)
+    back = Transformer.from_crs(epsg, 4326, always_xy=True)
+    union_m = _transform(forward.transform, union_ll)
+    a = np.asarray(forward.transform(*centre.coords[0]), dtype=float)
+    b = np.asarray(forward.transform(*centre.coords[-1]), dtype=float)
+    chord = float(np.hypot(*(b - a)))
+    if chord < _MIN_CHORD_M:
+        raise UserInputError(
+            f"the {label} line is {chord:.3f} m long, which is one point: there "
+            "is no direction for the end cuts to be square to. Ask for a longer "
+            "span, or seed a channel with line either side of it.", code=code)
+    minx, miny, maxx, maxy = union_m.bounds
+    across = float(np.hypot(maxx - minx, maxy - miny)) + chord
+    parts = [p for p in getattr(union_m.intersection(_strip(a, b, across)),
+                                "geoms", [union_m.intersection(
+                                    _strip(a, b, across))])
+             if p.geom_type == "Polygon"]
+    kept = [p for p in parts if p.intersects(LineString([tuple(a), tuple(b)]))]
+    if not kept:
+        raise UserInputError(
+            f"the {label} line touches no part of the water surface between its "
+            "two ends, so which piece is the domain is not measurable. Seed a "
+            "channel whose banks are mapped.", code=code)
+    if len(parts) > len(kept):
+        logger.info("%s: %d piece(s) between the end cuts do not touch the line "
+                    "and were left out", label, len(parts) - len(kept))
+    cut_m = unary_union(kept)
+    unit = (b - a) / chord
+    normal = np.array([-unit[1], unit[0]])
+    faces = [_end_face(cut_m, point, unit, normal, name, back, label, code)
+             for point, name in ((a, "inflow"), (b, "outflow"))]
+    return dict(mapping(_transform(back.transform, cut_m))), faces
+
+
+def _strip(a: Any, b: Any, across: float) -> Any:
+    """The band between the two perpendicular cuts at ``a`` and ``b``, wide enough that only those cuts touch the surface."""
+    import numpy as np
+    from shapely.geometry import Polygon
+
+    span = np.asarray(b, dtype=float) - np.asarray(a, dtype=float)
+    unit = span / float(np.hypot(*span))
+    wide = np.array([-unit[1], unit[0]]) * across
+    return Polygon([tuple(a + wide), tuple(b + wide),
+                    tuple(b - wide), tuple(a - wide)])
+
+
+def _end_face(cut_m: Any, point: Any, unit: Any, normal: Any, name: str,
+              back: Any, label: str, code: str) -> list[list[float]]:
+    """The TRANSECT one cut left, as its two lon/lat ends.
+
+    Found by projecting the polygon's OWN boundary vertices, never by intersecting a
+    probe line: the cut edge is exactly collinear with one, so that intersection is unreliable."""
+    import numpy as np
+
+    origin = np.asarray(point, dtype=float)
+    rings = [np.asarray(ring.coords, dtype=float)
+             for part in getattr(cut_m, "geoms", [cut_m])
+             for ring in (part.exterior, *part.interiors)]
+    vertices = np.vstack(rings) - origin
+    on_plane = np.abs(vertices @ np.asarray(unit, dtype=float)) <= _ON_CUT_M
+    across = vertices[on_plane] @ np.asarray(normal, dtype=float)
+    if across.size < 2 or float(across.max() - across.min()) <= 0.0:
+        raise UserInputError(
+            f"the {name} end of this {label} left no transect on the water "
+            "surface: the water reaches that end along its own bank rather "
+            "than along the cut, so there is no transect there to prescribe a "
+            "boundary across. Seed a stretch the surface maps end to end.",
+            code=code)
+    ends = vertices[on_plane][[int(across.argmin()), int(across.argmax())]] \
+        + origin
+    return [[float(v) for v in back.transform(*end)] for end in ends]

@@ -349,21 +349,21 @@ package SteeringSurface {
 
     part dictionaryExtractor : Dictionary {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/engine_scripts/dico.py
+        code: trid3nt/workflows/telemac/authoring/engine_scripts/dico.py
         */
         port dictionaryOut : DictionaryOut;
     }
 
     part slot : Slot {
         doc /*
-        code: trid3nt_server/workflows/runtime/module.py
+        code: trid3nt/workflows/runtime/module.py
         */
         port dictionaryIn : DictionaryIn;
     }
 
     part wrapper : Module {
         doc /*
-        code: trid3nt_server/workflows/runtime/module.py
+        code: trid3nt/workflows/runtime/module.py
         */
         port dictionaryIn : DictionaryIn;
         port surfaceOut : SurfaceOut;
@@ -379,40 +379,40 @@ package SteeringSurface {
         two wrappers register is coupling, which both hydrodynamic carriers take
         from coupling.py; the water column is all that separates their reading
         of it.
-        code: trid3nt_server/workflows/telemac/modules/telemac2d.py
-        code: trid3nt_server/workflows/telemac/modules/coupling.py
+        code: trid3nt/workflows/telemac/modules/telemac2d.py
+        code: trid3nt/workflows/telemac/modules/coupling.py
         */
         port surfaceOut : SurfaceOut;
     }
 
     part temporalValue : TemporalValue {
         doc /*
-        code: trid3nt_server/inputs/temporal.py
+        code: trid3nt/inputs/temporal.py
         */
     }
 
     part alignment : Alignment {
         doc /*
-        code: trid3nt_server/inputs/series.py
+        code: trid3nt/inputs/series.py
         */
     }
 
     part observationSlot : ObservationSlot {
         doc /*
-        code: trid3nt_server/inputs/observation.py
+        code: trid3nt/inputs/observation.py
         */
     }
 
     part output : Output {
         doc /*
-        code: trid3nt_server/workflows/telemac/modules/telemac2d.py
+        code: trid3nt/workflows/telemac/modules/telemac2d.py
         */
         port surfaceOut : SurfaceOut;
     }
 
     part sheet : Sheet {
         doc /*
-        code: trid3nt_server/workflows/runtime/sheet.py
+        code: trid3nt/workflows/runtime/sheet.py
         */
         port surfaceIn : SurfaceIn;
         port deckOut : DeckOut;
@@ -423,7 +423,7 @@ package SteeringSurface {
         The engine's half of the filled sheet: the stage a complete sheet is
         serialized and staged through.
 
-        code: trid3nt_server/workflows/telemac/modules/sheet.py
+        code: trid3nt/workflows/telemac/modules/sheet.py
         */
         port stageOut : StageOut;
     }
@@ -433,7 +433,7 @@ package SteeringSurface {
         MODFLOW's half of the filled sheet: the simulation directory written,
         validated by mf6 and staged through the one stager.
 
-        code: trid3nt_server/workflows/modflow/workflow.py
+        code: trid3nt/workflows/modflow/workflow.py
         */
         port stageOut : StageOut;
     }
@@ -444,7 +444,7 @@ package SteeringSurface {
         checked against itself and staged through the one stager with the one
         case section its worker reads.
 
-        code: trid3nt_server/workflows/geoclaw/workflow.py
+        code: trid3nt/workflows/geoclaw/workflow.py
         */
         port stageOut : StageOut;
     }
@@ -455,7 +455,7 @@ package SteeringSurface {
         best parameters written in, staged as an ordinary MODFLOW run with that
         engine's staged check through the one stager.
 
-        code: trid3nt_server/workflows/pestpp/authoring/modflow.py
+        code: trid3nt/workflows/pestpp/authoring/modflow.py
         */
         port stageOut : StageOut;
     }
@@ -467,7 +467,7 @@ package SteeringSurface {
         writer, staged as an ordinary TELEMAC run with that engine's staged check
         through the one stager.
 
-        code: trid3nt_server/workflows/pestpp/authoring/telemac.py
+        code: trid3nt/workflows/pestpp/authoring/telemac.py
         */
         port stageOut : StageOut;
     }
@@ -478,28 +478,28 @@ package SteeringSurface {
         files and the model files, checked against the control file and staged
         through the one stager.
 
-        code: trid3nt_server/workflows/pestpp/staging.py
+        code: trid3nt/workflows/pestpp/staging.py
         */
         port stageOut : StageOut;
     }
 
     part fill : Fill {
         doc /*
-        code: trid3nt_server/workflows/runtime/fill.py
+        code: trid3nt/workflows/runtime/fill.py
         */
         port drawIn : DrawIn;
     }
 
     part canvasGate : CanvasGate {
         doc /*
-        code: trid3nt_server/inputs/gate/draw_input.py
+        code: trid3nt_harness/inputs/gate/draw_input.py
         */
         port drawOut : DrawOut;
     }
 
     part serializer : Serializer {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/serializer.py
+        code: trid3nt/workflows/telemac/authoring/serializer.py
         */
         port deckIn : DeckIn;
         port writeOut : WriteOut;
@@ -507,7 +507,7 @@ package SteeringSurface {
 
     part steeringGate : SteeringGate {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/cas_validate.py
+        code: trid3nt/workflows/telemac/authoring/cas_validate.py
         */
         port writeOut : WriteOut;
         port parseIn : ParseIn;
@@ -515,7 +515,7 @@ package SteeringSurface {
 
     part steeringDriver : SteeringDriver {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/engine_scripts/cas.py
+        code: trid3nt/workflows/telemac/authoring/engine_scripts/cas.py
         */
         port writeIn : WriteIn;
         port parseOut : ParseOut;
@@ -523,26 +523,26 @@ package SteeringSurface {
 
     part stager : Stager {
         doc /*
-        code: trid3nt_server/workflows/solver/staging.py
+        code: trid3nt/workflows/solver/staging.py
         */
         port stageIn : StageIn;
     }
 
     part engineWorkflow : EngineWorkflow {
         doc /*
-        code: trid3nt_server/workflows/telemac/workflow.py
+        code: trid3nt/workflows/telemac/workflow.py
         */
     }
 
     part runRecord : RunRecord {
         doc /*
-        code: trid3nt_server/workflows/runtime/journal.py
+        code: trid3nt/workflows/runtime/journal.py
         */
     }
 
     part point : TypedInput {
         doc /*
-        code: trid3nt_server/inputs/point.py
+        code: trid3nt/inputs/point.py
         */
     }
 

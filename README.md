@@ -103,7 +103,9 @@ Each has its own map README.
 | directory | what it is |
 | --- | --- |
 | `plugin/` | The QGIS plugin - the only client. |
-| `trid3nt_server/` | The daemon: turn loop, tool dispatch, gates, render, workflows. |
+| `trid3nt/` | The SDK: fetchers, derive tools, the mesh, the engines and their templates, the typed inputs, the format set, the store. |
+| `trid3nt_harness/` | The control plane: the LLM adapters and turn guards, tool retrieval, the gate machine. |
+| `trid3nt_server/` | The daemon: the WebSocket protocol, sessions, turn loop and dispatch, emission to the canvas. |
 | `contracts/` | The shared pydantic contracts both sides import. |
 | `workers/` | The solver worker images - the engine room. |
 | `scripts/` | The entry points you type, and the model checker. |
@@ -115,7 +117,7 @@ Each has its own map README.
 
 Three, independent; a git commit deploys none of them.
 
-- **Server code**: edit `trid3nt_server/`, then `make agent` - the venv installs it editable, so a restart picks the change up.
+- **Server code**: edit `trid3nt/`, `trid3nt_harness/` or `trid3nt_server/`, then `make agent` - the venv installs it editable, so a restart picks the change up.
 - **QGIS plugin**: `make plugin`, then reload in QGIS. QGIS runs the installed profile copy, never this checkout.
 - **Worker image**: `scripts/build_telemac_image.sh`. A worker edit is inert until the image is rebuilt.
 

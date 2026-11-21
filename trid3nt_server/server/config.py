@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 
-from trid3nt_server.settings import setting
+from trid3nt.settings import setting
 
 def _tool_retrieval_k() -> int:
     """The TOOL_RETRIEVAL_K setting: the ceiling on the tools a turn's matches add, which retrieve_visible_tools clamps."""

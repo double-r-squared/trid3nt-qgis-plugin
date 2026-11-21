@@ -14,7 +14,7 @@ from trid3nt_contracts.ws import Envelope, ErrorPayload
 
 from trid3nt_server.render.pipeline_emitter import current_turn_case
 from trid3nt_server.server.protocol.connections import _SESSION_WS_CONNECTIONS
-from trid3nt_server.settings import setting
+from trid3nt.settings import setting
 
 if TYPE_CHECKING:
     from websockets.asyncio.server import ServerConnection

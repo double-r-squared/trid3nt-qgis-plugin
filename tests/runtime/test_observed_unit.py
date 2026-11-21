@@ -14,11 +14,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.inputs.observation import convert, observation
-from trid3nt_server.inputs.input import Input
-from trid3nt_server.workflows.runtime import fill
-from trid3nt_server.workflows.runtime.errors import DeclarationError, StepFailedError
-from trid3nt_server.inputs.slots import LEVEL, OBSERVE
+from trid3nt.inputs.observation import convert, observation
+from trid3nt.inputs.input import Input
+from trid3nt.workflows.runtime import fill
+from trid3nt.workflows.runtime.errors import DeclarationError, StepFailedError
+from trid3nt.inputs.slots import LEVEL, OBSERVE
 
 _METADATA = SimpleNamespace(name="t", description="", tags=())
 
@@ -95,10 +95,10 @@ def test_a_row_observes_only_what_it_went_out_and_measured() -> None:
 
 
 def test_the_published_table_is_the_deck_s_own_text_and_its_coupled_rows() -> None:
-    from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
-    from trid3nt_server.workflows.telemac.templates.water_temperature import (
+    from trid3nt.workflows.telemac.workflow import TelemacWorkflow
+    from trid3nt.workflows.telemac.templates.water_temperature import (
         water_temperature as warmed)
-    from trid3nt_server.workflows.telemac.templates.ice_cover import (
+    from trid3nt.workflows.telemac.templates.ice_cover import (
         ice_cover as frozen)
 
     for template, unit in ((warmed, "DEGC"), (frozen, "oC")):

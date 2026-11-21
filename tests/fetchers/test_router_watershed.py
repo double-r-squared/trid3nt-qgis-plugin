@@ -12,10 +12,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.tools.fetchers._fetch_common import FetchError
-from trid3nt_server.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.hydrology.fetch_watershed import hooks as ws
+from trid3nt.tools.fetchers._fetch_common import FetchError
+from trid3nt.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.hydrology.fetch_watershed import hooks as ws
 
 #: The gauged Coweeta Creek headwater near Otto, NC - the rain-on-grid canary's own
 #: pour point, so the offline shapes here stand where the live proof stands.
@@ -104,7 +104,7 @@ def test_the_outlet_run_is_two_points_a_few_cells_apart():
 
 def test_a_basin_that_ran_off_the_window_refuses_rather_than_returning_a_cut(
         spec, monkeypatch):
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     monkeypatch.setattr(ws, "_basin", _stub_basin(["traced it"], truncated=True))
     monkeypatch.setitem(TOOL_REGISTRY, "fetch_dem", SimpleNamespace(
@@ -116,7 +116,7 @@ def test_a_basin_that_ran_off_the_window_refuses_rather_than_returning_a_cut(
 
 
 def test_a_dem_the_sibling_could_not_serve_is_quoted_verbatim(spec, monkeypatch):
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     class _Outage(FetchError):
         error_code = "DEM_FALLBACK_GATE"
@@ -135,7 +135,7 @@ def test_a_dem_the_sibling_could_not_serve_is_quoted_verbatim(spec, monkeypatch)
 
 
 def test_a_dem_refusal_that_is_not_retryable_stays_an_input_refusal(spec, monkeypatch):
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     class _Bad(FetchError):
         error_code = "DEM_OUT_OF_COVERAGE"
@@ -151,7 +151,7 @@ def test_a_dem_refusal_that_is_not_retryable_stays_an_input_refusal(spec, monkey
 
 def test_the_two_rows_are_the_basin_and_the_outlet_it_drains_through(
         spec, monkeypatch):
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     monkeypatch.setattr(ws, "_basin", _stub_basin(["traced it"]))
     monkeypatch.setitem(TOOL_REGISTRY, "fetch_dem", SimpleNamespace(
@@ -164,7 +164,7 @@ def test_the_two_rows_are_the_basin_and_the_outlet_it_drains_through(
     assert by_part["basin"]["properties"]["type"] is None
     # A catchment outlet prescribes a stage-discharge relation, not a stated level,
     # and it is spelled with the slot's own constant so a rename cannot drop the run.
-    from trid3nt_server.inputs.boundary import RATING, RUN_TYPES
+    from trid3nt.inputs.boundary import RATING, RUN_TYPES
 
     assert by_part["outlet"]["properties"]["type"] == RATING
     assert RATING in RUN_TYPES

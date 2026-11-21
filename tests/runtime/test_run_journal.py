@@ -14,9 +14,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.inputs import run_notes
-from trid3nt_server.store import journal as store_journal
-from trid3nt_server.workflows.runtime import journal
+from trid3nt.inputs import run_notes
+from trid3nt.store import journal as store_journal
+from trid3nt.workflows.runtime import journal
 
 
 @pytest.fixture(autouse=True)
@@ -201,7 +201,7 @@ def test_draining_closes_the_channel_so_the_next_run_starts_empty():
 def test_the_solver_s_correct_end_is_read_off_the_solve_step_and_recorded():
     """A solve says whether it reached its own correct end; the line carries the
     flag it said, and nothing where the solve step's metrics state none."""
-    from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
+    from trid3nt.workflows.telemac.workflow import TelemacWorkflow
 
     ended = SimpleNamespace(results={"solve": {"metrics": {"correct_end": True}}})
     silent = SimpleNamespace(results={"solve": {"metrics": {}}})
@@ -213,7 +213,7 @@ def test_the_solver_s_correct_end_is_read_off_the_solve_step_and_recorded():
 
 def _verdict(value, origin, source=""):
     from trid3nt_contracts.common import Origin
-    from trid3nt_server.workflows.runtime.fill import ACCEPTED, Verdict
+    from trid3nt.workflows.runtime.fill import ACCEPTED, Verdict
 
     return Verdict(ACCEPTED, value, origin=Origin(origin), source=source)
 
@@ -224,8 +224,8 @@ def test_the_run_s_own_line_carries_every_input_and_the_correct_end_its_solve_st
     the fill answered into the one map: a keyword the caller stated under its
     spaced spelling is the deck's own row, a supplied row records what was handed
     in and a matched one names its source."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.workflow import RunResult
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.workflows.runtime.workflow import RunResult
 
     written: list[dict] = []
     monkeypatch.setattr(journal, "append_record", written.append)
@@ -258,9 +258,9 @@ def test_the_run_s_own_line_carries_every_input_and_the_correct_end_its_solve_st
 def test_a_keyword_stated_on_a_coupled_body_keeps_its_own_entry():
     """Two bodies may spell one identifier: the carrier's is the deck's row, and
     the one a caller stated on a coupled body stays under the name it was stated."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.runtime.workflow import RunResult
-    from trid3nt_server.workflows.telemac.workflow import run_bodies
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.workflows.runtime.workflow import RunResult
+    from trid3nt.workflows.telemac.workflow import run_bodies
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
     carrier, coupled = run_bodies(wf.steering)[:2]
@@ -277,7 +277,7 @@ def test_a_keyword_stated_on_a_coupled_body_keeps_its_own_entry():
 
 
 def test_the_run_journals_the_mesh_its_mesh_step_returned(monkeypatch):
-    from trid3nt_server.workflows.runtime.workflow import RunResult, Workflow
+    from trid3nt.workflows.runtime.workflow import RunResult, Workflow
 
     lines: list = []
     monkeypatch.setattr(journal, "append_record", lines.append)

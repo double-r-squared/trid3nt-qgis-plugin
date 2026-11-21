@@ -12,9 +12,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.mesh.meshers import MeshToolError
-from trid3nt_server.workflows.telemac.authoring import selafin_io as IO
-from trid3nt_server.workflows.telemac.modules import outputs as R
+from trid3nt.tools.mesh.meshers import MeshToolError
+from trid3nt.workflows.telemac.authoring import selafin_io as IO
+from trid3nt.workflows.telemac.modules import outputs as R
 
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -115,7 +115,7 @@ def test_the_geometry_carries_the_walks_own_numbering(tmp_path):
     any other walk classifies the wrong nodes without saying anything."""
     from serafin import SerafinHeader, SerafinReader
 
-    from trid3nt_server.tools.mesh.shared.formats.tin_topology import (
+    from trid3nt.tools.mesh.shared.formats.tin_topology import (
         boundary_numbering)
 
     ours, _ = boundary_numbering(_RING_CELLS, _RING_X.shape[0])
@@ -140,7 +140,7 @@ def test_the_origin_is_reported_and_the_coordinates_stay_as_stored(tmp_path):
     here would place the mesh twice as far out as the file puts it."""
     from serafin import SerafinHeader, SerafinWriter
 
-    from trid3nt_server.tools.mesh.shared.formats.tin_topology import (
+    from trid3nt.tools.mesh.shared.formats.tin_topology import (
         boundary_numbering)
 
     ipobo, _ = boundary_numbering(_CELLS, 4)
@@ -165,7 +165,7 @@ def test_a_three_dimensional_result_keeps_every_plane(tmp_path):
     Reading the 2D connectivity for a 3D file drops every plane but one."""
     from serafin import SerafinHeader, SerafinWriter
 
-    from trid3nt_server.tools.mesh.shared.formats.tin_topology import (
+    from trid3nt.tools.mesh.shared.formats.tin_topology import (
         boundary_numbering)
 
     ipobo, _ = boundary_numbering(_CELLS, 4)
@@ -212,7 +212,7 @@ def test_a_frame_that_will_not_read_refuses_by_the_same_name(tmp_path,
 def test_geometry_pair_is_written_double_precision(tmp_path):
     import numpy as np
 
-    from trid3nt_server.workflows.telemac.authoring.selafin_io import (
+    from trid3nt.workflows.telemac.authoring.selafin_io import (
         GEOMETRY_FILE_FORMAT, read_selafin, write_telemac_pair)
 
     x = np.array([0.0, 1.0, 1.0, 0.0]) + 500000.1
@@ -225,7 +225,7 @@ def test_geometry_pair_is_written_double_precision(tmp_path):
 
 
 def test_the_deck_states_the_geometry_format():
-    from trid3nt_server.workflows.telemac.modules import wrapper_for
-    from trid3nt_server.workflows.telemac.workflow import stated
+    from trid3nt.workflows.telemac.modules import wrapper_for
+    from trid3nt.workflows.telemac.workflow import stated
 
     assert stated(steering=wrapper_for("telemac2d"), keywords={})["GEOMETRY_FILE_FORMAT"] == "SERAFIND"

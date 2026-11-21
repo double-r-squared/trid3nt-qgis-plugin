@@ -10,15 +10,15 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.tools import get_registered_tools
+from trid3nt import tools as agent_tools
+from trid3nt.tools import get_registered_tools
 
 # Force-import modules that are NOT in the __init__.py eager-import list but
 # whose tools are in scope for annotation coverage. These are loaded by the
 # agent service at startup via the server entrypoint but not by the package
 # __init__.py. Import them here so the live registry is fully populated.
-import trid3nt_server.tools  # noqa: F401 — eager-registers the full tool surface (fetch_dem, fetch_buildings, etc.)
-import trid3nt_server.workflows.solver.solver  # noqa: F401 — registers run_solver + wait_for_completion
+import trid3nt.tools  # noqa: F401 — eager-registers the full tool surface (fetch_dem, fetch_buildings, etc.)
+import trid3nt.workflows.solver.solver  # noqa: F401 — registers run_solver + wait_for_completion
 
 
 
@@ -199,7 +199,7 @@ def test_atomic_tool_metadata_annotation_defaults():
 
 def test_register_tool_annotation_kwargs_override_defaults(empty_registry):
     """Annotation kwargs passed at decorator time override schema defaults."""
-    from trid3nt_server.tools import register_tool
+    from trid3nt.tools import register_tool
 
     md = AtomicToolMetadata(
         name="test_write_tool",

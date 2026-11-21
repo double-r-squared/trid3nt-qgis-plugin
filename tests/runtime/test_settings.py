@@ -10,14 +10,14 @@ import json
 
 import pytest
 
-from trid3nt_server import settings
-from trid3nt_server.settings import reader
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime import fill as fill_mod
-from trid3nt_server.workflows.runtime import journal
-from trid3nt_server.workflows.runtime.fill import Fill, fill
-from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.workflows.runtime.workflow import RunResult
+from trid3nt import settings
+from trid3nt.settings import reader
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.runtime import fill as fill_mod
+from trid3nt.workflows.runtime import journal
+from trid3nt.workflows.runtime.fill import Fill, fill
+from trid3nt.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.runtime.workflow import RunResult
 
 
 def test_every_entry_carries_its_family_default_and_where_the_default_comes_from():
@@ -36,7 +36,7 @@ def test_every_entry_carries_its_family_default_and_where_the_default_comes_from
 
 
 def test_describe_keywords_serves_the_dictionary_with_its_source():
-    from trid3nt_server.tools.search.describe_keywords.describe_keywords import describe_keywords
+    from trid3nt.tools.search.describe_keywords.describe_keywords import describe_keywords
 
     found = describe_keywords(module="settings", query="how far a fill searches")
     top = found["matches"][0]["keywords"][0]

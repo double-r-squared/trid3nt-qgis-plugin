@@ -12,11 +12,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.workflows.telemac.errors import TelemacError
+from trid3nt.workflows.telemac.errors import TelemacError
 
 
 def _workflow():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow
 
@@ -34,7 +34,7 @@ def test_the_structure_and_its_reflection_are_stated_or_not():
 
 
 def test_a_free_field_boundary_reflects_nothing():
-    from trid3nt_server.workflows.telemac.modules.artemis import (
+    from trid3nt.workflows.telemac.modules.artemis import (
         KINC, KLOG, stamp_boundary_rows)
 
     rows = stamp_boundary_rows(_CLI, open_nodes=[0], structure_nodes=[],
@@ -45,7 +45,7 @@ def test_a_free_field_boundary_reflects_nothing():
 
 
 def test_structure_faces_with_no_stated_reflection_refuse():
-    from trid3nt_server.workflows.telemac.modules.artemis import stamp_boundary_rows
+    from trid3nt.workflows.telemac.modules.artemis import stamp_boundary_rows
 
     with pytest.raises(ValueError, match="never a default"):
         stamp_boundary_rows(_CLI, open_nodes=[0], structure_nodes=[2],
@@ -57,7 +57,7 @@ def test_structure_faces_with_no_stated_reflection_refuse():
     (None, 0.5, "ARTEMIS_REFLECTION_UNPAIRED")])
 def test_a_reflection_without_its_structure_or_the_reverse_refuses(
         structure, reflection, code):
-    from trid3nt_server.workflows.telemac.authoring.walked_boundary import (
+    from trid3nt.workflows.telemac.authoring.walked_boundary import (
         settle_harbour)
 
     with pytest.raises(TelemacError) as caught:
@@ -70,7 +70,7 @@ def test_a_reflection_without_its_structure_or_the_reverse_refuses(
 
 
 def _recipe(untaken):
-    from trid3nt_server.workflows.telemac.templates.agitation.agitation import MESH
+    from trid3nt.workflows.telemac.templates.agitation.agitation import MESH
 
     env = SimpleNamespace(data={}, run={
         "domain": "domain-uri", "mesh_resolution_m": None, "mesh_grade": 0.2,

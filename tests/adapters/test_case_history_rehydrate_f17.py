@@ -12,12 +12,12 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from trid3nt_server.model.adapters.adapter import (
+from trid3nt_harness.model.adapters.adapter import (
     REHYDRATE_HISTORY_CAP,
     build_layers_present_note,
     rehydrate_history_from_case,
 )
-from trid3nt_server.store.cases import Persistence
+from trid3nt.store.cases import Persistence
 from trid3nt_server.server import (
     SessionState,
     _emit_case_open,

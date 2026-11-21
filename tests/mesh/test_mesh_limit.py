@@ -5,10 +5,10 @@ from __future__ import annotations
 import mesh_builds
 import pytest
 
-from trid3nt_server import settings
-from trid3nt_server.tools.mesh.meshers import MeshToolError
-from trid3nt_server.tools.mesh.session import MeshSession
-from trid3nt_server.tools.mesh.tool import tool
+from trid3nt import settings
+from trid3nt.tools.mesh.meshers import MeshToolError
+from trid3nt.tools.mesh.session import MeshSession
+from trid3nt.tools.mesh.tool import tool
 
 _AOI = (-83.50, 35.00, -83.40, 35.09)
 
@@ -66,7 +66,7 @@ def _bed_session(tmp_path, cell_deg, **stated):
     import rasterio
     from rasterio.transform import from_origin
 
-    from trid3nt_server.tools.mesh.tool import mesh_op
+    from trid3nt.tools.mesh.tool import mesh_op
 
     tif = tmp_path / "bed.tif"
     with rasterio.open(tif, "w", driver="GTiff", height=200, width=200, count=1,
@@ -176,7 +176,7 @@ def test_with_the_budget_unset_nothing_is_fitted_or_refused(tmp_path):
 
 
 def test_the_budget_is_off_by_default(tmp_path):
-    from trid3nt_server.settings import setting
+    from trid3nt.settings import setting
 
     assert setting("SOLVE_BUDGET_S") == 0
 

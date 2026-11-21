@@ -12,10 +12,10 @@ import time
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import RouterUpstreamError
-from trid3nt_server.tools.fetchers._router.hooks import hyriver
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers._router.transport import client as transport_client
+from trid3nt.tools.fetchers._router.errors import RouterUpstreamError
+from trid3nt.tools.fetchers._router.hooks import hyriver
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers._router.transport import client as transport_client
 
 _SPEC = compose_specs_from_tree()["fetch_high_water_marks"]
 

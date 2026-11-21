@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.mesh.meshers import (
+from trid3nt.tools.mesh.meshers import (
     POST,
     PRE,
     MeshToolError,
@@ -26,8 +26,8 @@ from trid3nt_server.tools.mesh.meshers import (
     registered_meshers,
     resolve_op,
 )
-from trid3nt_server.tools.mesh.meshers import flopy_grid as FLOPY
-from trid3nt_server.tools.mesh.tool import MeshTool, mesh_op
+from trid3nt.tools.mesh.meshers import flopy_grid as FLOPY
+from trid3nt.tools.mesh.tool import MeshTool, mesh_op
 
 _AOI = (-75.80, 36.10, -75.70, 36.20)
 
@@ -260,7 +260,7 @@ def test_the_readback_states_its_own_lon_lat_extent(monkeypatch, tmp_path):
     """A mesh built in UTM is placed on the map by the extent it states in lon/lat."""
     from pyproj import Transformer
 
-    from trid3nt_server.tools.mesh.session import _lonlat_bbox
+    from trid3nt.tools.mesh.session import _lonlat_bbox
 
     _stub(monkeypatch, tmp_path)
     mesh = FLOPY.build(_recipe())
@@ -350,7 +350,7 @@ def _post_bed(monkeypatch, value=-4.0):
         return dataclasses.replace(mesh, bed=np.full(mesh.node_count, value))
 
     monkeypatch.setattr(
-        "trid3nt_server.tools.mesh.shared.primitives.set_bed", fake_set_bed)
+        "trid3nt.tools.mesh.shared.primitives.set_bed", fake_set_bed)
 
 
 def test_a_primitive_after_the_build_runs_over_the_mesh_that_came_back(
@@ -362,7 +362,7 @@ def test_a_primitive_after_the_build_runs_over_the_mesh_that_came_back(
 
 
 def _driver():
-    from trid3nt_server.tools.mesh.meshers import flopy_build
+    from trid3nt.tools.mesh.meshers import flopy_build
 
     return flopy_build
 
@@ -627,8 +627,8 @@ def test_every_flopy_mesher_answers_to_the_one_refine_word():
 
 
 def test_a_drawn_refine_region_is_a_recipe_entry_these_meshers_accept():
-    from trid3nt_server.inputs.gate.spatial_roles import parse_drawn_roles
-    from trid3nt_server.tools.mesh.op_tool import drawn_ops
+    from trid3nt_harness.inputs.gate.spatial_roles import parse_drawn_roles
+    from trid3nt.tools.mesh.op_tool import drawn_ops
 
     drawn = parse_drawn_roles({"type": "FeatureCollection", "features": [{
         "type": "Feature", "geometry": _DOMAIN,

@@ -6,8 +6,8 @@ import pytest
 
 pytest.importorskip("rasterio")
 
-from trid3nt_server.tools.fetchers import _tile_mosaic
-from trid3nt_server.tools.fetchers._fetch_common import PixelBudgetExceededError
+from trid3nt.tools.fetchers import _tile_mosaic
+from trid3nt.tools.fetchers._fetch_common import PixelBudgetExceededError
 
 _BBOX = (-124.3, 47.0, -124.1, 47.2)
 

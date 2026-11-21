@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import json
 
-from trid3nt_server.workflows.telemac.modules.module import module_input_dir
-from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+from trid3nt.workflows.telemac.modules.module import module_input_dir
+from trid3nt.workflows.telemac.templates.dye_release.dye_release import (
     INPUTS,
     telemac_dye_release,
 )

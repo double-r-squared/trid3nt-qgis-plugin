@@ -1,0 +1,1117 @@
+"""A module's outputs: the read of each primitive off a solved TELEMAC run.
+
+Primitives are named from the module's variable vocabulary (``field``, ``series``, ``max_over_time``, ``profile``,
+``extent``, ``mesh``, ``mass_balance``, ``drogues``, ``column``); the result file is opened by the daemon's SELAFIN reader.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from functools import cached_property
+from pathlib import Path
+from typing import Any, Mapping
+
+from trid3nt.workflows.runtime import DeclarativeError
+from trid3nt.workflows.runtime.primitives import (
+    Field,
+    Frames,
+    Line,
+    OutputEmpty,
+    Primitive,
+    Profile,
+    Read,
+    Series,
+    Spectrum,
+    Track,
+    _drawn,
+)
+from trid3nt.inputs.observation import Observation
+from trid3nt.workflows.telemac.authoring.selafin_io import (
+    SelafinReadError,
+    keep_whole_frames,
+    read_selafin,
+)
+
+logger = logging.getLogger("trid3nt.workflows.telemac.modules.outputs")
+
+__all__ = [
+    "PRIMITIVES",
+    "reading",
+    "solved_run",
+    "SelafinReadError",
+    "SolveNonFinite",
+    "Solved",
+    "mesh_area_m2",
+    "wetted_fraction",
+    "column",
+    "drogues",
+    "read_selafin",
+    "reference_line",
+    "read_spectrum",
+    "spectrum",
+]
+
+# A declared edge is a fraction of the variable's own range, never an absolute concentration (a trace substance at half a microgram per litre would be refused as empty). The module's table says which rows have one.
+EDGE_FRACTION = 0.05
+# The engine spells a unit in capitals after the name; these are the SI spellings for those not plain lower-case.
+_UNITS = {"MG/L": "mg/L", "G/L": "g/L", "MGO2/L": "mgO2/L", "DEGC": "degC"}
+
+
+
+class SolveNonFinite(DeclarativeError):
+    """A written variable stopped being a number: the solve failed. Not an empty output - the run fails by the variable's name."""
+
+    error_code = "TELEMAC_SOLVE_NON_FINITE"
+
+
+
+def drogues() -> Primitive:
+    """The particle track the module wrote, as the positions at written instants."""
+    return Primitive("drogues")
+
+
+def column(name: str, at: Any = None, t: Any = -1) -> Primitive:
+    """A 3D variable down the planes at a Point, or at the deepest node, at an instant."""
+    return Primitive("column", variable=name, at=at, t=t)
+
+
+def spectrum(at: Any = None, t: Any = -1) -> Primitive:
+    """The directional spectrum a printout point recorded, at an instant.
+
+    ``at`` is the Point the nearest printout point answers for; unplaced, the first the deck named.
+    """
+    return Primitive("spectrum", at=at, t=t)
+
+
+def reference_line(value: Any, *, label: str) -> Any:
+    """The standard a chart's own variable is read against, as one flat line.
+
+    ``value`` is a number or a param name; a run that never supplied it draws nothing.
+    """
+
+    def lines(read: Read, reads: Mapping[Any, Any],
+              params: Mapping[str, Any]) -> list[Line]:
+        held = params.get(value) if isinstance(value, str) else value
+        if held is None:
+            return []
+        axis = read.distance_m if isinstance(read, Profile) else read.times
+        named = " ".join(p for p in (f"{float(held):g}", read.units, label) if p)
+        return [Line(label=named, x=[float(axis[0]), float(axis[-1])],
+                     values=[float(held), float(held)])]
+
+    return lines
+
+
+def reading(module: str, file: str = "") -> str:
+    """The key a solved result is held under: the module's name, and the keyword of the companion file it is read from when it is not the module's own."""
+    return f"{module}@{file}" if file else module
+
+
+def solved_run(run: Mapping[str, Any], key: str) -> "Solved":
+    """The solved result a ``reading`` key names."""
+    from . import wrapper_for
+
+    module, _, file = key.partition("@")
+    return Solved(run, wrapper_for(module), file)
+
+
+class Solved:
+    """One solved run's files, each opened once: the module's result, the listing.
+
+    ``run`` is the handle the solve step returned; ``body`` names the module.
+    """
+
+    def __init__(self, run: Mapping[str, Any], body: Any, file: str = "") -> None:
+        self.run = run
+        self.body = body
+        self.run_id = str(run["run_id"])
+        self.utm_epsg = int(run["utm_epsg"])
+        # ``file`` is the keyword whose named file is read instead of the module's own result.
+        self.companion = file
+        self.result_file = (self._named(file) if file else
+                            str(getattr(body, "RESULT_FILE", "") or run["result_basename"]))
+        # A 3D result is no mesh format: the module writes the 2D result beside it, which is the mesh its planes are read onto.
+        self.display_file = str(run.get("display_basename") or self.result_file)
+        self._beside: dict[str, dict[str, Any]] = {}
+
+    def _named(self, keyword: str) -> str:
+        """The file this run's deck named under ``keyword``."""
+        filled = (self.run.get("sheet") or {}).get("filled") or {}
+        basename = str((filled.get(keyword) or {}).get("value") or "")
+        if not basename:
+            raise OutputEmpty(
+                f"this run's deck names no {self.body.slot(keyword).keyword}, so "
+                "the run wrote no such file and there is nothing to read.")
+        return basename
+
+    @cached_property
+    def result(self) -> dict[str, Any]:
+        from trid3nt.workflows.solver.solver import download_result
+
+        local = download_result(self.run_id, self.result_file)
+        try:
+            if self.run.get("stopped"):
+                keep_whole_frames(local)
+            return read_selafin(local)
+        finally:
+            Path(local).unlink(missing_ok=True)
+
+    @cached_property
+    def listing(self) -> str:
+        from trid3nt.workflows.solver.solver import download_result
+
+        local = download_result(self.run_id, "full_listing.log")
+        try:
+            return Path(local).read_text(errors="replace")
+        finally:
+            Path(local).unlink(missing_ok=True)
+
+    @cached_property
+    def xy(self) -> tuple[Any, Any]:
+        """The node coordinates of the 2D mesh every read is taken over.
+
+        A 3D result stores NPLAN copies of the 2D coordinates while reads hold one plane, so the first NPOIN2 are the nodes.
+        """
+        import numpy as np
+
+        nodes = int(self.result["npoin2"])
+        return (np.asarray(self.result["x"])[:nodes],
+                np.asarray(self.result["y"])[:nodes])
+
+    @cached_property
+    def lonlat(self) -> tuple[Any, Any]:
+        import numpy as np
+        from pyproj import Transformer
+
+        x, y = self.xy
+        back = Transformer.from_crs(self.utm_epsg, 4326, always_xy=True)
+        lon, lat = back.transform(x, y)
+        return np.asarray(lon), np.asarray(lat)
+
+    @property
+    def display_mesh(self) -> tuple[int, int]:
+        """``(nodes, cells)`` of the 2D mesh a derived dataset group is bound to."""
+        return int(self.result["npoin2"]), int(self.result["nelem2"])
+
+    @cached_property
+    def bbox(self) -> tuple[float, float, float, float]:
+        """The lon/lat box the solved mesh spans - where the camera flies."""
+        lon, lat = self.lonlat
+        return (float(lon.min()), float(lat.min()),
+                float(lon.max()), float(lat.max()))
+
+    def variable(self, token: str) -> tuple[str, str]:
+        """``(result variable, units)`` for a token of the module's vocabulary.
+
+        ``T<n>`` is the n-th declared tracer name; the rest read off the table.
+        """
+        upper = str(token).strip().upper()
+        if upper.startswith("T") and upper[1:].isdigit():
+            names = list(self.run.get("tracer_names") or ())
+            index = int(upper[1:]) - 1
+            if index >= len(names):
+                return self._appended_tracer(token, names, index)
+            padded = str(names[index]).ljust(32)
+            wanted, unit = padded[:16].strip(), padded[16:].strip()
+        else:
+            # What this run wrote is its own published table: a row allocated under a switch (ice cover, salinity, frazil class) exists only where the deck opened it.
+            published = self.output_row(upper)
+            table = getattr(self.body, "MODULE_OUTPUT", {})
+            if published.get("name"):
+                wanted, unit = str(published["name"]), str(published.get("unit") or "")
+            elif upper in table:
+                wanted, unit = table[upper].name, table[upper].unit
+            else:
+                # A variable no row names is still written, read under the spelling its result file carries; the file is the list.
+                spelled = self.carried(upper)
+                if spelled is None:
+                    raise OutputEmpty(
+                        f"{token!r} is not a variable {self.body.MODULE} writes "
+                        f"({', '.join(table)}).")
+                wanted, unit = spelled
+        for name in self.result["varnames"]:
+            if name.strip().upper() == wanted.upper():
+                return name, _UNITS.get(unit.upper(), unit.lower())
+        raise OutputEmpty(
+            f"{token} ({wanted}) is not among the variables the result carries "
+            f"({self.result['varnames']}).")
+
+    def carried(self, spelling: str) -> tuple[str, str] | None:
+        """``(variable, unit)`` for a spelling the result file itself carries.
+
+        The unit is the record's own: an unrowed variable has no declared unit.
+        """
+        units = list(self.result.get("varunits") or ())
+        for index, name in enumerate(self.result["varnames"]):
+            if name.strip().upper() == str(spelling).strip().upper():
+                return name, (units[index] if index < len(units) else "")
+        return None
+
+    def output_row(self, token: str) -> Mapping[str, Any]:
+        """This run's own table row for a token - its style and its edge.
+
+        A read is deduplicated by a primitive stripped of publishing, so legend and mask read the one declaration.
+        """
+        upper = str(token).strip().upper()
+        module = str(self.body.MODULE).upper()
+        for row in self.run.get("module_output") or ():
+            if (str(row.get("token")).strip().upper() == upper
+                    and str(row.get("module")).upper() == module):
+                return row
+        return {}
+
+    def style(self, token: str) -> Any:
+        """The style row this run draws a token under."""
+        return self.output_row(token).get("style")
+
+    def has_edge(self, token: str) -> bool:
+        """Does this token's row declare a visible edge?
+
+        A quantity concentrated somewhere has one; a variable the water carries everywhere does not.
+        """
+        return bool(self.output_row(token).get("has_edge"))
+
+    def injected(self, token: str) -> bool:
+        """Did the deck put this token's quantity into the domain?
+
+        What the deck put in and the run lost is a broken run; a variable the engine grows is honestly zero where nothing happened.
+        """
+        return bool(self.output_row(token).get("injected"))
+
+    @cached_property
+    def host_result(self) -> dict[str, Any]:
+        """The run's own result - where the water depth is.
+
+        A coupled module writes no depth, so its variables are masked by the host's, by node.
+        """
+        from trid3nt.workflows.solver.solver import download_result
+
+        basename = str(self.run.get("result_basename") or self.result_file)
+        if basename == self.result_file or self.companion:
+            return self.result
+        local = download_result(self.run_id, basename)
+        try:
+            return read_selafin(local)
+        finally:
+            Path(local).unlink(missing_ok=True)
+
+    def beside(self, keyword: str) -> dict[str, Any]:
+        """Another result this deck named, read off the file it named it in.
+
+        A module may write several (TOMAWAC's spectra beside its wave field), each kept under the deck's own name.
+        """
+        from trid3nt.workflows.solver.solver import download_result
+
+        basename = self._named(keyword)
+        if basename not in self._beside:
+            local = download_result(self.run_id, basename)
+            try:
+                # Every file a module writes beside its result is a spectrum, over quadrangles.
+                self._beside[basename] = read_selafin(local, quadrangles=True)
+            finally:
+                Path(local).unlink(missing_ok=True)
+        return self._beside[basename]
+
+    @cached_property
+    def wet(self) -> Any:
+        """Which nodes held water at each written instant, or ``None``.
+
+        The same WATER DEPTH above the wet tolerance the renderer draws, so measure and picture agree. With no depth row
+        there is no mask and every node is read.
+        """
+        import numpy as np
+
+        host = self.host_result
+        picked = next((v for v in host["varnames"]
+                       if v.strip().upper().startswith("WATER DEPTH")), None)
+        if picked is None:
+            return None
+        depth = np.asarray(host["data"][picked], dtype="float64")
+        if depth.size == 0:
+            return None
+        npoin2, nplan = int(host["npoin2"]), int(host.get("nplan", 1))
+        if nplan > 1:
+            depth = depth.reshape(depth.shape[0], nplan, npoin2)[:, -1, :]
+        return depth > _WET_TOL_M
+
+    def varies(self, token: str) -> bool:
+        """Does this token's row vary in time?
+
+        One that does not is a property of the domain (the bed), defined without water, so no wet mask applies.
+        """
+        row = self.output_row(token)
+        return bool(row.get("varies", True)) if row else True
+
+    def mask_for(self, token: str, values: Any) -> Any:
+        """The mask a token's measures and legend are read under, or ``None``.
+
+        The wet nodes less every node the engine wrote non-finite; ``None`` where the run has no depth to mask by or the row is the domain's own.
+        """
+        import numpy as np
+
+        finite = np.isfinite(values)
+        wet = None if not self.varies(token) else self.wet_like(values)
+        if wet is None:
+            return None if bool(finite.all()) else finite
+        return wet & finite
+
+    def wet_like(self, values: Any) -> Any:
+        """The wet mask shaped to ``values`` - one flag per value - or ``None``.
+
+        A coupled module on its own cadence borrows the mask by node: wet at any host instant.
+        """
+        import numpy as np
+
+        mask = self.wet
+        if mask is None:
+            return None
+        frames, nodes = mask.shape
+        want_frames, want_nodes = int(values.shape[0]), int(values.shape[1])
+        if want_nodes > nodes:
+            return None
+        if want_nodes < nodes:
+            mask = mask[:, :want_nodes]
+        if frames == want_frames:
+            return mask
+        return np.broadcast_to(mask.any(axis=0), (want_frames, want_nodes))
+
+    def _appended_tracer(self, token: str, names: list[Any], index: int
+                         ) -> tuple[str, str]:
+        """A tracer a coupled module appended behind the carrier's declared ones.
+
+        The n-th sits n-1 past the first declared name; with no declared tracer, appended ones begin where the host's table ends.
+        """
+        varnames = list(self.result["varnames"])
+        units = list(self.result.get("varunits") or [""] * len(varnames))
+        if names:
+            first = str(names[0]).ljust(32)[:16].strip().upper()
+            start = next((i for i, name in enumerate(varnames)
+                          if name.strip().upper() == first), None)
+        else:
+            own = {row.name.strip().upper()
+                   for row in self.body.MODULE_OUTPUT.values()}
+            start = next((i for i, name in enumerate(varnames)
+                          if name.strip().upper() not in own), None)
+        position = None if start is None else start + index
+        if position is None or position >= len(varnames):
+            raise OutputEmpty(
+                f"{token} names tracer {index + 1}; this run declares {len(names)} "
+                f"and the result carries {varnames}.")
+        unit = units[position] if position < len(units) else ""
+        return varnames[position], _UNITS.get(unit.upper(), unit.lower())
+
+    def frames(self, token: str, plane: int | None) -> tuple[str, str, Any]:
+        """``(variable, units, values(nframes, npoin2))`` for a token, one plane.
+
+        A token the module defines over the result's variables is read through its definition.
+        """
+        import numpy as np
+
+        derived = self.body.DERIVED.get(str(token).strip().upper())
+        if derived is not None:
+            return derived(self)
+        name, units = self.variable(token)
+        values = np.asarray(self.result["data"][name], dtype="float64")
+        nplan = int(self.result.get("nplan", 1))
+        if nplan > 1:
+            npoin2 = int(self.result["npoin2"])
+            values = values.reshape(values.shape[0], nplan, npoin2)[
+                :, nplan - 1 if plane is None else int(plane), :]
+        if values.size == 0:
+            raise OutputEmpty(f"{token} carries no time steps in {self.result_file}.")
+        if not np.isfinite(values).any():
+            raise OutputEmpty(
+                f"not one value {self.result_file} carries for {name.strip()!r} "
+                "is a number: the engine allocated it and never wrote it.")
+        return name, units, values
+
+    def plane_label(self, plane: int | None) -> str | None:
+        """What a plane of this result is called, bottom first; ``None`` on 2D."""
+        nplan = int(self.result.get("nplan", 1))
+        if nplan < 2:
+            return None
+        index = nplan - 1 if plane is None else int(plane)
+        return ("bottom plane" if index == 0 else "surface plane"
+                if index == nplan - 1 else f"plane {index + 1} of {nplan}")
+
+    def node_at(self, at: Any) -> int:
+        """The 2D node nearest ``at``, a Point in any of the shapes it arrives in."""
+        import numpy as np
+
+        from trid3nt.inputs.point import as_utm
+
+        px, py = as_utm(_point(at), self.utm_epsg)
+        x, y = self.xy
+        return int(np.argmin(np.hypot(x - px, y - py)))
+
+
+def _edge(has_edge: bool, peak: float) -> float | None:
+    """The visible edge of a variable whose row declares one: a fraction of the magnitude that row reads."""
+    return EDGE_FRACTION * peak if has_edge else None
+
+
+
+def _floor(has_edge: bool, values: Any, row: Any = None,
+           wet: Any = None) -> float | None:
+    """Where a variable stops being drawn: its declared edge, if it has one. A variable everywhere above its edge (temperature, salinity) is drawn and ranged whole."""
+    import numpy as np
+
+    from trid3nt.render import presets
+
+    drawn = _drawn(values, wet)
+    edge = _edge(has_edge, presets.declared_peak(drawn, row))
+    finite = np.asarray(drawn)[np.isfinite(drawn)]
+    return (edge if edge is not None and finite.size
+            and float(finite.min()) < edge else None)
+
+
+def _per_frame(values: Any, wet: Any) -> tuple[Any, Any, Any]:
+    """Each frame's extremes over the wet nodes, and which frames held any.
+
+    A frame with no wet node reads nothing rather than zero.
+    """
+    import numpy as np
+
+    if wet is None:
+        return (values.max(axis=1), values.min(axis=1),
+                np.ones(values.shape[0], dtype=bool))
+    live = np.asarray(wet).any(axis=1)
+    highs = np.full(values.shape[0], np.nan)
+    lows = np.full(values.shape[0], np.nan)
+    if live.any():
+        highs[live] = np.where(wet[live], values[live], -np.inf).max(axis=1)
+        lows[live] = np.where(wet[live], values[live], np.inf).min(axis=1)
+    return highs, lows, live
+
+
+def _envelope(token: str, times: Any, values: Any, row: Any = None,
+              has_edge: bool = False, wet: Any = None,
+              injected: bool = False) -> dict[str, Any]:
+    """The measures of a series over time: peak and trough with their instants, the final value, the swing, the frame count, all over wet nodes."""
+    import numpy as np
+
+    from trid3nt.render import presets
+
+    highs, lows, live = _per_frame(values, wet)
+    if not live.any():
+        raise OutputEmpty(
+            f"{token} was never read on a node this run held water at: every "
+            "frame is dry, so there is nothing for a measure to be about.")
+    index = np.flatnonzero(live)
+    peak_i = int(index[int(np.argmax(highs[live]))])
+    peak = float(highs[peak_i])
+    # A peak on the last instant is where the window closed: the run was still rising, so it is a floor.
+    low_i = int(index[int(np.argmin(lows[live]))])
+    last_i = int(index[-1])
+    measures: dict[str, Any] = {"max": peak, "t_max": float(times[peak_i]),
+                                "min": float(lows[low_i]),
+                                "t_min": float(times[low_i]),
+                                "last": float(highs[last_i]),
+                                "range": peak - float(lows[low_i]),
+                                "frames": int(live.sum()),
+                                "truncated": bool(times.size > 1
+                                                  and peak_i == times.size - 1)}
+    # The edge is a fraction of the magnitude the row declares, the statistic the legend's top reads; a record maximum a drying node carries would mask the whole field.
+    edge = _edge(has_edge, presets.declared_peak(_drawn(values, wet), row))
+    # The honesty floor is about shape and what the deck put in: an injected quantity the run lost has no region to draw (a broken run), while a grown one (ice cover, bed evolution) is zero because nothing happened.
+    if injected and not peak > 0.0:
+        raise OutputEmpty(
+            f"{token} is zero at every node this run held water on, so it is "
+            "withheld as empty: the run injected nothing there is a shape of.")
+    if edge is not None:
+        measures["active_frames"] = int((highs[live] > edge).sum())
+    return measures
+
+
+def _travel_m(x: Any, y: Any, values: Any, floor: float | None) -> float | None:
+    """How far the field's centroid moved from where it first appeared, in metres.
+
+    Over the nodes it is visible at: above its declared edge, else everywhere the run held water.
+    """
+    import numpy as np
+
+    track = []
+    for frame in values:
+        above = np.isfinite(frame) if floor is None else frame > floor
+        if above.any() and frame[above].sum() > 0:
+            weight = frame[above]
+            track.append(((x[above] * weight).sum() / weight.sum(),
+                          (y[above] * weight).sum() / weight.sum()))
+    if len(track) < 2:
+        return None
+    x0, y0 = track[0]
+    return round(max(float(np.hypot(cx - x0, cy - y0)) for cx, cy in track), 1)
+
+
+def read_field(primitive: Primitive, solved: Solved) -> Read:
+    """``field(name, t)``: one instant as a Field, or every instant as Frames."""
+    import numpy as np
+
+    name, units, values = solved.frames(primitive.variable, primitive.plane)
+    times = np.asarray(solved.result["times"], dtype="float64")
+    row, edge = solved.style(primitive.variable), solved.has_edge(primitive.variable)
+    wet = solved.mask_for(primitive.variable, values)
+    measures = _envelope(primitive.variable, times, values, row, edge, wet,
+                         injected=solved.injected(primitive.variable))
+    if primitive.t == "every":
+        floor = _floor(edge, values, row, wet)
+        x, y = solved.xy
+        measures["travel_m"] = _travel_m(x, y, _drawn(values, wet), floor)
+        # A temporal layer's values are what its legend is measured over, and the layer paints the result file's own group: a never-wet node moves neither range nor picture.
+        return Frames(name=name, units=units, values=_drawn(values, wet),
+                      file=solved.result_file,
+                      group=name.strip(), epsg=solved.utm_epsg,
+                      reference_time=solved.run.get("reference_time"),
+                      frames=int(times.size), floor=floor, measures=measures)
+    # An int is a frame index from the file's first frame; a float is an instant in seconds at the nearest written frame. Measures are the frame's own; the envelope only sets the edge.
+    index = (int(primitive.t) if isinstance(primitive.t, int)
+             else int(np.argmin(np.abs(times - float(primitive.t)))))
+    frame = values[index]
+    held = (np.ones(frame.size, dtype=bool) if wet is None
+            else np.asarray(wet)[index])
+    inside = frame[held]
+    if not inside.size:
+        raise OutputEmpty(
+            f"{primitive.variable} has no node this run held water at, at "
+            f"t = {times[index]:g} s.")
+    return Field(name=name, units=units, values=frame, wet=held,
+                 t=float(times[index]), plane=solved.plane_label(primitive.plane),
+                 floor=_floor(edge, values, row, wet),
+                 measures={"max": float(inside.max()), "min": float(inside.min()),
+                           "mean": float(inside.mean()),
+                           "spread": float(inside.max() - inside.min()),
+                           "nodes": int(inside.size),
+                           "t": float(times[index]), "frames": int(times.size)})
+
+
+def _point(at: Any) -> Any:
+    from trid3nt.inputs import Point
+
+    if isinstance(at, Point):
+        return at
+    if isinstance(at, Observation):
+        # A data input's site, or a number that stands nowhere: the miss is the
+        # reader's to say, so an unmatched read composes nothing instead of refusing.
+        if at.lon is None or at.lat is None:
+            raise OutputEmpty(
+                f"the {at.site_id or at.site_name or 'reading'} was stated as a "
+                "number, which stands at no site, so there is no site to read it at.")
+        return Point(at.lon, at.lat, at.site_name or at.site_id)
+    if isinstance(at, Mapping):
+        return Point(float(at["lon"]), float(at["lat"]), at.get("name"))
+    return Point(*at)
+
+
+def read_series(primitive: Primitive, solved: Solved) -> Series:
+    """``series(name, at)``: the domain maximum per instant, or a Point's value.
+
+    At a data input's site the read takes the site's own coordinates, lands on the node
+    the result file reads it at, and with no site or a site off the mesh composes nothing.
+    A token the module prints rather than writes is read off the listing, at the liquid boundary the Point lies on.
+    """
+    import numpy as np
+
+    if primitive.variable in solved.body.LISTING:
+        return _boundary_series(primitive, solved)
+    name, units, values = solved.frames(primitive.variable, primitive.plane)
+    times = np.asarray(solved.result["times"], dtype="float64")
+    row, edge = solved.style(primitive.variable), solved.has_edge(primitive.variable)
+    wet = solved.mask_for(primitive.variable, values)
+    if primitive.at is None:
+        highs, _lows, _live = _per_frame(values, wet)
+        return Series(name=name, units=units, times=times, values=highs,
+                      at="the domain maximum",
+                      measures=_envelope(
+                          primitive.variable, times, values, row, edge, wet,
+                          injected=solved.injected(primitive.variable)))
+    point = _point(primitive.at)
+    lon, lat = solved.lonlat
+    held = None
+    if isinstance(primitive.at, Observation):
+        from trid3nt.inputs.point import as_utm, containing_face
+
+        x, y = solved.xy
+        face, away = containing_face(as_utm(point, solved.utm_epsg),
+                                     x=x, y=y, faces=solved.result["ikle2"])
+        if face is None:
+            raise OutputEmpty(
+                f"the site {primitive.at.site_id or point.name or ''} is outside "
+                f"the mesh, {away:.0f} m from its nearest face.")
+    node = solved.node_at(point)
+    column = values[:, node:node + 1]
+    if wet is not None and not isinstance(primitive.at, Observation):
+        # A site's series is what the record measured there, water or not; a stated
+        # point's line and numbers share the wet mask, so a gap is a gap in both.
+        held = np.asarray(wet)[:, node:node + 1]
+    return Series(name=name, units=units, times=times,
+                  values=_drawn(column, held)[:, 0],
+                  at=f"at {point.name or 'the point'}",
+                  lon=float(lon[node]), lat=float(lat[node]),
+                  measures=_envelope(primitive.variable, times, column, row,
+                                     edge, held,
+                                     injected=solved.injected(primitive.variable)))
+
+
+def _boundary_series(primitive: Primitive, solved: Solved) -> Series:
+    """A printed token at a Point: the listing's series for the nearest liquid boundary.
+
+    The measures carry the volume that crossed it over the sampled instants.
+    """
+    import numpy as np
+    from pyproj import Transformer
+
+    from .listing import boundary_flux
+    from trid3nt.inputs.point import as_utm
+
+    if primitive.at is None:
+        raise OutputEmpty(f"{primitive.variable} is read at a liquid boundary; "
+                          "series() needs the Point it is read at.")
+    boundaries = list(solved.run.get("liquid_boundaries") or ())
+    if not boundaries:
+        raise OutputEmpty("the run records no liquid boundary, so there is none "
+                          f"to read {primitive.variable} across.")
+    point = _point(primitive.at)
+    px, py = as_utm(point, solved.utm_epsg)
+    nearest = min(boundaries,
+                  key=lambda b: float(np.hypot(float(b["x"]) - px,
+                                               float(b["y"]) - py)))
+    times, flows = boundary_flux(solved.listing, boundary=int(nearest["number"]))
+    if not times:
+        raise OutputEmpty(f"the listing prints no flux for liquid boundary "
+                          f"{nearest['number']}.")
+    times_arr = np.asarray(times, dtype="float64")
+    flows_arr = np.asarray(flows, dtype="float64")
+    # A printed flux is measured across a boundary, not at a node, so no node mask applies.
+    measures = _envelope(primitive.variable, times_arr, flows_arr[:, None],
+                         solved.style(primitive.variable),
+                         solved.has_edge(primitive.variable))
+    measures["integral"] = round(float(np.trapezoid(flows_arr, times_arr)), 3)
+    row = solved.body.MODULE_OUTPUT[primitive.variable]
+    name, unit = row.name, row.unit
+    lon, lat = Transformer.from_crs(solved.utm_epsg, 4326, always_xy=True).transform(
+        float(nearest["x"]), float(nearest["y"]))
+    return Series(name=name, units=_UNITS.get(unit.upper(), unit.lower()),
+                  times=times_arr, values=flows_arr,
+                  at=f"at {point.name or 'liquid boundary ' + str(nearest['number'])}",
+                  lon=float(lon), lat=float(lat), measures=measures)
+
+
+# How a punctual file names a printout point's variable: the spectrum's number, then the 1-based 2D mesh node the engine snapped the coordinate onto.
+_PRINTOUT_POINT = re.compile(r"PT2D0*(\d+)")
+
+
+def read_spectrum(primitive: Primitive, solved: Solved) -> Spectrum:
+    """``spectrum(at)``: the directional spectrum one printout point recorded.
+
+    The punctual file's mesh is the polar grid (a node at (f cos theta, f sin theta)) with one variable per printout point; the read integrates over direction.
+    """
+    import numpy as np
+
+    spectra = solved.beside(solved.body.RESULT_FILES[0])
+    name, node = _printout_point(primitive, solved, spectra)
+    times = np.asarray(spectra["times"], dtype="float64")
+    index = (int(primitive.t) if isinstance(primitive.t, int)
+             else int(np.argmin(np.abs(times - float(primitive.t)))))
+    x = np.asarray(spectra["x"], dtype="float64")
+    y = np.asarray(spectra["y"], dtype="float64")
+    frequency, rows = _rings(np.hypot(x, y), 5)
+    direction, columns = _rings(
+        np.round(np.degrees(np.arctan2(y, x)), 4) % 360.0, 4)
+    flat = np.asarray(spectra["data"][name], dtype="float64")[index]
+    if frequency.size * direction.size != flat.size:
+        raise OutputEmpty(
+            f"{name} is written over {flat.size} nodes, and the file's own mesh "
+            f"reads as {frequency.size} frequencies by {direction.size} "
+            "directions: this is not a polar spectral grid.")
+    density = np.zeros((frequency.size, direction.size))
+    density[rows, columns] = flat
+    # The energy against frequency: the spectrum summed over the grid's equal angular sectors.
+    energy = density.sum(axis=1) * (2.0 * np.pi / direction.size)
+    variance = float(np.trapezoid(energy, frequency))
+    peak = int(np.argmax(energy)) if energy.size else 0
+    at = (primitive.at.name if getattr(primitive.at, "name", None)
+          else f"2D node {node + 1}")
+    return Spectrum(
+        units="m2/Hz", frequency_hz=frequency, values=energy,
+        directions_deg=direction, density=density, at=f"at {at}",
+        measures={"hm0_m": 4.0 * float(np.sqrt(max(variance, 0.0))),
+                  "variance_m2": variance,
+                  "peak_frequency_hz": float(frequency[peak]),
+                  "peak_period_s": (float(1.0 / frequency[peak])
+                                    if frequency[peak] else None),
+                  "peak_direction_deg": float(
+                      direction[int(np.argmax(density)) % direction.size]),
+                  "t": float(times[index]), "frames": int(times.size)})
+
+
+def _rings(values: Any, decimals: int) -> tuple[Any, Any]:
+    """The distinct values of one polar axis, and the ring each node is on.
+
+    The grid is single precision, so a ring's nodes agree only to rounding; the ring's mean is reported.
+    """
+    import numpy as np
+
+    index = np.searchsorted(np.unique(np.round(values, decimals)),
+                            np.round(values, decimals))
+    return (np.bincount(index, weights=values) / np.bincount(index), index)
+
+
+def _printout_point(primitive: Primitive, solved: Solved,
+                    spectra: Mapping[str, Any]) -> tuple[str, int]:
+    """The variable this read is taken from, and the 2D node it stands on.
+
+    A printout point is named for the node the engine snapped to, so the nearest named one answers; an unplaced read takes the first.
+    """
+    import numpy as np
+
+    lon, lat = solved.lonlat
+    found = [(name, int(match.group(1)) - 1)
+             for name, match in ((n, _PRINTOUT_POINT.search(n.strip().upper()))
+                                 for n in spectra["varnames"])
+             if match is not None and 0 <= int(match.group(1)) - 1 < lon.size]
+    if not found:
+        raise OutputEmpty(
+            "the spectra file carries no printout point over a node of the mesh "
+            f"this run solved on (it carries {spectra['varnames']}).")
+    if primitive.at is None:
+        return found[0]
+    node = solved.node_at(_point(primitive.at))
+    return min(found, key=lambda row: float(np.hypot(lon[row[1]] - lon[node],
+                                                     lat[row[1]] - lat[node])))
+
+
+def read_max_over_time(primitive: Primitive, solved: Solved) -> Field:
+    """``max_over_time(name)``: the maximum every node reached, and when."""
+    import numpy as np
+
+    name, units, values = solved.frames(primitive.variable, primitive.plane)
+    times = np.asarray(solved.result["times"], dtype="float64")
+    row, edge = solved.style(primitive.variable), solved.has_edge(primitive.variable)
+    wet = solved.mask_for(primitive.variable, values)
+    measures = _envelope(primitive.variable, times, values, row, edge, wet,
+                         injected=solved.injected(primitive.variable))
+    # The envelope is over the instants each node held water; a peak taken from dry frames reads nothing.
+    drawn = _drawn(values, wet)
+    envelope = np.where(np.isfinite(drawn).any(axis=0),
+                        np.nanmax(np.where(np.isfinite(drawn), drawn, -np.inf),
+                                  axis=0), np.nan)
+    ever = np.isfinite(envelope)
+    # One pit can set the maximum while the field sits orders of magnitude below it, so the 99th percentile rides beside it.
+    measures["p99"] = float(np.percentile(envelope[ever], 99))
+    return Field(name=name, units=units,
+                 values=np.where(ever, envelope, 0.0), wet=ever,
+                 plane=solved.plane_label(primitive.plane),
+                 floor=_floor(edge, values, row, wet),
+                 measures=measures)
+
+
+# The depth an element must hold to count as wet: TELEMAC's tidal-flat treatment leaves thinner films on a drying bar, and counting them as conveyance would make the heuristic agree with the domain by construction.
+_WET_TOL_M = 0.02
+
+
+def mesh_area_m2(mesh: Mapping[str, Any]) -> float:
+    """The area the elements of a read result cover, in the mesh's own metres."""
+    import numpy as np
+
+    ikle = np.asarray(mesh["ikle"], dtype=int)
+    x, y = np.asarray(mesh["x"]), np.asarray(mesh["y"])
+    if ikle.size == 0:
+        return 0.0
+    a, b, c = ikle[:, 0], ikle[:, 1], ikle[:, 2]
+    return float((0.5 * np.abs((x[b] - x[a]) * (y[c] - y[a])
+                               - (x[c] - x[a]) * (y[b] - y[a]))).sum())
+
+
+def wetted_fraction(mesh: Mapping[str, Any], *, wet_tol_m: float = _WET_TOL_M
+                    ) -> dict[str, Any]:
+    """How much of the solved domain held water at the final frame - by element, a heuristic; ``mesh`` is the record the postprocess already read."""
+    # The reach domain is the mapped active channel, which at bankfull includes bars a low flow leaves dry; TELEMAC wets and dries them natively, so conveyance width is narrower than the mesh and nothing in the result says so.
+    import numpy as np
+
+    # SELAFIN pads a variable name to 32 chars with its unit trailing ('WATER DEPTH     M'), so an exact-key lookup never matches.
+    picked = next((v for v in mesh["varnames"]
+                   if v.strip().upper().startswith("WATER DEPTH")), None)
+    depth = mesh["data"].get(picked) if picked is not None else None
+    ikle = np.asarray(mesh["ikle"], dtype=int)
+    if depth is None or np.asarray(depth).size == 0 or ikle.size == 0:
+        return {}
+    x, y = np.asarray(mesh["x"]), np.asarray(mesh["y"])
+    a, b, c = ikle[:, 0], ikle[:, 1], ikle[:, 2]
+    area = 0.5 * np.abs((x[b] - x[a]) * (y[c] - y[a])
+                        - (x[c] - x[a]) * (y[b] - y[a]))
+    final = np.asarray(depth)[-1]
+    wet = area[final[ikle].mean(axis=1) > float(wet_tol_m)]
+    total = mesh_area_m2(mesh)
+    if total <= 0.0:
+        return {}
+    return {"mesh_area_m2": total, "wet_area_m2": float(wet.sum()),
+            "wetted_fraction": round(float(wet.sum()) / total, 4),
+            "wet_tol_m": float(wet_tol_m)}
+
+
+def read_extent(primitive: Primitive, solved: Solved) -> Read:
+    """``extent()``: the domain's lon/lat bounds, its area, its wetted fraction."""
+    lon, lat = solved.lonlat
+    return Read(measures={
+        "bbox": [float(lon.min()), float(lat.min()), float(lon.max()), float(lat.max())],
+        "area_km2": round(mesh_area_m2(solved.result) / 1.0e6, 4),
+        **wetted_fraction(solved.result)})
+
+
+def read_mesh(primitive: Primitive, solved: Solved) -> Read:
+    """``mesh()``: the mesh the run solved on - its counts and its measured edge."""
+    return Read(measures={
+        "nodes": int(solved.result["npoin2"]),
+        "elements": int(solved.result["nelem2"]),
+        "planes": int(solved.result.get("nplan", 1)),
+        "epsg": solved.utm_epsg,
+        "size_m": solved.run.get("mesh_size_m"),
+        "resolution_label": solved.run.get("mesh_resolution_label")})
+
+
+def read_mass_balance(primitive: Primitive, solved: Solved) -> Read:
+    """``mass_balance()``: the closure the engine printed in its own listing.
+
+    The water balance carries the final block's volumes (outflow-positive) and, where printed, the rainfall volume and fraction left. The sediment balance carries per-class closure and dredge volumes.
+    """
+    from .listing import (
+        continuity_rel_error, final_balance, gaia_mass_balance, nestor_volumes,
+    )
+
+    if solved.body.MODULE == "gaia":
+        # A run that armed no dredge printed none and carries none.
+        return Read(measures={**gaia_mass_balance(solved.listing),
+                              **nestor_volumes(solved.listing)})
+    measures: dict[str, Any] = {
+        "continuity_rel_error": continuity_rel_error(solved.listing)}
+    final = final_balance(solved.listing)
+    if "boundary_volume_m3" in final:
+        final["outflow_volume_m3"] = -final.pop("boundary_volume_m3") + 0.0
+    if "rain_depth_m" in final:
+        final["rain_volume_m3"] = round(
+            final["rain_depth_m"] * mesh_area_m2(solved.result), 3)
+        if final.get("outflow_volume_m3") is not None and final["rain_volume_m3"] > 0.0:
+            final["runoff_coefficient"] = round(
+                final["outflow_volume_m3"] / final["rain_volume_m3"], 6)
+    return Read(measures={**measures, **final})
+
+
+# How many stations a profile is binned into along its line.
+_PROFILE_STATIONS = 60
+
+
+def _chainage(x: Any, y: Any, line: Any) -> tuple[Any, Any, Any]:
+    """Each node's arc length along ``line`` at its nearest segment, that segment's unit direction, and the node's distance off the line."""
+    import numpy as np
+
+    line = np.asarray(line, dtype="float64")
+    ax, ay, bx, by = line[:-1, 0], line[:-1, 1], line[1:, 0], line[1:, 1]
+    dx, dy = bx - ax, by - ay
+    length = np.hypot(dx, dy)
+    cum = np.concatenate([[0.0], np.cumsum(length)])
+    t = np.clip(((x[:, None] - ax) * dx + (y[:, None] - ay) * dy)
+                / np.maximum(length * length, 1e-9), 0.0, 1.0)
+    d2 = (ax + t * dx - x[:, None]) ** 2 + (ay + t * dy - y[:, None]) ** 2
+    k = np.argmin(d2, axis=1)
+    s = cum[k] + t[np.arange(x.size), k] * length[k]
+    unit = np.stack([dx[k], dy[k]], axis=1) / np.maximum(length[k], 1e-9)[:, None]
+    return s, unit, np.sqrt(d2[np.arange(x.size), k])
+
+
+def _stopped_being_a_number(name: str, values: Any, times: Any, index: int,
+                            band: Any) -> None:
+    """Refuse a read whose field carries no number where the line runs.
+
+    Frames are read back to the first non-finite one: the instant the solve failed, with every later frame downstream of a lost number.
+    """
+    import numpy as np
+
+    finite = np.isfinite(np.asarray(values, dtype="float64"))
+    if not np.asarray(band).any() or finite[index][band].any():
+        return
+    first = int(np.argmax(~finite.all(axis=1)))
+    raise SolveNonFinite(
+        f"{name} is not a number along the line at t = {times[index]:g} s; it "
+        f"first went non-finite at t = {times[first]:g} s. The solve failed "
+        "there, so there is no reading to take.")
+
+
+def read_profile(primitive: Primitive, solved: Solved) -> Profile:
+    """``profile(name, along, t, within_m)``: the depth-weighted mean of a variable per station down a line at one instant.
+
+    Nodes within the stated distance (else the whole domain); the line runs the way the flow goes when velocities exist.
+    The measures carry min and max with their stations, the along-line speed and the swing.
+    """
+    import numpy as np
+
+    from trid3nt.tools.mesh.shared.nodes import read_centerline_utm
+
+    name, units, values = solved.frames(primitive.variable, primitive.plane)
+    times = np.asarray(solved.result["times"], dtype="float64")
+    index = (int(primitive.t) if isinstance(primitive.t, int)
+             else int(np.argmin(np.abs(times - float(primitive.t)))))
+    x, y = (np.asarray(v, dtype="float64") for v in solved.xy)
+    line = read_centerline_utm(primitive.along, solved.utm_epsg)
+    s, axis, off = _chainage(x, y, line)
+    weight, along = np.ones(x.size), None
+    if primitive.within is not None:
+        weight = np.where(off <= float(primitive.within), weight, 0.0)
+    # The nodes the line reads, before any water is applied: only these say whether no wet node or a non-number left nothing weighted.
+    band = weight > 0.0
+    # The same wet mask as every other measure, off the host's depth: a drying-bar film is not the water the profile is about.
+    wet = solved.mask_for(primitive.variable, values)
+    if wet is not None and np.asarray(wet).shape[1] == x.size:
+        weight = np.where(np.asarray(wet)[index], weight, 0.0)
+    if all(token in solved.body.MODULE_OUTPUT for token in ("H", "U", "V")):
+        depth = solved.frames("H", primitive.plane)[2][index]
+        weight = weight * np.where(depth > _WET_TOL_M, depth, 0.0)
+        u = solved.frames("U", primitive.plane)[2][index]
+        v = solved.frames("V", primitive.plane)[2][index]
+        along = u * axis[:, 0] + v * axis[:, 1]
+        if float((along * weight).sum()) < 0.0:
+            s, along = s.max() - s, -along
+    if not (weight > 0.0).any():
+        _stopped_being_a_number(name, values, times, index, band)
+        raise OutputEmpty(f"no wet node at t = {times[index]:g} s to read "
+                          f"{primitive.variable} along the line.")
+    edges = np.linspace(0.0, float(s.max()) or 1.0, _PROFILE_STATIONS + 1)
+    station = np.clip(np.digitize(s, edges) - 1, 0, _PROFILE_STATIONS - 1)
+    frame = values[index]
+    distance, means = [], []
+    for b in range(_PROFILE_STATIONS):
+        w = weight[station == b]
+        if w.sum() <= 0.0:
+            continue
+        distance.append(float(0.5 * (edges[b] + edges[b + 1])))
+        means.append(float((frame[station == b] * w).sum() / w.sum()))
+    if len(distance) < 3:
+        raise OutputEmpty(f"{primitive.variable} reaches {len(distance)} wet "
+                          "stations along the line; a profile needs three.")
+    means_arr = np.asarray(means)
+    lo, hi = int(means_arr.argmin()), int(means_arr.argmax())
+    measures: dict[str, Any] = {
+        "min": float(means_arr[lo]), "x_min_m": distance[lo],
+        "max": float(means_arr[hi]), "x_max_m": distance[hi],
+        "range": float(means_arr[hi] - means_arr[lo]),
+        "t": float(times[index]), "stations": len(distance),
+        "velocity_mps": (None if along is None else
+                         float((along * weight).sum() / weight.sum()))}
+    return Profile(name=name, units=units, distance_m=np.asarray(distance),
+                   values=means_arr,
+                   along="downstream distance" if along is not None
+                   else "distance along the line",
+                   measures=measures)
+
+
+def read_column(primitive: Primitive, solved: Solved) -> Profile:
+    """``column(name, at, t)``: a 3D variable down the planes at one node and instant, as depth below the free surface.
+
+    ``at=None`` reads the deepest column. The measures carry top and bottom values, their difference, the depth-weighted mean and the depth.
+    """
+    import numpy as np
+
+    times = np.asarray(solved.result["times"], dtype="float64")
+    index = (int(primitive.t) if isinstance(primitive.t, int)
+             else int(np.argmin(np.abs(times - float(primitive.t)))))
+    nplan, npoin2 = int(solved.result.get("nplan", 1)), int(solved.result["npoin2"])
+    if nplan < 2:
+        raise OutputEmpty(f"{solved.result_file} carries one plane; a column reads "
+                          "the planes of a 3D result.")
+
+    def _planes(token: str) -> Any:
+        name = solved.variable(token)[0]
+        frame = np.asarray(solved.result["data"][name], dtype="float64")[index]
+        return frame.reshape(nplan, npoin2)
+
+    z = _planes("Z")
+    node = (int(np.argmin(z[0])) if primitive.at is None
+            else solved.node_at(primitive.at))
+    name, units = solved.variable(primitive.variable)
+    values = _planes(primitive.variable)[:, node]
+    depth = z[-1, node] - z[:, node]
+    span = float(depth[0])
+    mean = (float(np.trapezoid(values, z[:, node]) / span) if span > 1e-9
+            else float(values.mean()))
+    return Profile(name=name, units=units, distance_m=depth[::-1],
+                   values=values[::-1], along="depth below the surface",
+                   measures={"top": float(values[-1]), "bottom": float(values[0]),
+                             "top_minus_bottom": float(values[-1] - values[0]),
+                             "mean": mean, "depth_m": span,
+                             "t": float(times[index]), "planes": nplan})
+
+
+def parse_drogues(path: str | Path) -> list[tuple[float, list[tuple[float, float]]]]:
+    """The TecPlot ASCII drogues track -> ``[(t_s, [(x, y), ...]), ...]``.
+
+    One ZONE per written instant; an unparsable row is skipped.
+    """
+    import re
+
+    zones: list[tuple[float, list[tuple[float, float]]]] = []
+    time_s: float | None = None
+    points: list[tuple[float, float]] = []
+    for line in Path(path).read_text(errors="replace").splitlines():
+        if line.startswith("ZONE"):
+            if time_s is not None:
+                zones.append((time_s, points))
+            stamp = re.search(r"SOLUTIONTIME=\s*([\d.]+)", line)
+            time_s, points = (float(stamp.group(1)) if stamp else 0.0), []
+            continue
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) >= 3:
+            try:
+                points.append((float(parts[1]), float(parts[2])))
+            except ValueError:
+                continue
+    if time_s is not None:
+        zones.append((time_s, points))
+    return zones
+
+
+# How many written instants the track keeps: the release, mid-run and the end.
+_TRACK_SNAPSHOTS = 3
+
+
+def read_drogues(primitive: Primitive, solved: Solved) -> Track:
+    """``drogues()``: the particle positions the module wrote, at three instants."""
+    import numpy as np
+    from pyproj import Transformer
+
+    from trid3nt.workflows.solver.solver import download_result
+    from .telemac2d import DROGUES_FILENAME
+
+    local = download_result(solved.run_id, DROGUES_FILENAME)
+    try:
+        zones = parse_drogues(local)
+    finally:
+        Path(local).unlink(missing_ok=True)
+    written = [(t, pts) for t, pts in zones if pts]
+    if not written:
+        raise OutputEmpty("the drogues track holds no float at any written instant.")
+    to_lonlat = Transformer.from_crs(solved.utm_epsg, 4326, always_xy=True).transform
+    keep = ([written[0], written[len(written) // 2], written[-1]]
+            if len(written) >= _TRACK_SNAPSHOTS else written)
+    features = []
+    for t, pts in keep:
+        lon, lat = to_lonlat(*zip(*pts))
+        features.append({"type": "Feature",
+                         "geometry": {"type": "MultiPoint",
+                                      "coordinates": [[round(a, 6), round(b, 6)]
+                                                      for a, b in zip(lon, lat)]},
+                         "properties": {"t_s": t, "n": len(pts)}})
+    first, last = np.mean(written[0][1], axis=0), np.mean(written[-1][1], axis=0)
+    released, remaining = len(written[0][1]), len(written[-1][1])
+    return Track(features={"type": "FeatureCollection", "features": features},
+                 measures={"released": released, "remaining": remaining,
+                           "exited": max(0, released - remaining),
+                           "instants": len(written),
+                           "drift_m": round(float(np.hypot(*(last - first))), 1)})
+
+
+# The primitive set, as every wrapper binds it: the reader of each, by kind.
+PRIMITIVES: Mapping[str, Any] = {
+    "field": read_field, "series": read_series, "max_over_time": read_max_over_time,
+    "profile": read_profile, "extent": read_extent, "mesh": read_mesh,
+    "mass_balance": read_mass_balance,
+}

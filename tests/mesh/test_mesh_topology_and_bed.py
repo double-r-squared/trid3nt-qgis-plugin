@@ -10,9 +10,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.mesh.meshers import Mesh, MeshToolError
-from trid3nt_server.tools.mesh.shared import primitives as P
-from trid3nt_server.tools.mesh.shared.nodes import (
+from trid3nt.tools.mesh.meshers import Mesh, MeshToolError
+from trid3nt.tools.mesh.shared import primitives as P
+from trid3nt.tools.mesh.shared.nodes import (
     MeshNodeError,
     read_centerline_utm,
 )
@@ -317,7 +317,7 @@ def test_the_interpolation_is_a_visible_default_off_a_declared_roster(tmp_path, 
     import inspect
 
     assert inspect.signature(P.set_bed).parameters["interp"].default is None
-    from trid3nt_server.settings import setting
+    from trid3nt.settings import setting
 
     assert setting("SAMPLE_INTERP") == "nearest"
     user_settings(SAMPLE_INTERP="bilinear")
@@ -352,7 +352,7 @@ def test_a_declared_pit_fill_runs_the_delineators_own_chain_and_says_so(
         return dst
 
     monkeypatch.setattr(
-        "trid3nt_server.tools.derive._hydrology_common.write_conditioned_dem",
+        "trid3nt.tools.derive._hydrology_common.write_conditioned_dem",
         _fake_condition)
     bedded = P.set_bed(_lonlat_mesh(), source=str(raster), condition="pit_fill")
     assert seen["src"] == str(raster)
@@ -377,8 +377,8 @@ def test_the_journal_names_the_rung_that_ACTUALLY_painted_the_bed(tmp_path):
 
     A reader with only the journal beside the mesh files would otherwise see the row
     the recipe ASKED for and no sign of the substitution that answered it."""
-    from trid3nt_server.tools.mesh.recipe import build_recipe
-    from trid3nt_server.tools.mesh.session import MeshSession
+    from trid3nt.tools.mesh.recipe import build_recipe
+    from trid3nt.tools.mesh.session import MeshSession
 
     session = MeshSession(
         build_recipe(mesher="reg_grid", extent=(-75.80, 36.10, -75.70, 36.20),
@@ -400,7 +400,7 @@ def test_the_bed_is_fetched_past_the_extent_the_mesh_has_nodes_on():
 def test_the_note_reads_the_same_from_a_layer_and_from_a_dict():
     from types import SimpleNamespace
 
-    from trid3nt_server.tools.mesh.meshers import fetch_notes
+    from trid3nt.tools.mesh.meshers import fetch_notes
 
     assert fetch_notes(SimpleNamespace(notes=["swapped"])) == ["swapped"]
     assert fetch_notes({"notes": ["swapped"]}) == ["swapped"]
@@ -484,7 +484,7 @@ def test_the_boundary_numbering_is_one_count_across_every_loop():
     """IPOBO is a permutation of 1..NPTFR: a per-loop count breaks it."""
     import numpy as np
 
-    from trid3nt_server.tools.mesh.shared.formats.tin_topology import (
+    from trid3nt.tools.mesh.shared.formats.tin_topology import (
         boundary_numbering,
     )
 
@@ -502,7 +502,7 @@ def test_the_outer_boundary_runs_counter_clockwise_whatever_order_the_cells_come
     numbers the boundaries in reverse."""
     import numpy as np
 
-    from trid3nt_server.tools.mesh.shared.formats.tin_topology import (
+    from trid3nt.tools.mesh.shared.formats.tin_topology import (
         boundary_numbering,
     )
 
@@ -526,7 +526,7 @@ def test_a_boundary_walk_whose_loops_share_a_node_refuses_naming_it():
     import numpy as np
     import pytest
 
-    from trid3nt_server.tools.mesh.shared.formats.tin_topology import (
+    from trid3nt.tools.mesh.shared.formats.tin_topology import (
         BoundaryPinched,
         boundary_numbering,
     )
@@ -543,8 +543,8 @@ def test_reading_an_accepted_mesh_or_a_stored_layer_leaves_no_directory_behind(
         tmp_path, monkeypatch):
     import tempfile
 
-    from trid3nt_server.tools.mesh.shared import nodes as nodes_mod
-    from trid3nt_server.tools import cache
+    from trid3nt.tools.mesh.shared import nodes as nodes_mod
+    from trid3nt.tools import cache
 
     raster = _bed_raster(tmp_path)
     twodm = ("MESH2D\nND 1 0.0 0.0 -1.0\nND 2 10.0 0.0 -2.0\n"
@@ -569,8 +569,8 @@ def test_reading_an_accepted_mesh_or_a_stored_layer_leaves_no_directory_behind(
 
 
 def test_an_object_store_raster_lives_only_as_long_as_its_build(tmp_path, monkeypatch):
-    from trid3nt_server.tools import cache
-    from trid3nt_server.tools.mesh import inputs
+    from trid3nt.tools import cache
+    from trid3nt.tools.mesh import inputs
 
     raster = _bed_raster(tmp_path)
     monkeypatch.setattr(cache, "read_object_bytes_s3", lambda uri: raster.read_bytes())

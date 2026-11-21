@@ -10,9 +10,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.executors import stac_raster
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.executors import stac_raster
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
 
 @pytest.fixture(scope="module")

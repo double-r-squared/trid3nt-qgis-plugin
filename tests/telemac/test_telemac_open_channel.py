@@ -7,7 +7,7 @@ roughness the deck is written at. Offline: no solve, no container.
 """
 
 from __future__ import annotations
-from trid3nt_server.workflows.telemac.authoring.selafin_io import (
+from trid3nt.workflows.telemac.authoring.selafin_io import (
     BOUNDARY_CONDITIONS_FILE,
     GEOMETRY_FILE,
 )
@@ -18,10 +18,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.inputs.observation import Observation
-from trid3nt_server.workflows.telemac.authoring import accepted_mesh as MESH
-from trid3nt_server.workflows.telemac.authoring import opening as D
-from trid3nt_server.workflows.telemac.errors import TelemacError
+from trid3nt.inputs.observation import Observation
+from trid3nt.workflows.telemac.authoring import accepted_mesh as MESH
+from trid3nt.workflows.telemac.authoring import opening as D
+from trid3nt.workflows.telemac.errors import TelemacError
 
 #: Two faces of a straight channel 1 km apart, each a trapezoid falling 3 m
 #: between them - the fall over the distance IS the friction slope.
@@ -169,7 +169,7 @@ def test_a_level_at_or_below_the_bed_refuses_rather_than_opening_dry(flat):
 
 def test_a_reach_that_does_not_fall_and_has_no_level_refuses_by_name(flat):
     """The uniform-flow refusal stands: a level has to come from somewhere."""
-    from trid3nt_server.workflows.telemac.helpers.uniform_flow import (
+    from trid3nt.workflows.telemac.helpers.uniform_flow import (
         UniformFlowError,
     )
 
@@ -230,7 +230,7 @@ def test_the_missouri_reach_opens_flat_at_its_derived_outflow_level(monkeypatch)
     """The recorded survey bed carries bars 3-4 m over its pools: a sheet of the 5.896 m normal depth over it stood
     at 291.06-298.17 m and drained through the outflow for the whole run. Flat at 291.385 m it starts under its
     uniform-flow surface with the inflow face wet."""
-    from trid3nt_server.tools.mesh.shared.nodes import read_accepted_mesh_nodes
+    from trid3nt.tools.mesh.shared.nodes import read_accepted_mesh_nodes
 
     xy, _cells, bed, _ll = read_accepted_mesh_nodes(str(_MISSOURI / "mesh.2dm"), utm_epsg=32615)
     monkeypatch.setattr(D, "mesh_nodes", lambda mesh: (xy, bed))
@@ -249,7 +249,7 @@ _MISSOURI_WALK = Path(__file__).resolve().parents[1] / "fixtures" / "nhdplus_nld
 def _missouri_held(monkeypatch, level_m):
     from types import SimpleNamespace
 
-    from trid3nt_server.tools.mesh.shared.nodes import read_accepted_mesh_nodes
+    from trid3nt.tools.mesh.shared.nodes import read_accepted_mesh_nodes
 
     xy, _cells, bed, _ll = read_accepted_mesh_nodes(str(_MISSOURI / "mesh.2dm"), utm_epsg=32615)
     monkeypatch.setattr(D, "mesh_nodes", lambda mesh: (xy, bed))
@@ -294,7 +294,7 @@ def test_the_sloped_openings_routine_is_the_engines_own_hook_in_fixed_form(monke
 
 
 def test_the_sloped_opening_is_compiled_beside_the_boundary_lists():
-    from trid3nt_server.workflows.telemac.modules.telemac2d import _boundaries
+    from trid3nt.workflows.telemac.modules.telemac2d import _boundaries
 
     surface = {"line": [[0.0, 0.0], [1000.0, 0.0]], "s_in": 0.0, "s_out": 1000.0, "z_in": 98.0, "z_out": 96.0}
     measured = {"liquid_boundary_order": ["inflow", "outflow"], "liquid_boundary_prescribes": ["flowrate", "elevation"],
@@ -313,7 +313,7 @@ def test_the_derived_outflows_friction_slope_is_measured_along_the_walked_line(m
     slope is gentler and the same flow stands higher: 291.489 m, not the 291.385 m the chord gave."""
     from types import SimpleNamespace
 
-    from trid3nt_server.tools.mesh.shared.nodes import read_accepted_mesh_nodes
+    from trid3nt.tools.mesh.shared.nodes import read_accepted_mesh_nodes
 
     xy, _cells, bed, _ll = read_accepted_mesh_nodes(str(_MISSOURI / "mesh.2dm"), utm_epsg=32615)
     monkeypatch.setattr(D, "mesh_nodes", lambda mesh: (xy, bed))

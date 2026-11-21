@@ -17,20 +17,20 @@ import pandas as pd
 import pytest
 from shapely.geometry import LineString, Point, Polygon
 
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.errors import (
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
 )
-from trid3nt_server.tools.fetchers._router.executors.vector_fgb import (
+from trid3nt.tools.fetchers._router.executors.vector_fgb import (
     features_to_fgb_bytes,
 )
-from trid3nt_server.tools.fetchers.socioeconomic.fetch_osm_features import hooks as osm
-from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+from trid3nt.tools.fetchers.socioeconomic.fetch_osm_features import hooks as osm
+from trid3nt.tools.fetchers._router.spec import load_spec_from_path
 
 SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[2]
-    / "trid3nt_server/tools/fetchers/socioeconomic/fetch_osm_features/source.yaml"
+    / "trid3nt/tools/fetchers/socioeconomic/fetch_osm_features/source.yaml"
 )
 
 _FORT_MYERS = (-82.0, 26.5, -81.8, 26.7)
@@ -73,7 +73,7 @@ def _serve(monkeypatch, frame):
 
 
 def test_promoted_as_router_spec():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY["fetch_osm_features"]
     assert entry.metadata.source_class == "osm_features"
@@ -265,7 +265,7 @@ def test_breakwaters_kept_whole_not_clipped(monkeypatch):
 
 
 def _inject_read_through(monkeypatch, store: dict[str, bytes]):
-    from trid3nt_server.tools.cache import (
+    from trid3nt.tools.cache import (
         CACHE_BUCKET, ReadThroughResult, cache_path, compute_cache_key, is_cacheable,
     )
 

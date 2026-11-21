@@ -17,7 +17,7 @@ from aiohttp import web
 
 logger = logging.getLogger("trid3nt_server.server.protocol.http")
 
-from trid3nt_server.model.credentials.auth_handshake import ADVERTISED_HTTP_PORT_DEFAULT
+from trid3nt.credentials.auth_handshake import ADVERTISED_HTTP_PORT_DEFAULT
 
 #: Every response carries these: the doors are unauthenticated with open CORS,
 #: and nothing they answer is cacheable.

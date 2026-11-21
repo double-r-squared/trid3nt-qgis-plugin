@@ -17,10 +17,10 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server import server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.model.adapters.adapter import build_layers_present_note
-from trid3nt_server.store.cases import CASES_COLLECTION, Persistence
-from trid3nt_server.render.uri_registry import reset_uri_registries_for_tests
+from trid3nt import tools as agent_tools
+from trid3nt_harness.model.adapters.adapter import build_layers_present_note
+from trid3nt.store.cases import CASES_COLLECTION, Persistence
+from trid3nt.render.uri_registry import reset_uri_registries_for_tests
 from trid3nt_server.server import (
     SessionState,
     _emit_case_open,
@@ -28,7 +28,7 @@ from trid3nt_server.server import (
     get_persistence,
     set_persistence,
 )
-from trid3nt_server.tools import RegisteredTool
+from trid3nt.tools import RegisteredTool
 
 from tests._fakes import MockMCPClient, _fresh_case_summary
 

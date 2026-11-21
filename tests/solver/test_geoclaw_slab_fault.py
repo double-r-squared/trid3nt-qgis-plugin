@@ -20,11 +20,11 @@ import pytest
 from pyproj import Geod
 from scipy.interpolate import RegularGridInterpolator
 
-from trid3nt_server.tools.fetchers import _slab2_grids as slab2
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.tools.fetchers.hazard.fetch_slab_geometry import hooks
-from trid3nt_server.workflows.geoclaw.errors import GeoclawError
-from trid3nt_server.workflows.geoclaw.modules import GEO
+from trid3nt.tools.fetchers import _slab2_grids as slab2
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.tools.fetchers.hazard.fetch_slab_geometry import hooks
+from trid3nt.workflows.geoclaw.errors import GeoclawError
+from trid3nt.workflows.geoclaw.modules import GEO
 
 _TAR = Path(__file__).parents[1] / "fixtures" / "geoclaw" / "slab2" / "slab2_excerpt.tar.gz"
 _RUN = {"GEO_COORDINATE_SYSTEM": 2}

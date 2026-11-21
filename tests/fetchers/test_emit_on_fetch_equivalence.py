@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from trid3nt_server.tools.fetchers._router.emit_on_fetch import (
+from trid3nt.tools.fetchers._router.emit_on_fetch import (
     input_layer_name,
 )
 
@@ -19,7 +19,7 @@ def test_a_matched_row_is_asked_under_its_own_name():
     NAME now: no template names a fetcher, so the name the seam surfaces the
     input under is the only word the question spells."""
     from trid3nt_contracts.coverage import SourceChoice
-    from trid3nt_server.tools.search.match import base_ask
+    from trid3nt.tools.search.match import base_ask
 
     choice = SourceChoice(slot="bed", need="bathymetry", picked="fetch_dem")
     assert base_ask(choice, "bed", None, None, None, None,

@@ -1,6 +1,6 @@
 # settings -- one home for the judgments a person may change
 
-`trid3nt_server/settings/` carries every judgment the system makes that a person
+`trid3nt/settings/` carries every judgment the system makes that a person
 could reasonably make differently: how far a hole is filled, how large a merge
 may be, how long a card waits. A constant of that kind is never written in the
 module that uses it; it is an entry in one dictionary, and the module calls

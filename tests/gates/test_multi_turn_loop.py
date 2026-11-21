@@ -16,15 +16,15 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_contracts.message import Message
-from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.model.adapters.adapter import (
+from trid3nt_harness.model.adapters.model_selection import ModelSettings
+from trid3nt_harness.model.adapters.adapter import (
     FunctionCallEvent,
     TextDeltaEvent,
     build_contents_from_history,
     stream_events_with_contents,
     summarize_tool_result,
 )
-from trid3nt_server.settings import entry
+from trid3nt.settings import entry
 from trid3nt_contracts import new_ulid
 
 
@@ -432,7 +432,7 @@ async def test_stream_model_reply_caps_runaway_loop(fake_llm):
     # tool+args (identical fetch_dem), so the LOOP WATCHDOG trips at
     # loop_repeat_n() rounds - well before the MAX_TURN_STEPS cap
     # cap. (A varied-tool runaway hits the step cap instead - next test.)
-    from trid3nt_server.model.guards.runaway_guard import LOOP_REPEAT_N
+    from trid3nt_harness.model.guards.runaway_guard import LOOP_REPEAT_N
 
     assert dispatch_count <= LOOP_REPEAT_N, (
         f"identical-repeat runaway not watchdog-capped: {dispatch_count} "

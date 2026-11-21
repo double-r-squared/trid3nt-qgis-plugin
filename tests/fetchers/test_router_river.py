@@ -18,17 +18,17 @@ import pandas as pd
 import pytest
 from shapely.geometry import LineString
 
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.errors import RouterInputError
-from trid3nt_server.tools.fetchers._router.executors.vector_fgb import (
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.errors import RouterInputError
+from trid3nt.tools.fetchers._router.executors.vector_fgb import (
     features_to_fgb_bytes,
 )
-from trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry import hooks as river
-from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+from trid3nt.tools.fetchers.hydrology.fetch_river_geometry import hooks as river
+from trid3nt.tools.fetchers._router.spec import load_spec_from_path
 
 RIVER_SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[2]
-    / "trid3nt_server/tools/fetchers/hydrology/fetch_river_geometry/source.yaml"
+    / "trid3nt/tools/fetchers/hydrology/fetch_river_geometry/source.yaml"
 )
 
 # Kansas -- outside every old v0.1 HUC4 envelope (the exact case that used to
@@ -78,7 +78,7 @@ def _validated(**raw: Any) -> dict[str, Any]:
 
 
 def test_river_promoted_as_router_spec():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY["fetch_river_geometry"]
     assert entry.metadata.source_class == "river_geometry"
@@ -88,7 +88,7 @@ def test_river_promoted_as_router_spec():
 
 
 def test_river_docstring_describes_osm_primary_and_dropped_leg():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     doc = TOOL_REGISTRY["fetch_river_geometry"].fn.__doc__ or ""
     assert "Overpass" in doc
@@ -199,7 +199,7 @@ def test_river_oversized_bbox_rejected_km2():
 
 
 def _inject_read_through(monkeypatch, store: dict[str, bytes]):
-    from trid3nt_server.tools.cache import (
+    from trid3nt.tools.cache import (
         CACHE_BUCKET, ReadThroughResult, cache_path, compute_cache_key, is_cacheable,
     )
 

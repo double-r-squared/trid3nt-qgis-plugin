@@ -13,11 +13,11 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.fetchers import _tile_mosaic
-from trid3nt_server.tools.fetchers.ocean.fetch_bluetopo import hooks as bt
-from trid3nt_server.tools.fetchers.ocean.fetch_cudem import hooks as cu
-from trid3nt_server.tools.fetchers.ocean.fetch_etopo import hooks as et
-from trid3nt_server.tools.fetchers.ocean.fetch_regional_coastal_dem import (
+from trid3nt.tools.fetchers import _tile_mosaic
+from trid3nt.tools.fetchers.ocean.fetch_bluetopo import hooks as bt
+from trid3nt.tools.fetchers.ocean.fetch_cudem import hooks as cu
+from trid3nt.tools.fetchers.ocean.fetch_etopo import hooks as et
+from trid3nt.tools.fetchers.ocean.fetch_regional_coastal_dem import (
     hooks as rc,
 )
 
@@ -211,10 +211,10 @@ def test_the_bed_resolution_lever_is_resolution_m_from_the_spec_to_the_merge(
     """One lever name across the raster fetchers: what the row declares is what the
     rung edge hands over and what the hook passes into the composite."""
     numpy = pytest.importorskip("numpy")
-    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+    from trid3nt.tools.fetchers._router.spec import load_spec_from_path
 
     spec = load_spec_from_path(Path(
-        "trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/source.yaml"))
+        "trid3nt/tools/fetchers/ocean/fetch_bluetopo/source.yaml"))
     assert "resolution_m" in spec.params
 
     passed: dict = {}
@@ -240,10 +240,10 @@ def test_a_bed_resolution_that_is_not_a_cell_size_refuses_by_the_lever_name() ->
 
 def test_the_bluetopo_spec_declares_the_delegate_hooks_and_the_result_model() -> None:
     from trid3nt_contracts.execution import LAYER_RESULT_MODELS
-    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+    from trid3nt.tools.fetchers._router.spec import load_spec_from_path
 
     spec = load_spec_from_path(Path(
-        "trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/source.yaml"))
+        "trid3nt/tools/fetchers/ocean/fetch_bluetopo/source.yaml"))
     assert spec.hooks is not None
     assert spec.hooks.delegate == "bluetopo.read"
     assert spec.hooks.delegate_validate == "bluetopo.validate"
@@ -258,7 +258,7 @@ def test_the_bluetopo_spec_declares_the_delegate_hooks_and_the_result_model() ->
 #: elevation. Read off the tree rather than listed, so a new one joins the rule
 #: by existing rather than by somebody remembering to add it here.
 def _bed_capable_rows() -> dict:
-    from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+    from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
     return {name: spec for name, spec in compose_specs_from_tree().items()
             if spec.normalize.quantity == "elevation"}
@@ -277,10 +277,10 @@ def test_the_lake_row_pins_one_product_of_the_mixed_mosaic() -> None:
     """DEM_all merges the lake-datum grids, the NAVD88 coastal tiles, the same
     tiles on MHW and the EGM2008 global bases under one name, so the row that
     reads it as a bed names the ONE product it means."""
-    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+    from trid3nt.tools.fetchers._router.spec import load_spec_from_path
 
     spec = load_spec_from_path(Path(
-        "trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_bathymetry/"
+        "trid3nt/tools/fetchers/ocean/fetch_greatlakes_bathymetry/"
         "source.yaml"))
     rule = spec.ingest["imageserver"]["export_query"]["mosaicRule"]
     assert "Name='greatlakes_lakedatum'" in rule
@@ -302,10 +302,10 @@ ST_CLAIR_RIVER_AOI = (-82.475404, 42.886362, -82.404648, 42.99302)
 
 
 def _lake_spec():
-    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+    from trid3nt.tools.fetchers._router.spec import load_spec_from_path
 
     return load_spec_from_path(Path(
-        "trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_bathymetry/"
+        "trid3nt/tools/fetchers/ocean/fetch_greatlakes_bathymetry/"
         "source.yaml"))
 
 
@@ -334,8 +334,8 @@ def test_the_lake_grid_publishes_its_own_fill_as_nodata(monkeypatch) -> None:
     import rasterio
     from rasterio import transform as rtransform
 
-    from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError
-    from trid3nt_server.tools.fetchers._router.executors import raster_cog
+    from trid3nt.tools.fetchers._router.errors import RouterEmptyError
+    from trid3nt.tools.fetchers._router.executors import raster_cog
 
     def _tiff(values):
         buf = io.BytesIO()
@@ -347,7 +347,7 @@ def test_the_lake_grid_publishes_its_own_fill_as_nodata(monkeypatch) -> None:
             dst.write(np.asarray(values, dtype="float32"), 1)
         return buf.getvalue()
 
-    tp = "trid3nt_server.tools.fetchers._router.transport"
+    tp = "trid3nt.tools.fetchers._router.transport"
     spec, params = _lake_spec(), {"bbox": list(ST_CLAIR_RIVER_AOI)}
 
     monkeypatch.setattr(f"{tp}.get_client", lambda: object())
@@ -450,25 +450,25 @@ def test_a_regional_collection_that_cannot_be_listed_refuses_rather_than_skippin
 def test_every_bed_row_states_a_cell_and_a_frame_the_offset_service_names() -> None:
     """R8 and R17 on one line: a row states the cell its ask fetches and the zero
     it counts from, as a frame name an offset can be asked in."""
-    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+    from trid3nt.tools.fetchers._router.spec import load_spec_from_path
 
     frames = {"navd88", "egm2008", "lwd_igld85"}
     for row in ("fetch_cudem", "fetch_etopo", "fetch_regional_coastal_dem"):
         spec = load_spec_from_path(Path(
-            f"trid3nt_server/tools/fetchers/ocean/{row}/source.yaml"))
+            f"trid3nt/tools/fetchers/ocean/{row}/source.yaml"))
         coverage = next(c for c in spec.coverage if c.data_class == "bathymetry")
         assert coverage.resolution_m and coverage.resolution_m > 0
         assert (coverage.datum or "").lower() in frames
 
 
 def test_the_composite_row_is_gone_from_the_registry() -> None:
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     assert "fetch_topobathy" not in TOOL_REGISTRY
 
 
 def _bed_rank(lon: float, lat: float) -> list[str]:
-    from trid3nt_server.tools.search.match import Need, match, sources_with_coverage
+    from trid3nt.tools.search.match import Need, match, sources_with_coverage
 
     choice = match(
         Need(slot="bed", data_class="bathymetry", lon=lon, lat=lat,
@@ -485,7 +485,7 @@ def test_the_bed_ladder_over_a_coastal_box_is_the_rows_in_the_sorts_own_order(
     The sort reads facts, not names: the measured records come first and the
     finest of them leads, and the global relief MODEL ranks below every one of
     them because of how its numbers were come by."""
-    from trid3nt_server.tools.search.match import Need, match, sources_with_coverage
+    from trid3nt.tools.search.match import Need, match, sources_with_coverage
 
     laid = _bed_rank(-85.50, 29.90)
     assert laid == ["fetch_ehydro_surveys", "fetch_bluetopo", "fetch_cudem",
@@ -512,10 +512,10 @@ def test_the_alaskan_tsunami_dem_is_the_finest_bed_at_sand_point_on_mhw() -> Non
     mosaic is cut to the MHW grids finest cell first; the lower 48 is outside."""
     from pathlib import Path
 
-    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+    from trid3nt.tools.fetchers._router.spec import load_spec_from_path
 
     spec = load_spec_from_path(Path(
-        "trid3nt_server/tools/fetchers/ocean/fetch_ncei_tsunami_dem/source.yaml"))
+        "trid3nt/tools/fetchers/ocean/fetch_ncei_tsunami_dem/source.yaml"))
     rule = spec.ingest["imageserver"]["export_query"]["mosaicRule"]
     assert "VerticalDatum='MHW'" in rule
     assert '"sortField":"ZOrder","ascending":true' in rule
@@ -563,7 +563,7 @@ def test_etopo_asked_for_the_sea_floor_inland_holds_nothing(monkeypatch) -> None
 
 
 def test_etopo_s_bathymetry_row_asks_for_the_sea_floor() -> None:
-    from trid3nt_server.tools.fetchers._router.registration import get_spec
+    from trid3nt.tools.fetchers._router.registration import get_spec
 
     row = next(r for r in get_spec("fetch_etopo").coverage if r.data_class == "bathymetry")
     assert row.ask == {"surface": "sea_floor"}

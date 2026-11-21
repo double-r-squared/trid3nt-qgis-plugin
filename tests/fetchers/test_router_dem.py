@@ -14,13 +14,13 @@ import numpy as np
 import pytest
 import rasterio.transform as _rt
 
-from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
-from trid3nt_server.tools.fetchers._fetch_common import (
+from trid3nt.tools import TOOL_REGISTRY, RegisteredTool
+from trid3nt.tools.fetchers._fetch_common import (
     BboxInvalidError,
     PixelBudgetExceededError,
     UpstreamAPIError,
 )
-from trid3nt_server.tools.fetchers.terrain.fetch_dem import hooks as dem_mod
+from trid3nt.tools.fetchers.terrain.fetch_dem import hooks as dem_mod
 from trid3nt_contracts.execution import DemLayerURI, LayerURI
 
 FORT_MYERS_BBOX = (-81.9, 26.55, -81.8, 26.68)
@@ -157,8 +157,8 @@ def test_fetch_dem_cache_key_is_the_asked_bbox_and_resolution():
     spelling the default source changes nothing, and a different asked bbox or
     resolution keys differently -- including a past-budget ask, which does NOT
     collapse onto the key of the spacing that would have fitted."""
-    from trid3nt_server.tools.fetchers._router.router import prospective_cache_key
-    from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+    from trid3nt.tools.fetchers._router.router import prospective_cache_key
+    from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
     spec = compose_specs_from_tree()["fetch_dem"]
     asked = {"bbox": FORT_MYERS_BBOX, "resolution_m": 10}

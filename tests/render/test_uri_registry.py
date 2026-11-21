@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.render.uri_registry import (
+from trid3nt.render.uri_registry import (
     RESOLVABLE_URI_PARAMS,
     SessionUriRegistry,
     UriResolutionError,
@@ -176,7 +176,7 @@ class TestResolutionBranches:
     def test_branch3_close_match_substituted_with_warning(self, caplog) -> None:
         reg = make_registry()
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
-        with caplog.at_level("WARNING", logger="trid3nt_server.render.uri_registry"):
+        with caplog.at_level("WARNING", logger="trid3nt.render.uri_registry"):
             out = reg.resolve_params(
                 "pelicun_damage_assessment",
                 {"layer_uri": MANGLED_NSI_LAYERID_BASENAME_0253},
@@ -410,7 +410,7 @@ class MockWebSocket:
 def _dummy_uri_tool():
     """Register two dummy tools: a producer (returns LayerURI) + a consumer."""
     from trid3nt_contracts.tool_registry import AtomicToolMetadata
-    from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
+    from trid3nt.tools import TOOL_REGISTRY, RegisteredTool
 
     captured: dict[str, Any] = {}
 
@@ -472,7 +472,7 @@ def test_invoke_seam_registers_then_resolves(_dummy_uri_tool) -> None:
 def test_invoke_seam_unresolved_raises_typed_error(_dummy_uri_tool) -> None:
     """The remaining branch-4 raise (display-face URL, no recoverable data
     URI) propagates as a typed retryable error the loop summarizes."""
-    from trid3nt_server.model.adapters.adapter import summarize_tool_result
+    from trid3nt_harness.model.adapters.adapter import summarize_tool_result
     from trid3nt_server.server import SessionState, _invoke_tool_via_emitter
 
     from trid3nt_contracts.common import new_ulid
@@ -567,7 +567,7 @@ class TestPlaceholderResolution:
 
     def test_placeholder_resolution_logs_info_telemetry(self, caplog) -> None:
         reg = self._registry_with_dem()
-        with caplog.at_level("INFO", logger="trid3nt_server.render.uri_registry"):
+        with caplog.at_level("INFO", logger="trid3nt.render.uri_registry"):
             reg.resolve_params(
                 "publish_layer", {"layer_uri": "LayerURI_from_fetch_dem"}
             )
@@ -740,7 +740,7 @@ class TestReconnectSeedsRegistryFromCase:
     def test_case_open_on_fresh_session_resolves_persisted_handle(self) -> None:
         import asyncio
 
-        from trid3nt_server.store.cases import Persistence
+        from trid3nt.store.cases import Persistence
         from trid3nt_server.server import SessionState, _emit_case_open, get_persistence, set_persistence
         from trid3nt_contracts.common import new_ulid
 
@@ -789,7 +789,7 @@ class TestReconnectSeedsRegistryFromCase:
     def test_case_switch_on_same_session_replaces_not_leaks(self) -> None:
         import asyncio
 
-        from trid3nt_server.store.cases import Persistence
+        from trid3nt.store.cases import Persistence
         from trid3nt_server.server import SessionState, _emit_case_open, get_persistence, set_persistence
         from trid3nt_contracts.common import new_ulid
 
@@ -840,7 +840,7 @@ def test_a_layer_published_again_under_another_id_keeps_what_its_producer_said(
 ) -> None:
     """The canvas may name a fetched layer by a second id over the same uri; the
     datum and quantity its producer stated ride to that id."""
-    from trid3nt_server.render.uri_registry import lookup_layer_for_handle
+    from trid3nt.render.uri_registry import lookup_layer_for_handle
 
     reset_uri_registries_for_tests()
     registry = get_uri_registry("republish-summary")

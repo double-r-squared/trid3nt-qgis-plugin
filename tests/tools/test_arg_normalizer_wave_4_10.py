@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.tools.tool_arg_normalizer import normalize_args
+from trid3nt_harness.tools.tool_arg_normalizer import normalize_args
 
 
 

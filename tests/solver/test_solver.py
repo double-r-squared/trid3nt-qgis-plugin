@@ -11,9 +11,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.store import objects as storage
-from trid3nt_server.workflows.solver.solver import (
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.store import objects as storage
+from trid3nt.workflows.solver.solver import (
     LOCAL_SOLVER_SPEC_REGISTRY,
     SolverNotRegisteredError,
     run_solver,
@@ -79,7 +79,7 @@ def test_every_engine_solves_under_the_id_its_run_was_staged_with(engine, monkey
     import importlib
     from types import SimpleNamespace
 
-    mod = importlib.import_module(f"trid3nt_server.workflows.{engine}.engine")
+    mod = importlib.import_module(f"trid3nt.workflows.{engine}.engine")
     seen = {}
 
     async def _dispatch(**kwargs):

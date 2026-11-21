@@ -15,8 +15,8 @@ import pytest
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.render.formats import Published
-from trid3nt_server.workflows.telemac.modules import (
+from trid3nt.render.formats import Published
+from trid3nt.workflows.telemac.modules import (
     GAIA,
     T2D,
     T3D,
@@ -24,9 +24,9 @@ from trid3nt_server.workflows.telemac.modules import (
     SlotRefused,
     fill,
 )
-from trid3nt_server.workflows.telemac.modules.outputs import Solved
-from trid3nt_server.workflows.runtime.primitives import series
-from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
+from trid3nt.workflows.telemac.modules.outputs import Solved
+from trid3nt.workflows.runtime.primitives import series
+from trid3nt.workflows.telemac.modules.telemac2d import Boundaries
 
 
 def test_the_printouts_keyword_is_the_table_and_the_run_s_own_tracers():
@@ -83,7 +83,7 @@ def _run(telemac_result, monkeypatch, dye=None, unrowed=None) -> dict[str, Any]:
                    data={"WATER DEPTH": depth, "DYE": dye,
                          **{name: frames for name, (_, frames) in unrowed.items()}})
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     sheet = fill(T2D, NUMBER_OF_TRACERS=1,
                  NAMES_OF_TRACERS=["DYE             MG/L"])
@@ -101,7 +101,7 @@ def _run(telemac_result, monkeypatch, dye=None, unrowed=None) -> dict[str, Any]:
 @pytest.fixture()
 def published(monkeypatch, fake_s3, telemac_result):
     """Every deliverable the publish was handed, in the order it was handed."""
-    from trid3nt_server.workflows.telemac import workflow as door
+    from trid3nt.workflows.telemac import workflow as door
 
     seen: list[Any] = []
 
@@ -111,15 +111,15 @@ def published(monkeypatch, fake_s3, telemac_result):
             layer_id="L", name="Water depth", layer_type="mesh",
             uri="s3://runs/RID/r2d.slf", quantity="water_depth"),))
 
-    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
+    monkeypatch.setattr("trid3nt.workflows.runtime.primitives.publish", _publish)
     return seen, _run(telemac_result, monkeypatch)
 
 
 def test_a_varying_row_is_one_temporal_layer_and_a_still_row_its_frame(published):
     """A row that varies in time publishes ONE layer - the temporal one, styled;
     its caption is the engine's own result-file name."""
-    from trid3nt_server.render.formats import Mesh
-    from trid3nt_server.workflows.telemac import workflow as door
+    from trid3nt.render.formats import Mesh
+    from trid3nt.workflows.telemac import workflow as door
 
     seen, run = published
     asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
@@ -137,8 +137,8 @@ def test_a_temporal_layer_is_ranged_over_the_record_not_its_last_frame(
         monkeypatch, fake_s3, telemac_result):
     """A tracer that peaks then flushes is ranged over every frame: ranged on the
     last frame alone the legend collapses and the animation paints blank."""
-    from trid3nt_server.render.formats import Published
-    from trid3nt_server.workflows.telemac import workflow as door
+    from trid3nt.render.formats import Published
+    from trid3nt.workflows.telemac import workflow as door
 
     seen: list[Any] = []
 
@@ -148,7 +148,7 @@ def test_a_temporal_layer_is_ranged_over_the_record_not_its_last_frame(
             layer_id="L", name="Dye", layer_type="mesh",
             uri="s3://runs/RID/r2d.slf", quantity="dye"),))
 
-    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
+    monkeypatch.setattr("trid3nt.workflows.runtime.primitives.publish", _publish)
     run = _run(telemac_result, monkeypatch,
                dye=[[0.0] * 5, [25.0] * 5, [0.0] * 5])
     asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
@@ -168,9 +168,9 @@ def test_the_froude_row_is_ranged_over_the_wet_nodes_and_not_capped():
     clipping the real peak off the top."""
     import numpy as np
 
-    from trid3nt_server.render import presets
-    from trid3nt_server.workflows.runtime.primitives import _drawn
-    from trid3nt_server.workflows.telemac.modules.telemac2d import MODULE_OUTPUT
+    from trid3nt.render import presets
+    from trid3nt.workflows.runtime.primitives import _drawn
+    from trid3nt.workflows.telemac.modules.telemac2d import MODULE_OUTPUT
 
     style = MODULE_OUTPUT["F"].style
     assert "range" not in style, "the wet mask ranges this row, not a cap"
@@ -189,8 +189,8 @@ def test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses(
         published):
     """The table is what the module writes; what a run actually wrote is what it
     carries. A missing row is skipped - a missing PLACED read is a refusal."""
-    from trid3nt_server.workflows.telemac import workflow as door
-    from trid3nt_server.workflows.runtime.primitives import OutputEmpty
+    from trid3nt.workflows.telemac import workflow as door
+    from trid3nt.workflows.runtime.primitives import OutputEmpty
 
     seen, run = published
     asyncio.run(door.publish_outputs(run=run, outputs=[], captions={},
@@ -207,8 +207,8 @@ def test_a_row_the_result_does_not_carry_is_skipped_and_a_placed_read_refuses(
 def _surfacing(monkeypatch, surfaced=None) -> list[Any]:
     """Stand in for the publish: every mesh item it is handed surfaces as a layer
     under its caption's quantity, or only the quantities ``surfaced`` names."""
-    from trid3nt_server.render.formats import Mesh, quantity_of
-    from trid3nt_server.workflows.telemac import workflow as door
+    from trid3nt.render.formats import Mesh, quantity_of
+    from trid3nt.workflows.telemac import workflow as door
 
     seen: list[Any] = []
 
@@ -222,13 +222,13 @@ def _surfacing(monkeypatch, surfaced=None) -> list[Any]:
             if isinstance(item.product, Mesh)
             and (surfaced is None or quantity_of(item.caption) in surfaced)))
 
-    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
+    monkeypatch.setattr("trid3nt.workflows.runtime.primitives.publish", _publish)
     return seen
 
 
 def _notes(run) -> list[str]:
-    from trid3nt_server.inputs import run_notes
-    from trid3nt_server.workflows.telemac import workflow as door
+    from trid3nt.inputs import run_notes
+    from trid3nt.workflows.telemac import workflow as door
 
     token = run_notes.bind_notes()
     try:
@@ -245,7 +245,7 @@ def test_every_variable_the_result_wrote_is_published_even_where_no_row_names_it
     table rows no name for - a spelling ending in a full stop among them - is
     published under the spelling the file itself carries; a row is what styles
     a layer, never what decides it is on the map."""
-    from trid3nt_server.render.formats import Mesh
+    from trid3nt.render.formats import Mesh
 
     seen = _surfacing(monkeypatch)
     run = _run(telemac_result, monkeypatch,
@@ -286,7 +286,7 @@ def test_a_slot_the_engine_source_marks_unwritten_is_neither_asked_nor_published
     printouts keyword asks for, and a file that carries it - finite values and
     all, as a scratch array leaves it - puts it on no layer; the journal names
     it with the engine source line that marks it."""
-    from trid3nt_server.workflows.telemac.modules.khione import KHIONE
+    from trid3nt.workflows.telemac.modules.khione import KHIONE
 
     for stated in ({}, {"HEAT_BUDGET": True, "DYNAMIC_ICE_COVER": True}):
         assert not set(KHIONE.UNWRITTEN) & set(KHIONE.written(stated))
@@ -313,7 +313,7 @@ def test_tomawacs_private_slot_is_withheld_under_its_french_spelling(
         monkeypatch, fake_s3, telemac_result):
     """The unwritten mark holds for the file an engine wrote in French: 'PRIVE 1'
     reaches no layer, and the journal cites the source line that marks it."""
-    from trid3nt_server.workflows.telemac.modules.tomawac import WAC
+    from trid3nt.workflows.telemac.modules.tomawac import WAC
 
     seen = _surfacing(monkeypatch)
     run = _run(telemac_result, monkeypatch,
@@ -346,8 +346,8 @@ def test_a_spelling_two_result_files_carry_is_one_layer_under_one_label():
 
     from trid3nt_contracts.execution import LayerURI as Layer
 
-    from trid3nt_server.inputs import run_notes
-    from trid3nt_server.workflows.telemac import workflow as door
+    from trid3nt.inputs import run_notes
+    from trid3nt.workflows.telemac import workflow as door
 
     files = {"telemac2d": ("r2d.slf", ["WATER DEPTH", "FRAZIL"]),
              "khione": ("khione.slf", ["FRAZIL", "FRAZIL S"])}
@@ -412,7 +412,7 @@ def test_a_coupled_module_states_the_tracers_it_appends_and_its_own_table():
 def test_the_card_carries_every_variable_each_deck_writes():
     """The keyword is generated, so no slot carries it: the card states what
     each deck writes, expanded, in the module's own order."""
-    from trid3nt_server.workflows.runtime.review import card_rows
+    from trid3nt.workflows.runtime.review import card_rows
 
     sheet = fill(T2D, NUMBER_OF_TRACERS=1,
                  NAMES_OF_TRACERS=["MARKER          MG/L"],
@@ -435,7 +435,7 @@ def test_the_published_order_is_the_table_order_across_host_and_coupled(
     """Nothing leads: every layer is surfaced, the host's table first and each
     coupled module's behind it, and the run returns its own record."""
     from trid3nt_server.render import layer_uri_emit
-    from trid3nt_server.workflows.telemac import workflow as door
+    from trid3nt.workflows.telemac import workflow as door
 
     surfaced: list[str] = []
 
@@ -445,7 +445,7 @@ def test_the_published_order_is_the_table_order_across_host_and_coupled(
 
     monkeypatch.setattr(layer_uri_emit, "publish_input_layer", _surface)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     x = [500000.0, 500120.0, 500000.0, 500120.0, 500060.0]
     y = [4400000.0, 4400000.0, 4400110.0, 4400110.0, 4400055.0]
@@ -483,7 +483,7 @@ def test_the_published_order_is_the_table_order_across_host_and_coupled(
 def test_the_card_carries_a_generated_keyword_once_per_deck():
     """A keyword the sheet GENERATES is not an engine default: it states the
     module's own variable table once, and never again under the advanced fold."""
-    from trid3nt_server.workflows.runtime.review import card_rows
+    from trid3nt.workflows.runtime.review import card_rows
 
     sheet = fill(T2D, coupling=[GAIA.bed(
         geometry="a.slf", boundary="a.cli", MASS_BALANCE=True, gradation=None,
@@ -502,7 +502,7 @@ def test_the_card_carries_a_generated_keyword_once_per_deck():
 def test_every_module_that_appends_rows_is_on_the_modules_page():
     """A module that writes no table of its own still states what it APPENDS, so
     the page carries it - and the hook hands back exactly what it declared."""
-    from trid3nt_server.workflows.telemac.modules import WRAPPERS
+    from trid3nt.workflows.telemac.modules import WRAPPERS
 
     page = (Path(__file__).resolve().parents[2]
             / "docs" / "modules.md").read_text(encoding="utf-8")

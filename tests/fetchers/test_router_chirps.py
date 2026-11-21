@@ -17,14 +17,14 @@ from rasterio import transform as rtransform
 from rasterio.io import MemoryFile
 
 from trid3nt_contracts.ws import LayerResponsePayload
-from trid3nt_server.tools.fetchers._router import router as _router
-from trid3nt_server.tools.fetchers._router.errors import (
+from trid3nt.tools.fetchers._router import router as _router
+from trid3nt.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
 )
-from trid3nt_server.tools.fetchers._router.executors import qgis_provider as qp
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.climate.fetch_chirps_precipitation import hooks as ch
+from trid3nt.tools.fetchers._router.executors import qgis_provider as qp
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.climate.fetch_chirps_precipitation import hooks as ch
 
 _WESTERN_GHATS = [72.0, 15.0, 78.0, 21.0]
 
@@ -61,7 +61,7 @@ def _patch_session(monkeypatch, exported: bytes) -> list:
 
 
 def _patch_router_cache(monkeypatch) -> dict:
-    from trid3nt_server.tools.cache import ReadThroughResult
+    from trid3nt.tools.cache import ReadThroughResult
 
     store: dict[str, bytes] = {}
 

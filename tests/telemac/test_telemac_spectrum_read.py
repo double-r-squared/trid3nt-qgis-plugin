@@ -15,9 +15,9 @@ from typing import Any
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.modules import WAC, spectrum
-from trid3nt_server.workflows.runtime.primitives import OutputEmpty, Spectrum
-from trid3nt_server.workflows.telemac.modules.outputs import Solved
+from trid3nt.workflows.telemac.modules import WAC, spectrum
+from trid3nt.workflows.runtime.primitives import OutputEmpty, Spectrum
+from trid3nt.workflows.telemac.modules.outputs import Solved
 
 #: The grid the deck below states: the engine lays NF frequencies from MINIMAL
 #: FREQUENCY at the FREQUENTIAL RATIO, and NDIRE equal sectors of the circle.
@@ -82,10 +82,10 @@ def _solved(monkeypatch, spectra: dict[str, Any] | None,
             *, named: str = "resWac.spe") -> Solved:
     """A solved standalone TOMAWAC run whose deck named its punctual file."""
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: f"/tmp/{basename}")
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.modules.outputs.read_selafin",
+        "trid3nt.workflows.telemac.modules.outputs.read_selafin",
         lambda path, **_kw: spectra if str(path).endswith(".spe") else _wave_field())
     filled = ({"PUNCTUAL_RESULTS_FILE": {"keyword": "PUNCTUAL RESULTS FILE",
                                          "value": named, "provenance": "template"}}
@@ -140,7 +140,7 @@ def test_the_point_asked_about_is_answered_by_the_nearest_printout_point(monkeyp
     """A punctual file carries one variable per printout point, each named for
     the 2D node the engine snapped it onto, so a placed read picks the point
     that stands nearest the place the question was asked at."""
-    from trid3nt_server.inputs import Point
+    from trid3nt.inputs import Point
 
     solved = _solved(monkeypatch, _spectra(
         varnames=[f"F00001PT2D{_NEAR_NODE:06d}", f"F00002PT2D{_FAR_NODE:06d}"],
@@ -180,7 +180,7 @@ def test_a_file_whose_mesh_is_not_polar_is_refused_rather_than_reshaped(monkeypa
 def test_no_module_whose_result_is_a_mesh_reads_a_spectrum():
     """The read is registered on the wave module alone: a spectrum lives over a
     frequency-direction grid, and nothing a hydrodynamic result carries is one."""
-    from trid3nt_server.workflows.telemac.modules import T2D, T3D
+    from trid3nt.workflows.telemac.modules import T2D, T3D
 
     assert "spectrum" in WAC.READS
     assert "spectrum" not in T2D.READS
@@ -223,7 +223,7 @@ def test_the_punctual_file_s_quadrangles_are_read_and_a_result_s_are_refused(
     """The engine joins the polar grid into quadrangles, which no result mesh is
     made of: the spectrum read opens them, and the result read still refuses a
     file whose elements are not the triangles or prisms a mesh has."""
-    from trid3nt_server.workflows.telemac.authoring.selafin_io import (
+    from trid3nt.workflows.telemac.authoring.selafin_io import (
         SelafinReadError, read_selafin)
 
     written = tmp_path / "resWac.spe"
@@ -232,10 +232,10 @@ def test_the_punctual_file_s_quadrangles_are_read_and_a_result_s_are_refused(
         read_selafin(written)
     solved = _solved(monkeypatch, None)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: str(tmp_path / basename))
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.modules.outputs.read_selafin",
+        "trid3nt.workflows.telemac.modules.outputs.read_selafin",
         lambda path, **stated: (read_selafin(path, **stated)
                                 if str(path).endswith(".spe") else _wave_field()))
     read = _read(solved, spectrum())

@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router import hooks as hooks_pkg
-from trid3nt_server.tools.fetchers._router.spec import (
+from trid3nt.tools.fetchers._router import hooks as hooks_pkg
+from trid3nt.tools.fetchers._router.spec import (
     _fetchers_root,
     compose_specs_from_tree,
 )

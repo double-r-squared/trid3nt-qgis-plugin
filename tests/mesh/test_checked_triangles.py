@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.tools.mesh.shared.nodes import MeshNodeError, checked_triangles
-from trid3nt_server.workflows.telemac.authoring import mesh_files
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.tools.mesh.shared.nodes import MeshNodeError, checked_triangles
+from trid3nt.workflows.telemac.authoring import mesh_files
 
 _SQUARE = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]])
 _TWO = np.array([[0, 1, 2], [0, 2, 3]])

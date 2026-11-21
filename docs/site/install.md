@@ -127,7 +127,7 @@ yourself in a real terminal, then restart QGIS.
 ## Daemon-only install (from-scratch)
 
 Follow this on the machine that will actually run the server (`trid3nt_server`
-+ MinIO + the solvers). If this machine will ALSO run QGIS, this is still the
+with `trid3nt` and `trid3nt_harness`, + MinIO + the solvers). If this machine will ALSO run QGIS, this is still the
 right starting point -- see [Both](#both-one-dev-machine) for the one extra step.
 
 ### Prerequisites

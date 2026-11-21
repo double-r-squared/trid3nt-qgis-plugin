@@ -14,10 +14,10 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 
-from trid3nt_server.inputs.gate import confirm
-from trid3nt_server.inputs.gate.pending import _PENDING_CONFIRMATIONS
+from trid3nt_harness.inputs.gate import confirm
+from trid3nt_harness.inputs.gate.pending import _PENDING_CONFIRMATIONS
 from trid3nt_server.server import config
-from trid3nt_server.inputs.gate.errors import CodeExecConfirmationCancelledError, GateConfirmationTimeoutError
+from trid3nt_harness.inputs.gate.errors import CodeExecConfirmationCancelledError, GateConfirmationTimeoutError
 
 
 class _FakeWS:
@@ -106,7 +106,7 @@ async def test_a_cancelled_wait_drops_its_entry() -> None:
 
 
 def test_approval_window_is_bounded(user_settings) -> None:
-    from trid3nt_server.workflows.runtime.module import SlotRefused
+    from trid3nt.workflows.runtime.module import SlotRefused
 
     assert confirm._code_exec_approval_timeout_s() == 180.0
     user_settings(CODE_EXEC_APPROVAL_TIMEOUT_S=42.5)

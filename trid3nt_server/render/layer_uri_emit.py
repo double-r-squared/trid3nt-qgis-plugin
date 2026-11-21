@@ -36,7 +36,7 @@ async def publish_for_emission(layer: LayerURI) -> LayerURI:
     if layer.layer_type != "raster" or not uri.startswith("s3://"):
         return layer
 
-    from .publish import PublishLayerError, publish_layer
+    from trid3nt.render.publish import PublishLayerError, publish_layer
 
     try:
         # Offloaded: publish runs rasterio / GDAL over the COG and must not block the event loop.
@@ -114,8 +114,8 @@ def _resolve_non_raster_legend(layer: LayerURI) -> LayerURI:
     row = {**(layer.style or {})}
     row.setdefault("kind", kind)
     try:
-        from .presets import from_row, paints_a_raster
-        from .publish import legend_for_published_layer
+        from trid3nt.render.presets import from_row, paints_a_raster
+        from trid3nt.render.publish import legend_for_published_layer
 
         if paints_a_raster(from_row(row)):
             return layer
@@ -175,7 +175,7 @@ async def publish_input_layer(
 
 def _cog_object_exists(cog_uri: str) -> bool:
     """Any lookup failure reads as absent, so a fabricated uri registers only once the store confirms it."""
-    from trid3nt_server.store import objects as storage
+    from trid3nt.store import objects as storage
 
     try:
         _, bucket, key = storage.split_object_uri(cog_uri)
@@ -212,7 +212,7 @@ async def publish_raster_input_cog(
         return False
     try:
         # Late import: no load-time rasterio dependency.
-        from trid3nt_server.render.publish import (
+        from trid3nt.render.publish import (
             PublishLayerError,
             publish_layer,
         )

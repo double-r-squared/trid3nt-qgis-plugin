@@ -20,8 +20,8 @@ if not DEV.is_dir():
                 allow_module_level=True)
 
 from dev.testing.canaries import CANARIES  # noqa: E402
-from trid3nt_server.inputs.domain import place_kind  # noqa: E402
-from trid3nt_server.inputs.point import _from_mapping  # noqa: E402
+from trid3nt.inputs.domain import place_kind  # noqa: E402
+from trid3nt.inputs.point import _from_mapping  # noqa: E402
 
 
 def _named_seeds():

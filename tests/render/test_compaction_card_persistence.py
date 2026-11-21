@@ -10,15 +10,15 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.model.adapters.adapter import (
+from trid3nt_harness.model.adapters.model_selection import ModelSettings
+from trid3nt_harness.model.adapters.adapter import (
     CompactionCompleteEvent,
     CompactionStartEvent,
     TextDeltaEvent,
 )
-from trid3nt_server.model.guards.context_budget import COMPACTING_LABEL, compaction_complete_label
+from trid3nt_harness.model.guards.context_budget import COMPACTING_LABEL, compaction_complete_label
 from trid3nt_server.server.turn.compaction import complete_compaction_card, mint_compaction_card
-from trid3nt_server.store.cases import make_file_persistence
+from trid3nt.store.cases import make_file_persistence
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid
 

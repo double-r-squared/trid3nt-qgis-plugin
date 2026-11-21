@@ -13,8 +13,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.weather.fetch_raws_weather import hooks as raws
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.weather.fetch_raws_weather import hooks as raws
 
 
 @pytest.fixture(scope="module")
@@ -61,7 +61,7 @@ def test_what_the_record_lost_to_faults_is_said_on_the_run_journal(spec, caplog)
 
 
 def test_a_record_that_is_all_faults_refuses_rather_than_returning_nothing(spec):
-    from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError
+    from trid3nt.tools.fetchers._router.errors import RouterEmptyError
 
     with pytest.raises(RouterEmptyError):
         _merged(spec, [_observation(0, XRIRGZZ=332.0)])

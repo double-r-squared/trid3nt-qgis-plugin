@@ -9,14 +9,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server import settings
-from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.workflows.runtime.sheet import fill
-from trid3nt_server.workflows.solver import cores
-from trid3nt_server.workflows.solver.solver import _with_cpu_limit
-from trid3nt_server.workflows.telemac.modules import wrapper_for
-from trid3nt_server.workflows.telemac.modules.sheet import stage
+from trid3nt import settings
+from trid3nt.inputs.run_notes import bind_notes, drain_notes
+from trid3nt.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.runtime.sheet import fill
+from trid3nt.workflows.solver import cores
+from trid3nt.workflows.solver.solver import _with_cpu_limit
+from trid3nt.workflows.telemac.modules import wrapper_for
+from trid3nt.workflows.telemac.modules.sheet import stage
 
 T2D = wrapper_for("telemac2d")
 ART = wrapper_for("artemis")
@@ -28,8 +28,8 @@ def _host(monkeypatch, count: int, here: bool) -> None:
 
 
 def _staged(monkeypatch, tmp_path, sheet, **run):
-    from trid3nt_server.workflows.solver import staging
-    from trid3nt_server.workflows.telemac.authoring import serializer
+    from trid3nt.workflows.solver import staging
+    from trid3nt.workflows.telemac.authoring import serializer
 
     seen: dict = {}
 
@@ -148,13 +148,13 @@ def test_a_direct_solve_stays_serial_and_takes_no_default(monkeypatch, tmp_path)
     _host(monkeypatch, 8, True)
     sheet = fill(ART, GEOMETRY_FILE="g.slf", BOUNDARY_CONDITIONS_FILE="g.cli")
     assert ART.MODULE_INPUT["SOLVER"].engine_default == 8
-    from trid3nt_server.workflows.telemac.modules.sheet import _with_container_cores
+    from trid3nt.workflows.telemac.modules.sheet import _with_container_cores
 
     assert PROCESSORS not in _with_container_cores(sheet).filled
 
 
 def test_geoclaw_bouss_takes_container_cores_over_its_threads(monkeypatch):
-    from trid3nt_server.workflows.geoclaw.workflow import _processes
+    from trid3nt.workflows.geoclaw.workflow import _processes
 
     _host(monkeypatch, 8, True)
     assert _processes({}, "geoclaw_bouss") == 7
@@ -166,8 +166,8 @@ def test_geoclaw_bouss_takes_container_cores_over_its_threads(monkeypatch):
 def test_local_cores_bounds_the_mesh_child(tmp_path):
     import mesh_builds
 
-    from trid3nt_server.tools.mesh.meshers import MeshToolError
-    from trid3nt_server.tools.mesh.session import _in_child
+    from trid3nt.tools.mesh.meshers import MeshToolError
+    from trid3nt.tools.mesh.session import _in_child
 
     token = settings.bind_run({"LOCAL_CORES": 1})
     try:

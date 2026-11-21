@@ -14,13 +14,13 @@ from importlib import import_module
 
 from datetime import datetime, timezone
 
-from trid3nt_server.tools.search.fetch import (
+from trid3nt_harness.tools.search.fetch import (
     FetchArgError, FetchReachError, FetchSourceError, resolve_fetch)
-from trid3nt_server.tools.search.find_sources import find_sources
+from trid3nt_harness.tools.search.find_sources import find_sources
 
 # The package re-exports the tool under its own name, so the MODULE the world
 # fixture patches is reached by import rather than by attribute.
-fs = import_module("trid3nt_server.tools.search.find_sources.find_sources")
+fs = import_module("trid3nt_harness.tools.search.find_sources.find_sources")
 
 from tests.search.test_source_match import CONUS, EUROPE, WILLAMETTE, surface
 
@@ -32,7 +32,7 @@ OREGON_SHELF_BOX = [-124.6, 45.9, -124.5, 46.0]
 @pytest.fixture(autouse=True)
 def case():
     """One case's registry active, as the dispatch binds it, so every row is held under a handle."""
-    from trid3nt_server.render.uri_registry import (
+    from trid3nt.render.uri_registry import (
         SessionUriRegistry, activate_registry, deactivate_registry)
 
     reg = SessionUriRegistry(session_id="case-one")
@@ -46,8 +46,8 @@ def world(monkeypatch):
     """Register a set of (source, row) pairs as the whole world, with the params
     each source states, so the ask is built off declarations alone."""
     from trid3nt_contracts.tool_registry import AtomicToolMetadata
-    from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
-    from trid3nt_server.tools.fetchers._router import registration
+    from trid3nt.tools import TOOL_REGISTRY, RegisteredTool
+    from trid3nt.tools.fetchers._router import registration
 
     def _register(pairs, params=None):
         rows: dict[str, list] = {}
@@ -216,7 +216,7 @@ async def test_the_gauge_row_is_called_by_the_code_its_vocabulary_names():
     """A slot naming the variable it observes reaches the gauges through the
     same ``need:of`` the portal is reached through: the row maps TEMPERATURE
     onto the source's own word, which here is the NWIS parameter code."""
-    from trid3nt_server.tools.search.match import (
+    from trid3nt.tools.search.match import (
         Need, ask_for, base_ask, match, sources_with_coverage)
 
     need = Need(slot="observe", data_class="water quality sample",

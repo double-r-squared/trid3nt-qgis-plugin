@@ -11,7 +11,7 @@ from typing import Any
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt.tools import TOOL_REGISTRY
 
 logger = logging.getLogger("trid3nt_server.server")
 
@@ -85,7 +85,7 @@ def _tool_search_tool_names() -> frozenset[str]:
     set and the expand simply no-ops."""
     names: set[str] = set()
     try:
-        from trid3nt_server.tools.search.search_tools.search_tools import _SEARCH_TOOLS_METADATA
+        from trid3nt_harness.tools.search.search_tools.search_tools import _SEARCH_TOOLS_METADATA
 
         if getattr(_SEARCH_TOOLS_METADATA, "name", None):
             names.add(_SEARCH_TOOLS_METADATA.name)
@@ -100,7 +100,7 @@ def _default_declarable_registry() -> dict[str, Any]:
     every tool except the ``catalog`` and ``internal`` tiers, which are
     registry-resolvable but never declared to the model, and every data source,
     which the model reaches through ``find_sources`` and ``fetch``."""
-    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+    from trid3nt.tools.fetchers._router.registration import registered_spec_names
 
     sources = registered_spec_names()
     _reg = {

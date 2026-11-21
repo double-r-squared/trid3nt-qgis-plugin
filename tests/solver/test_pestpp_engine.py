@@ -19,19 +19,19 @@ from typing import Any
 
 import pytest
 
-import trid3nt_server.workflows.solver.solver as solver_mod
-from trid3nt_server.store import objects as storage
-from trid3nt_server.workflows.pestpp import outputs, staging
-from trid3nt_server.workflows.pestpp.engine import (
+import trid3nt.workflows.solver.solver as solver_mod
+from trid3nt.store import objects as storage
+from trid3nt.workflows.pestpp import outputs, staging
+from trid3nt.workflows.pestpp.engine import (
     DEFAULT_PESTPP_IMAGE,
     PESTPP_SOLVER_NAME,
     _build_argv,
     _spec,
     classify_exit,
 )
-from trid3nt_server.workflows.pestpp.errors import PestppError
-from trid3nt_server.workflows.solver.code_provenance import engine_paths, resolve_engine
-from trid3nt_server.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
+from trid3nt.workflows.pestpp.errors import PestppError
+from trid3nt.workflows.solver.code_provenance import engine_paths, resolve_engine
+from trid3nt.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "pestpp"
 _WORKER = Path(__file__).resolve().parents[2] / "workers" / "pestpp" / "entrypoint.py"
@@ -55,7 +55,7 @@ def _study(tmp_path: Path) -> Path:
 def test_the_engine_holds_its_registry_rows():
     assert PESTPP_SOLVER_NAME in LOCAL_SOLVER_SPEC_REGISTRY
     assert resolve_engine("pestpp") == "pestpp"
-    assert engine_paths("pestpp") == ("workers/pestpp/", "trid3nt_server/workflows/pestpp/")
+    assert engine_paths("pestpp") == ("workers/pestpp/", "trid3nt/workflows/pestpp/")
 
 
 def test_the_spec_is_local_docker_with_network_none_and_reads_the_record():

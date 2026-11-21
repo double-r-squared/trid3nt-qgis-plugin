@@ -1,0 +1,738 @@
+"""THE MATCH: a slot asks, a fetcher answers, nobody writes the ladder.
+
+A slot states a NEED (class, place, window, frame) and every fetcher states its COVERAGE. The filter is hard on class and place;
+the window is hard for a series and a sort key for a surface; a differing datum is FLAGGED here and refused at the offset row.
+The sort reads facts in order: how the numbers were come by, distance, cell against the mesh, recency, the zero counted from.
+What comes back is one ranked list: the card renders it, the tool result carries it on a tie, the sheet stores the pick.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import logging
+import re
+from dataclasses import dataclass
+from typing import Sequence
+
+from typing import Any, Mapping
+
+from trid3nt_contracts.coverage import (
+    PROVENANCE_KINDS, Coverage, CoverageExtent, CoveragePoint, SourceChoice,
+    SourceOption)
+
+from trid3nt.workflows.runtime.errors import DeclarationError
+
+logger = logging.getLogger(__name__)
+
+__all__ = ["HELD_NOTHING", "LOOSEN_DATUM", "LOOSEN_WINDOW", "NO_MOMENT", "Need", "RANKED_ROWS",
+           "ask_for", "base_ask", "covered_sources", "dropped_from", "excluded", "filled", "instant",
+           "match", "needed", "picked_row", "remedy", "shown_params", "sources_with_coverage",
+           "unreached", "window_params"]
+
+#: How many rows the ranked list carries. Five: enough for the facts to be
+#: comparable in one read, few enough that a model answering with a row number
+#: is choosing rather than scanning.
+RANKED_ROWS = 5
+_NAMED_EXCLUSIONS = 3
+
+
+@dataclass(frozen=True, slots=True)
+class Need:
+    """What one slot asks the world for.
+
+    Every field but the class is read off the run: the place is the domain's, the window the run's, the frame the bed's."""
+
+    slot: str
+    data_class: str
+    lon: float | None = None
+    lat: float | None = None
+    #: The instants the run opens and closes at, ISO. A series source that does
+    #: not span them has no record for this run, and a run that states NEITHER
+    #: asks no series source at all - a record has to be a record OF something.
+    opens: str | None = None
+    until: str | None = None
+    #: The vertical frame the run is solved on, as the bed states it.
+    frame: str | None = None
+    #: WHAT OF THE CLASS the slot asks for, "" for any. Where a source of the class publishes it as its quantity, the rows
+    #: publishing another are excluded; anywhere else it is the published variable or feature, and a row with no word for it is.
+    of: str = ""
+    #: WHAT IS MEASURED, as the run states it in the source's own word ("Boron"), "" where the run states none. A row
+    #: asking by the need hears it in place of its word for ``of``; a row that cannot be told it is excluded.
+    measured: str = ""
+    #: The cell the mesh resolves, which is what a source's own cell is ranked
+    #: against - finer than the mesh is detail the mesh cannot carry.
+    mesh_m: float | None = None
+    #: The run-level statement that loosens ONE filter. It shows as the user's
+    #: choice and never as the match's own judgement.
+    loosen: str = ""
+    #: The source the run NAMES for this slot, "" where it names none. A named
+    #: source the filters excluded is a refusal, not a pick.
+    pick: str = ""
+    #: THE SHAPE the slot reads this class as, "" for any. A class published as both a coastline LINE and a waterbody POLYGON
+    #: cannot hand a polygon to a step that cuts with a line.
+    geometry: str = ""
+    #: THE DOMAIN'S OWN WATER: the outline a gauge has to stand on for its flow
+    #: to be this run's flow, with the note saying whether the run drew the
+    #: polygon or only its box. ``None`` where the run states no domain.
+    water: CoverageExtent | None = None
+
+    def __post_init__(self) -> None:
+        if not self.data_class:
+            raise DeclarationError(
+                f"the {self.slot!r} slot declares a need with no data class: a "
+                "match filters on the class first, and a need without one asks "
+                "the whole catalogue for anything.")
+
+
+#: The loosening a run states, by the filter it lifts. A window stand-in takes
+#: the nearest record the source holds; an unconverted datum takes a source on
+#: another zero as it is.
+LOOSEN_WINDOW = "window"
+LOOSEN_DATUM = "datum"
+
+
+def sources_with_coverage() -> list[tuple[str, Coverage]]:
+    """Every row every registered fetcher states, by source name.
+
+    ONE PAIR PER ROW: a source serving two classes is two candidates, filtered on the class each serves.
+    A source with no row is never matched."""
+    from trid3nt.tools.fetchers._router.registration import _SPEC_REGISTRY
+
+    return sorted(((name, row) for name, spec in _SPEC_REGISTRY.items()
+                   for row in spec.coverage),
+                  key=lambda pair: (pair[0], pair[1].data_class))
+
+
+def covered_sources() -> frozenset[str]:
+    """The fetchers a row speaks for: the ones the match can reach."""
+    return frozenset(name for name, _row in sources_with_coverage())
+
+
+def match(need: Need,
+          candidates: Sequence[tuple[str, Coverage]]) -> SourceChoice:
+    """The ranked list for one need, PURE over the declarations it is handed.
+
+    Survivors first in rank order, then what each filter excluded and why. The
+    caller probes the top survivor and drops it on empty."""
+    kept: list[tuple[tuple[float, ...], str, Coverage]] = []
+    dropped: list[SourceOption] = []
+    rows = [(name, coverage) for name, coverage in candidates
+            if coverage.data_class == need.data_class]
+    # ``of`` FILTERS BY QUANTITY only where some row of the class publishes that quantity; anywhere else it is a column word.
+    by_quantity = bool(need.of) and need.of in {
+        _quantity(name) for name, _coverage in rows}
+    for name, coverage in rows:
+        reason = (_no_moment(need, coverage) or _unaskable(name, coverage, need)
+                  or _wrong_shape(name, need)
+                  or _excluded(need, coverage, name, by_quantity))
+        if reason:
+            dropped.append(_option(name, coverage, need, excluded=reason))
+            continue
+        kept.append((_rank(need, coverage), name, coverage))
+    kept.sort(key=lambda row: (row[0], row[1]))
+    survivors = [_option(name, coverage, need) for _key, name, coverage in kept]
+    tie = len(kept) > 1 and kept[0][0] == kept[1][0]
+    if need.pick:
+        survivors = _named_first(need, survivors, dropped)
+        tie = False
+    ranked = (survivors + dropped)[:RANKED_ROWS]
+    picked = survivors[0].fetcher if survivors else ""
+    return SourceChoice(
+        slot=need.slot, need=need.data_class, rows=ranked, picked=picked,
+        sentence=_sentence(need, survivors, dropped), tie=tie,
+        loosened=need.loosen, picked_by_user=bool(need.pick))
+
+
+def _named_first(need: Need, survivors: Sequence[SourceOption],
+                 dropped: Sequence[SourceOption]) -> list[SourceOption]:
+    """The list with the RUN's named source at its head; the list stays whole, the pick is never a way past the filters."""
+    named = next((row for row in survivors if row.fetcher == need.pick), None)
+    if named is None:
+        excluded = next((row.excluded for row in dropped
+                         if row.fetcher == need.pick), "")
+        raise DeclarationError(
+            f"the run picks {need.pick!r} for the {need.slot!r} slot and it is "
+            "not a survivor of the match: "
+            + (excluded or f"no row on it serves {need.data_class}")
+            + ". Pick a source the list carries, or state the value.")
+    return [named] + [row for row in survivors if row.fetcher != need.pick]
+
+
+def dropped_from(choice: SourceChoice, fetcher: str, why: str) -> SourceChoice:
+    """The same list with ``fetcher`` moved out of the pick: what the PROBE found.
+
+    A source that answered nothing over this domain is excluded by the world
+    rather than by a filter, and the next survivor fills the slot."""
+    rows = [row.model_copy(update={"excluded": why}) if row.fetcher == fetcher
+            else row for row in choice.rows]
+    nxt = next((row.fetcher for row in rows
+                if row.fetcher != fetcher and not row.excluded), "")
+    return choice.model_copy(update={
+        "rows": rows, "picked": nxt, "tie": False,
+        "sentence": _probe_sentence(choice, rows, fetcher, nxt)})
+
+
+#: What the probe can supply off the run: box, seed and window. Anything else a source requires is askable only where its row says what to pass.
+_ASKABLE = frozenset({"bbox", "seed_point", "start_date", "end_date",
+                      "valid_time"})
+
+#: THE CLASS WHOSE PLACE FILTER IS THE DOMAIN ITSELF: a level propagates up a reach, but a discharge is one section's water,
+#: so a gauge not on this domain's water measures another river's flow.
+_ON_THE_WATER = "discharge series"
+
+#: The param a station-addressed source is called by. A row whose extent lists
+#: its stations answers it with the nearest one; a discovered network is called
+#: by box and never states one.
+_STATION = "station"
+
+
+def _required(name: str) -> list[str]:
+    """The params this source refuses to be called without."""
+    from trid3nt.tools.fetchers._router.registration import _SPEC_REGISTRY
+
+    spec = _SPEC_REGISTRY.get(name)
+    if spec is None:
+        return []
+    return [param for param, decl in spec.params.items()
+            if bool(getattr(decl, "required", None)
+                    or (isinstance(decl, dict) and decl.get("required")))]
+
+
+def _wrong_shape(name: str, need: Need) -> str:
+    """Why this source's own output cannot be read as the shape the slot needs."""
+    if not need.geometry:
+        return ""
+    from trid3nt.tools.fetchers._router.registration import _SPEC_REGISTRY
+
+    spec = _SPEC_REGISTRY.get(name)
+    output = getattr(spec, "output", None)
+    # A raster or a record has no geometry to state: what it publishes is its layer type.
+    kind = str(getattr(output, "layer_type", "") or "")
+    published = str((getattr(output, "style", None) or {}).get("geometry")
+                    or (kind if kind != "vector" else ""))
+    if not published or published == _SHAPE_WORD.get(need.geometry, need.geometry):
+        return ""
+    return (f"publishes a {published} layer and this slot reads its class as a "
+            f"{need.geometry}")
+
+
+#: The slot's shape word in the vocabulary a source's own style row is written in.
+_SHAPE_WORD: Mapping[str, str] = {"polyline": "line"}
+
+
+def needed(name: str, coverage: Coverage, need: Need) -> list[str]:
+    """The params this source requires that nothing in the need or the row can fill."""
+    asked = set(_ASKABLE) | set(coverage.ask)
+    if coverage.window.series:
+        asked |= {param for param, _ in _INSTANT_PARAMS}
+    if need.lon is None or need.lat is None:
+        asked.discard("seed_point")
+    if coverage.extent.points or coverage.extent.read_from:
+        asked.add(_STATION)
+    return [param for param in _required(name) if param not in asked]
+
+
+def _unaskable(name: str, coverage: Coverage, need: Need) -> str:
+    """Why the probe could not call this source at all, or "" where it can; a param is askable only where the NEED holds its value."""
+    needs = needed(name, coverage, need)
+    if not needs:
+        return ""
+    return (f"asks to be called by {', '.join(needs)} and its row "
+            "says nothing to pass for it")
+
+
+#: Stations read in from a listing, by the hook that read them. A listing is a
+#: bounded static fact about a network, so it is read once per process.
+_LISTED: dict[str, list[CoveragePoint]] = {}
+
+
+def _station_set(coverage: Coverage) -> CoverageExtent:
+    """This row's extent with its listed stations read in; an unreadable listing leaves the extent as declared."""
+    hook = coverage.extent.read_from
+    if not hook or coverage.extent.points:
+        return coverage.extent
+    if hook not in _LISTED:
+        from trid3nt.tools.fetchers._router.hooks import resolve_hook
+
+        try:
+            _LISTED[hook] = list(resolve_hook(hook)())
+        except Exception as exc:  # noqa: BLE001 - an unread listing is not a match failure
+            logger.warning("the %s station listing did not answer (%s); the "
+                           "region's own outline stands for it", hook, exc)
+            _LISTED[hook] = []
+    listed = _LISTED[hook]
+    return coverage.extent.model_copy(update={"points": listed}) if listed \
+        else coverage.extent
+
+
+#: The two params a source states its window in, by spelling and instant resolution: a DATE pair is a day, a TIME pair is the moment.
+#: A source that spells neither is asked over none.
+_WINDOW_PARAMS = ((("start_date", "end_date"), 10),
+                  (("start_time", "end_time"), None))
+
+
+#: The params a source states ONE moment in, by spelling and instant resolution: a series row is asked the run's opening
+#: in the first of these it declares (``valid_time`` is asked of any row).
+_INSTANT_PARAMS = (("valid_time", None), ("date", 10), ("cycle", None))
+
+
+#: How long ONE cadence is, by the word a row leads its cadence with. A record
+#: that speaks for a moment is bracketed by the minute either side; a word none
+#: of these reads is a day, the coarsest cadence a series is published at.
+_CADENCES: Mapping[str, dt.timedelta] = {
+    "hourly": dt.timedelta(hours=1),
+    "daily": dt.timedelta(days=1),
+    "instantaneous": dt.timedelta(minutes=1)}
+
+#: A cadence stated as a count of minutes, which is how the sub-hourly networks
+#: state theirs.
+_MINUTE_COUNT = re.compile(r"(\d+)\s*-?\s*min")
+
+_A_DAY = dt.timedelta(days=1)
+
+
+def base_ask(choice: SourceChoice, purpose: str, bbox: Sequence[float] | None,
+             lon: float | None, lat: float | None, opens: str | None,
+             until: str | None) -> dict[str, Any]:
+    """The place and the window in the params THIS source states them in; a SERIES window BRACKETS the run by one cadence each side.
+
+    A span asks a series for its whole record through the param its row switches it on with; a moment leaves it off."""
+    from trid3nt.tools.fetchers._router.registration import _SPEC_REGISTRY
+
+    spec = _SPEC_REGISTRY.get(choice.picked)
+    params = dict(getattr(spec, "params", {}) or {})
+    ask: dict[str, Any] = {"purpose": purpose}
+    switch = getattr(getattr(picked_row(choice), "window", None), "series_param", "")
+    if switch in params and opens and until and instant(until) != instant(opens):
+        ask[switch] = True
+    if "bbox" in params and bbox is not None:
+        ask["bbox"] = [float(v) for v in bbox]
+    if "seed_point" in params and lon is not None and lat is not None:
+        ask["seed_point"] = [lon, lat]
+    window = next(((pair, cut) for pair, cut in _WINDOW_PARAMS
+                   if pair[0] in params and pair[1] in params), None)
+    if opens and window is not None:
+        (first, last), cut = window
+        step = _cadence(picked_row(choice))
+        ask[first] = _moved(opens, -step, cut)
+        ask[last] = _moved(until or opens, step, cut)
+    elif opens:
+        row = picked_row(choice)
+        series = row is not None and row.window.series
+        spelled = next(((param, cut) for param, cut in _INSTANT_PARAMS
+                        if param in params and (series or param == "valid_time")), None)
+        if spelled is not None:
+            ask[spelled[0]] = str(opens)[:spelled[1]]
+    return ask
+
+
+def _cadence(row: Coverage | None) -> dt.timedelta:
+    """One step of the record this row publishes, off the LEADING word of its cadence; a surface is asked over the window itself."""
+    if row is None or not row.window.series:
+        return dt.timedelta(0)
+    stated = row.window.cadence.strip().lower().split()
+    word = stated[0].strip(",;:()") if stated else ""
+    minutes = _MINUTE_COUNT.match(word)
+    if minutes:
+        return dt.timedelta(minutes=int(minutes.group(1)))
+    return _CADENCES.get(word, _A_DAY)
+
+
+def _moved(stamp: str, step: dt.timedelta, cut: int | None) -> str:
+    """One end of the asked window, moved one cadence OUTWARD so the run's own opening and close are measured, not just inside it."""
+    moment = instant(stamp)
+    if moment is None:
+        return str(stamp)[:cut]
+    return (moment + step).isoformat()[:cut]
+
+
+#: How a row's ask block names one of the NEED's own attributes rather
+#: than a literal value. The question states its reach once, generically; the
+#: row that knows both names maps it onto the param this source states it in.
+_FROM_NEED = "need:"
+
+def _asked(value: str, needs: Mapping[str, Any]) -> Any:
+    """One ask value: the need attribute it names, or the literal it is; ``None`` leaves the param off so the source's default answers."""
+    text = str(value)
+    if not text.startswith(_FROM_NEED):
+        return value
+    return needs.get(text[len(_FROM_NEED):])
+
+
+def ask_for(choice: SourceChoice, base: Mapping[str, Any], lon: float | None,
+            lat: float | None, needs: Mapping[str, Any] | None = None
+            ) -> dict[str, Any]:
+    """What the PICKED source is called with: the run's own facts, plus what the matched ROW says it takes.
+
+    The row, not the source's default, is what the match weighed. A source called by station name gets the nearest listed
+    station; a param mapped to a need attribute is given that."""
+    ask = dict(base)
+    row = picked_row(choice)
+    if row is None:
+        return ask
+    stated = dict(needs or {})
+    if stated.get("measured"):
+        stated["of"] = stated["measured"]
+    elif stated.get("of"):
+        # The one attribute a source hears in its OWN word: the row that knows
+        # both names is the row that was matched.
+        stated["of"] = row.word_for(str(stated["of"])) or None
+    ask.update({param: _asked(value, stated)
+                for param, value in row.ask.items()
+                if _asked(value, stated) is not None})
+    if lon is None or lat is None:
+        return ask
+    station = _station_set(row).nearest(lon, lat)
+    if station is None:
+        return ask
+    if _STATION in _required(choice.picked):
+        ask[_STATION] = station.id
+    elif "bbox" in ask:
+        ask["bbox"] = _reaching(ask["bbox"], station)
+    return ask
+
+
+def filled(choice: SourceChoice, purpose: str, bbox: Sequence[float] | None,
+           need: Need, needs: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """THE FILLER: the full request the picked source is called with for this need - the place and window in its own
+    params, then what its matched row says it takes. A template's slot and a find_sources row are filled here alike."""
+    ask = ask_for(choice, base_ask(choice, purpose, bbox, need.lon, need.lat, need.opens,
+                                   need.until), need.lon, need.lat, needs)
+    if not purpose:
+        ask.pop("purpose", None)
+    return ask
+
+
+def unreached(choice: SourceChoice, need: Need) -> str:
+    """Why the picked source's row does not reach this place and window, or "" where it does or states no row to check."""
+    row = picked_row(choice)
+    return excluded(need, row, choice.picked) if row is not None else ""
+
+
+def excluded(need: Need, coverage: Coverage, name: str = "") -> str:
+    """Why the place, window or quantity filter drops this row, or "" where it reaches."""
+    return _excluded(need, coverage, name)
+
+
+def window_params() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The params a source states the opening and the close of a window in, every spelling the filler writes."""
+    return ((*(pair[0] for pair, _cut in _WINDOW_PARAMS), *(p for p, _cut in _INSTANT_PARAMS)),
+            tuple(pair[1] for pair, _cut in _WINDOW_PARAMS))
+
+
+def shown_params(name: str, choice: SourceChoice, request: Mapping[str, Any]
+                 ) -> tuple[str, list[float] | None, str]:
+    """A filled request in our words: READY or what it still needs, the box it asks over, and the params it also takes.
+
+    Hidden are the place and window params (shown as box and window), what the row fixes for its class, and the series switch."""
+    from trid3nt.tools.fetchers._router.registration import _SPEC_REGISTRY
+
+    params = dict(getattr(_SPEC_REGISTRY.get(name), "params", {}) or {})
+    row = picked_row(choice)
+    starts, ends = window_params()
+    hidden = {"bbox", "seed_point", "purpose", _STATION, *starts, *ends,
+              *(row.ask if row is not None else ()),
+              row.window.series_param if row is not None else ""}
+    needs = [param for param in _required(name) if param not in request]
+    accepts = [param for param in params if param not in request and param not in hidden
+               and param not in needs]
+    box = request.get("bbox")
+    return (f"needs: {', '.join(needs)}" if needs else "READY",
+            [float(v) for v in box] if box is not None else None, ", ".join(accepts))
+
+
+def remedy(coverage: Coverage, need: Need) -> str:
+    """The edit that would make an excluded row reach: a window inside its record, else a box inside its extent."""
+    if coverage.window.series and _outside_window(need, coverage):
+        return (f"a window inside {coverage.window.earliest or 'its first record'} to "
+                f"{coverage.window.latest or 'now'}")
+    if coverage.extent.kind == "stations":
+        return f"a box within {coverage.reach_km or 0.0:g} km of one of its stations"
+    return f"a box inside {coverage.extent.note or 'its stated extent'}"
+
+
+def _reaching(bbox: Any, station: CoveragePoint) -> list[float]:
+    """The run's own box, widened to REACH the station the row was ranked on."""
+    west, south, east, north = (float(v) for v in bbox)
+    return [min(west, station.lon - AROUND_PLACE_DEG),
+            min(south, station.lat - AROUND_PLACE_DEG),
+            max(east, station.lon + AROUND_PLACE_DEG),
+            max(north, station.lat + AROUND_PLACE_DEG)]
+
+
+#: How far past a station or a point the widened box reaches, in degrees - about a hundred
+#: metres, so a station ON the edge is inside the box rather than on its line.
+AROUND_PLACE_DEG = 0.001
+
+
+def picked_row(choice: SourceChoice) -> Coverage | None:
+    """The row the pick was ranked on: this source's row of the class asked for AND of
+    the kind the ranked list shows."""
+    from trid3nt.tools.fetchers._router.registration import _SPEC_REGISTRY
+
+    spec = _SPEC_REGISTRY.get(choice.picked)
+    if spec is None:
+        return None
+    kind = next((row.kind for row in choice.rows
+                 if row.fetcher == choice.picked and not row.excluded), "")
+    return next((row for row in spec.coverage
+                 if row.data_class == choice.need
+                 and (not kind or row.kind == kind)), None)
+
+
+def _quantity(name: str) -> str:
+    """The quantity this source states it publishes (its ``normalize.quantity``), "" where it states none."""
+    from trid3nt.tools.fetchers._router.registration import _SPEC_REGISTRY
+
+    spec = _SPEC_REGISTRY.get(name)
+    normalize = getattr(spec, "normalize", None)
+    return str(getattr(normalize, "quantity", None) or "")
+
+
+def _excluded(need: Need, coverage: Coverage, name: str = "",
+              by_quantity: bool = False) -> str:
+    """Why a filter drops this source, or "" where it survives; the window is hard for a SERIES only, the datum is never a filter."""
+    unpublished = (_other_quantity(name, need) if by_quantity
+                   else _unpublished(need, coverage))
+    if unpublished:
+        return unpublished
+    if need.lon is not None and need.lat is not None:
+        extent = _station_set(coverage)
+        if need.data_class == _ON_THE_WATER and need.water is not None:
+            off = _off_the_water(need, extent)
+            if off:
+                return off
+        else:
+            away = extent.distance_km(need.lon, need.lat)
+            reach = coverage.reach_km or 0.0
+            if away > reach:
+                where = coverage.extent.note or "stated extent"
+                if coverage.extent.kind == "stations":
+                    return (f"its nearest station is about {away:.0f} km away "
+                            f"and one serves {reach:g} km: {where}")
+                return f"does not reach this place: {where}"
+    if coverage.window.series and need.loosen != LOOSEN_WINDOW:
+        outside = _outside_window(need, coverage)
+        if outside:
+            return outside
+    return ""
+
+
+#: The head of the reason a series source is not asked at all, which is also how
+#: the refusal names it: one phrasing, so the row and the sentence cannot drift.
+NO_MOMENT = "no moment was stated"
+#: What a row says once it was ASKED and answered nothing; the probe writes it and the sentence reads it back.
+HELD_NOTHING = "held nothing here"
+
+
+def _no_moment(need: Need, coverage: Coverage) -> str:
+    """Why a SERIES source is not asked when the run states no moment, or ""; asked over none it answers with its latest record."""
+    if not coverage.window.series or need.opens:
+        return ""
+    return (f"{NO_MOMENT}, so it is not asked: a series source reached over no "
+            "window answers with its latest record")
+
+
+def _unpublished(need: Need, coverage: Coverage) -> str:
+    """Why a source publishing none of what the slot asked for leaves the list, or ""; a row with no word for it publishes something else.
+    A run stating what it measures is asked of a row that hears the need in its own word."""
+    if need.measured:
+        if _FROM_NEED + "of" in map(str, coverage.ask.values()):
+            return ""
+        return (f"is asked for no measured word, so it cannot be told "
+                f"{need.measured}")
+    if not need.of or coverage.word_for(need.of):
+        return ""
+    known = ", ".join(sorted(coverage.vocabulary)) or "nothing"
+    return (f"publishes nothing it calls {need.of}; its row states a word for "
+            f"{known}")
+
+
+def _other_quantity(name: str, need: Need) -> str:
+    """Why a source publishing another quantity than the one the slot asked for leaves the list, or ""."""
+    published = _quantity(name)
+    if published == need.of:
+        return ""
+    return (f"publishes {published or 'no stated quantity'} and this slot asks "
+            f"for {need.of}")
+
+
+def _off_the_water(need: Need, extent: CoverageExtent) -> str:
+    """Why this source's stations do not stand on the domain's own water, or ""; a network with no listing states no station here."""
+    water = need.water
+    if water is None:
+        return ""
+    stations = extent.listed()
+    if not stations:
+        return ""
+    cell_km = float(need.mesh_m or 0.0) / 1000.0
+    nearest = min(stations,
+                  key=lambda p: water.distance_km(p.lon, p.lat))
+    away = water.distance_km(nearest.lon, nearest.lat)
+    if away <= cell_km:
+        return ""
+    return (f"its nearest station {nearest.id} stands about {away:.0f} km off "
+            f"{water.note}: a discharge is the water passing one section, so a "
+            "gauge off this domain's water reports another flow")
+
+
+def _outside_window(need: Need, coverage: Coverage) -> str:
+    """Whether the run's window falls outside what a series source holds."""
+    opens, until = instant(need.opens), instant(need.until or need.opens)
+    if opens is None:
+        return ""
+    earliest, latest = (instant(coverage.window.earliest),
+                        instant(coverage.window.latest))
+    if latest is None and coverage.kind == "measured":
+        # An instrument has not recorded tomorrow: a measured series that states
+        # no close reports TO NOW, and a run opening past now has no record from
+        # it however far forward the source keeps answering.
+        latest = dt.datetime.now(dt.timezone.utc)
+        if until is not None and until > latest:
+            return (f"reports to now and this run closes at "
+                    f"{need.until or need.opens}")
+    if earliest is not None and opens < earliest:
+        return (f"reports from {coverage.window.earliest} and this run opens at "
+                f"{need.opens}")
+    if latest is not None and until is not None and until > latest:
+        return (f"reports to {coverage.window.latest} and this run closes at "
+                f"{need.until or need.opens}")
+    return ""
+
+
+def instant(value: str | None) -> dt.datetime | None:
+    """One ISO stamp as a UTC instant, or ``None`` where it is unreadable."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        read = dt.datetime.fromisoformat(
+            text[:-1] + "+00:00" if text.endswith("Z") else text)
+    except ValueError:
+        return None
+    return read if read.tzinfo is not None else read.replace(tzinfo=dt.timezone.utc)
+
+
+def _rank(need: Need, coverage: Coverage) -> tuple[float, ...]:
+    """The sort key, on FACTS, in the order they decide: provenance kind, distance, cell against the mesh, recency, datum.
+
+    A source coarser than the mesh ranks below every source that resolves it; among those the finer ranks first. Lower sorts earlier."""
+    return (float(PROVENANCE_KINDS.index(coverage.kind)),
+            _distance_km(need, coverage), _cell_rank(need, coverage),
+            -_recency(coverage), 0.0 if _on_frame(need, coverage) else 1.0)
+
+
+def _distance_km(need: Need, coverage: Coverage) -> float:
+    """How far the place is from what this source holds, zero where it is inside."""
+    if need.lon is None or need.lat is None:
+        return 0.0
+    return _station_set(coverage).distance_km(need.lon, need.lat)
+
+
+def _cell_rank(need: Need, coverage: Coverage) -> float:
+    """Where this source's cell stands against the mesh the run resolves; a source stating no cell ranks after every one that does."""
+    cell = coverage.resolution_m
+    if cell is None:
+        return float("inf")
+    if need.mesh_m is None:
+        return 0.0
+    if cell <= float(need.mesh_m):
+        return -1.0 / cell
+    return cell
+
+
+def _recency(coverage: Coverage) -> float:
+    """How current this source's records are, as a sortable instant; a source reporting TO NOW states no ``latest`` and is infinite."""
+    latest = instant(coverage.window.latest)
+    return latest.timestamp() if latest is not None else float("inf")
+
+
+def _on_frame(need: Need, coverage: Coverage) -> bool:
+    """Is this source already counted from the run's own frame? A differing or unstated datum is a flag, not an exclusion."""
+    from trid3nt.inputs.vertical_datum import names_frame
+
+    if not need.frame or not coverage.datum:
+        return not need.frame
+    return names_frame(coverage.datum, need.frame)
+
+
+def _option(name: str, coverage: Coverage, need: Need, *,
+            excluded: str = "") -> SourceOption:
+    """One ranked row: the source and the four facts it is picked on."""
+    return SourceOption(
+        fetcher=name, kind=coverage.kind, distance=_range(need, coverage),
+        resolution=_cell(coverage), recency=_currency(coverage),
+        datum=coverage.datum or "no datum stated",
+        extent=coverage.extent.note or coverage.extent.kind,
+        excluded=excluded)
+
+
+def _range(need: Need, coverage: Coverage) -> str:
+    """How far the place is from this source, in the words the card shows."""
+    if need.lon is None or need.lat is None:
+        return ""
+    away = _distance_km(need, coverage)
+    if away <= 0.0:
+        return "over this place"
+    return f"about {away:.0f} km away"
+
+
+def _cell(coverage: Coverage) -> str:
+    if coverage.resolution_m is not None:
+        return f"{coverage.resolution_m:g} m"
+    return "stations" if coverage.extent.kind == "stations" else "no cell stated"
+
+
+def _currency(coverage: Coverage) -> str:
+    if coverage.window.series:
+        return coverage.window.cadence or "a reported series"
+    return f"measured to {coverage.window.latest}" if coverage.window.latest \
+        else "static"
+
+
+def _named_exclusions(rows: Sequence[SourceOption]) -> str:
+    """The first few exclusions in a sentence, the rest counted: the wire's
+    sentence field is bounded and a class grows rows."""
+    shown = "; ".join(f"{row.fetcher} {row.excluded}" for row in rows[:_NAMED_EXCLUSIONS])
+    more = len(rows) - _NAMED_EXCLUSIONS
+    return f"{shown}; and {more} more" if more > 0 else shown
+
+
+def _sentence(need: Need, survivors: Sequence[SourceOption],
+              dropped: Sequence[SourceOption]) -> str:
+    """ONE sentence: what the model is told and what the card shows."""
+    if not survivors:
+        if dropped and all(row.excluded.startswith(NO_MOMENT) for row in dropped):
+            return (f"{need.slot}: {NO_MOMENT}, so no source was asked for "
+                    f"{need.data_class}. State {need.slot} as a number or a layer.")
+        named = _named_exclusions(dropped)
+        return (f"{need.slot}: nothing measures {need.data_class} here - "
+                + (named or "no source states coverage of this class")
+                + ". State the value on the call, or ask about a place or a "
+                  "moment a source reaches.")
+    top = survivors[0]
+    facts = ", ".join(fact for fact in (top.kind, top.distance, top.resolution,
+                                        top.recency, top.datum) if fact)
+    over = ", ".join(f"{row.fetcher} {row.resolution}" for row in survivors[1:4])
+    tail = f", over {over}" if over else ""
+    loosened = (f" The run states {need.loosen} loosened, which is the user's "
+                "choice." if need.loosen else "")
+    named = " The run picks it, which is the user's choice." if need.pick else ""
+    return f"{need.slot}: {top.fetcher} ({facts}){tail}.{named}{loosened}"
+
+
+def _probe_sentence(choice: SourceChoice, rows: Sequence[SourceOption],
+                    fetcher: str, nxt: str) -> str:
+    """What the run says once the world has answered."""
+    tried = [row for row in rows if row.excluded.startswith(HELD_NOTHING)]
+    if nxt:
+        names = ", ".join(row.fetcher for row in tried)
+        return f"{choice.slot}: {names} held nothing, so {nxt} fills the slot."
+    each = "; ".join(f"{row.fetcher} {row.excluded}" for row in tried)
+    named = _named_exclusions([row for row in rows if row.excluded
+                               and not row.excluded.startswith(HELD_NOTHING)])
+    return (f"{choice.slot}: nothing measures {choice.need} here - every source "
+            f"asked held nothing: {each}"
+            + (f"; not asked: {named}" if named else "")
+            + ". State the value on the call, or ask about a place or a "
+              "moment a source reaches.")

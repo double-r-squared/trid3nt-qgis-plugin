@@ -13,11 +13,11 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.solver.solver import (
+from trid3nt.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     LOCAL_SOLVER_SPEC_REGISTRY,
 )
-from trid3nt_server.workflows.telemac import engine as T
+from trid3nt.workflows.telemac import engine as T
 
 
 def test_the_solver_identifier_is_the_engine_name():

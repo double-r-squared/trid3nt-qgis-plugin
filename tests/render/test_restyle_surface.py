@@ -14,11 +14,11 @@ import pytest
 from trid3nt_contracts import new_ulid
 
 from trid3nt_server.render import pipeline_emitter as emitter_module
-from trid3nt_server.render import publish as publish_module
-from trid3nt_server.render import restyle as restyle_module
+from trid3nt.render import publish as publish_module
+from trid3nt.render import restyle as restyle_module
 from trid3nt_server.render.pipeline_emitter import PipelineEmitter
-from trid3nt_server.render.restyle import RestyleError, apply_style, restyled_row
-from trid3nt_server.tools.derive.restyle_layer.restyle_layer import restyle_layer
+from trid3nt.render.restyle import RestyleError, apply_style, restyled_row
+from trid3nt.tools.derive.restyle_layer.restyle_layer import restyle_layer
 
 #: A declared row with something to say in every field, so an override that
 #: leaked into a neighbour is visible rather than masked by a default.
@@ -171,7 +171,7 @@ async def test_hiding_a_layer_is_the_un_emit_and_unhiding_puts_it_back(
 @pytest.fixture()
 def on_the_map(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every handle resolves to the one published uri, and no bytes are read."""
-    from trid3nt_server.render import uri_registry
+    from trid3nt.render import uri_registry
 
     monkeypatch.setattr(uri_registry, "lookup_uri_for_handle", lambda handle: URI)
     monkeypatch.setattr(publish_module, "_read_raster_bytes", lambda uri: None)

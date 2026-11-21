@@ -12,19 +12,19 @@ from pathlib import Path
 import pytest
 from pyproj import Transformer
 
-from trid3nt_server.inputs.point import PointNotViableError
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow import workflow as WF
-from trid3nt_server.workflows.modflow.authoring import mesh_files as MF
-from trid3nt_server.workflows.modflow.authoring.release import place_release
-from trid3nt_server.workflows.modflow.authoring.simulation import coupled_sheet, serialize
-from trid3nt_server.workflows.modflow.authoring.validate import validate_authored_simulation
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF, PRT
-from trid3nt_server.workflows.modflow.modules.outputs import TRACKED, Solved
-from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.workflows.runtime.primitives import OutputEmpty, Primitive, Series, Track
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.inputs.point import PointNotViableError
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow import workflow as WF
+from trid3nt.workflows.modflow.authoring import mesh_files as MF
+from trid3nt.workflows.modflow.authoring.release import place_release
+from trid3nt.workflows.modflow.authoring.simulation import coupled_sheet, serialize
+from trid3nt.workflows.modflow.authoring.validate import validate_authored_simulation
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF, PRT
+from trid3nt.workflows.modflow.modules.outputs import TRACKED, Solved
+from trid3nt.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.runtime.primitives import OutputEmpty, Primitive, Series, Track
+from trid3nt.workflows.runtime.sheet import fill
 
 _SIDE = 4
 _N = _SIDE * _SIDE
@@ -392,7 +392,7 @@ def solved(monkeypatch, tmp_path):
         shutil.copy(tmp_path / basename, dest)
         return str(dest)
 
-    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result", download)
+    monkeypatch.setattr("trid3nt.workflows.solver.solver.download_result", download)
 
     def build(tracking=None) -> Solved:
         sheet = _fill(tracking=tracking)

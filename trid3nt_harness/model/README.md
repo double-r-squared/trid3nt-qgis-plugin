@@ -1,0 +1,18 @@
+# `model/` - the model connection
+
+Everything between the turn loop and the model answering it: the provider
+adapters that speak each provider's wire from the shared IR and the guards that
+bound what one model turn may do.
+
+## Files
+
+| file | what it is |
+| --- | --- |
+| `__init__.py` | The package door. |
+
+## Subfolders
+
+| subfolder | what lives there |
+| --- | --- |
+| `adapters/` | The LLM provider adapters, behind one shared IR. |
+| `guards/` | The guards over a model turn - the circuit breaker, the runaway guard, the context budget, tool gating and the error classifier they share. |

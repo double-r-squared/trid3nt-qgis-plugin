@@ -14,7 +14,7 @@ import pytest
 from door_client import drive, drive_raw
 
 from trid3nt_server.server.protocol.http import layers
-from trid3nt_server.inputs.user_layer import (
+from trid3nt.inputs.user_layer import (
     CaseNotFoundError,
     ImportLayerInputError,
     ObjectNotFoundError,
@@ -273,7 +273,7 @@ def test_ingest_layer_file_oversized_413_before_read(monkeypatch):
         raise AssertionError("upload fn must not run on an oversized body")
 
     monkeypatch.setattr(layers, "_upload_layer_file_fn", lambda: _never)
-    from trid3nt_server.inputs.user_layer import MAX_INGEST_BYTES
+    from trid3nt.inputs.user_layer import MAX_INGEST_BYTES
 
     out = drive_raw(
         _post_declaring(

@@ -410,14 +410,14 @@ package MeshSeam {
 
     part meshRouter : MeshRouter {
         doc /*
-        code: trid3nt_server/tools/mesh/tool.py
+        code: trid3nt/tools/mesh/tool.py
         */
         port recipeOut : RecipeOut;
     }
 
     part recipeObject : RecipeObject {
         doc /*
-        code: trid3nt_server/tools/mesh/recipe.py
+        code: trid3nt/tools/mesh/recipe.py
         */
         port recipeIn : RecipeIn;
         port opIn : OpIn;
@@ -425,14 +425,14 @@ package MeshSeam {
 
     part opTool : OpTool {
         doc /*
-        code: trid3nt_server/tools/mesh/op_tool.py
+        code: trid3nt/tools/mesh/op_tool.py
         */
         port opOut : OpOut;
     }
 
     part meshSession : MeshSession {
         doc /*
-        code: trid3nt_server/tools/mesh/session.py
+        code: trid3nt/tools/mesh/session.py
         */
         port opIn : OpIn;
         port opOut : OpOut;
@@ -445,14 +445,14 @@ package MeshSeam {
 
     part meshGate : MeshGate {
         doc /*
-        code: trid3nt_server/tools/mesh/gate.py
+        code: trid3nt/tools/mesh/gate.py
         */
         port probesIn : ProbesIn;
     }
 
     part mesherRegistry : MesherRegistry {
         doc /*
-        code: trid3nt_server/tools/mesh/meshers/__init__.py
+        code: trid3nt/tools/mesh/meshers/__init__.py
         */
         port registrationIn : RegistrationIn;
         port namespaceIn : NamespaceIn;
@@ -460,7 +460,7 @@ package MeshSeam {
 
     part om2dAdapter : MesherAdapter {
         doc /*
-        code: trid3nt_server/tools/mesh/meshers/om2d.py
+        code: trid3nt/tools/mesh/meshers/om2d.py
         */
         port registrationOut : RegistrationOut;
         port namespaceOut : NamespaceOut;
@@ -478,7 +478,7 @@ package MeshSeam {
         is empty because a lattice at the one size word is the whole of what an
         undeclared ask asked for.
 
-        code: trid3nt_server/tools/mesh/meshers/reg_grid.py
+        code: trid3nt/tools/mesh/meshers/reg_grid.py
         */
         port registrationOut : RegistrationOut;
     }
@@ -489,7 +489,7 @@ package MeshSeam {
         flagregion ops, built in the daemon as the level-1 lattice. Its one
         namespace is the flagregion op, a roster of names the mesher itself runs.
 
-        code: trid3nt_server/tools/mesh/meshers/claw_grid.py
+        code: trid3nt/tools/mesh/meshers/claw_grid.py
         */
         port registrationOut : RegistrationOut;
         port namespaceOut : NamespaceOut;
@@ -502,8 +502,8 @@ package MeshSeam {
         libraries' OWN method rosters with the phase derived, so ops are
         code-as-data bound against the library's signatures at build time.
 
-        code: trid3nt_server/tools/mesh/meshers/flopy_grid.py
-        code: trid3nt_server/tools/mesh/meshers/flopy_build.py
+        code: trid3nt/tools/mesh/meshers/flopy_grid.py
+        code: trid3nt/tools/mesh/meshers/flopy_build.py
         */
         port registrationOut : RegistrationOut;
         port namespaceOut : NamespaceOut;
@@ -511,7 +511,7 @@ package MeshSeam {
 
     part om2dBox : MesherBox {
         doc /*
-        code: trid3nt_server/tools/mesh/meshers/om2d_build.py
+        code: trid3nt/tools/mesh/meshers/om2d_build.py
         */
         port configIn : ConfigIn;
         port arraysOut : ArraysOut;
@@ -520,7 +520,7 @@ package MeshSeam {
 
     part selafinIo : SelafinIo {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/selafin_io.py
+        code: trid3nt/workflows/telemac/authoring/selafin_io.py
         */
     }
 
@@ -529,13 +529,13 @@ package MeshSeam {
         The steering file read and written by the library's own TelemacCas
         against the module dictionary, in its own interpreter over the opentelemac tree.
 
-        code: trid3nt_server/workflows/telemac/authoring/engine_scripts/cas.py
+        code: trid3nt/workflows/telemac/authoring/engine_scripts/cas.py
         */
     }
 
     part sharedPrimitives : SharedPrimitives {
         doc /*
-        code: trid3nt_server/tools/mesh/shared/primitives.py
+        code: trid3nt/tools/mesh/shared/primitives.py
         */
         port bedOut : BedOut;
         port rolesOut : RolesOut;
@@ -543,7 +543,7 @@ package MeshSeam {
 
     part meshArtifactStore : MeshArtifactStore {
         doc /*
-        code: trid3nt_server/tools/mesh/artifact.py
+        code: trid3nt/tools/mesh/artifact.py
         */
         port artifactIn : ArtifactIn;
         port fieldsIn : FieldsIn;
@@ -551,14 +551,14 @@ package MeshSeam {
 
     part topologyWriter : TopologyWriter {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/topology.py
+        code: trid3nt/workflows/telemac/authoring/topology.py
         */
         port topologyIn : TopologyIn;
     }
 
     part telemacMeshFiles : EngineMeshFiles {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/mesh_files.py
+        code: trid3nt/workflows/telemac/authoring/mesh_files.py
         */
         port topologyOut : TopologyOut;
     }
@@ -670,8 +670,8 @@ package MeshSeam {
         that could see its session or its gate would be state with a program
         beside it, which is the shape this law replaced.
 
-        forbid: trid3nt_server.tools.mesh.recipe -> trid3nt_server.tools.mesh.session
-        forbid: trid3nt_server.tools.mesh.recipe -> trid3nt_server.tools.mesh.gate
+        forbid: trid3nt.tools.mesh.recipe -> trid3nt.tools.mesh.session
+        forbid: trid3nt.tools.mesh.recipe -> trid3nt.tools.mesh.gate
         */
     }
 
@@ -685,7 +685,7 @@ package MeshSeam {
         registry for nothing; the one edit tool it needs is registered like any
         other.
 
-        forbid: trid3nt_server.tools.mesh.gate -> trid3nt_server.tools.TOOL_REGISTRY
+        forbid: trid3nt.tools.mesh.gate -> trid3nt.tools.TOOL_REGISTRY
         */
     }
 
@@ -834,7 +834,7 @@ package MeshSeam {
 
         The rule is written over the DIRECTORY every such script lives in.
 
-        forbid: trid3nt_server.workflows.telemac.authoring.engine_scripts -> trid3nt_contracts
+        forbid: trid3nt.workflows.telemac.authoring.engine_scripts -> trid3nt_contracts
         */
     }
 
@@ -846,7 +846,7 @@ package MeshSeam {
         a second place a mesh gets built, and the mesh a human approved and the
         mesh a solver ran on would be two objects that happen to agree.
 
-        forbid: trid3nt_server.tools.mesh -> trid3nt_server.workflows.telemac
+        forbid: trid3nt.tools.mesh -> trid3nt.workflows.telemac
         */
     }
 

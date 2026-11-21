@@ -7,7 +7,7 @@ The WAVE AGITATION (Kd = Hs/H0) inside a harbour, marina or basin, behind a decl
 |  |  |
 |---|---|
 | module | `artemis` - 118 keywords in its dictionary, of which this template states 8 |
-| solves | `trid3nt_server.workflows.telemac.engine.solve_case` |
+| solves | `trid3nt.workflows.telemac.engine.solve_case` |
 | engine defaults | every keyword this template does not state keeps the engine's own default; `describe_keywords` names it with that default, and `keywords={...}` sets it |
 
 ## The data it consumes

@@ -13,18 +13,18 @@ import numpy as np
 import pytest
 from pyproj import Transformer
 
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow import workflow as WF
-from trid3nt_server.workflows.modflow.authoring import mesh_files as MF
-from trid3nt_server.workflows.modflow.authoring import refinement as RF
-from trid3nt_server.workflows.modflow.authoring.simulation import serialize
-from trid3nt_server.workflows.modflow.authoring.staged_check import check_staged_run
-from trid3nt_server.workflows.modflow.authoring.validate import validate_authored_simulation
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF
-from trid3nt_server.workflows.modflow.modules.outputs import Solved
-from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow import workflow as WF
+from trid3nt.workflows.modflow.authoring import mesh_files as MF
+from trid3nt.workflows.modflow.authoring import refinement as RF
+from trid3nt.workflows.modflow.authoring.simulation import serialize
+from trid3nt.workflows.modflow.authoring.staged_check import check_staged_run
+from trid3nt.workflows.modflow.authoring.validate import validate_authored_simulation
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF
+from trid3nt.workflows.modflow.modules.outputs import Solved
+from trid3nt.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.runtime.sheet import fill
 
 _SIDE = 4
 _N = _SIDE * _SIDE

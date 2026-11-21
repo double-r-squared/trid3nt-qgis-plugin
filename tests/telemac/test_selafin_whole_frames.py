@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring.selafin_io import (
+from trid3nt.workflows.telemac.authoring.selafin_io import (
     SelafinReadError, keep_whole_frames, read_selafin)
 
 _FULL = Path(__file__).parents[1] / "fixtures" / "progress" / "r2d_domain.slf"

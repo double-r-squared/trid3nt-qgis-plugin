@@ -11,9 +11,9 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_contracts.coverage import Member
-from trid3nt_server.inputs.observation import ObservationError
-from trid3nt_server.inputs.slots import WEATHER, ingest_slot
-from trid3nt_server.inputs.weather import UNITS, weather
+from trid3nt.inputs.observation import ObservationError
+from trid3nt.inputs.slots import WEATHER, ingest_slot
+from trid3nt.inputs.weather import UNITS, weather
 
 _HOUR = 3600.0
 _SEED = {"lon": -124.1, "lat": 40.48}
@@ -132,7 +132,7 @@ def test_the_slot_reads_the_class_the_station_networks_publish():
 
 
 def test_a_row_naming_no_point_ranks_from_the_middle_of_the_run_s_domain():
-    from trid3nt_server.inputs.bound_domain import Domain, bind_domain, reset_domain
+    from trid3nt.inputs.bound_domain import Domain, bind_domain, reset_domain
 
     doc = _both([_raws(hour, "NEAR") for hour in range(24)],
                 [_raws(hour, "FAR") for hour in range(24)])
@@ -146,8 +146,8 @@ def test_a_row_naming_no_point_ranks_from_the_middle_of_the_run_s_domain():
 def test_the_weather_row_is_told_the_run_s_window_and_the_moment_it_opens_at():
     from types import SimpleNamespace
 
-    from trid3nt_server.inputs.input import Input
-    from trid3nt_server.workflows.runtime.fill import _what_the_record_reports
+    from trid3nt.inputs.input import Input
+    from trid3nt.workflows.runtime.fill import _what_the_record_reports
 
     told = _what_the_record_reports(
         SimpleNamespace(window_s=7200.0,

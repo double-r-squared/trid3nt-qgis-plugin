@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.tools.fetchers.hazard.fetch_moment_tensor import hooks
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.tools.fetchers.hazard.fetch_moment_tensor import hooks
 
 _FIX = Path(__file__).parents[1] / "fixtures" / "geoclaw" / "moment_tensor"
 

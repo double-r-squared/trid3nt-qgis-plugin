@@ -20,11 +20,11 @@ import rasterio
 from rasterio.transform import from_origin
 
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_server.inputs.bed import RASTER, bed
-from trid3nt_server.inputs.run_notes import bind_coverage, drain_coverage
-from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.settings import bind_run, reset_run
-from trid3nt_server.tools.derive._raster_layers import FILLED, UNMEASURED
+from trid3nt.inputs.bed import RASTER, bed
+from trid3nt.inputs.run_notes import bind_coverage, drain_coverage
+from trid3nt.inputs.user_input import UserInputError
+from trid3nt.settings import bind_run, reset_run
+from trid3nt.tools.derive._raster_layers import FILLED, UNMEASURED
 
 _NAN = float("nan")
 
@@ -32,7 +32,7 @@ _NAN = float("nan")
 @pytest.fixture(autouse=True)
 def _written_locally(monkeypatch, tmp_path):
     """Every raster the bed writes lands under the test's own directory, never the store."""
-    from trid3nt_server.tools.derive import _hydrology_common as common
+    from trid3nt.tools.derive import _hydrology_common as common
 
     real = common.write_cog
     monkeypatch.setattr(common, "write_cog", lambda band, **kw: real(
@@ -280,7 +280,7 @@ def test_a_stated_depth_is_never_one_surface_of_several():
 
 
 def test_a_case_layer_by_id_carries_its_datum_and_quantity_into_the_list():
-    from trid3nt_server.render.uri_registry import (
+    from trid3nt.render.uri_registry import (
         activate_registry, deactivate_registry, get_uri_registry)
 
     survey = _layer(_write(np.full((4, 4), 5.0), west=500_004.0, north=4_000_000.0, cell=1.0),
@@ -298,8 +298,8 @@ def test_a_case_layer_by_id_carries_its_datum_and_quantity_into_the_list():
 
 def test_a_fetched_layer_carries_the_datum_and_the_quantity_its_row_states():
     import trid3nt_server.main as main
-    from trid3nt_server.tools.fetchers._router.registration import get_spec
-    from trid3nt_server.tools.fetchers._router.router import build_layer_uri
+    from trid3nt.tools.fetchers._router.registration import get_spec
+    from trid3nt.tools.fetchers._router.router import build_layer_uri
 
     main._import_tools_registry()
     box = {"bbox": [-82.47, 42.88, -82.40, 42.99]}
@@ -314,7 +314,7 @@ def test_a_fetched_layer_carries_the_datum_and_the_quantity_its_row_states():
 def test_no_slot_reads_an_op():
     import inspect
 
-    from trid3nt_server.inputs import slots
+    from trid3nt.inputs import slots
 
     assert "op" not in inspect.signature(bed).parameters
     reading = sorted(slot.name for slot in vars(slots).values()
@@ -333,12 +333,12 @@ def test_the_datum_quantity_and_shift_survive_fetch_and_qgis_into_the_bed(monkey
     from shapely.geometry import Point
 
     from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
-    from trid3nt_server.render.uri_registry import (
+    from trid3nt.render.uri_registry import (
         activate_registry, deactivate_registry, get_uri_registry, lookup_layer_for_handle)
-    from trid3nt_server.store import objects as storage
-    from trid3nt_server.tools.derive.run_qgis_algorithm import run_qgis_algorithm as qgis
-    from trid3nt_server.tools.fetchers._router import router
-    from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+    from trid3nt.store import objects as storage
+    from trid3nt.tools.derive.run_qgis_algorithm import run_qgis_algorithm as qgis
+    from trid3nt.tools.fetchers._router import router
+    from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
     spec = compose_specs_from_tree()["fetch_ehydro_surveys"]
     rows = gpd.GeoDataFrame(

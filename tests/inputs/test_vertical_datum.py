@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs import vertical_datum
-from trid3nt_server.inputs.vertical_datum import DatumError, one_datum
+from trid3nt.inputs import vertical_datum
+from trid3nt.inputs.vertical_datum import DatumError, one_datum
 
 
 def _stating(datums: dict[str, str], monkeypatch: pytest.MonkeyPatch) -> None:
@@ -59,7 +59,7 @@ def test_a_layer_states_its_own_datum_and_a_name_reads_its_row(
     """A survey carries a local project datum nothing in its row knows, so
     what the caller holds is what is read; a bare name still reads the row."""
     from trid3nt_contracts.execution import LayerURI
-    from trid3nt_server.inputs.vertical_datum import datum_of
+    from trid3nt.inputs.vertical_datum import datum_of
 
     _stating({"fetch_dem": "NAVD88"}, monkeypatch)
     survey = LayerURI(layer_id="s", name="the survey", layer_type="raster",
@@ -88,7 +88,7 @@ class _Survey:
 
 
 def test_a_source_on_the_runs_own_frame_is_not_shifted() -> None:
-    from trid3nt_server.inputs.vertical_datum import onto_frame
+    from trid3nt.inputs.vertical_datum import onto_frame
 
     aligned = onto_frame({"vertical_datum": "NAVD88 (metres, positive up)",
                           "name": "3dep"}, "NAVD88")
@@ -96,7 +96,7 @@ def test_a_source_on_the_runs_own_frame_is_not_shifted() -> None:
 
 
 def test_a_survey_reaches_the_runs_frame_through_the_shift_it_publishes() -> None:
-    from trid3nt_server.inputs.vertical_datum import onto_frame
+    from trid3nt.inputs.vertical_datum import onto_frame
 
     aligned = onto_frame(_Survey(), "NAVD88")
     assert aligned.shift_m == pytest.approx(_CRD_TO_NAVD88_M)
@@ -105,14 +105,14 @@ def test_a_survey_reaches_the_runs_frame_through_the_shift_it_publishes() -> Non
 
 
 def test_a_frame_the_run_does_not_state_asks_nothing() -> None:
-    from trid3nt_server.inputs.vertical_datum import onto_frame
+    from trid3nt.inputs.vertical_datum import onto_frame
 
     assert onto_frame(_Survey(), None).shift_m == 0.0
 
 
 def test_a_source_publishing_no_shift_owes_an_offset_row() -> None:
     """The RUNTIME declares the row; the coercion reads it and fetches nothing."""
-    from trid3nt_server.inputs.vertical_datum import offset_ask
+    from trid3nt.inputs.vertical_datum import offset_ask
 
     ask = offset_ask({"vertical_datum": "NGVD29", "name": "the gauge"},
                      "NAVD88", at=[-122.669, 45.518])
@@ -122,8 +122,8 @@ def test_a_source_publishing_no_shift_owes_an_offset_row() -> None:
 
 def test_the_coercion_reads_the_rows_value_and_fetches_nothing(
         monkeypatch: pytest.MonkeyPatch) -> None:
-    from trid3nt_server.inputs import vertical_datum as vd
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.inputs import vertical_datum as vd
+    from trid3nt.tools import TOOL_REGISTRY
 
     def _never(**_kwargs: object) -> object:
         raise AssertionError("the coercion called the fetch")
@@ -139,13 +139,13 @@ def test_the_coercion_reads_the_rows_value_and_fetches_nothing(
 
 
 def test_a_source_that_publishes_its_own_shift_owes_no_row() -> None:
-    from trid3nt_server.inputs.vertical_datum import offset_ask
+    from trid3nt.inputs.vertical_datum import offset_ask
 
     assert offset_ask(_Survey(), "NAVD88", at=[-122.669, 45.518]) is None
 
 
 def test_a_source_already_on_the_runs_frame_owes_no_row() -> None:
-    from trid3nt_server.inputs.vertical_datum import offset_ask
+    from trid3nt.inputs.vertical_datum import offset_ask
 
     assert offset_ask({"vertical_datum": "NAVD88 (metres, positive up)",
                        "name": "3dep"}, "NAVD88", at=[-122.669, 45.518]) is None
@@ -154,7 +154,7 @@ def test_a_source_already_on_the_runs_frame_owes_no_row() -> None:
 def test_a_frame_the_fetch_does_not_serve_owes_no_row() -> None:
     """A district's project datum is not a VDatum frame: no row, and the
     alignment below refuses naming both."""
-    from trid3nt_server.inputs.vertical_datum import offset_ask
+    from trid3nt.inputs.vertical_datum import offset_ask
 
     assert offset_ask({"vertical_datum": "SD (Columbia River Datum: CRD)",
                        "name": "the survey"}, "NAVD88",
@@ -162,7 +162,7 @@ def test_a_frame_the_fetch_does_not_serve_owes_no_row() -> None:
 
 
 def test_a_pair_nothing_measures_refuses_naming_both_frames() -> None:
-    from trid3nt_server.inputs.vertical_datum import onto_frame
+    from trid3nt.inputs.vertical_datum import onto_frame
 
     with pytest.raises(DatumError) as caught:
         onto_frame({"vertical_datum": "CRD", "name": "the survey"}, "NAVD88")
@@ -177,7 +177,7 @@ def test_a_supplied_surface_states_no_per_feature_zero(tmp_path) -> None:
     import rasterio
     from rasterio.transform import from_origin
 
-    from trid3nt_server.inputs.vertical_datum import offset_ask, record_datum
+    from trid3nt.inputs.vertical_datum import offset_ask, record_datum
 
     path = tmp_path / "bed.tif"
     with rasterio.open(path, "w", driver="GTiff", width=4, height=4, count=1,
@@ -214,7 +214,7 @@ def _half_measured(tmp_path) -> dict[str, str]:
 
 
 def _standing_on_the_box(monkeypatch: pytest.MonkeyPatch) -> None:
-    from trid3nt_server.inputs import bound_domain
+    from trid3nt.inputs import bound_domain
 
     monkeypatch.setattr(bound_domain, "current_domain",
                         lambda: bound_domain.Domain(bbox=_DOMAIN_BOX))
@@ -224,7 +224,7 @@ def test_a_footprint_missing_the_box_centre_is_asked_at_the_seed(
         tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The survey measured nothing at the domain's centre and measured the seed,
     so the seed is where its offset is asked."""
-    from trid3nt_server.inputs.vertical_datum import offset_ask
+    from trid3nt.inputs.vertical_datum import offset_ask
 
     _standing_on_the_box(monkeypatch)
     ask = offset_ask(_half_measured(tmp_path), "NAVD88", at=_SEED_ON_THE_SURVEY)
@@ -238,7 +238,7 @@ def test_a_seed_off_the_footprint_is_asked_at_the_nearest_measured_point(
         tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The seed sits where the survey measured nothing: the ask walks to the
     nearest point of the survey's OWN footprint, not to a centre of anything."""
-    from trid3nt_server.inputs.vertical_datum import offset_ask
+    from trid3nt.inputs.vertical_datum import offset_ask
 
     _standing_on_the_box(monkeypatch)
     lon, lat = offset_ask(_half_measured(tmp_path), "NAVD88",
@@ -253,12 +253,12 @@ def test_a_point_the_service_does_not_reach_refuses_naming_it(
     that reads it states the point that was asked."""
     import json
 
-    from trid3nt_server.inputs.vertical_datum import OFFSET_FETCH, offset_ask
-    from trid3nt_server.tools.fetchers._router.registration import get_spec
-    from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError
-    from trid3nt_server.tools.fetchers.ocean.fetch_vertical_datum_offset.hooks \
+    from trid3nt.inputs.vertical_datum import OFFSET_FETCH, offset_ask
+    from trid3nt.tools.fetchers._router.registration import get_spec
+    from trid3nt.tools.fetchers._router.errors import RouterEmptyError
+    from trid3nt.tools.fetchers.ocean.fetch_vertical_datum_offset.hooks \
         import record
-    from trid3nt_server.tools.fetchers import _proj_grids
+    from trid3nt.tools.fetchers import _proj_grids
 
     _standing_on_the_box(monkeypatch)
     # The refusal names what the local grids convert at the point; the naming
@@ -298,7 +298,7 @@ def test_a_record_stating_a_chart_datum_asks_for_the_chart_datum(tmp_path) -> No
     """The zero is the one the RECORD states, and a plane named on a system is
     asked for as the plane: a low water datum and the geodetic zero it is
     expressed on are metres apart, and the longer name is the measured one."""
-    from trid3nt_server.inputs.vertical_datum import offset_ask, record_datum
+    from trid3nt.inputs.vertical_datum import offset_ask, record_datum
 
     layer = _soundings(tmp_path, _LWD)
     assert record_datum(layer) == _LWD
@@ -311,7 +311,7 @@ def test_a_record_stating_a_datum_no_service_serves_refuses_by_name(
         tmp_path) -> None:
     """A district's project datum is no VDatum frame: no offset row is owed, and
     the alignment refuses naming the datum rather than laying one over the other."""
-    from trid3nt_server.inputs.vertical_datum import offset_ask, onto_frame
+    from trid3nt.inputs.vertical_datum import offset_ask, onto_frame
 
     layer = _soundings(tmp_path, "SD (Columbia River Datum: CRD)")
     assert offset_ask(layer, "NAVD88", at=[-122.669, 45.518]) is None
@@ -325,7 +325,7 @@ def test_a_record_on_the_runs_frame_is_read_on_it_and_not_shifted(
         tmp_path) -> None:
     """The alignment reads the zero the ROWS state, so a survey standing on the
     run's own frame is aligned rather than refused as stating none."""
-    from trid3nt_server.inputs.vertical_datum import onto_frame
+    from trid3nt.inputs.vertical_datum import onto_frame
 
     aligned = onto_frame(_soundings(tmp_path, "NAVD88"), "NAVD88")
     assert (aligned.shift_m, aligned.note) == (0.0, "")

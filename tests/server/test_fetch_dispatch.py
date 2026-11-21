@@ -14,9 +14,9 @@ from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server import server
-from trid3nt_server.render.uri_registry import reset_uri_registries_for_tests
-from trid3nt_server.tools.fetchers._router.registration import get_spec, registered_spec_names
-from trid3nt_server.tools.fetchers._router.emit_on_fetch import maybe_emit_input_on_fetch
+from trid3nt.render.uri_registry import reset_uri_registries_for_tests
+from trid3nt.tools.fetchers._router.registration import get_spec, registered_spec_names
+from trid3nt.tools.fetchers._router.emit_on_fetch import maybe_emit_input_on_fetch
 
 
 class FakeWS:
@@ -37,8 +37,8 @@ def _registry():
 @pytest.fixture
 def world(monkeypatch):
     """The source stubbed to surface one layer through the emit-on-fetch seam, and every gate and guard recording the name it is asked about."""
-    from trid3nt_server import tools as agent_tools
-    from trid3nt_server.inputs.gate import confirm
+    from trid3nt import tools as agent_tools
+    from trid3nt_harness.inputs.gate import confirm
     from trid3nt_server.server.dispatch import emitter
 
     reset_uri_registries_for_tests()
@@ -127,7 +127,7 @@ async def test_a_fetch_is_the_direct_call(world, name):
 @pytest.mark.asyncio
 async def test_a_wrapper_that_does_not_translate_emits_the_layer_twice(world, monkeypatch):
     """Fail proof: the call dispatched under the name fetch, the source called from inside it, puts the layer on the map beside its own copy."""
-    from trid3nt_server import tools as agent_tools
+    from trid3nt import tools as agent_tools
     from trid3nt_server.server.dispatch import emitter
 
     asked, stub = world
@@ -145,7 +145,7 @@ async def test_a_wrapper_that_does_not_translate_emits_the_layer_twice(world, mo
 
 @pytest.mark.asyncio
 async def test_a_source_the_registry_serves_but_a_template_is_not_fetchable():
-    from trid3nt_server.tools.search.fetch import FetchSourceError
+    from trid3nt_harness.tools.search.fetch import FetchSourceError
 
     with pytest.raises(FetchSourceError, match="no source named 'telemac_dye_release'"):
         await _dispatch("fetch", {"source": "telemac_dye_release", "args": {}})
@@ -153,7 +153,7 @@ async def test_a_source_the_registry_serves_but_a_template_is_not_fetchable():
 
 @pytest.mark.asyncio
 async def test_an_unknown_source_and_an_unknown_argument_are_refused_by_name_with_the_nearest():
-    from trid3nt_server.tools.search.fetch import FetchArgError, FetchSourceError
+    from trid3nt_harness.tools.search.fetch import FetchArgError, FetchSourceError
 
     with pytest.raises(FetchSourceError, match="fetch_fema_nfhl_zones"):
         await _dispatch("fetch", {"source": "fetch_femaa_nfhl_zones", "args": {}})
@@ -164,7 +164,7 @@ async def test_an_unknown_source_and_an_unknown_argument_are_refused_by_name_wit
 
 
 def test_the_source_name_is_taken_without_its_prefix_and_args_may_arrive_as_text():
-    from trid3nt_server.tools.search.fetch import resolve_fetch
+    from trid3nt_harness.tools.search.fetch import resolve_fetch
 
     name, kwargs = resolve_fetch({"source": "fema_nfhl_zones", "args": '{"bbox": [0, 0, 1, 1]}'})
     assert (name, kwargs) == ("fetch_fema_nfhl_zones", {"bbox": [0, 0, 1, 1]})
@@ -179,7 +179,7 @@ async def test_a_handle_find_sources_held_is_sent_as_the_row_showed(world, monke
     asked, stub = world
     name = "fetch_nws_river_forecast"
     stub(name)
-    monkeypatch.setattr(import_module("trid3nt_server.tools.search.find_sources.find_sources"),
+    monkeypatch.setattr(import_module("trid3nt_harness.tools.search.find_sources.find_sources"),
                         "sources_with_coverage", lambda: [(name, row) for row in get_spec(name).coverage])
     session = new_ulid()
     found, _steps, _layers = await _dispatch(

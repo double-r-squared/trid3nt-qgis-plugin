@@ -18,13 +18,13 @@ import pyogrio
 import pytest
 from dataretrieval.nwis import _read_rdb
 
-from trid3nt_server.inputs.fields import FieldError, Measured, records
-from trid3nt_server.inputs.observation import observation
-from trid3nt_server.tools.fetchers._router import registration
-from trid3nt_server.tools.fetchers._router.executors.vector_fgb import (
+from trid3nt.inputs.fields import FieldError, Measured, records
+from trid3nt.inputs.observation import observation
+from trid3nt.tools.fetchers._router import registration
+from trid3nt.tools.fetchers._router.executors.vector_fgb import (
     apply_ingest_transforms, features_to_fgb_bytes)
-from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels import hooks as gw_hooks
-from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges import hooks as nwis_hooks
+from trid3nt.tools.fetchers.hydrology.fetch_usgs_groundwater_levels import hooks as gw_hooks
+from trid3nt.tools.fetchers.hydrology.fetch_usgs_nwis_gauges import hooks as nwis_hooks
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "fetcher_fields"
 _NWIS = "fetch_usgs_nwis_gauges"
@@ -199,7 +199,7 @@ def test_a_period_average_keeps_only_what_every_reading_states_alike():
 
 
 def test_the_executor_writes_a_wells_whole_record_and_the_location_join_to_the_file(monkeypatch):
-    from trid3nt_server.tools.fetchers._router.executors import chained_resolution, http_json
+    from trid3nt.tools.fetchers._router.executors import chained_resolution, http_json
 
     measured, located = _body("usgs_field_measurements_des_moines.json"), _body("usgs_monitoring_locations_des_moines.json")
     monkeypatch.setattr(http_json, "_get", lambda spec, plan: located if "monitoring-locations" in plan.url else measured)

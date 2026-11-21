@@ -95,7 +95,7 @@ outlives both.
 
 ## Files
 
-Described one by one in `trid3nt_server/render/README.md`. The seam is modeled
+Described one by one in `trid3nt/render/README.md`. The seam is modeled
 in `docs/model/render-seam.sysml`.
 
 ## Invariants

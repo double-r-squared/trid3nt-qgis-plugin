@@ -14,14 +14,14 @@ import pytest
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server.tools import (
+from trid3nt.tools import (
     RegisteredTool,
     TOOL_REGISTRY,
     clear_registry_for_tests,
 )
-from trid3nt_server.tools.fetchers._router import registration, router
-from trid3nt_server.tools.fetchers._router.errors import RouterInputError
-from trid3nt_server.tools.fetchers._router.executors import raster_cog
+from trid3nt.tools.fetchers._router import registration, router
+from trid3nt.tools.fetchers._router.errors import RouterInputError
+from trid3nt.tools.fetchers._router.executors import raster_cog
 
 _PINNED_NOW = datetime(2026, 7, 28, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -202,7 +202,7 @@ def test_route_end_to_end_writes_cache_and_emits_layeruri(fake_s3, monkeypatch):
 
 
 def test_route_vector_source_class_in_uri(fake_s3, monkeypatch):
-    from trid3nt_server.tools.fetchers._router.executors import vector_ogr
+    from trid3nt.tools.fetchers._router.executors import vector_ogr
 
     spec = SourceSpec.model_validate({
         "name": "fetch_demo_vector", "source_class": "demo_vector", "shape": "vector-fgb",
@@ -277,7 +277,7 @@ def test_promoted_signature_synthesized_from_spec(registered_spec):
 
 def test_promoted_tool_is_a_document_of_the_source_index_and_no_tool_of_the_tool_index(registered_spec):
     """A promoted row is found through find_sources: the source index holds it by name, the tool index never ranks it."""
-    from trid3nt_server.tools.search.search_tools import search_tools as st
+    from trid3nt_harness.tools.search.search_tools import search_tools as st
 
     spec, name = registered_spec
     snapshot = {name: TOOL_REGISTRY[name]}

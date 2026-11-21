@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.geoclaw import progress as geoclaw
-from trid3nt_server.workflows.modflow import progress as modflow
-from trid3nt_server.workflows.telemac import progress as telemac
+from trid3nt.workflows.geoclaw import progress as geoclaw
+from trid3nt.workflows.modflow import progress as modflow
+from trid3nt.workflows.telemac import progress as telemac
 
 _SAMPLES = Path(__file__).parents[1] / "fixtures" / "progress"
 
@@ -59,8 +59,8 @@ def test_modflow_states_the_stress_period_and_step_against_the_decks_tdis():
 
 
 def test_a_stopped_modflow_run_keeps_the_records_read_whole_and_refuses_when_none_is():
-    from trid3nt_server.workflows.modflow.modules.outputs import Solved
-    from trid3nt_server.workflows.runtime.primitives import OutputEmpty
+    from trid3nt.workflows.modflow.modules.outputs import Solved
+    from trid3nt.workflows.runtime.primitives import OutputEmpty
 
     stopped = Solved.__new__(Solved)
     stopped.stopped = True
@@ -80,9 +80,9 @@ def test_a_stopped_modflow_run_keeps_the_records_read_whole_and_refuses_when_non
 
 
 def test_a_stopped_geoclaw_run_reads_only_the_fgout_frames_written_whole(monkeypatch):
-    from trid3nt_server.store import objects as storage
-    from trid3nt_server.workflows.geoclaw.modules.outputs import Solved
-    from trid3nt_server.workflows.runtime.primitives import OutputEmpty
+    from trid3nt.store import objects as storage
+    from trid3nt.workflows.geoclaw.modules.outputs import Solved
+    from trid3nt.workflows.runtime.primitives import OutputEmpty
 
     class _S3:
         def __init__(self, sizes):

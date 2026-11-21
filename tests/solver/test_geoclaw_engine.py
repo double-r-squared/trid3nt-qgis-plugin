@@ -16,13 +16,13 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.solver.code_provenance import (
+from trid3nt.workflows.solver.code_provenance import (
     engine_paths,
     resolve_engine,
 )
-from trid3nt_server.workflows.solver.diagnostics import _PARSERS
-from trid3nt_server.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
-from trid3nt_server.workflows.geoclaw.engine import (
+from trid3nt.workflows.solver.diagnostics import _PARSERS
+from trid3nt.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
+from trid3nt.workflows.geoclaw.engine import (
     DEFAULT_GEOCLAW_IMAGE,
     GEOCLAW_SOLVER_NAME,
     _build_argv,
@@ -73,7 +73,7 @@ def test_the_engine_holds_its_three_registry_rows():
     assert _PARSERS["geoclaw"].__name__ == "parse_geoclaw"
     assert resolve_engine("geoclaw") == "geoclaw"
     assert engine_paths("geoclaw") == (
-        "workers/geoclaw/", "trid3nt_server/workflows/geoclaw/")
+        "workers/geoclaw/", "trid3nt/workflows/geoclaw/")
 
 
 def test_the_spec_is_local_docker_with_network_none():

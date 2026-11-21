@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.telemac.modules.telemac2d import Storm
-from trid3nt_server.workflows.telemac.modules import (
+from trid3nt.workflows.telemac.modules.telemac2d import Storm
+from trid3nt.workflows.telemac.modules import (
     Sheet,
     SheetIncomplete,
     SlotRefused,
@@ -25,19 +25,19 @@ from trid3nt_server.workflows.telemac.modules import (
     load_module_input,
     run,
 )
-from trid3nt_server.workflows.telemac.modules.sheet import stage
-from trid3nt_server.workflows.runtime.module import (
+from trid3nt.workflows.telemac.modules.sheet import stage
+from trid3nt.workflows.runtime.module import (
     UNSET,
     Module,
 )
-from trid3nt_server.workflows.telemac.modules.module import (
+from trid3nt.workflows.telemac.modules.module import (
     TelemacModule,
     module_input_dir,
 )
-from trid3nt_server.workflows.telemac.modules.telemac2d import (
+from trid3nt.workflows.telemac.modules.telemac2d import (
     Sources,
 )
-from trid3nt_server.workflows.telemac import (
+from trid3nt.workflows.telemac import (
     workflow as telemac_workflow,
 )
 
@@ -82,7 +82,7 @@ def test_a_wrapper_asserts_nothing_and_has_no_hook_to():
     """Every EXPOSED wrapper, not one built for the test: a wrapper that gains
     composites and outputs is still the analog of the engine's own defaults, and
     the moment one of them carries a value of its own the law is gone."""
-    from trid3nt_server.workflows.telemac.modules import WRAPPERS
+    from trid3nt.workflows.telemac.modules import WRAPPERS
 
     for wrapper in WRAPPERS.values():
         assert dict(wrapper.ASSERTED) == {}, wrapper.MODULE
@@ -328,8 +328,8 @@ def test_run_does_not_refuse_an_open_keyword_the_engine_may_yet_default():
 
 
 def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
-    from trid3nt_server.workflows.solver import staging
-    from trid3nt_server.workflows.telemac.authoring import serializer
+    from trid3nt.workflows.solver import staging
+    from trid3nt.workflows.telemac.authoring import serializer
 
     order: list[str] = []
 
@@ -431,7 +431,7 @@ def test_a_continuation_names_the_file_and_nothing_else():
     run's own continue_from - no deck states it. The staged file is the parent's own
     result, whose format is the keyword's own default, so nothing states that
     either."""
-    from trid3nt_server.workflows.runtime.sheet import fill
+    from trid3nt.workflows.runtime.sheet import fill
 
     sheet = fill(T2D, produced={"settled": {"continue_from": "previous.slf"}})
     assert sheet.filled["PREVIOUS_COMPUTATION_FILE"].value == "previous.slf"
@@ -466,7 +466,7 @@ def test_a_value_of_none_states_nothing_and_the_engine_default_stands():
 # -- the coupled modules ------------------------------------------------------ #
 
 def test_a_coupling_states_only_what_the_carrier_names_it_by():
-    from trid3nt_server.workflows.telemac.modules import WAQTEL
+    from trid3nt.workflows.telemac.modules import WAQTEL
 
     body = WAQTEL.degradation(substance="substance",
                               presets={"sewage": {"law": 1, "coef": 2.0}})
@@ -486,7 +486,7 @@ def test_a_coupling_states_only_what_the_carrier_names_it_by():
 def test_a_degradation_given_nothing_couples_nothing():
     """The body is listed on every dye deck; asked for no decay, the carrier
     states no coupling at all rather than a process with nothing to run."""
-    from trid3nt_server.workflows.telemac.modules import WAQTEL
+    from trid3nt.workflows.telemac.modules import WAQTEL
 
     body = WAQTEL.degradation(substance="substance", presets={})
     assert T2D.COMPOSITES["coupling"].apply([body], {"substance": None}) == ({}, {})
@@ -495,7 +495,7 @@ def test_a_degradation_given_nothing_couples_nothing():
 def test_a_named_substance_reaches_the_law_its_preset_row_carries():
     """The substance word is the WHOLE of what this body takes: a caller with a
     rate of its own states the keyword pair, which is what the refusal names."""
-    from trid3nt_server.workflows.telemac.modules import WAQTEL
+    from trid3nt.workflows.telemac.modules import WAQTEL
 
     body = WAQTEL.degradation(substance="substance",
                               presets={"coli": {"law": 1, "coef": 2.0}})
@@ -508,7 +508,7 @@ def test_a_named_substance_reaches_the_law_its_preset_row_carries():
 def test_a_rate_is_stated_by_the_keyword_pair_and_bounded_by_the_sidecar():
     """The capability the deleted arguments carried lives on the keywords: a law
     and its coefficient, taken inside the sidecar's own range."""
-    from trid3nt_server.workflows.telemac.modules import WAQTEL
+    from trid3nt.workflows.telemac.modules import WAQTEL
 
     written = dict(fill(WAQTEL, LAW_OF_TRACERS_DEGRADATION=[3],
                         COEFFICIENT_1_FOR_LAW_OF_TRACERS_DEGRADATION=[0.5]
@@ -520,7 +520,7 @@ def test_a_rate_is_stated_by_the_keyword_pair_and_bounded_by_the_sidecar():
 
 
 def test_a_substance_no_preset_names_refuses_rather_than_running_conservative():
-    from trid3nt_server.workflows.telemac.modules import WAQTEL
+    from trid3nt.workflows.telemac.modules import WAQTEL
 
     body = WAQTEL.degradation(substance="substance",
                               presets={"coli": {"law": 1, "coef": 2.0}})
@@ -587,7 +587,7 @@ def test_a_coupled_body_states_only_what_its_caller_handed_it():
     """A coupled body is on the WRAPPER, so a constant inside one reaches every template
     naming the body while an ASSERTED class body never sees it. Called twice with no
     argument in common, only the wrapper's own unopinionated slots may repeat."""
-    from trid3nt_server.workflows.telemac.modules import WRAPPERS
+    from trid3nt.workflows.telemac.modules import WRAPPERS
 
     opinions = []
     for (module, body), (first, second) in _COUPLED_CALLS.items():
@@ -629,7 +629,7 @@ def _hashable(value):
 
 
 def test_a_coupled_body_is_checked_against_its_own_module_s_dictionary():
-    from trid3nt_server.workflows.telemac.modules import WAQTEL
+    from trid3nt.workflows.telemac.modules import WAQTEL
 
     body = WAQTEL.o2(
         WATER_TEMPERATURE=20.0, WATER_SALINITY=0.0,
@@ -645,7 +645,7 @@ def test_a_coupled_body_is_checked_against_its_own_module_s_dictionary():
 
 
 def _bed(**over):
-    from trid3nt_server.workflows.telemac.modules import GAIA
+    from trid3nt.workflows.telemac.modules import GAIA
 
     asked = dict(geometry="river.slf", boundary="river.cli", gradation=None,
                  presets={"graded_sand": [[100.0, 0.34], [400.0, 0.33],
@@ -701,8 +701,8 @@ def test_every_wrapper_binds_the_primitive_set_and_nothing_question_named():
     a series, an envelope, the extent, the mesh, the mass balance. WAQTEL writes
     no result file of its own - the oxygen field is a carrier tracer - so it binds
     nothing, which is the honest reading of a module that publishes nothing."""
-    from trid3nt_server.workflows.telemac.modules import ART, GAIA, T3D, WAQTEL
-    from trid3nt_server.workflows.telemac.modules.outputs import PRIMITIVES
+    from trid3nt.workflows.telemac.modules import ART, GAIA, T3D, WAQTEL
+    from trid3nt.workflows.telemac.modules.outputs import PRIMITIVES
 
     for wrapper in (T2D, T3D, ART, GAIA):
         assert set(PRIMITIVES) <= set(wrapper.READS), wrapper.MODULE
@@ -737,8 +737,8 @@ def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
     deck advects temperature by whatever the VELOCITIES use. The template states the
     scheme and its ceiling as VALUES - a user sets either keyword by name - and the
     step it is carried at comes from the settled domain."""
-    from trid3nt_server.workflows.telemac.modules import load_module_input
-    from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import (
+    from trid3nt.workflows.telemac.modules import load_module_input
+    from trid3nt.workflows.telemac.templates.stratified_flow.stratified_flow import (
         STEERING,
     )
 
@@ -759,8 +759,8 @@ def test_every_open_water_recipe_sizes_the_domain_rim_it_meshes():
     """Nothing else sizes the rim: every sizing function measures the SHORELINE and an
     AOI's box is not one, so an undeclared rim comes back an order of magnitude past
     the size word. The op runs after the sizing and before the gradation."""
-    from trid3nt_server.tools.mesh.tool import recipe_plan_value
-    from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
+    from trid3nt.tools.mesh.tool import recipe_plan_value
+    from trid3nt.workflows.telemac.templates.agitation.agitation import (
         MESH as HARBOUR,
     )
 
@@ -846,7 +846,7 @@ def test_the_identifier_and_the_composite_name_reach_the_same_floor():
 def test_two_sources_on_the_floor_are_two_sources_in_the_deck():
     """A longer array IS the second source: one order, four arrays, two columns
     of series - and nothing in the body changed to allow it."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Sources
+    from trid3nt.workflows.telemac.modules.telemac2d import Sources
 
     sheet = _filled(produced={"settled": {"until_s": 600.0}},
                     **{"ABSCISSAE OF SOURCES": [500.0, 900.0],
@@ -867,7 +867,7 @@ def test_a_fill_with_two_tracers_is_a_two_tracer_deck():
     """Nothing is frozen: a body that states one tracer is overridden to two on
     the fill, and every tracer-arity keyword and the sources series follow the
     fill rather than the body."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Sources, TracerNames
+    from trid3nt.workflows.telemac.modules.telemac2d import Sources, TracerNames
 
     class ONE(T2D):
         NUMBER_OF_TRACERS = 1
@@ -898,7 +898,7 @@ def test_a_floor_that_is_not_a_mapping_refuses_by_name():
     argument it is, rather than raising out of the fill and blaming a step."""
     import asyncio
 
-    from trid3nt_server.workflows.telemac.workflow import fill_sheet
+    from trid3nt.workflows.telemac.workflow import fill_sheet
 
     with pytest.raises(SlotRefused) as caught:
         asyncio.run(fill_sheet(steering=T2D, produced={}, params={},
@@ -910,8 +910,8 @@ def test_a_floor_that_is_not_a_mapping_refuses_by_name():
 def test_a_template_places_its_reads_through_the_primitives_its_module_binds():
     """A template lists primitives, and every one is bound on its own module's
     wrapper under the primitive's name, published, and captioned."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.telemac.modules import WRAPPERS
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.workflows.telemac.modules import WRAPPERS
 
     for name in _TEMPLATES:
         workflow = TOOL_REGISTRY[name].fn.workflow
@@ -927,7 +927,7 @@ def test_a_template_places_its_reads_through_the_primitives_its_module_binds():
 def test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots():
     """The prose is READ OFF the declaration, so it cannot claim a surface the
     body does not state, and it names the two ways past what it lists."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     for name in _TEMPLATES:
         entry = TOOL_REGISTRY[name]
@@ -949,7 +949,7 @@ def test_every_required_file_is_the_template_s_own_statement():
 
     A composite's expansion is not readable until a fill runs it, so a required file
     it filled would read as an open mandatory slot on the docstring and on the card."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     for name in _TEMPLATES:
         body = TOOL_REGISTRY[name].fn.workflow.steering
@@ -963,10 +963,10 @@ def test_the_artemis_forcing_composite_carries_the_file_and_not_its_name():
     """ARTEMIS reads its forcing out of the boundary file, so the composite
     stands for that file's ROWS; the keyword that names the file is stated beside
     the geometry it is the boundary of."""
-    from trid3nt_server.workflows.telemac.modules.artemis import (
+    from trid3nt.workflows.telemac.modules.artemis import (
         ART, BOUNDARY_FILENAME,
     )
-    from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
+    from trid3nt.workflows.telemac.templates.agitation.agitation import (
         STEERING as AGITATION,
     )
 
@@ -983,7 +983,7 @@ def test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique():
     """Set slots and open mandatory ones are the review; the whole rest of the
     module is under advanced, grouped by the dictionary's own section and
     carrying the engine default it will otherwise run on."""
-    from trid3nt_server.workflows.runtime.review import card_rows
+    from trid3nt.workflows.runtime.review import card_rows
 
     sheet = _filled(**{"LAW OF BOTTOM FRICTION": 4})
     rows = {row.name: row for row in card_rows(sheet)}
@@ -1015,7 +1015,7 @@ def test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique():
 def test_a_set_keyword_row_shows_the_unit_it_is_read_in_and_the_range_it_is_taken_in():
     """The dictionary carries the unit only in the prose of its help, so the
     bounds sidecar states it as data and the card row renders both."""
-    from trid3nt_server.workflows.runtime.review import card_rows
+    from trid3nt.workflows.runtime.review import card_rows
 
     rows = {row.name: row for row in card_rows(_filled(DURATION=600.0))}
     assert rows["DURATION"].units == "s"
@@ -1028,7 +1028,7 @@ def test_a_set_keyword_row_shows_the_unit_it_is_read_in_and_the_range_it_is_take
 def test_a_keyword_bounded_per_element_offers_the_card_no_single_range():
     """A speed beside a bearing has no one range an editor could clamp to; the
     refusal at the fill is what names the element that missed."""
-    from trid3nt_server.workflows.runtime.review import card_rows
+    from trid3nt.workflows.runtime.review import card_rows
 
     sheet = _filled(**{"SPEED AND DIRECTION OF WIND": [4.0, 90.0]})
     row = {r.name: r for r in card_rows(sheet)}["SPEED_AND_DIRECTION_OF_WIND"]
@@ -1041,7 +1041,7 @@ def test_an_open_slot_under_the_fold_says_the_dictionary_answers_it_for_nobody()
     """An engine default that does not exist is not rendered as one: the row says
     the dictionary gives the keyword none, which is what makes a substitution
     the engine makes visible rather than assumed."""
-    from trid3nt_server.workflows.runtime.review import card_rows
+    from trid3nt.workflows.runtime.review import card_rows
 
     sheet = fill(T2D)
     rows = {row.name: row for row in card_rows(sheet)}
@@ -1056,8 +1056,8 @@ def test_an_open_slot_under_the_fold_says_the_dictionary_answers_it_for_nobody()
 #: The two modules that write the steering format: the serializer resolves the
 #: sheet into decks, and the in-image script hands each keyword to telapy.
 _STEERING_WRITERS = (
-    "trid3nt_server/workflows/telemac/authoring/serializer.py",
-    "trid3nt_server/workflows/telemac/authoring/engine_scripts/cas.py",
+    "trid3nt/workflows/telemac/authoring/serializer.py",
+    "trid3nt/workflows/telemac/authoring/engine_scripts/cas.py",
 )
 
 
@@ -1102,7 +1102,7 @@ def test_the_serializer_is_the_only_module_that_writes_a_keyword_into_a_deck():
     keywords = {slot.keyword for module in _EXPOSED + ("tomawac", "khione")
                 for slot in load_module_input(module, directory=module_input_dir()).values()}
     offenders = {}
-    for tree_root in (Path("trid3nt_server"), Path("workers")):
+    for tree_root in (Path("trid3nt"), Path("trid3nt_harness"), Path("trid3nt_server"), Path("workers")):
         for path in sorted(tree_root.rglob("*.py")):
             if path.as_posix() in _STEERING_WRITERS:
                 continue
@@ -1119,7 +1119,7 @@ def test_the_oil_module_is_one_value_the_deck_s_own_preset_and_point_expand():
     point and the release step are compiled into the routine. The float count and
     their write cadence are the module's own keywords - the cadence in TIME
     STEPS, as the dictionary states it - so the deck writes both by name."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Oil
+    from trid3nt.workflows.telemac.modules.telemac2d import Oil
 
     presets = {"diesel": dict(compo=[(0.6, 560.0), (0.4, 700.0)],
                               hap=[(0.15, 610.0, 0.005, 1.0e-5, 8.0e-5)],
@@ -1167,7 +1167,7 @@ async def _answer(emitter: _Emitter, *replies) -> None:
     import asyncio
 
     from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
-    from trid3nt_server.inputs.gate import pending
+    from trid3nt_harness.inputs.gate import pending
 
     for index, (decision, revised) in enumerate(replies):
         while len(emitter.sent) <= index or \
@@ -1189,7 +1189,7 @@ def _card_run(monkeypatch, *replies, spent=(), seat=None,
     import asyncio
 
     from trid3nt_server.render import pipeline_emitter as pe
-    from trid3nt_server.workflows.telemac.workflow import fill_sheet
+    from trid3nt.workflows.telemac.workflow import fill_sheet
 
     emitter = _Emitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: emitter)
@@ -1232,8 +1232,8 @@ def test_the_deck_is_written_before_each_card_is_drawn(monkeypatch):
 
 def test_a_staged_run_goes_to_the_box_and_nothing_else_runs_after_a_proceed(
         monkeypatch):
-    from trid3nt_server.workflows.solver import staging
-    from trid3nt_server.workflows.telemac.authoring import serializer
+    from trid3nt.workflows.solver import staging
+    from trid3nt.workflows.telemac.authoring import serializer
 
     def _never(*_args, **_kwargs):
         raise AssertionError("nothing is written once the run is staged")
@@ -1257,8 +1257,8 @@ def test_a_param_edited_on_the_card_reaches_the_chart_reference(monkeypatch):
     from types import SimpleNamespace
 
     from seated import resolve_params
-    from trid3nt_server.inputs.input import Input
-    from trid3nt_server.workflows.telemac.workflow import _seat_on
+    from trid3nt.inputs.input import Input
+    from trid3nt.workflows.telemac.workflow import _seat_on
 
     class _P:
         storm_mm_per_day = Input(desc="The storm rate the run is forced with.", default=6.0,
@@ -1283,8 +1283,8 @@ def test_the_card_the_provenance_and_the_journal_say_one_origin(
     import asyncio
 
     from seated import resolve_params
-    from trid3nt_server.workflows.runtime import journal, provenance_entries
-    from trid3nt_server.inputs.input import Input
+    from trid3nt.workflows.runtime import journal, provenance_entries
+    from trid3nt.inputs.input import Input
 
     class _P:
         storm_mm_per_day = Input(desc="The storm rate the run is forced with.",
@@ -1330,9 +1330,9 @@ def test_a_param_another_stage_reads_refuses_by_name(monkeypatch):
 def test_an_unstated_mode_with_no_session_refuses_and_fills_nothing(monkeypatch):
     import asyncio
 
-    from trid3nt_server.errors import DeclarativeError
+    from trid3nt.errors import DeclarativeError
     from trid3nt_server.render import pipeline_emitter as pe
-    from trid3nt_server.workflows.telemac.workflow import fill_sheet
+    from trid3nt.workflows.telemac.workflow import fill_sheet
 
     monkeypatch.setattr(pe, "current_emitter", lambda: None)
     with pytest.raises(DeclarativeError) as caught:
@@ -1354,7 +1354,7 @@ def test_auto_launches_at_once_with_no_card(monkeypatch, user_settings):
 def test_a_wind_from_the_north_lands_on_the_engine_s_own_direction():
     """Weather names the bearing a wind blows FROM, clockwise from north; the
     keyword takes the direction it blows TOWARD, counted from +x."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Wind
+    from trid3nt.workflows.telemac.modules.telemac2d import Wind
 
     written = dict(fill(T2D, wind=Wind(speed_mps=4.0, from_deg=0.0,
                                        drag=1.2e-6)).resolved())
@@ -1366,8 +1366,8 @@ def test_a_wind_from_the_north_lands_on_the_engine_s_own_direction():
 
 
 def test_a_three_d_wind_is_its_velocity_components_and_they_arm_the_wind():
-    from trid3nt_server.workflows.telemac.modules import T3D
-    from trid3nt_server.workflows.telemac.modules.telemac3d import Wind
+    from trid3nt.workflows.telemac.modules import T3D
+    from trid3nt.workflows.telemac.modules.telemac3d import Wind
 
     written = dict(fill(T3D, wind=Wind(speed_mps=5.0, from_deg=0.0)).resolved())
     assert written["WIND"] is True
@@ -1378,7 +1378,7 @@ def test_a_three_d_wind_is_its_velocity_components_and_they_arm_the_wind():
 
 
 def test_a_curve_number_field_writes_its_scatter_beside_the_model_stated_by_name():
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Runoff
+    from trid3nt.workflows.telemac.modules.telemac2d import Runoff
 
     sheet = fill(T2D, RAINFALL_RUNOFF_MODEL=1,
                  runoff=Runoff(node_xy=[(0.0, 0.0), (10.0, 0.0)],
@@ -1393,7 +1393,7 @@ def test_a_curve_number_field_writes_its_scatter_beside_the_model_stated_by_name
 
 
 def test_a_roughness_field_writes_manning_zones_read_under_law_four():
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Friction
+    from trid3nt.workflows.telemac.modules.telemac2d import Friction
 
     sheet = fill(T2D, LAW_OF_BOTTOM_FRICTION=4,
                  friction=Friction(manning_per_node=[0.03, 0.05, 0.03]))
@@ -1410,7 +1410,7 @@ def test_a_drawn_breach_line_is_written_into_the_breaches_data_file():
     metres, opened at its stated time with its width and its growth."""
     from pyproj import Transformer
 
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Breach
+    from trid3nt.workflows.telemac.modules.telemac2d import Breach
 
     crest = [[-85.305, 35.045], [-85.300, 35.050]]
     sheet = fill(T2D, produced={"settled": {"utm_epsg": 32616}},
@@ -1427,7 +1427,7 @@ def test_a_drawn_breach_line_is_written_into_the_breaches_data_file():
 
 
 def test_a_breach_growth_whose_fields_are_not_written_refuses_by_name():
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Breach
+    from trid3nt.workflows.telemac.modules.telemac2d import Breach
 
     with pytest.raises(Exception, match="lateral-growth option 3"):
         fill(T2D, produced={"settled": {"utm_epsg": 32616}},
@@ -1439,15 +1439,15 @@ def test_a_breach_growth_whose_fields_are_not_written_refuses_by_name():
 # -- an impossible value refuses, an unusual one is used and noted ----------- #
 
 def test_a_negative_manning_is_refused_by_name_before_any_run():
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Friction
+    from trid3nt.workflows.telemac.modules.telemac2d import Friction
 
     with pytest.raises(SlotRefused, match="Manning n of -0.03 is impossible"):
         fill(T2D, friction=Friction(manning_per_node=[0.03, -0.03]))
 
 
 def test_an_unusual_manning_is_used_as_stated_with_a_note():
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Friction
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.workflows.telemac.modules.telemac2d import Friction
 
     token = bind_notes()
     sheet = fill(T2D, friction=Friction(manning_per_node=[1.5, 0.03]))
@@ -1459,7 +1459,7 @@ def test_an_unusual_manning_is_used_as_stated_with_a_note():
 
 
 def test_a_curve_number_off_its_scale_is_refused_by_name():
-    from trid3nt_server.workflows.telemac.modules.telemac2d import Runoff
+    from trid3nt.workflows.telemac.modules.telemac2d import Runoff
 
     with pytest.raises(SlotRefused, match="curve number CN2 of 120 is impossible"):
         fill(T2D, runoff=Runoff(node_xy=[(0.0, 0.0)], cn2=[120.0],

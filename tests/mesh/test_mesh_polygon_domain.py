@@ -14,10 +14,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.mesh.meshers import MeshToolError
-from trid3nt_server.tools.mesh.meshers import om2d as OM2D
-from trid3nt_server.tools.mesh.meshers import reg_grid as REG_GRID
-from trid3nt_server.tools.mesh.tool import mesh_op, tool
+from trid3nt.tools.mesh.meshers import MeshToolError
+from trid3nt.tools.mesh.meshers import om2d as OM2D
+from trid3nt.tools.mesh.meshers import reg_grid as REG_GRID
+from trid3nt.tools.mesh.tool import mesh_op, tool
 
 _AOI = (-75.80, 36.10, -75.70, 36.20)
 
@@ -63,7 +63,7 @@ def test_the_extent_param_takes_the_polygon_however_it_was_written():
 
 
 def test_the_polygon_domain_is_the_om2d_mesher_not_a_second_one():
-    from trid3nt_server.tools.mesh.meshers import registered_meshers
+    from trid3nt.tools.mesh.meshers import registered_meshers
 
     assert registered_meshers() == ("claw_grid", "gridgen", "om2d",
                                     "reg_grid", "triangle", "voronoi")
@@ -83,7 +83,7 @@ def test_a_domains_own_runs_travel_as_the_edge_the_water_crosses(
         monkeypatch, tmp_path):
     """The shoreline is the edge MINUS the runs, so which stretches the water
     crosses has to reach the box; a wall run prescribes nothing and stays shore."""
-    from trid3nt_server.inputs.domain import domain as ingest
+    from trid3nt.inputs.domain import domain as ingest
 
     sent = _stub_om2d(monkeypatch, tmp_path)
     reach = ingest({"type": "FeatureCollection", "features": [
@@ -103,7 +103,7 @@ def test_a_domains_own_runs_travel_as_the_edge_the_water_crosses(
 
 def test_a_drawn_pond_states_no_run_so_its_whole_edge_is_shore(
         monkeypatch, tmp_path):
-    from trid3nt_server.inputs.domain import domain as ingest
+    from trid3nt.inputs.domain import domain as ingest
 
     sent = _stub_om2d(monkeypatch, tmp_path)
     OM2D.build(_recipe(extent=ingest(_BASIN)))
@@ -134,7 +134,7 @@ def test_no_size_word_and_no_raster_asks_for_the_edge_by_name(
         monkeypatch, tmp_path):
     """The library requires a finest edge; with none stated and no input data
     to read one off, the mesh says which word it needs."""
-    from trid3nt_server.tools.mesh.meshers import MeshToolError
+    from trid3nt.tools.mesh.meshers import MeshToolError
 
     _stub_om2d(monkeypatch, tmp_path)
     with pytest.raises(MeshToolError) as excinfo:
@@ -248,7 +248,7 @@ def test_a_stretch_the_domain_slot_cut_meshes_as_the_domain(monkeypatch, tmp_pat
     handed; the mesher takes that polygon the way it takes any fetched vector."""
     from shapely.geometry import LineString, shape
 
-    from trid3nt_server.inputs.domain import _cut_square
+    from trid3nt.inputs.domain import _cut_square
 
     sent = _stub_om2d(monkeypatch, tmp_path)
     water = {"type": "Polygon", "coordinates": [[
@@ -267,7 +267,7 @@ def test_a_stretch_the_domain_slot_cut_meshes_as_the_domain(monkeypatch, tmp_pat
 
 @pytest.fixture()
 def driver():
-    from trid3nt_server.tools.mesh.meshers import om2d_build
+    from trid3nt.tools.mesh.meshers import om2d_build
 
     return om2d_build
 
@@ -392,7 +392,7 @@ _COAST = {"type": "LineString",
 
 def _cut_water(tmp_path):
     """The water polygon a coastline leaves in ``_CUT_BOX``, staged as a file."""
-    from trid3nt_server.tools.mesh.water import water_polygon
+    from trid3nt.tools.mesh.water import water_polygon
 
     path = tmp_path / "water.geojson"
     path.write_text(json.dumps(water_polygon(_COAST, _CUT_BOX)))
@@ -431,7 +431,7 @@ def test_an_island_hole_does_not_make_the_cut_boxs_edges_shore(
         monkeypatch, tmp_path):
     """The all-shore guard reads the OUTER ring: a coast still cuts the box open
     however many islands stand inside it."""
-    from trid3nt_server.tools.mesh.water import water_polygon
+    from trid3nt.tools.mesh.water import water_polygon
 
     sent = _stub_om2d(monkeypatch, tmp_path)
     path = tmp_path / "island_water.geojson"
@@ -445,7 +445,7 @@ def test_an_island_hole_does_not_open_a_box_that_was_drawn_as_the_box(
         monkeypatch, tmp_path):
     """A drawn box is all shore however many islands stand inside it: the guard
     never counts a hole's segments against the outer ring's."""
-    from trid3nt_server.inputs.domain import domain as ingest
+    from trid3nt.inputs.domain import domain as ingest
 
     sent = _stub_om2d(monkeypatch, tmp_path)
     OM2D.build(_recipe(extent=ingest(_with_island(_BASIN))))

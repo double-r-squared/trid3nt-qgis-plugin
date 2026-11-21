@@ -19,8 +19,8 @@ import rasterio
 from rasterio.transform import from_origin
 
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_server.tools.derive import DeriveError
-from trid3nt_server.tools.derive.green_ampt_parameters.green_ampt_parameters import (
+from trid3nt.tools.derive import DeriveError
+from trid3nt.tools.derive.green_ampt_parameters.green_ampt_parameters import (
     CLASSES, NODATA, _NAMES, classes, derived, green_ampt_parameters, saxton_rawls)
 
 _FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "green_ampt"
@@ -142,7 +142,7 @@ def _grids(tmp_path, cells: dict[str, list[float]], units: dict[str, str] | None
 
 
 def _derived_with_notes(tmp_path, grids: dict[str, LayerURI]) -> tuple[dict[str, np.ndarray], list[str], list[LayerURI]]:
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
     token = bind_notes()
     try:
         out = derived(grids["sand"], grids["silt"], grids["clay"], grids.get("soc"), _output_dir=str(tmp_path))

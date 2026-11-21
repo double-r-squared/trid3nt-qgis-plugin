@@ -70,7 +70,7 @@ def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
 
     Output goes to ``tmp_path`` because the section tool writes its own artifact;
     ``water`` names WHAT the water fetch returns."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     seen = captured if captured is not None else {}
     centerline_uri = _write(tmp_path, "centerline.geojson", CENTERLINE)
@@ -105,7 +105,7 @@ def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
 
     for module in ("endpoints.endpoints", "section.section"):
         monkeypatch.setattr(
-            f"trid3nt_server.tools.derive.{module}._write_geojson",
+            f"trid3nt.tools.derive.{module}._write_geojson",
             _local_write)
 
     # The ACCEPTED MESH a derived release is settled inside. The mesh session is
@@ -117,7 +117,7 @@ def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
     # and the release containment through the module's, so it stands in at both.
     import numpy as np
 
-    from trid3nt_server.tools.mesh.shared import nodes as nodes_mod
+    from trid3nt.tools.mesh.shared import nodes as nodes_mod
 
     span = 1.0e7
 

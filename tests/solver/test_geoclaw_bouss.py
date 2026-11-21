@@ -16,11 +16,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.workflows.geoclaw.authoring.rundata import serialize
-from trid3nt_server.workflows.geoclaw.errors import GeoclawError
-from trid3nt_server.workflows.geoclaw.modules import GEO, GEOB, SlotRefused, body_on, wrapper_for
-from trid3nt_server.workflows.geoclaw.templates.tsunami_inundation import tsunami_inundation as template
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.workflows.geoclaw.authoring.rundata import serialize
+from trid3nt.workflows.geoclaw.errors import GeoclawError
+from trid3nt.workflows.geoclaw.modules import GEO, GEOB, SlotRefused, body_on, wrapper_for
+from trid3nt.workflows.geoclaw.templates.tsunami_inundation import tsunami_inundation as template
+from trid3nt.workflows.runtime.sheet import fill
 
 _BOUSS = ("BOUSS_BOUSS_EQUATIONS", "BOUSS_BOUSS_MIN_LEVEL", "BOUSS_BOUSS_MAX_LEVEL", "BOUSS_BOUSS_MIN_DEPTH",
           "BOUSS_BOUSS_SOLVER", "BOUSS_BOUSS_TSTART")
@@ -142,7 +142,7 @@ def test_each_executable_is_held_to_the_initial_line_it_prints():
 
 
 def test_a_run_names_its_module_and_its_process_count_and_a_wrong_one_refuses_by_name(monkeypatch):
-    from trid3nt_server.workflows.geoclaw import workflow as gw
+    from trid3nt.workflows.geoclaw import workflow as gw
 
     steered = gw.GeoclawWorkflow._steered
     me = SimpleNamespace(steering=template.STEERING)
@@ -164,8 +164,8 @@ def test_a_run_names_its_module_and_its_process_count_and_a_wrong_one_refuses_by
 
 
 def test_the_staged_case_names_the_module_and_carries_cores_only_past_one(tmp_path):
-    from trid3nt_server.workflows.geoclaw import workflow
-    from trid3nt_server.workflows.solver import staging
+    from trid3nt.workflows.geoclaw import workflow
+    from trid3nt.workflows.solver import staging
 
     captured = []
 
@@ -188,7 +188,7 @@ def test_the_staged_case_names_the_module_and_carries_cores_only_past_one(tmp_pa
 
 
 def test_an_unstated_thread_count_stages_one_per_boussinesq_process_and_none_for_shallow_water():
-    from trid3nt_server.workflows.geoclaw.workflow import _threads
+    from trid3nt.workflows.geoclaw.workflow import _threads
 
     assert _threads({"cores": 3}, "geoclaw_bouss") == 1
     assert _threads({"cores": 3, "threads": 2}, "geoclaw_bouss") == 2

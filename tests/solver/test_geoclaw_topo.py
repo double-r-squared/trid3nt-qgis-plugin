@@ -19,14 +19,14 @@ import pytest
 import rasterio
 from rasterio.transform import from_origin
 
-from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.workflows.geoclaw.authoring.rundata import serialize
-from trid3nt_server.workflows.geoclaw.authoring.staged_check import (
+from trid3nt.inputs.user_input import UserInputError
+from trid3nt.workflows.geoclaw.authoring.rundata import serialize
+from trid3nt.workflows.geoclaw.authoring.staged_check import (
     check_staged_run,
 )
-from trid3nt_server.workflows.geoclaw.errors import GeoclawError
-from trid3nt_server.workflows.geoclaw.modules import GEO
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.workflows.geoclaw.errors import GeoclawError
+from trid3nt.workflows.geoclaw.modules import GEO
+from trid3nt.workflows.runtime.sheet import fill
 
 _AUTHORING = Path(__file__).with_name("test_geoclaw_authoring.py")
 _spec = importlib.util.spec_from_file_location("geoclaw_authoring_sheet", _AUTHORING)

@@ -15,16 +15,16 @@ import inspect
 import pytest
 
 from trid3nt_contracts.coverage import Member
-from trid3nt_server.inputs.weather import weather
-from trid3nt_server.inputs.observation import Observation, ObservationError
-from trid3nt_server.workflows.telemac.authoring.atmosphere import (
+from trid3nt.inputs.weather import weather
+from trid3nt.inputs.observation import Observation, ObservationError
+from trid3nt.workflows.telemac.authoring.atmosphere import (
     ATMOSPHERE_FILENAME,
 )
-from trid3nt_server.workflows.telemac.modules import fill
-from trid3nt_server.workflows.telemac.templates.water_temperature import (
+from trid3nt.workflows.telemac.modules import fill
+from trid3nt.workflows.telemac.templates.water_temperature import (
     water_temperature as template,
 )
-from trid3nt_server.inputs.slots import BED, DISCHARGE, OBSERVE
+from trid3nt.inputs.slots import BED, DISCHARGE, OBSERVE
 from seated import value_inputs, row_inputs
 
 #: The week the deck states as DURATION, as the hourly record that has to span
@@ -63,7 +63,7 @@ def test_every_slot_this_run_stands_on_reaches_the_wire_as_the_slot_it_is():
     """What the user hands in supersedes the match the template needs, so a pond
     outline, a stated depth, a stated opening temperature and a weather record
     the user already holds run this question with no fetch at all."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     wire = set(inspect.signature(
         TOOL_REGISTRY["telemac_water_temperature"].fn).parameters)
@@ -212,9 +212,9 @@ def test_the_weather_is_asked_over_a_window_bracketing_the_deck():
     source spells that window under, and a source that spells them as INSTANTS
     is asked at the instant, so a window shorter than a day is not two of the
     same day."""
-    from trid3nt_server.tools.search.match import (
+    from trid3nt.tools.search.match import (
         Need, base_ask, match, sources_with_coverage)
-    from trid3nt_server.workflows.runtime.fill import _closes
+    from trid3nt.workflows.runtime.fill import _closes
 
     window_s = _workflow().run_window_s({})
     assert window_s == 604800.0

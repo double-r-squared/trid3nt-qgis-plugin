@@ -12,11 +12,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.errors import DeclarationError
-from trid3nt_server.inputs.input import Input
-from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-from trid3nt_server.workflows.runtime import fill
-from trid3nt_server.workflows.runtime.errors import StepFailedError
+from trid3nt.errors import DeclarationError
+from trid3nt.inputs.input import Input
+from trid3nt.inputs.run_notes import bind_notes, drain_notes
+from trid3nt.workflows.runtime import fill
+from trid3nt.workflows.runtime.errors import StepFailedError
 
 _NOTHING = SimpleNamespace(sentence="nothing measures aquifer property here")
 

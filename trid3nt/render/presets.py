@@ -1,0 +1,585 @@
+"""The preset family: four data KINDS, one .qml writer.
+
+A preset is not a quantity: four renderer shapes cover every product drawn here,
+and a quantity's units, title, scale and ramp parameterise one of the four rather
+than adding a fifth. The .qml written is a subset of QGIS's own style format.
+"""
+
+from __future__ import annotations
+
+import math
+import re
+import logging
+from dataclasses import dataclass, replace
+from typing import Any, Callable, Iterable, Literal, Mapping
+from xml.sax.saxutils import quoteattr
+
+from trid3nt.settings import setting
+
+logger = logging.getLogger("trid3nt.render.presets")
+
+__all__ = [
+    "KINDS",
+    "Preset",
+    "Resolved",
+    "Scale",
+    "band_range_reader",
+    "bare_default",
+    "from_row",
+    "paints_a_raster",
+    "qml",
+    "ramp_stops",
+    "resolve",
+    "shared_range",
+]
+
+Kind = Literal["continuous", "classed", "reference", "mesh"]
+Policy = Literal["data", "fixed"]
+Transform = Literal["linear", "log", "sqrt", "percentile"]
+Geometry = Literal["point", "line", "polygon"]
+
+#: The whole family; a product that is none of these has no picture.
+KINDS: tuple[Kind, ...] = ("continuous", "classed", "reference", "mesh")
+
+#: QGIS reads a ramp as explicit stops, so the paint travels in the document. Five stops at t = 0, .25, .5, .75, 1 of
+#: the matplotlib / ColorBrewer ramp; ``hsv`` is closed (a bearing wraps, so 0 and 360 are one colour). ``terrain`` is
+#: that ramp's land range (t = .25 to 1) at eight stops, since relief needs more and its low end is land, not sub-sea blue.
+_RAMP_STOPS: dict[str, tuple[str, ...]] = {
+    "viridis": ("#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"),
+    "magma": ("#000004", "#51127c", "#b73779", "#fc8961", "#fcfdbf"),
+    "inferno": ("#000004", "#57106e", "#bc3754", "#f98e09", "#fcffa4"),
+    "plasma": ("#0d0887", "#7e03a8", "#cc4778", "#f89540", "#f0f921"),
+    "cividis": ("#00224e", "#434e6c", "#7d7c78", "#bcae6c", "#fee838"),
+    "blues": ("#f7fbff", "#c6dbef", "#6aaed6", "#2070b4", "#08306b"),
+    "greens": ("#f7fcf5", "#c7e9c0", "#73c476", "#228a44", "#00441b"),
+    "oranges": ("#fff5eb", "#fdd0a2", "#fd8c3b", "#d84801", "#7f2704"),
+    "reds": ("#fff5f0", "#fcbba1", "#fb694a", "#ca181d", "#67000d"),
+    "rdbu": ("#67001f", "#e58368", "#f6f7f7", "#68abd0", "#053061"),
+    "rdylbu": ("#a50026", "#f98e52", "#feffc0", "#8ec2dc", "#313695"),
+    "rdylgn": ("#a50026", "#f98e52", "#feffbe", "#84ca66", "#006837"),
+    "ylgn": ("#ffffe5", "#d9f0a3", "#77c679", "#228343", "#004529"),
+    "ylgnbu": ("#ffffd9", "#c6e9b4", "#40b5c4", "#225da8", "#081d58"),
+    "ylorrd": ("#ffffcc", "#fed976", "#fd8c3c", "#e2191c", "#800026"),
+    "gnbu": ("#f7fcf0", "#ccebc5", "#7accc4", "#2a8bbe", "#084081"),
+    "terrain": ("#01cc66", "#6de27c", "#d9f791", "#dad085", "#a48b68",
+                "#93756e", "#c9bab7", "#ffffff"),
+    "gray": ("#000000", "#404040", "#808080", "#c0c0c0", "#ffffff"),
+    "hsv": ("#ff0000", "#b3ff00", "#00ffff", "#4d00ff", "#ff0000"),
+}
+
+
+def ramp_stops(name: str | None) -> tuple[str, ...]:
+    """The hex stops of a ramp; a ``<base>_r`` name is the base reversed.
+
+    No name, or an unknown one, takes the DEFAULT_RAMP setting, never grey - grey reads as no data.
+    """
+    key = (name or "").strip().lower()
+    stops = _RAMP_STOPS.get(key)
+    if stops is None and key.endswith("_r"):
+        base = _RAMP_STOPS.get(key[: -len("_r")])
+        if base is not None:
+            stops = tuple(reversed(base))
+    if stops is None:
+        fallback = setting("DEFAULT_RAMP")
+        if key:
+            logger.warning("presets: unknown ramp %r -> %s", name, fallback)
+        stops = _RAMP_STOPS[fallback]
+    return stops
+
+
+@dataclass(frozen=True, slots=True)
+class Scale:
+    """The one scale a quantity is read on.
+
+    ``range`` under ``policy="data"`` is the FALLBACK, never a second opinion; no ``clip`` is the CLIP_PERCENTILES setting.
+    """
+
+    policy: Policy = "data"
+    range: tuple[float, float] | None = None
+    transform: Transform = "percentile"
+    clip: tuple[float, float] | None = None
+
+    def merged(self, other: "Scale | None") -> "Scale":
+        """``other`` wins field by field - the override order, in one place."""
+        if other is None:
+            return self
+        return Scale(
+            policy=other.policy or self.policy,
+            range=other.range if other.range is not None else self.range,
+            transform=other.transform or self.transform,
+            clip=other.clip if other.clip is not None else self.clip,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class Preset:
+    """One of four renderer shapes, parameterised by what the data is."""
+
+    kind: Kind = "continuous"
+    #: Empty is the DEFAULT_RAMP setting, read when the preset is resolved.
+    ramp: str = ""
+    units: str | None = None
+    scale: Scale = Scale()
+    #: ``(lower, upper, "#rrggbb", label)`` breaks - what makes a preset classed.
+    classes: tuple[tuple[float, float, str, str], ...] = ()
+    #: The symbol shape a vector kind needs; its presence says the layer is a vector (a classed row without one is a classed raster).
+    geometry: Geometry | None = None
+    color: str = "#3b7dd8"
+    attribute: str | None = None
+    #: The MDAL group a mesh preset paints; QGIS binds it by name, an index does not survive the load.
+    dataset_group: str | None = None
+    #: Where the field stops being drawn: a floored field is ranged from here, so a still and an animation of one quantity show the same absent region.
+    floor: float | None = None
+
+_BARE: dict[Kind, Preset] = {
+    "continuous": Preset(kind="continuous"),
+    "classed": Preset(kind="classed"),
+    # A reference layer is an outline a reader locates by, drawn not measured, with no scale. Its geometry is undeclared by
+    # default: a wrong-shaped symbol draws nothing, so an undeclared one leaves QGIS's default.
+    "reference": Preset(kind="reference", scale=Scale(policy="fixed", range=None)),
+    "mesh": Preset(kind="mesh"),
+}
+
+
+def bare_default(kind: str | None) -> Preset:
+    """The kind's own preset, for a declaration that named no parameters."""
+    return _BARE.get(str(kind or "continuous").strip().lower(), _BARE["continuous"])
+
+
+def paints_a_raster(preset: Preset) -> bool:
+    """Does this preset draw a RASTER - the only shape with bands to read?
+
+    A ``geometry`` makes a classed preset a vector; a mesh is never a raster.
+    """
+    return preset.kind in ("continuous", "classed") and preset.geometry is None
+
+
+def _scale_from(doc: Any, fallback: Scale) -> Scale:
+    if not isinstance(doc, Mapping):
+        return fallback
+    rng, clip = doc.get("range"), doc.get("clip")
+    return Scale(
+        policy=str(doc.get("policy") or fallback.policy),
+        range=(float(rng[0]), float(rng[1])) if rng else fallback.range,
+        transform=str(doc.get("transform") or fallback.transform),
+        clip=(float(clip[0]), float(clip[1])) if clip else fallback.clip,
+    )
+
+
+def from_row(row: Any) -> Preset:
+    """A declared ``style:`` row as a preset. An absent row is the bare default.
+
+    The row lives beside the source or product it draws, never in a table elsewhere.
+    """
+    if not isinstance(row, Mapping):
+        return bare_default("continuous")
+    base = bare_default(row.get("kind"))
+    return Preset(
+        kind=base.kind,
+        ramp=str(row.get("ramp") or base.ramp),
+        units=row.get("units") if row.get("units") is not None else base.units,
+        scale=_scale_from(row.get("scale"), base.scale),
+        classes=tuple((float(c[0]), float(c[1]), str(c[2]), str(c[3]))
+                      for c in (row.get("classes") or ())),
+        geometry=row.get("geometry") or base.geometry,  # type: ignore[arg-type]
+        color=str(row.get("color") or base.color),
+        attribute=row.get("attribute") or base.attribute,
+        dataset_group=row.get("dataset_group") or base.dataset_group,
+        floor=(float(row["floor"]) if row.get("floor") is not None
+               else base.floor),
+    )
+
+
+#: Where the concrete range came from; the legend says which, because the colours cannot.
+FIXED, FROM_DATA, SHARED, FALLBACK = "fixed", "data", "shared", "fallback"
+
+_SAFE_RANGE = (0.0, 1.0)
+
+
+@dataclass(frozen=True, slots=True)
+class Resolved:
+    """One preset resolved against a layer: the concrete range and its source."""
+
+    preset: Preset
+    range: tuple[float, float] | None
+    source: str
+
+    @property
+    def kind(self) -> Kind:
+        return self.preset.kind
+
+    def legend_note(self) -> str:
+        """What the legend says about its own scale - the policy AND the range."""
+        if self.preset.classes:
+            return f"{len(self.preset.classes)} declared classes"
+        if self.range is None:
+            return "no scale (drawn, not measured)"
+        lo, hi = self.range
+        units = f" {self.preset.units}" if self.preset.units else ""
+        how = {
+            FIXED: "fixed domain scale",
+            FROM_DATA: f"scaled to this run ({_percentile_phrase(self.preset.scale)})",
+            # A shared range was handed in, so naming this preset's percentiles would describe a read nobody made.
+            SHARED: "one range shared across the compared set",
+            FALLBACK: "declared fallback range (the run's own values were unreadable)",
+        }.get(self.source, self.source)
+        return f"{how}: {lo:g} to {hi:g}{units}"
+
+    def qml(self) -> str | None:
+        return qml(self)
+
+
+def _percentile_phrase(scale: Scale) -> str:
+    if scale.transform == "percentile" and scale.clip:
+        return f"p{scale.clip[0]:g}-p{scale.clip[1]:g}"
+    return scale.transform
+
+
+def needs_run_range(preset: Preset, override: Scale | None = None) -> bool:
+    """Does this preset's declared policy want the layer's own range read?"""
+    if preset.kind == "reference" or preset.classes:
+        return False
+    scale = preset.scale.merged(override)
+    return scale.policy != "fixed" or scale.range is None
+
+
+def resolve(
+    preset: Preset,
+    *,
+    read_range: Callable[[Scale], tuple[float, float] | None] | None = None,
+    override: Scale | None = None,
+    shared: tuple[float, float] | None = None,
+) -> Resolved:
+    """Resolve a preset to a concrete scale. The ONE place that decision is made.
+
+    Override order, later wins: the declared row -> ``override`` -> ``shared``.
+    """
+    scale = preset.scale.merged(override)
+    if _paints_values(preset):
+        if scale.clip is None:
+            scale = replace(scale, clip=_clip_setting())
+        preset = replace(preset, ramp=preset.ramp or setting("DEFAULT_RAMP"))
+    spec = replace(preset, scale=scale)
+    if spec.kind == "reference" or spec.classes:
+        return Resolved(spec, None if spec.kind == "reference" else scale.range, FIXED)
+    if shared is not None:
+        return Resolved(spec, shared, SHARED)
+    if scale.policy == "fixed" and scale.range is not None:
+        return Resolved(spec, scale.range, FIXED)
+    # ``read_range`` is asked only under policy ``data`` with no ``shared`` range, so a fixed-scale preset never pays for a
+    # band read. The scope is the run, never one frame: a per-frame range makes one colour mean different values.
+    found = read_range(scale) if read_range is not None else None
+    if found is not None:
+        return Resolved(spec, _widen(found), FROM_DATA)
+    return Resolved(spec, scale.range or _SAFE_RANGE, FALLBACK)
+
+
+def _paints_values(preset: Preset) -> bool:
+    return preset.kind != "reference" and not preset.classes
+
+
+def _clip_setting() -> tuple[float, float]:
+    low, high = setting("CLIP_PERCENTILES")
+    return (float(low), float(high))
+
+
+def _widen(rng: tuple[float, float]) -> tuple[float, float]:
+    """A zero-width range is not a scale - renderers reject it, so pad it."""
+    lo, hi = float(rng[0]), float(rng[1])
+    if hi > lo:
+        return (lo, hi)
+    pad = max(abs(lo) * 0.01, 1e-6)
+    return (lo - pad, hi + pad)
+
+
+def shared_range(
+    ranges: Iterable[tuple[float, float] | None],
+) -> tuple[float, float] | None:
+    """ONE range spanning a compared set - before/after, coarse-versus-refined.
+
+    A compared set shares one scale; ``None`` when nothing in it had a range.
+    """
+    found = [r for r in ranges if r is not None]
+    if not found:
+        return None
+    return _widen((min(r[0] for r in found), max(r[1] for r in found)))
+
+
+_PERCENTILE_CAP = re.compile(r"p(\d+(?:\.\d+)?)")
+
+
+def _legend_end(value: float, *, up: bool) -> float:
+    """Six decimals, rounded away from the field: rounding into the data would label a colour as the extreme while values run past it."""
+    step = 1e6
+    return (math.ceil(value * step) if up else math.floor(value * step)) / step
+
+
+def declared_peak(values: Any, row: Any = None) -> float:
+    """How large a row says its own field gets: the ``p<q>`` percentile where it caps the range, the maximum otherwise.
+    
+    The legend top and the field's visible edge are both this number."""
+    import numpy as np
+
+    finite = np.asarray(values, dtype="float64").ravel()
+    finite = finite[np.isfinite(finite)]
+    if not finite.size:
+        return 0.0
+    cap = _PERCENTILE_CAP.fullmatch(str(dict(row or {}).get("range") or ""))
+    return (float(np.percentile(finite, float(cap.group(1)))) if cap is not None
+            else float(finite.max()))
+
+
+def measured_range(values: Any, row: Any = None, *, floor: float | None = None
+                   ) -> tuple[float, float]:
+    """The legend range a producer measured while it held the field.
+    
+    A ``center`` row is diverging and ranged symmetrically about it; a ``floor`` pins the bottom; a ``range`` of ``p<q>``
+    caps the top at that percentile."""
+    import numpy as np
+
+    finite = np.asarray(values, dtype="float64").ravel()
+    finite = finite[np.isfinite(finite)]
+    declared = dict(row or {})
+    hi = declared_peak(finite, declared)
+    lo = float(finite.min()) if finite.size else 0.0
+    center = declared.get("center")
+    if center is not None:
+        reach = max(abs(hi - float(center)), abs(lo - float(center)))
+        return (_legend_end(float(center) - reach, up=False),
+                _legend_end(float(center) + reach, up=True))
+    if declared.get("floor") is not None:
+        lo = float(declared["floor"])
+    elif floor is not None:
+        # A floored field is read from its floor: below it nothing is drawn, so a lower ramp start would spend colours on an
+        # absent region. The bottom is the floor exactly, because that identity says the shader may clip there.
+        return (float(floor), _legend_end(max(hi, float(floor)), up=True))
+    return (_legend_end(lo, up=False), _legend_end(hi, up=True))
+
+
+def band_range_reader(
+    raster_bytes: bytes | None,
+) -> Callable[[Scale], tuple[float, float] | None]:
+    """A ``read_range`` that reads band 1 of an in-hand COG at the scale's clip.
+
+    ``None`` when nothing finite can be read; the resolver then says fallback.
+    """
+
+    def _read(scale: Scale) -> tuple[float, float] | None:
+        if not raster_bytes:
+            return None
+        try:
+            import numpy as np
+            from rasterio.io import MemoryFile
+        except Exception as exc:  # noqa: BLE001 - deps absent: declared fallback
+            logger.debug("band-stats deps unavailable (%s: %s)", type(exc).__name__, exc)
+            return None
+        lo_pct, hi_pct = scale.clip or _clip_setting()
+        try:
+            with MemoryFile(raster_bytes) as mem, mem.open() as src:
+                band = src.read(1, masked=True)
+                arr = np.ma.filled(band.astype("float64"), np.nan)
+                finite = arr[np.isfinite(arr)]
+                if finite.size == 0:
+                    return None
+                lo = float(np.percentile(finite, lo_pct))
+                hi = float(np.percentile(finite, hi_pct))
+        except Exception as exc:  # noqa: BLE001 - unreadable / not a raster
+            logger.debug("band-stats read failed (%s: %s)", type(exc).__name__, exc)
+            return None
+        if lo != lo or hi != hi:
+            return None
+        return (lo, hi)
+
+    return _read
+
+
+_HEADER = ("<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n"
+           '<qgis version="3.40.6" styleCategories="Symbology">\n')
+_FOOTER = "</qgis>\n"
+
+#: QGIS symbol class per geometry; a symbol not matching the layer's geometry loads and draws nothing.
+_SYMBOL: dict[Geometry, tuple[str, str, str]] = {
+    "point": ("marker", "SimpleMarker", "color"),
+    "line": ("line", "SimpleLine", "line_color"),
+    "polygon": ("fill", "SimpleFill", "color"),
+}
+
+
+def _rgba(color: str, alpha: int = 255) -> str:
+    value = color.lstrip("#")
+    r, g, b = (int(value[i:i + 2], 16) for i in (0, 2, 4))
+    return f"{r},{g},{b},{alpha}"
+
+
+def _tick_label(value: float, units: str | None) -> str:
+    return f"{value:g} {units}" if units else f"{value:g}"
+
+
+def _ramp_items(resolved: Resolved, indent: str) -> str:
+    lo, hi = resolved.range or _SAFE_RANGE
+    stops = ramp_stops(resolved.preset.ramp)
+    span = hi - lo
+    rows = []
+    for i, color in enumerate(stops):
+        value = lo + span * (i / (len(stops) - 1))
+        rows.append(
+            f'{indent}<item value="{value:.10g}" color="{color}" alpha="255" '
+            f"label={quoteattr(_tick_label(value, resolved.preset.units))}/>")
+    return "\n".join(rows)
+
+
+def _colorrampshader(resolved: Resolved, indent: str, *, clip: bool = False) -> str:
+    lo, hi = resolved.range or _SAFE_RANGE
+    return (
+        f'{indent}<colorrampshader colorRampType="INTERPOLATED" classificationMode="1"'
+        f' clip="{1 if clip else 0}" minimumValue="{lo:.10g}" maximumValue="{hi:.10g}"'
+        f' labelPrecision="4">\n'
+        f"{_ramp_items(resolved, indent + '  ')}\n"
+        f"{indent}</colorrampshader>")
+
+
+def _continuous_qml(resolved: Resolved) -> str:
+    lo, hi = resolved.range or _SAFE_RANGE
+    return (
+        "  <pipe>\n"
+        f'    <rasterrenderer type="singlebandpseudocolor" band="1" opacity="1"'
+        f' alphaBand="-1" classificationMin="{lo:.10g}" classificationMax="{hi:.10g}"'
+        f' nodataColor="">\n'
+        "      <rastershader>\n"
+        f"{_colorrampshader(resolved, '        ')}\n"
+        "      </rastershader>\n"
+        "    </rasterrenderer>\n"
+        "  </pipe>\n")
+
+
+def _symbol(name: str, geometry: Geometry | None, color: str, indent: str) -> str:
+    stype, sclass, color_key = _SYMBOL[geometry or "point"]
+    extra = ('        <Option name="outline_color" type="QString" '
+             f'value="{_rgba("#232323")}"/>\n'
+             '        <Option name="outline_width" type="QString" value="0.26"/>\n'
+             if geometry != "line" else "")
+    size = ('        <Option name="size" type="QString" value="2.4"/>\n'
+            '        <Option name="size_unit" type="QString" value="MM"/>\n'
+            '        <Option name="name" type="QString" value="circle"/>\n'
+            if geometry == "point" else "")
+    width = ('        <Option name="line_width" type="QString" value="0.66"/>\n'
+             '        <Option name="line_width_unit" type="QString" value="MM"/>\n'
+             if geometry == "line" else "")
+    return (
+        f'{indent}<symbol name="{name}" type="{stype}" alpha="1" force_rhr="0"'
+        ' clip_to_extent="1" frame_rate="10" is_animated="0">\n'
+        f'{indent}  <layer class="{sclass}" enabled="1" locked="0" pass="0">\n'
+        f'{indent}    <Option type="Map">\n'
+        f'{indent}      <Option name="{color_key}" type="QString" value="{_rgba(color)}"/>\n'
+        f"{extra}{size}{width}"
+        f'{indent}      <Option name="style" type="QString" value="solid"/>\n'
+        f"{indent}    </Option>\n"
+        f"{indent}  </layer>\n"
+        f"{indent}</symbol>")
+
+
+def _classed_raster_qml(resolved: Resolved) -> str:
+    """Discrete bands over a raster: each class paints up to its upper bound."""
+    classes = resolved.preset.classes
+    lo = classes[0][0] if classes else 0.0
+    hi = classes[-1][1] if classes else 1.0
+    items = "\n".join(
+        f'{"        "}<item value="{upper:.10g}" color="{color}" alpha="255" '
+        f"label={quoteattr(label)}/>"
+        for _lower, upper, color, label in classes)
+    return (
+        "  <pipe>\n"
+        f'    <rasterrenderer type="singlebandpseudocolor" band="1" opacity="1"'
+        f' alphaBand="-1" classificationMin="{lo:.10g}" classificationMax="{hi:.10g}"'
+        f' nodataColor="">\n'
+        "      <rastershader>\n"
+        f'        <colorrampshader colorRampType="DISCRETE" classificationMode="2"'
+        f' clip="0" minimumValue="{lo:.10g}" maximumValue="{hi:.10g}"'
+        f' labelPrecision="4">\n'
+        f"{items}\n"
+        "        </colorrampshader>\n"
+        "      </rastershader>\n"
+        "    </rasterrenderer>\n"
+        "  </pipe>\n")
+
+
+def _classed_vector_qml(resolved: Resolved, attribute: str) -> str:
+    classes = resolved.preset.classes
+    ranges = "\n".join(
+        f'      <range lower="{lo:.10f}" upper="{hi:.10f}" symbol="{i}"'
+        f" label={quoteattr(label)} render=\"true\"/>"
+        for i, (lo, hi, _color, label) in enumerate(classes))
+    symbols = "\n".join(
+        _symbol(str(i), resolved.preset.geometry, color, "      ")
+        for i, (_lo, _hi, color, _label) in enumerate(classes))
+    return (
+        f'  <renderer-v2 type="graduatedSymbol" attr={quoteattr(attribute)}'
+        ' graduatedMethod="GraduatedColor" symbollevels="0" forceraster="0"'
+        ' enableorderby="0" referencescale="-1">\n'
+        "    <ranges>\n"
+        f"{ranges}\n"
+        "    </ranges>\n"
+        "    <symbols>\n"
+        f"{symbols}\n"
+        "    </symbols>\n"
+        "  </renderer-v2>\n")
+
+
+def _reference_qml(resolved: Resolved) -> str:
+    return (
+        '  <renderer-v2 type="singleSymbol" symbollevels="0" forceraster="0"'
+        ' enableorderby="0" referencescale="-1">\n'
+        "    <symbols>\n"
+        f"{_symbol('0', resolved.preset.geometry, resolved.preset.color, '      ')}\n"
+        "    </symbols>\n"
+        "  </renderer-v2>\n")
+
+
+def _clips_below_floor(resolved: Resolved) -> bool:
+    """True when the range's bottom is the field's floor; QGIS's clip drops values on both sides, so any other range would clip live values."""
+    floor = resolved.preset.floor
+    return (floor is not None and resolved.range is not None
+            and resolved.range[0] == floor)
+
+
+def _mesh_qml(resolved: Resolved) -> str:
+    lo, hi = resolved.range or _SAFE_RANGE
+    group = resolved.preset.dataset_group or ""
+    # QGIS remaps the settings' group index through this name on load; without the row the mesh-renderer-settings block is silently dropped.
+    binding = (f'  <name-to-global-index global-index="0" name={quoteattr(group)}/>\n'
+               if group else "")
+    return (
+        "  <mesh-renderer-settings>\n"
+        '    <active-dataset-group scalar="0" vector="-1"/>\n'
+        f'    <scalar-settings group="0" min-val="{lo:.10g}" max-val="{hi:.10g}"'
+        ' opacity="1" interpolation-method="no-resampling">\n'
+        f"{_colorrampshader(resolved, '      ', clip=_clips_below_floor(resolved))}\n"
+        "    </scalar-settings>\n"
+        "  </mesh-renderer-settings>\n"
+        f"{binding}")
+
+
+def qml(resolved: Resolved) -> str | None:
+    """The resolved preset as a QGIS ``.qml`` document, or ``None``.
+
+    ``None`` when the preset has nothing it can honestly say about THIS layer.
+    """
+    # Three refusals, each because the document would draw worse than QGIS's default: a mesh preset with no named dataset
+    # group, a reference preset with undeclared geometry, a classed preset with no breaks (an item-less shader paints the
+    # raster one flat colour).
+    if resolved.preset.kind == "mesh" and not resolved.preset.dataset_group:
+        return None
+    if resolved.preset.kind == "reference" and resolved.preset.geometry is None:
+        return None
+    if resolved.preset.kind == "classed" and not resolved.preset.classes:
+        return None
+    body = {
+        "continuous": lambda: _continuous_qml(resolved),
+        "classed": lambda: (
+            _classed_vector_qml(resolved, resolved.preset.attribute or "value")
+            if resolved.preset.geometry
+            else _classed_raster_qml(resolved)),
+        "reference": lambda: _reference_qml(resolved),
+        "mesh": lambda: _mesh_qml(resolved),
+    }[resolved.preset.kind]()
+    return _HEADER + body + _FOOTER

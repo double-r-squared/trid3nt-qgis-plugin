@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt.tools import TOOL_REGISTRY
 
 # Eager-import all workflow modules that add to TOOL_REGISTRY at import time.
 # Mirrors the startup-time import order; any module that calls @register_tool
@@ -28,7 +28,7 @@ def _get_normalizer():
     production one: ``tool_arg_normalizer.normalize_args`` when importable, else the
     inspect-based strip."""
     try:
-        from trid3nt_server.tools.tool_arg_normalizer import normalize_args  # type: ignore[import]
+        from trid3nt_harness.tools.tool_arg_normalizer import normalize_args  # type: ignore[import]
         return normalize_args, True
     except ImportError:
         return _inspect_strip_unknown, False
@@ -285,7 +285,7 @@ def test_tool_registry_count_ge_50() -> None:
     assert count >= 50, (
         f"[AGENT layer] Expected ≥50 tools in TOOL_REGISTRY, got {count}. "
         "A submodule import likely failed silently — check for ImportError at "
-        "the eager-import block in trid3nt_server/tools/__init__.py."
+        "the eager-import block in trid3nt/tools/__init__.py."
     )
 
 
@@ -298,7 +298,7 @@ def test_normalizer_presence_logged() -> None:
     if is_real:
         logger.info(
             "OQ-0168-NORMALIZER-DEPENDENCY resolved: "
-            "trid3nt_server.tools.tool_arg_normalizer.normalize_args is in use (job-0164 merged)."
+            "trid3nt_harness.tools.tool_arg_normalizer.normalize_args is in use (job-0164 merged)."
         )
     else:
         logger.warning(

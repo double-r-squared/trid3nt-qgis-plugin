@@ -14,8 +14,8 @@ import pytest
 from trid3nt_contracts.coverage import (
     Coverage, CoverageExtent, CoveragePoint, CoverageWindow)
 
-from trid3nt_server.workflows.runtime.errors import DeclarationError
-from trid3nt_server.tools.search.match import (
+from trid3nt.workflows.runtime.errors import DeclarationError
+from trid3nt.tools.search.match import (
     LOOSEN_WINDOW,
     Need,
     dropped_from,
@@ -251,8 +251,8 @@ def test_a_run_that_picks_a_source_the_filters_excluded_is_refused():
 def test_a_source_called_by_station_with_no_stations_listed_is_not_a_survivor(monkeypatch):
     from types import SimpleNamespace
 
-    from trid3nt_server.tools.fetchers._router import registration
-    from trid3nt_server.tools.search import match as m
+    from trid3nt.tools.fetchers._router import registration
+    from trid3nt.tools.search import match as m
 
     spec = SimpleNamespace(params={"station": {"required": True},
                                    "start_date": {"required": True}})
@@ -275,8 +275,8 @@ def test_a_source_addressed_by_a_seed_is_no_survivor_of_a_question_with_no_point
     inside the run."""
     from types import SimpleNamespace
 
-    from trid3nt_server.tools.fetchers._router import registration
-    from trid3nt_server.tools.search import match as m
+    from trid3nt.tools.fetchers._router import registration
+    from trid3nt.tools.search import match as m
 
     spec = SimpleNamespace(params={"seed_point": {"required": True}})
     registration._SPEC_REGISTRY["fetch_by_seed"] = spec
@@ -299,8 +299,8 @@ def test_the_probe_names_the_nearest_listed_station_and_the_rows_own_ask(
     and the values that make the source answer with THAT row travel with it."""
     from types import SimpleNamespace
 
-    from trid3nt_server.tools.fetchers._router import registration
-    from trid3nt_server.tools.search import match as m
+    from trid3nt.tools.fetchers._router import registration
+    from trid3nt.tools.search import match as m
 
     row = gauges(data_class="water level series", kind="predicted")
     row.ask = {"product": "predictions"}
@@ -393,8 +393,8 @@ def test_a_box_called_source_is_asked_over_a_box_that_reaches_its_station(
     source on the list."""
     from types import SimpleNamespace
 
-    from trid3nt_server.tools.fetchers._router import registration
-    from trid3nt_server.tools.search import match as m
+    from trid3nt.tools.fetchers._router import registration
+    from trid3nt.tools.search import match as m
 
     row = gauges(data_class="water level series", kind="predicted")
     row.extent = row.extent.model_copy(update={
@@ -457,8 +457,8 @@ def test_the_source_is_called_by_its_own_word_for_the_feature(monkeypatch):
     it in."""
     from types import SimpleNamespace
 
-    from trid3nt_server.tools.fetchers._router import registration
-    from trid3nt_server.tools.search import match as m
+    from trid3nt.tools.fetchers._router import registration
+    from trid3nt.tools.search import match as m
 
     row = hydrography(
         {"channel network": "default", "drainage network": "drainage"},
@@ -478,8 +478,8 @@ def test_a_stated_measured_word_is_what_the_source_is_called_with(monkeypatch):
     a row that cannot be told it leaves the list."""
     from types import SimpleNamespace
 
-    from trid3nt_server.tools.fetchers._router import registration
-    from trid3nt_server.tools.search import match as m
+    from trid3nt.tools.fetchers._router import registration
+    from trid3nt.tools.search import match as m
 
     asks = hydrography({"NO3": "Nitrate"}, ask={"characteristic": "need:of"})
     deaf = hydrography({"NO3": "Nitrate"})
@@ -500,7 +500,7 @@ def test_a_series_need_with_no_moment_stated_asks_no_source_at_all():
     """A record is a reading AT A TIME. A run that stated none has no window to
     put, so the source that would have answered with its latest one is not
     asked, and the refusal says which."""
-    from trid3nt_server.tools.search.match import NO_MOMENT
+    from trid3nt.tools.search.match import NO_MOMENT
 
     choice = match(Need(slot="inflow", data_class="discharge series",
                         lon=WILLAMETTE[0], lat=WILLAMETTE[1]),
@@ -515,7 +515,7 @@ def test_no_level_or_discharge_source_can_be_reached_without_a_moment():
     """Every published source of the two classes a level and a discharge slot
     read states a SERIES window, so the gate above covers every one of them:
     neither slot has a source it could fall through to for a latest record."""
-    from trid3nt_server.tools.search.match import sources_with_coverage
+    from trid3nt.tools.search.match import sources_with_coverage
 
     rows = [(name, row) for name, row in sources_with_coverage()
             if row.data_class in ("water level series", "discharge series")]
@@ -528,7 +528,7 @@ def test_every_series_row_of_the_registry_is_unasked_without_a_moment():
     states a SERIES window on is dropped with NO_MOMENT when the run states no
     moment - even a loosened window does not lift it - and no stated moment
     drops one for it, so a new time-grained class is pinned the day it lands."""
-    from trid3nt_server.tools.search.match import (
+    from trid3nt.tools.search.match import (
         NO_MOMENT, sources_with_coverage)
 
     rows = [(name, row) for name, row in sources_with_coverage()
@@ -552,8 +552,8 @@ def _asked_over(monkeypatch, cadence, params, name):
     """The window a row stating ``cadence`` is asked over for a six-hour run."""
     from types import SimpleNamespace
 
-    from trid3nt_server.tools.fetchers._router import registration
-    from trid3nt_server.tools.search import match as m
+    from trid3nt.tools.fetchers._router import registration
+    from trid3nt.tools.search import match as m
 
     opens, until = "2026-09-10T12:00:00Z", "2026-09-10T18:00:00Z"
     row = gauges(data_class="water level series", cadence=cadence)
@@ -603,8 +603,8 @@ _DES_MOINES = (-93.655, 41.676)
 
 
 def _registered_rows():
-    from trid3nt_server.tools import TOOL_REGISTRY  # noqa: F401 - registers every fetcher's row
-    from trid3nt_server.tools.search.match import sources_with_coverage
+    from trid3nt.tools import TOOL_REGISTRY  # noqa: F401 - registers every fetcher's row
+    from trid3nt.tools.search.match import sources_with_coverage
 
     return sources_with_coverage()
 
@@ -689,8 +689,8 @@ def _declared_of_needs():
     """Every (class, of) a registered template's row asks the match for: a row's
     ``of=``, and a domain's kind - which reaches the match as its ``of`` - stated
     or read off a seed, as every word a hydrography row publishes."""
-    from trid3nt_server.inputs.slots import DOMAIN
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.inputs.slots import DOMAIN
+    from trid3nt.tools import TOOL_REGISTRY
 
     asked = set()
     for entry in TOOL_REGISTRY.values():
@@ -709,7 +709,7 @@ def _declared_of_needs():
 
 def test_every_declared_of_matches_as_it_did_unless_it_names_a_published_quantity(
         monkeypatch):
-    from trid3nt_server.tools.search import match as matching
+    from trid3nt.tools.search import match as matching
 
     rows = _registered_rows()
     places = (WILLAMETTE, _DES_MOINES, (-82.42, 42.97))
@@ -742,7 +742,7 @@ def test_a_series_row_stating_its_moment_in_one_param_is_asked_the_runs_opening(
         fetcher, data_class, param, asked):
     """A source called by one date or one cycle is a survivor of a run that states
     its moment, and is handed that moment in the param its own spec declares."""
-    from trid3nt_server.tools.search.match import base_ask
+    from trid3nt.tools.search.match import base_ask
 
     rows = [(name, row) for name, row in _registered_rows()
             if name == fetcher and row.data_class == data_class]
@@ -770,8 +770,8 @@ def test_a_span_asks_a_series_for_its_record_and_a_moment_does_not(monkeypatch):
     from types import SimpleNamespace
 
     from trid3nt_contracts.coverage import SourceChoice, SourceOption
-    from trid3nt_server.tools.fetchers._router import registration
-    from trid3nt_server.tools.search.match import base_ask
+    from trid3nt.tools.fetchers._router import registration
+    from trid3nt.tools.search.match import base_ask
 
     row = gauges(data_class="water level series", kind="predicted")
     row.window.series_param = "include_series"

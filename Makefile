@@ -145,7 +145,7 @@ status:
 reap:
 	@set -a; . $(REPO_ROOT)/.env.local; set +a; \
 	  $(REPO_ROOT)/venvs/agent/bin/python -c "import asyncio; \
-	  from trid3nt_server.store.sweep import reap; \
+	  from trid3nt.store.sweep import reap; \
 	  print(len(asyncio.run(reap())), 'spent cache objects deleted')"
 
 stop:

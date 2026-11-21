@@ -14,12 +14,12 @@ from pathlib import Path
 
 import yaml
 
-from trid3nt_server.workflows.telemac.workflow import stated
+from trid3nt.workflows.telemac.workflow import stated
 from seated import REACH, SEATED, row_inputs, value_inputs
-from trid3nt_server.workflows.telemac.templates.channel_dredging import (
+from trid3nt.workflows.telemac.templates.channel_dredging import (
     channel_dredging,
 )
-from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
+from trid3nt.inputs.slots import BED, DISCHARGE, DOMAIN
 from seated import value_inputs, row_inputs
 
 _WORKFLOW = channel_dredging.telemac_channel_dredging.workflow
@@ -41,7 +41,7 @@ def _rows() -> dict:
 
 
 def _recipe():
-    from trid3nt_server.tools.mesh.tool import recipe_from_plan_value
+    from trid3nt.tools.mesh.tool import recipe_from_plan_value
 
     return recipe_from_plan_value(_steps()["mesh"].kwargs["mesh"])
 

@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.tools.fetchers.hazard.fetch_finite_fault import hooks
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.tools.fetchers.hazard.fetch_finite_fault import hooks
 
 _FIX = Path(__file__).parents[1] / "fixtures" / "geoclaw" / "finite_fault"
 

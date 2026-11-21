@@ -11,10 +11,10 @@ import pytest
 
 from tests.solver.test_modflow_lakes import _CELLS, _CENTRE, _POINTS, _TO_LONLAT, _mesh, _rundir, staged_beside  # noqa: F401
 from tests.solver.test_modflow_streams import _DIMENSIONS, _VALUES, _fill, _line, _MAIN
-from trid3nt_server.workflows.modflow.authoring.simulation import serialize
-from trid3nt_server.workflows.modflow.authoring.stress import place_streams
-from trid3nt_server.workflows.modflow.authoring.validate import validate_authored_simulation
-from trid3nt_server.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.authoring.simulation import serialize
+from trid3nt.workflows.modflow.authoring.stress import place_streams
+from trid3nt.workflows.modflow.authoring.validate import validate_authored_simulation
+from trid3nt.workflows.modflow.errors import ModflowError
 
 _LAKE_VALUES = {"stage": 12.0, "bottom": 0.0, "leakance": 0.1}
 _INTO = {"streams": "creek", "from_key": "permanent_identifier", "to_key": "receives_from_waterbody"}

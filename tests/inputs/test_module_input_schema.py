@@ -10,8 +10,8 @@ import json
 
 import pytest
 
-from trid3nt_server.errors import DeclarationError
-from trid3nt_server.inputs.input import Input, declared, hydrate
+from trid3nt.errors import DeclarationError
+from trid3nt.inputs.input import Input, declared, hydrate
 
 
 def _source(tmp_path, template: str = "demo_flow", inputs=None,
@@ -52,7 +52,7 @@ def test_a_values_schema_and_prose_arrive_and_the_class_carries_them(tmp_path):
 
 
 def test_the_declared_type_is_read_back_as_a_type(tmp_path):
-    from trid3nt_server.inputs.point import Point
+    from trid3nt.inputs.point import Point
 
     source, template = _source(
         tmp_path, inputs={"at": {"desc": "d", "type": "Point"},

@@ -13,16 +13,16 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.inputs.observation import Observation
-from trid3nt_server.render.formats import Published
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime.fill import (
+from trid3nt.inputs.observation import Observation
+from trid3nt.render.formats import Published
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.runtime.fill import (
     REJECTED,
     Fill,
     fill,
 )
-from trid3nt_server.workflows.telemac.modules import T2D, series
-from trid3nt_server.workflows.telemac import workflow as door
+from trid3nt.workflows.telemac.modules import T2D, series
+from trid3nt.workflows.telemac import workflow as door
 
 
 def _reach(telemac_result) -> dict[str, Any]:
@@ -43,9 +43,9 @@ def _reach(telemac_result) -> dict[str, Any]:
 def solved(monkeypatch, telemac_result):
     _reach(telemac_result)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
-    from trid3nt_server.workflows.telemac.modules.outputs import Solved
+    from trid3nt.workflows.telemac.modules.outputs import Solved
 
     return Solved({"run_id": "RID", "utm_epsg": 32610,
                    "result_basename": "r2d.slf",
@@ -68,7 +68,7 @@ def published(monkeypatch):
             layer_type="raster", uri="s3://runs/RID/temperature.tif",
             quantity="water_temperature"),), charts={})
 
-    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish",
+    monkeypatch.setattr("trid3nt.workflows.runtime.primitives.publish",
                         _publish)
     return seen
 
@@ -98,7 +98,7 @@ def _gauge(solved, *, site_id: str = "SCOC1") -> Observation:
 def test_the_series_is_read_at_the_matched_gauges_site(solved, published):
     """water_temperature's T1 answers at the gauge's own site: the node the
     result file holds the gauge at, in the chart and on the station."""
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     obs = _gauge(solved)
     outputs, anchors = _water_temperature_outputs(obs, solved)
@@ -125,7 +125,7 @@ def test_a_gauge_off_the_mesh_composes_no_series_and_journals_the_miss(
         solved, published):
     """A gauge whose site the mesh does not hold composes nothing and says so
     on the journal with its site and its distance; the run does not refuse."""
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     far = Observation(value=22.0, units="deg C", site_id="FAR-OUT",
                       site_name="the far gauge",
@@ -149,7 +149,7 @@ def test_a_gauge_stated_as_a_number_composes_no_series_and_journals_the_miss(
         solved, published):
     """No site matched reads nothing: an observation stated as a number stands
     nowhere, so no series is composed and the journal says so."""
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     placeless = Observation(value=22.0, units="deg C", site_id=None,
                             site_name=None, lon=None, lat=None)
@@ -180,7 +180,7 @@ def test_a_station_argument_refuses_as_unknown(tool, argument):
 
 
 def _sea_state(site_id: str):
-    from trid3nt_server.inputs.wave import Wave
+    from trid3nt.inputs.wave import Wave
 
     return Wave(height_m=1.6, peak_period_s=8.0, from_direction_deg=220.0,
                 site_id=site_id)
@@ -200,8 +200,8 @@ async def test_the_only_buoy_matched_is_the_one_the_run_was_forced_with(tool):
     read there would answer with what the run was handed: the observation is
     dropped from the run's reads, taken out of what may be charted, and the
     journal says why there is no independent check."""
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-    from trid3nt_server.workflows.runtime.fill import production
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.workflows.runtime.fill import production
 
     workflow = TOOL_REGISTRY[tool].fn.workflow
     env = production(Fill(workflow=workflow))
@@ -220,8 +220,8 @@ async def test_the_only_buoy_matched_is_the_one_the_run_was_forced_with(tool):
 async def test_a_buoy_other_than_the_forcing_one_is_kept_for_the_run_to_read_at():
     """The observe row matched a different station than the sea state came from,
     so the observation stays held for every read and chart to answer at."""
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-    from trid3nt_server.workflows.runtime.fill import production
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.workflows.runtime.fill import production
 
     workflow = TOOL_REGISTRY["tomawac_nearshore_waves"].fn.workflow
     env = production(Fill(workflow=workflow))
@@ -242,9 +242,9 @@ async def test_a_run_that_has_not_held_the_buoy_reads_it_before_dropping_it(
     """The coupled host holds no wave-series fill of its own, so the drop reads
     the observe row the way any other read does - and drops that result too when
     it turns out to be the forcing station itself."""
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-    from trid3nt_server.workflows.runtime import fill as fill_mod
-    from trid3nt_server.workflows.runtime.fill import production
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.workflows.runtime import fill as fill_mod
+    from trid3nt.workflows.runtime.fill import production
 
     async def _buoy(_env, _row) -> Observation:
         return _matched("44097")

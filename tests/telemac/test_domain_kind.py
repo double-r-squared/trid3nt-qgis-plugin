@@ -40,7 +40,7 @@ STATED_QUESTIONS = {
 
 def _picked(of: str) -> str:
     """The source the match picks for a hydrography domain of this kind."""
-    from trid3nt_server.tools.search.match import (
+    from trid3nt.tools.search.match import (
         Need, match, sources_with_coverage)
 
     return match(Need(slot="domain", data_class="hydrography",
@@ -49,7 +49,7 @@ def _picked(of: str) -> str:
 
 
 def _domain(tool: str):
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     rows = {row.name: row for row in row_inputs(TOOL_REGISTRY[tool].fn.workflow)}
     return rows["domain"]
@@ -71,7 +71,7 @@ def test_a_question_whose_seed_cannot_imply_the_kind_states_it(tool, kind):
 def test_a_place_on_a_flowline_takes_the_line_and_not_the_pond_beside_it():
     """The match is what enforces it: with the place's kind on the need, the
     only source left on the list is the one that publishes a flowline."""
-    from trid3nt_server.tools.search.match import (
+    from trid3nt.tools.search.match import (
         Need, match, sources_with_coverage)
 
     choice = match(Need(slot="domain", data_class="hydrography",

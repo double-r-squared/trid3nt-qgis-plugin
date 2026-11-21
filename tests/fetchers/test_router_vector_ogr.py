@@ -17,8 +17,8 @@ import pytest
 from shapely.geometry import Point
 
 from trid3nt_contracts.source_spec import SourceSpec
-from trid3nt_server.tools.fetchers._router.errors import RouterError
-from trid3nt_server.tools.fetchers._router.executors import vector_ogr
+from trid3nt.tools.fetchers._router.errors import RouterError
+from trid3nt.tools.fetchers._router.executors import vector_ogr
 
 _BBOX = (-82.7, 27.7, -82.3, 28.1)
 

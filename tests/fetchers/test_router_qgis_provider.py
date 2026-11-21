@@ -16,12 +16,12 @@ import pytest
 
 from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_contracts.ws import LayerResponsePayload
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.errors import (
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.errors import (
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.tools.fetchers._router.executors import qgis_provider
+from trid3nt.tools.fetchers._router.executors import qgis_provider
 
 _SERVICE = "https://example.test/arcgis/rest/services/Drought/FeatureServer"
 _BBOX = (-114.0, 31.3, -109.0, 37.0)
@@ -215,9 +215,9 @@ def test_the_provider_error_is_carried_verbatim(monkeypatch, loop_thread):
 def test_mode_materialise_lands_the_export_under_the_row_key(
     monkeypatch, loop_thread, fake_s3
 ):
-    from trid3nt_server.tools.cache import read_through
-    from trid3nt_server.tools.fetchers._router.router import synthesize_metadata
-    from trid3nt_server.tools.fetchers._router.spec import record_shape
+    from trid3nt.tools.cache import read_through
+    from trid3nt.tools.fetchers._router.router import synthesize_metadata
+    from trid3nt.tools.fetchers._router.spec import record_shape
 
     spec = _materialise_spec()
     params = {"bbox": _BBOX}
@@ -255,9 +255,9 @@ def test_mode_materialise_lands_the_export_under_the_row_key(
 def test_the_drought_monitor_is_a_provider_row_in_mode_open() -> None:
     from pathlib import Path
 
-    from trid3nt_server.tools import fetchers
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+    from trid3nt.tools import fetchers
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
     specs = compose_specs_from_tree(Path(fetchers.__file__).resolve().parent)
     spec = specs["fetch_us_drought_monitor"]
@@ -275,7 +275,7 @@ def test_the_drought_monitor_is_a_provider_row_in_mode_open() -> None:
 def test_the_drought_monitor_refuses_by_name_with_no_session(monkeypatch) -> None:
     from trid3nt_server.render import pipeline_emitter
     from trid3nt_server.server.processing import SessionUnavailableError
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     monkeypatch.setattr(pipeline_emitter, "current_emitter", lambda: None)
     with pytest.raises(SessionUnavailableError, match="us_drought_monitor"):

@@ -7,14 +7,14 @@ import json
 
 import pytest
 
-from trid3nt_server import settings
-from trid3nt_server.settings import reader
-from trid3nt_server.inputs.gate import pending
-from trid3nt_server.inputs.gate.input_review import GateCard
+from trid3nt import settings
+from trid3nt.settings import reader
+from trid3nt_harness.inputs.gate import pending
+from trid3nt_harness.inputs.gate.input_review import GateCard
 from trid3nt_server.render import pipeline_emitter as pe
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.meta.set_config.set_config import SettingDeclinedError, set_config
-from trid3nt_server.workflows.runtime.module import SlotRefused
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.meta.set_config.set_config import SettingDeclinedError, set_config
+from trid3nt.workflows.runtime.module import SlotRefused
 
 from tests.gates.test_input_review_gate import _FakeEmitter, _drive
 

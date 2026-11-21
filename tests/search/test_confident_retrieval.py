@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 
 import trid3nt_server.main as main
-import trid3nt_server.tools.search.search_tools.search_tools as dd
-from trid3nt_server.tools.search import tool_retrieval as tr
+import trid3nt_harness.tools.search.search_tools.search_tools as dd
+from trid3nt_harness.tools.search import tool_retrieval as tr
 
 main._import_tools_registry()
 
@@ -142,8 +142,8 @@ def test_the_split_is_what_offers_the_second_steps_tool(warm_index, user_setting
 
 def test_every_corpus_phrasing_offers_its_tool(warm_index):
     from trid3nt_contracts.coverage import DATA_CLASSES
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.tools.fetchers._router.registration import registered_spec_names
 
     corpus = dd._load_corpus()
     sources = registered_spec_names()
@@ -157,7 +157,7 @@ def test_every_corpus_phrasing_offers_its_tool(warm_index):
 
 
 def _sources_index(monkeypatch, sims):
-    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+    from trid3nt.tools.fetchers._router.registration import registered_spec_names
 
     names = sorted(registered_spec_names())[: len(sims)]
     monkeypatch.setattr(dd, "_SOURCE_INDEX", _index(sims, names))
@@ -166,7 +166,7 @@ def _sources_index(monkeypatch, sims):
 
 @pytest.mark.asyncio
 async def test_find_sources_returns_the_rows_within_the_margin_and_a_tie_returns_both(monkeypatch, user_settings):
-    from trid3nt_server.tools.search.find_sources.find_sources import find_sources
+    from trid3nt_harness.tools.search.find_sources.find_sources import find_sources
 
     user_settings(SOURCE_MARGIN=0.1)
     names = _sources_index(monkeypatch, [0.80, 0.80, 0.50, 0.30])

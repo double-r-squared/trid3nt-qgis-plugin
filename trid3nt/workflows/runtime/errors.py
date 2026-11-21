@@ -1,0 +1,65 @@
+"""Typed errors the declarative library raises. Every one carries an
+``error_code`` the tool wrapper maps straight onto the error envelope."""
+
+from __future__ import annotations
+
+from trid3nt.errors import (DeclarationError, DeclarativeError,
+                                   GateRefusedError)
+
+__all__ = [
+    "DeclarativeError",
+    "GateRefusedError",
+    "NamelessFailureError",
+    "DeclarationError",
+    "said",
+    "StepFailedError",
+    "SuppliedCoverageError",
+    "SuppliedGeometryError",
+]
+
+
+class SuppliedCoverageError(DeclarativeError):
+    error_code = "SUPPLIED_COVERAGE_MISMATCH"
+
+
+class SuppliedGeometryError(DeclarativeError):
+    """A supplied artifact is not the SHAPE the slot it fills declares.
+
+    Raised at the front door, before any reader is handed the artifact."""
+
+    error_code = "SUPPLIED_GEOMETRY_MISMATCH"
+
+
+def said(exc: BaseException) -> str:
+    """What a raised exception SAYS, or its type where it says nothing.
+
+    An exception raised with no arguments stringifies to nothing, and a failure
+    whose sentence is empty is a run that stopped in silence."""
+    return str(exc).strip() or f"{type(exc).__name__} (raised saying nothing)"
+
+
+class NamelessFailureError(DeclarativeError):
+    """A step failure was raised carrying no sentence saying what stopped it.
+
+    A run that stops in silence leaves the packet with a red step and nothing to
+    read off it, so the nameless refusal is itself refused here."""
+
+    error_code = "FAILURE_UNNAMED"
+
+
+class StepFailedError(DeclarativeError):
+    """A declared step's runner raised. ``cause`` keeps the engine's own typed error."""
+
+    error_code = "STEP_FAILED"
+
+    def __init__(self, message: str, *, error_code: str | None = None,
+                 step: str | None = None, cause: BaseException | None = None) -> None:
+        # The sentence is what the packet says stopped the run.
+        if not str(message or "").strip():
+            raise NamelessFailureError(
+                f"a step failure was raised for {step!r} carrying no sentence; "
+                "every failure names WHY it stopped - a typed code and a "
+                "sentence - and one caused by an upstream service says so.")
+        super().__init__(message, error_code=error_code)
+        self.step = step
+        self.cause = cause

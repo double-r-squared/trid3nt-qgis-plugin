@@ -16,10 +16,10 @@ import pyogrio
 import pytest
 import yaml
 
-from trid3nt_server.tools.fetchers import _router
-from trid3nt_server.tools.fetchers._router import registration
-from trid3nt_server.tools.fetchers._router.executors import http_json, vector_fgb, vector_ogr
-from trid3nt_server.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
+from trid3nt.tools.fetchers import _router
+from trid3nt.tools.fetchers._router import registration
+from trid3nt.tools.fetchers._router.executors import http_json, vector_fgb, vector_ogr
+from trid3nt.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
 
 _FIX = Path(__file__).resolve().parents[1] / "fixtures" / "fetcher_fields"
 _ROOT = Path(_router.__file__).resolve().parents[1]
@@ -88,7 +88,7 @@ def test_nws_event_keeps_every_alert_property_the_service_returns():
 
 
 def test_the_conus_alerts_keep_every_property_and_the_alert_without_a_polygon():
-    from trid3nt_server.tools.fetchers.weather.fetch_nws_alerts_conus import hooks
+    from trid3nt.tools.fetchers.weather.fetch_nws_alerts_conus import hooks
 
     body = _json("nws_alerts_fl_excerpt.json")
     body["features"].append({**body["features"][0], "geometry": None})
@@ -165,8 +165,8 @@ def test_the_ogr_nhd_rows_ask_the_service_for_every_field(name):
 
 
 def test_wfigs_and_ehydro_ask_for_every_field(monkeypatch):
-    from trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident import hooks as wfigs
-    from trid3nt_server.tools.fetchers.hydrology.fetch_ehydro_surveys import hooks as ehydro
+    from trid3nt.tools.fetchers.hazard.fetch_wfigs_incident import hooks as wfigs
+    from trid3nt.tools.fetchers.hydrology.fetch_ehydro_surveys import hooks as ehydro
 
     assert wfigs._build_wfigs_query("Ranger Road", None)["outFields"] == "*"
     asked = []
@@ -181,7 +181,7 @@ def test_wfigs_and_ehydro_ask_for_every_field(monkeypatch):
 
 
 def test_the_declarative_enrichment_block_is_gone():
-    from trid3nt_server.tools.fetchers._router import field_map
+    from trid3nt.tools.fetchers._router import field_map
 
     assert not hasattr(field_map, "enrich_plans") and not hasattr(field_map, "enrich_merge")
     assert [name for name, ingest in _ingests().items() if "enrich" in ingest] == []
@@ -205,7 +205,7 @@ def test_soilgrids_offers_every_property_and_statistic_the_service_serves():
 
 
 def test_the_soilgrids_request_names_the_statistic_and_an_uncertainty_is_scaled_by_ten():
-    from trid3nt_server.tools.fetchers._router.params import by_param
+    from trid3nt.tools.fetchers._router.params import by_param
 
     spec = _spec("fetch_soilgrids")
     assert spec.endpoints["data"].url_template.endswith("{soil_property}_{depth}_{statistic}.vrt")

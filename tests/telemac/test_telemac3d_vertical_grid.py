@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.modules.telemac3d import (
+from trid3nt.workflows.telemac.modules.telemac3d import (
     T3D,
     VerticalGrid,
     VerticalGridUnresolved,

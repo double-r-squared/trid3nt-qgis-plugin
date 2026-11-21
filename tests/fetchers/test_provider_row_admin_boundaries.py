@@ -15,11 +15,11 @@ import pytest
 
 from trid3nt_contracts.ws import LayerResponsePayload
 from trid3nt_server.server.processing import SessionUnavailableError
-from trid3nt_server.tools import TOOL_REGISTRY, fetchers
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.errors import RouterError
-from trid3nt_server.tools.fetchers._router.executors import qgis_provider
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools import TOOL_REGISTRY, fetchers
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.errors import RouterError
+from trid3nt.tools.fetchers._router.executors import qgis_provider
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
 from .test_router_qgis_provider import _Session, _bind, loop_thread  # noqa: F401
 
@@ -91,9 +91,9 @@ def test_it_refuses_by_name_with_no_session(monkeypatch) -> None:
 
 
 def test_the_export_lands_under_the_row_shaped_key(monkeypatch, loop_thread, fake_s3):
-    from trid3nt_server.tools.cache import read_through
-    from trid3nt_server.tools.fetchers._router.router import synthesize_metadata
-    from trid3nt_server.tools.fetchers._router.spec import record_shape
+    from trid3nt.tools.cache import read_through
+    from trid3nt.tools.fetchers._router.router import synthesize_metadata
+    from trid3nt.tools.fetchers._router.spec import record_shape
 
     params = router.validate_params(
         _SPEC, {"level": "county", "bbox": list(_BBOX), "name": _RECORDED["NAME"]}

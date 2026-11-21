@@ -14,15 +14,15 @@ import json
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import (
+from trid3nt.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.tools.fetchers._router.hooks import station_tie
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers._router.transport.errors import TransportError
-from trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_datums import hooks as datums
+from trid3nt.tools.fetchers._router.hooks import station_tie
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers._router.transport.errors import TransportError
+from trid3nt.tools.fetchers.ocean.fetch_noaa_coops_datums import hooks as datums
 
 #: The Chignik seed and the stations CO-OPS keeps within 600 km of it, at the
 #: coordinates the live catalog publishes. Sand Point is 0.1 km away and states
@@ -254,7 +254,7 @@ def test_the_offset_swallows_pages_it_cannot_read(offset_spec, coops):
 def test_the_shared_frame_sets_are_the_offset_rows_own(offset_spec):
     # Two homes for either set would let a pair the offset row composes from a
     # station drift apart from the pair the search looks for.
-    from trid3nt_server.tools.fetchers.ocean.fetch_vertical_datum_offset import hooks as vd
+    from trid3nt.tools.fetchers.ocean.fetch_vertical_datum_offset import hooks as vd
 
     assert station_tie.GEODETIC_FRAMES == vd._GEODETIC
     assert station_tie.TIDAL_FRAMES == vd._TIDAL

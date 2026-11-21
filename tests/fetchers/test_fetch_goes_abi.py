@@ -11,12 +11,12 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._router import registration as reg
-from trid3nt_server.tools.fetchers._router.errors import RouterInputError
-from trid3nt_server.tools.fetchers._router.executors import animation_frames as EX
-from trid3nt_server.tools.fetchers.imagery import _goes_archive_core as core
-from trid3nt_server.tools.fetchers.imagery.fetch_goes_abi import hooks as ABI
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.fetchers._router import registration as reg
+from trid3nt.tools.fetchers._router.errors import RouterInputError
+from trid3nt.tools.fetchers._router.executors import animation_frames as EX
+from trid3nt.tools.fetchers.imagery import _goes_archive_core as core
+from trid3nt.tools.fetchers.imagery.fetch_goes_abi import hooks as ABI
 
 _BBOX = [-108.0, 45.2, -107.2, 45.9]
 _SPEC = reg.get_spec("fetch_goes_abi")
@@ -145,7 +145,7 @@ def test_a_backwards_window_is_refused(monkeypatch):
 
 
 def test_an_empty_window_raises_the_typed_empty_error(monkeypatch):
-    from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError
+    from trid3nt.tools.fetchers._router.errors import RouterEmptyError
 
     monkeypatch.setattr(core, "_list_archive_keys_in_window", lambda *a, **k: [])
     with pytest.raises(RouterEmptyError) as caught:

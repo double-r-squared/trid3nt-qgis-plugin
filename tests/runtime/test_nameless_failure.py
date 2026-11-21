@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.runtime.errors import (
+from trid3nt.workflows.runtime.errors import (
     NamelessFailureError,
     StepFailedError,
     said,
@@ -43,7 +43,7 @@ def test_a_step_failure_over_a_silent_cause_still_says_what_stopped_it() -> None
 
 @pytest.mark.asyncio
 async def test_a_runner_that_raises_silently_reaches_the_caller_named() -> None:
-    from trid3nt_server.workflows.runtime.fill import call as _call_fn
+    from trid3nt.workflows.runtime.fill import call as _call_fn
 
     def runner():
         raise _Silent()
@@ -57,7 +57,7 @@ async def test_a_runner_that_raises_silently_reaches_the_caller_named() -> None:
 
 def test_the_failure_envelope_states_a_sentence_for_a_silent_refusal() -> None:
     """The envelope's message is the only thing a card can print."""
-    from trid3nt_server.workflows.runtime.workflow import Workflow
+    from trid3nt.workflows.runtime.workflow import Workflow
 
     envelope = Workflow._error(
         _AnyWorkflow(), "TELEMAC_INTERNAL_ERROR", _Silent())

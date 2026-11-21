@@ -1150,7 +1150,7 @@ async def test_mint_dispatch_and_sim_cards_emits_two_cards(
 ) -> None:
     """``mint_dispatch_and_sim_cards`` mints a complete Dispatch tool card + a
     running compute card bound to the handle's jobId."""
-    from trid3nt_server.workflows.solver.solve_progress import mint_dispatch_and_sim_cards
+    from trid3nt.workflows.solver.solve_progress import mint_dispatch_and_sim_cards
 
     handle = type(
         "H",
@@ -1183,7 +1183,7 @@ async def test_mint_cards_name_the_case_not_the_shared_solver_id(
     solver id cannot name the card without labelling every sibling after one leg.
     """
     from trid3nt_server.render import pipeline_emitter as pe
-    from trid3nt_server.workflows.solver import solve_progress
+    from trid3nt.workflows.solver import solve_progress
 
     handle = type("H", (), {"workflows_execution_id": "j", "workflow_name": "local-docker"})()
     token = pe._DISPATCHED_TOOL.set("telemac_do_sag")
@@ -1206,7 +1206,7 @@ async def test_a_compute_card_carries_the_engine_and_the_module_that_ran(
 ) -> None:
     """The card is titled by the run's identity, which is the engine and the
     module of it that ran; the plain tool card beside it is a run of nothing."""
-    from trid3nt_server.workflows.solver.solve_progress import mint_dispatch_and_sim_cards
+    from trid3nt.workflows.solver.solve_progress import mint_dispatch_and_sim_cards
 
     handle = type("H", (), {"workflows_execution_id": "j",
                             "workflow_name": "local-docker"})()
@@ -1224,7 +1224,7 @@ async def test_a_compute_card_carries_the_engine_and_the_module_that_ran(
 async def test_mint_dispatch_and_sim_cards_none_emitter_is_noop() -> None:
     """``emitter is None`` (direct/smoke call) returns ``None`` and emits
     nothing — the two cards are an observability affordance, never required."""
-    from trid3nt_server.workflows.solver.solve_progress import mint_dispatch_and_sim_cards
+    from trid3nt.workflows.solver.solve_progress import mint_dispatch_and_sim_cards
 
     handle = type("H", (), {"workflows_execution_id": "j", "solver": "sfincs"})()
     sim_id = await mint_dispatch_and_sim_cards(
@@ -1239,7 +1239,7 @@ async def test_route_sim_terminal_marks_complete_and_failed(
 ) -> None:
     """``route_sim_terminal`` drives the compute card green on a complete
     RunResult and red on a non-complete one (carrying its error_code)."""
-    from trid3nt_server.workflows.solver.solve_progress import route_sim_terminal
+    from trid3nt.workflows.solver.solve_progress import route_sim_terminal
 
     # complete -> green
     sink_ok = _CapturingSink()
@@ -1290,7 +1290,7 @@ class TestCompactionCard:
         """The running card is role="tool" (NEVER "compute" -- there is no
         Batch job bound to a local compaction pass), tool_name
         "context:compact", state running, labeled COMPACTING_LABEL."""
-        from trid3nt_server.model.guards.context_budget import COMPACTING_LABEL
+        from trid3nt_harness.model.guards.context_budget import COMPACTING_LABEL
         from trid3nt_server.server.turn.compaction import mint_compaction_card
 
         step_id = await mint_compaction_card(emitter=emitter)
@@ -1310,7 +1310,7 @@ class TestCompactionCard:
     async def test_complete_compaction_card_renames_and_completes(
         self, emitter: PipelineEmitter, sink: _CapturingSink
     ) -> None:
-        from trid3nt_server.model.guards.context_budget import compaction_complete_label
+        from trid3nt_harness.model.guards.context_budget import compaction_complete_label
         from trid3nt_server.server.turn.compaction import (
             complete_compaction_card,
             mint_compaction_card,
@@ -1354,7 +1354,7 @@ class TestCompactionCard:
         emitter.rename_step("does-not-exist", name="whatever")
 
     def test_compaction_complete_label_rounds_and_floors_at_1k(self) -> None:
-        from trid3nt_server.model.guards.context_budget import compaction_complete_label
+        from trid3nt_harness.model.guards.context_budget import compaction_complete_label
 
         assert compaction_complete_label(12800, 3900) == "Conversation compacted (13k -> 4k tokens)"
         assert compaction_complete_label(400, 100) == "Conversation compacted (1k -> 1k tokens)"
@@ -1400,7 +1400,7 @@ async def test_legend_lifted_from_publish_stash_by_uri(
     """The atomic publish_layer wrap-site rebuilds a LayerURI WITHOUT a legend; the
     emitter lifts the legend publish_layer stashed by that uri onto the summary
     (the continuous-raster path)."""
-    from trid3nt_server.render.publish import _stash_legend_for_uri
+    from trid3nt.render.publish import _stash_legend_for_uri
     from trid3nt_contracts.execution import LegendKey
 
     cog_uri = "s3://b/x.tif"

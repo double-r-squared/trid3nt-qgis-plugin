@@ -1,0 +1,344 @@
+"""The FORMAT SET, and the publish of one outputs list into it.
+
+A raster arrives as a COG already in the store (a timed group as one COG per instant), a vector as GeoJSON, a mesh as the MDAL file its engine wrote plus its
+dataset files, a series or profile as a chart payload. Nothing here reads an engine's result or paints a field;
+every product carries the style row its producer declared."""
+
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass, field, replace
+from typing import Any, Mapping, Sequence
+
+from trid3nt_contracts.execution import LayerURI
+
+from trid3nt.inputs.point import POINT_PAD_DEG
+__all__ = ["Chart", "Deliverable", "Mesh", "Published", "Raster", "RasterFrame",
+           "Vector", "instant_token", "publish", "quantity_of"]
+
+
+@dataclass(frozen=True, kw_only=True)
+class RasterFrame:
+    """One COG of a timed group: ``t`` seconds into the run and the window [valid_from, valid_to) it holds the map for."""
+
+    uri: str
+    t: float
+    valid_from: str
+    valid_to: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class Raster:
+    """A COG in the store, in EPSG:4326; or, as ``frames``, the timed COGs of one quantity (each its own layer)."""
+
+    uri: str | None = None
+    bbox: tuple[float, float, float, float] | None = None
+    units: str | None = None
+    value_range: tuple[float, float] | None = None
+    frames: tuple[RasterFrame, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (self.uri is None) == (not self.frames):
+            raise ValueError("a Raster is one uri or its frames, never both and never neither.")
+
+
+@dataclass(frozen=True, kw_only=True)
+class Vector:
+    """A GeoJSON FeatureCollection, in lon/lat."""
+
+    features: Mapping[str, Any]
+    units: str | None = None
+    stem: str | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class Mesh:
+    """An MDAL mesh under the run prefix, and the ONE dataset group it paints.
+
+    ``datasets`` are the dataset files written beside the mesh, loaded onto it
+    before the group is bound; ``frames`` makes the layer temporal and ``t``
+    names the instant a single-step group holds."""
+
+    file: str
+    group: str
+    epsg: int
+    datasets: tuple[str, ...] = ()
+    #: The lon/lat box the mesh itself spans, what the camera flies to; the run states it before the file is staged.
+    bbox: tuple[float, float, float, float] | None = None
+    reference_time: str | None = None
+    frames: int | None = None
+    t: float | None = None
+    plane: str | None = None
+    units: str | None = None
+    value_range: tuple[float, float] | None = None
+    #: Where the field stops being drawn; the style row masks it, since the result file's own group carries the values.
+    floor: float | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class Chart:
+    """A chart payload the dock renders, built by whoever read the series."""
+
+    payload: Mapping[str, Any]
+
+
+@dataclass(frozen=True, kw_only=True)
+class Deliverable:
+    """One product and how it is drawn: the caption names the quantity in the
+    producer's words, and ``style`` is the declared row."""
+
+    product: Raster | Vector | Mesh | Chart
+    caption: str
+    style: Mapping[str, Any] | None = None
+    #: Which tracer, counted from 1 in the deck's order; a tracer's name is the run's, so position is what a reader asks by.
+    tracer: int | None = None
+    #: What the layer is to the run: its product, an input it was solved on, or context beside it.
+    role: str = "primary"
+
+
+@dataclass(frozen=True)
+class Published:
+    """What one outputs list left behind: the layers it surfaced, and the charts."""
+
+    layers: tuple[LayerURI, ...] = ()
+    charts: Mapping[str, Any] = field(default_factory=dict)
+
+
+def instant_token(t: float) -> str:
+    """Seconds as a name part: ``21600`` -> ``21600``, ``0.5`` -> ``0p500``; two instants never share one."""
+    return str(int(t)) if float(t) == int(t) else f"{float(t):.3f}".replace(".", "p")
+
+
+def quantity_of(caption: str) -> str:
+    """The quantity token a caption's own words spell: ``water depth`` ->
+    ``water_depth``. Every product of one quantity is held to one scale by it."""
+    return "_".join(str(caption).strip().lower().split())
+
+
+async def publish(*, run_id: str, engine: str, name: str,
+                  items: Sequence[Deliverable]) -> Published:
+    """Publish every deliverable -> the layers it surfaced, and its charts.
+
+    Every layer is surfaced in the order the deliverables arrived in, because no
+    product of a run ranks another; the camera rides the run's own record."""
+    from trid3nt_server.render.layer_uri_emit import publish_input_layer
+    from trid3nt_server.render.pipeline_emitter import (
+        current_emitter,
+        emit_chart_payloads,
+    )
+    from trid3nt.workflows.runtime.run_output import persist_run_products
+
+    shared = _shared_ranges(items)
+    items = _one_row_per_quantity(items)
+    layers: list[LayerURI] = []
+    charts: dict[str, Any] = {}
+    for item in items:
+        quantity = quantity_of(item.caption)
+        if isinstance(item.product, Mesh):
+            layers.append(_mesh_layer(item, run_id=run_id, engine=engine,
+                                      name=name, value_range=shared.get(quantity)))
+        elif isinstance(item.product, Raster):
+            layers.extend(await _with_one_legend(_raster_layers(
+                item, run_id=run_id, engine=engine, name=name,
+                value_range=shared.get(quantity))))
+        elif isinstance(item.product, Vector):
+            layers.append(await asyncio.to_thread(
+                _vector_layer, item, run_id=run_id, engine=engine, name=name))
+    emitter = current_emitter()
+    for layer in layers:
+        await publish_input_layer(emitter, layer, role=layer.role)
+    for item in items:
+        if isinstance(item.product, Chart):
+            charts[quantity_of(item.caption)] = dict(item.product.payload)
+            await emit_chart_payloads(dict(item.product.payload))
+    if charts:
+        await persist_run_products(run_id, charts=charts)
+    record_run_outputs(layers)
+    return Published(layers=tuple(layers), charts=charts)
+
+
+def record_run_outputs(layers: Sequence[LayerURI]) -> None:
+    """Write every published layer onto the run in progress, for the record."""
+    from trid3nt.workflows.runtime.journal import journal_outputs
+
+    journal_outputs([layer.model_dump(mode="json",
+                                      include={"layer_id", "name", "layer_type",
+                                               "uri", "quantity", "tracer",
+                                               "units"})
+                     for layer in layers])
+
+
+def _one_row_per_quantity(items: Sequence[Deliverable]) -> list[Deliverable]:
+    """A product with no declared style takes its quantity's row; one quantity reads on one ramp as well as one range."""
+    declared: dict[str, Mapping[str, Any]] = {}
+    for item in items:
+        if item.style:
+            declared.setdefault(quantity_of(item.caption), item.style)
+    return [item if item.style
+            else replace(item, style=declared.get(quantity_of(item.caption)))
+            for item in items]
+
+
+def _shared_ranges(items: Sequence[Deliverable]
+                   ) -> dict[str, tuple[float, float] | None]:
+    """One range per quantity over every product that measured it, so the colour means the same value on every plane."""
+    from trid3nt.render import presets
+
+    found: dict[str, list[tuple[float, float] | None]] = {}
+    for item in items:
+        measured = getattr(item.product, "value_range", None)
+        if measured is not None:
+            found.setdefault(quantity_of(item.caption), []).append(tuple(measured))
+    return {quantity: presets.shared_range(ranges)
+            for quantity, ranges in found.items()}
+
+
+def _title(item: Deliverable, *, name: str) -> str:
+    """The layer's name for one product - what a reader calls it in the list."""
+    product = item.product
+    caption = item.caption
+    label = f"{caption[:1].upper()}{caption[1:]}"
+    units = getattr(product, "units", None)
+    measured = f"{label} ({units})" if units else label
+    plane = getattr(product, "plane", None)
+    where = f"{', ' + plane if plane else ''} ({name})"
+    if getattr(product, "frames", None):
+        return f"{label} over time{where}"
+    t = getattr(product, "t", None)
+    if t is not None:
+        return f"{measured} at t = {float(t):g} s{where}"
+    # A field with no instant is the envelope over the run; calling a track a peak would name a reading nobody took.
+    if isinstance(product, Mesh):
+        return f"Peak {caption}{where}"
+    return f"{label}{where}"
+
+
+def _style_row(item: Deliverable, *, kind: str,
+               value_range: tuple[float, float] | None,
+               dataset_group: str | None = None,
+               floor: float | None = None) -> dict[str, Any]:
+    """The declared row shaped for the format the product arrived in; the format decides which of the four shapes draws it."""
+    # The declared ``center`` / ``floor`` / ``range`` instruct measuring a range, which is done; ``floor`` here is the edge the product measured, which the renderer still masks on.
+    row = {k: v for k, v in dict(item.style or {}).items()
+           if k not in ("center", "floor", "range")}
+    row["kind"] = kind
+    if dataset_group is not None:
+        row["dataset_group"] = dataset_group
+    if floor is not None:
+        row["floor"] = float(floor)
+    if value_range is not None:
+        row["scale"] = {"policy": "fixed",
+                        "range": [float(value_range[0]), float(value_range[1])]}
+    return row
+
+
+def _mesh_layer(item: Deliverable, *, run_id: str, engine: str, name: str,
+                value_range: tuple[float, float] | None) -> LayerURI:
+    """An MDAL mesh + its dataset files -> ONE mesh layer painting one group."""
+    from trid3nt.store import objects as storage
+
+    mesh: Mesh = item.product  # type: ignore[assignment]
+    bucket = storage.runs_bucket()
+    quantity = quantity_of(item.caption)
+    title = _title(item, name=name)
+    stem = quantity if mesh.plane is None else f"{quantity}_{quantity_of(mesh.plane)}"
+    # Which group of one quantity this layer paints, in its id: two layers of one file and quantity are two products.
+    which = ("-over-time" if mesh.frames
+             else "" if mesh.t is None else f"-t{int(mesh.t)}")
+    return LayerURI(
+        layer_id=f"{engine}-{stem}{which}-{run_id}",
+        name=title,
+        layer_type="mesh",
+        uri=f"s3://{bucket}/{run_id}/{mesh.file}",
+        dataset_uris=[f"s3://{bucket}/{run_id}/{basename}"
+                      for basename in mesh.datasets],
+        style=_style_row(item, kind="mesh", value_range=value_range,
+                         dataset_group=mesh.group, floor=mesh.floor),
+        quantity=quantity, tracer=item.tracer, role="primary", units=mesh.units,
+        bbox=mesh.bbox, crs_authid=f"EPSG:{int(mesh.epsg)}",
+        reference_time=mesh.reference_time)
+
+
+async def _with_one_legend(layers: list[LayerURI]) -> list[LayerURI]:
+    """The legend resolved once from the group's first COG and set on every layer, so frames share one range and it rides the case row."""
+    from trid3nt.render.publish import legend_for_published_layer
+
+    first = layers[0]
+    legend = await asyncio.to_thread(
+        legend_for_published_layer, first.style, first.uri or "",
+        units=first.units)
+    if legend is None:
+        return layers
+    return [layer.model_copy(update={"legend": legend}) for layer in layers]
+
+
+def _raster_layers(item: Deliverable, *, run_id: str, engine: str, name: str,
+                   value_range: tuple[float, float] | None) -> list[LayerURI]:
+    """A COG in the store -> ONE raster layer; a timed group -> one layer per frame, each stamped with its own window."""
+    raster: Raster = item.product  # type: ignore[assignment]
+    quantity = quantity_of(item.caption)
+    style = _style_row(item, kind="continuous",
+                       value_range=value_range or raster.value_range)
+    if not raster.frames:
+        return [LayerURI(
+            layer_id=f"{engine}-{quantity}-{run_id}",
+            name=_title(item, name=name), layer_type="raster", uri=raster.uri,
+            style=style, quantity=quantity, role=item.role, units=raster.units,
+            bbox=raster.bbox)]
+    label = f"{item.caption[:1].upper()}{item.caption[1:]}"
+    measured = f"{label} ({raster.units})" if raster.units else label
+    return [LayerURI(
+        layer_id=f"{engine}-{quantity}-t{instant_token(frame.t)}-{run_id}",
+        name=f"{measured} at t = {frame.t:g} s ({name})", layer_type="raster",
+        uri=frame.uri, style=style, quantity=quantity, role=item.role,
+        units=raster.units, bbox=raster.bbox,
+        valid_from=frame.valid_from, valid_to=frame.valid_to)
+        for frame in raster.frames]
+
+
+def _vector_layer(item: Deliverable, *, run_id: str, engine: str,
+                  name: str) -> LayerURI:
+    """A GeoJSON FeatureCollection -> ONE vector layer in the run's store."""
+    import json
+
+    from trid3nt.store import objects as storage
+
+    vector: Vector = item.product  # type: ignore[assignment]
+    quantity = quantity_of(item.caption)
+    stem = vector.stem or quantity
+    bucket, key = storage.runs_bucket(), f"{run_id}/{stem}.geojson"
+    storage.client().put_object(
+        Bucket=bucket, Key=key,
+        Body=json.dumps(vector.features).encode("utf-8"),
+        ContentType="application/geo+json")
+    title = _title(item, name=name)
+    return LayerURI(
+        layer_id=f"{engine}-{quantity}-{run_id}",
+        name=title, layer_type="vector", uri=f"s3://{bucket}/{key}",
+        style=_style_row(item, kind="reference", value_range=None),
+        quantity=quantity, role=item.role, units=vector.units,
+        bbox=_features_bbox(vector.features))
+
+
+
+def _features_bbox(features: Mapping[str, Any]
+                   ) -> tuple[float, float, float, float] | None:
+    """The lon/lat box a FeatureCollection's own coordinates span."""
+    points: list[tuple[float, float]] = []
+
+    def _walk(coords: Any) -> None:
+        if (isinstance(coords, (list, tuple)) and len(coords) >= 2
+                and all(isinstance(v, (int, float)) for v in coords[:2])):
+            points.append((float(coords[0]), float(coords[1])))
+        elif isinstance(coords, (list, tuple)):
+            for item in coords:
+                _walk(item)
+
+    for feature in features.get("features") or ():
+        _walk((feature.get("geometry") or {}).get("coordinates"))
+    if not points:
+        return None
+    lons = [p[0] for p in points]
+    lats = [p[1] for p in points]
+    pad = POINT_PAD_DEG if len(points) == 1 else 0.0
+    return (min(lons) - pad, min(lats) - pad, max(lons) + pad, max(lats) + pad)

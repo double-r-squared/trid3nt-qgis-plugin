@@ -14,9 +14,9 @@ import rasterio
 from rasterio.transform import from_bounds
 from shapely.geometry import Point, shape
 
-from trid3nt_server.tools.fetchers._router.errors import RouterInputError
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.hydrology.fetch_watershed.hooks import _basin
+from trid3nt.tools.fetchers._router.errors import RouterInputError
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.hydrology.fetch_watershed.hooks import _basin
 
 # Synthetic geographic grid: 60x60 cells of 0.001 deg.
 N = 60
@@ -153,7 +153,7 @@ def test_a_wide_extent_over_few_cells_is_not_a_clamp(spec, tmp_path):
 def test_a_dem_past_the_cell_clamp_refuses(spec, tmp_path):
     """The clamp is read off the raster's declared shape, so the header alone
     settles it and nothing here allocates sixteen million cells."""
-    from trid3nt_server.settings import setting
+    from trid3nt.settings import setting
 
     side = int(setting("DEM_MAX_CELLS") ** 0.5) + 1
     path = str(tmp_path / "dense.tif")
@@ -169,7 +169,7 @@ def test_a_dem_past_the_cell_clamp_refuses(spec, tmp_path):
 def test_the_trace_runs_in_index_space_not_coordinate_space(spec, tmp_path):
     """Rounding an outlet coordinate to a neighbour cell collapses a convergent
     basin to a sliver, where the index-space trace captures the whole interior."""
-    from trid3nt_server.tools.derive._hydrology_common import _condition_dem
+    from trid3nt.tools.derive._hydrology_common import _condition_dem
 
     dem = str(tmp_path / "bowl.tif")
     pour = _bowl_dem(dem, -83.50, 35.10, 0.001, 40)

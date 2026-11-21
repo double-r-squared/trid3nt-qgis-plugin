@@ -16,7 +16,7 @@ import rasterio
 from rasterio.io import MemoryFile
 
 from trid3nt_contracts.source_spec import SourceSpec
-from trid3nt_server.tools.fetchers._router.executors import stac_raster
+from trid3nt.tools.fetchers._router.executors import stac_raster
 
 _BBOX = (-91.30, 30.30, -91.00, 30.55)
 #: the synthetic sources cover a superset of the request window.

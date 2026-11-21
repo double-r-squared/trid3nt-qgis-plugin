@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.solver.solver import (
+from trid3nt.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     LocalSolverSpec,
     SolverDispatchError,
@@ -74,8 +74,8 @@ def test_the_telemac_spec_declares_no_network():
 
     The posture is the image's rather than per-module: one spec serves every
     module, and it stages what it used to fetch inside the container."""
-    import trid3nt_server.workflows.telemac.engine  # noqa: F401
-    from trid3nt_server.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
+    import trid3nt.workflows.telemac.engine  # noqa: F401
+    from trid3nt.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
 
     assert LOCAL_SOLVER_SPEC_REGISTRY["telemac"]().network == "none"
 
@@ -84,7 +84,7 @@ def test_the_telemac_spec_declares_no_network():
 
 def test_an_unrecorded_code_identity_reads_as_unknown_not_as_clean():
     """A run with no stamp must not read as "nothing changed"."""
-    from trid3nt_server.workflows.solver.code_provenance import staleness
+    from trid3nt.workflows.solver.code_provenance import staleness
 
     warning = staleness(code_sha=None, engine="telemac")
     assert warning is not None
@@ -92,7 +92,7 @@ def test_an_unrecorded_code_identity_reads_as_unknown_not_as_clean():
 
 
 def test_an_engine_with_no_declared_paths_says_so():
-    from trid3nt_server.workflows.solver.code_provenance import staleness
+    from trid3nt.workflows.solver.code_provenance import staleness
 
     warning = staleness(code_sha="0" * 40, engine="not_an_engine")
     assert warning is not None
@@ -101,7 +101,7 @@ def test_an_engine_with_no_declared_paths_says_so():
 
 def test_the_engine_field_is_the_only_thing_an_engine_resolves_from():
     """A run record carries its ENGINE, so there is no solver name to map."""
-    from trid3nt_server.workflows.solver.code_provenance import (
+    from trid3nt.workflows.solver.code_provenance import (
         engine_paths,
         resolve_engine,
     )
@@ -113,7 +113,7 @@ def test_the_engine_field_is_the_only_thing_an_engine_resolves_from():
 
 def test_code_identity_stamps_a_sha_and_a_dirty_flag():
     """A sha alone claims a run came from a commit; an edit makes that false."""
-    from trid3nt_server.workflows.solver.code_provenance import code_identity
+    from trid3nt.workflows.solver.code_provenance import code_identity
 
     identity = code_identity()
     assert set(identity) == {"code_sha", "code_dirty"}
@@ -126,7 +126,7 @@ def test_a_moved_engine_names_the_commits_that_moved_it():
     """The warning is the point: a reader gets a verdict, not a diff to run."""
     import subprocess
 
-    from trid3nt_server.workflows.solver.code_provenance import _REPO_ROOT, staleness
+    from trid3nt.workflows.solver.code_provenance import _REPO_ROOT, staleness
 
     out = subprocess.run(
         ["git", "-C", str(_REPO_ROOT), "log", "--format=%H", "-40", "--",
@@ -150,7 +150,7 @@ def test_an_engine_that_never_moved_is_not_reported_as_drift_unknown():
     since it ran reads as unchanged however many unrelated commits landed on top."""
     import subprocess
 
-    from trid3nt_server.workflows.solver.code_provenance import _REPO_ROOT, staleness
+    from trid3nt.workflows.solver.code_provenance import _REPO_ROOT, staleness
 
     out = subprocess.run(
         ["git", "-C", str(_REPO_ROOT), "rev-parse", "HEAD"],
@@ -167,7 +167,7 @@ def test_the_bed_spec_is_registered_and_pins_one_product_of_the_mosaic():
     the same tiles on MHW, the ETOPO bases on EGM2008 - so the row that reads it
     as a bed pins the ONE product it means and states that product's datum as
     the FRAME NAME the offset service converts, never the prose for it."""
-    from trid3nt_server.tools.fetchers._router.registration import get_spec
+    from trid3nt.tools.fetchers._router.registration import get_spec
 
     spec = get_spec("fetch_greatlakes_bathymetry")
     assert spec is not None

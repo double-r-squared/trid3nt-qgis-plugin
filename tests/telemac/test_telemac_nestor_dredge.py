@@ -11,11 +11,11 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring.nestor import NestorRefused
-from trid3nt_server.workflows.telemac.modules import GAIA, fill
-from trid3nt_server.workflows.telemac.modules.gaia import (
+from trid3nt.workflows.telemac.authoring.nestor import NestorRefused
+from trid3nt.workflows.telemac.modules import GAIA, fill
+from trid3nt.workflows.telemac.modules.gaia import (
     Backfill, Dig, Dredging, Dump, SaveWaterLevel)
-from trid3nt_server.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.runtime.module import SlotRefused
 
 #: The run's own clock, which every action is dated against; the profiles are
 #: the surface its levels are read from.
@@ -171,7 +171,7 @@ def test_a_dredge_over_a_bed_with_no_stock_refuses_by_name():
 def test_the_carrier_deck_has_no_dredge_of_its_own():
     """NESTOR on the telemac2d deck adds a thickness to the bottom with no
     sediment stock behind it, which is not what this surface exposes."""
-    from trid3nt_server.workflows.telemac.modules import T2D
+    from trid3nt.workflows.telemac.modules import T2D
 
     with pytest.raises(SlotRefused, match="no keyword 'dredging'"):
         fill(T2D, dredging=Dredging(actions=[], measured="dredge",
@@ -181,7 +181,7 @@ def test_the_carrier_deck_has_no_dredge_of_its_own():
 def test_the_volumes_are_read_off_the_engine_s_own_report_lines():
     """The criterion dig reports the volume of the LAST maintenance period and
     resets its own sum at the next, so the run's figure is the sum over them."""
-    from trid3nt_server.workflows.telemac.modules.listing import nestor_volumes
+    from trid3nt.workflows.telemac.modules.listing import nestor_volumes
 
     listing = "\n".join((
         " ?>        dug volume  [m^3]  :    1200.5",
@@ -212,7 +212,7 @@ _STARTED = "\n".join((
 def test_a_pass_that_did_not_finish_is_stated_rather_than_left_null():
     """TimeEnd stops the next pass, not the one cutting, so a pass that has not
     reached grade when the clock runs out prints no volume at all."""
-    from trid3nt_server.workflows.telemac.modules.listing import nestor_volumes
+    from trid3nt.workflows.telemac.modules.listing import nestor_volumes
 
     read = nestor_volumes(_STARTED)
     assert "dug_volume_m3" not in read and "dumped_volume_m3" not in read
@@ -225,7 +225,7 @@ def test_a_pass_that_did_not_finish_is_stated_rather_than_left_null():
 def test_a_dredge_that_never_began_is_told_apart_from_one_that_did_not_finish():
     """NESTOR marks its initialisation banner too, so a run that armed a dredge
     whose schedule the clock never reached is not read as a run without one."""
-    from trid3nt_server.workflows.telemac.modules.listing import nestor_volumes
+    from trid3nt.workflows.telemac.modules.listing import nestor_volumes
 
     banner = " ?>       Each info line is marked with the Lable"
     assert nestor_volumes(banner)["dredge_report"].startswith(
@@ -246,7 +246,7 @@ _IN_THE_ARM = (-124.0975, 40.5025)
 def _nodes_at(*lonlat: tuple[float, float]):
     from shapely.geometry import mapping, Point as _Point
 
-    from trid3nt_server.workflows.telemac.authoring.accepted_mesh import to_utm
+    from trid3nt.workflows.telemac.authoring.accepted_mesh import to_utm
 
     return [list(to_utm(mapping(_Point(lon, lat)), 32610).coords)[0]
             for lon, lat in lonlat]
@@ -264,10 +264,10 @@ def test_a_grade_the_bed_has_no_stock_to_reach_refuses_at_authoring():
     """A grade deeper than the erodible bed is a pass the engine abandons part
     way through its first cut, so the cut the declaration asks for is measured
     against the stated stock before the run dispatches."""
-    from trid3nt_server.workflows.telemac.authoring.reference_surface import (
+    from trid3nt.workflows.telemac.authoring.reference_surface import (
         _refuse_a_cut_past_the_stock,
     )
-    from trid3nt_server.workflows.telemac.errors import TelemacError
+    from trid3nt.workflows.telemac.errors import TelemacError
 
     def _measure(grade_depth_m: float) -> None:
         _refuse_a_cut_past_the_stock(
@@ -290,8 +290,8 @@ def test_a_grade_the_bed_has_no_stock_to_reach_refuses_at_authoring():
 def test_a_dredge_area_is_guarded_by_its_polygon_not_its_bounding_box():
     """The engine works the ring, so an area whose box holds nodes its interior
     does not has nothing in it to move and refuses before the solve."""
-    from trid3nt_server.workflows.telemac.authoring.reference_surface import _dredge_field
-    from trid3nt_server.workflows.telemac.errors import TelemacError
+    from trid3nt.workflows.telemac.authoring.reference_surface import _dredge_field
+    from trid3nt.workflows.telemac.errors import TelemacError
 
     with pytest.raises(TelemacError, match="holds no node") as refused:
         _dredge_field(_L_SHAPE, "dredge_area", utm_epsg=32610,

@@ -8,8 +8,8 @@ import json
 
 import pytest
 
-from trid3nt_server.inputs.extent import Extent, extent
-from trid3nt_server.inputs.user_input import UserInputError
+from trid3nt.inputs.extent import Extent, extent
+from trid3nt.inputs.user_input import UserInputError
 
 
 def _ingest(value, **kw):
@@ -62,7 +62,7 @@ def test_a_value_of_no_readable_shape_refuses_under_the_callers_code(bad):
 
 
 def test_two_boxes_are_the_same_extent_within_a_tenth_of_a_metre():
-    from trid3nt_server.inputs.extent import bbox_equivalent
+    from trid3nt.inputs.extent import bbox_equivalent
 
     box = [-114.4, 42.5, -114.2, 42.7]
     assert bbox_equivalent(box, list(box))
@@ -78,11 +78,11 @@ def test_two_boxes_are_the_same_extent_within_a_tenth_of_a_metre():
 
 def test_a_touching_edge_overlaps_here_and_in_every_fetcher_that_asks():
     """One shapely rule behind three call sites, with one documented semantics."""
-    from trid3nt_server.inputs.extent import bbox_overlaps
-    from trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries.hooks import (
+    from trid3nt.inputs.extent import bbox_overlaps
+    from trid3nt.tools.fetchers.socioeconomic.fetch_field_boundaries.hooks import (
         _bbox_intersects as fields_intersects,
     )
-    from trid3nt_server.tools.fetchers.terrain.fetch_dem.hooks import (
+    from trid3nt.tools.fetchers.terrain.fetch_dem.hooks import (
         _bbox_intersects as dem_intersects,
     )
 

@@ -11,12 +11,12 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.ws import PayloadConfirmationEnvelopePayload
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server.inputs.gate.errors import UserDeclinedError
-from trid3nt_server.inputs.gate.pending import _PENDING_CONFIRMATIONS
-from trid3nt_server.model.credentials import resolver
+from trid3nt_harness.inputs.gate.errors import UserDeclinedError
+from trid3nt_harness.inputs.gate.pending import _PENDING_CONFIRMATIONS
+from trid3nt.credentials import resolver
 from trid3nt_server.server import SessionState, _invoke_tool_via_emitter
-from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
-from trid3nt_server.tools.fetchers._fetch_common import KeyRejectedError, KeyRequiredError
+from trid3nt.tools import TOOL_REGISTRY, RegisteredTool
+from trid3nt.tools.fetchers._fetch_common import KeyRejectedError, KeyRequiredError
 
 _NAME = "keyed_dummy_tool"
 _TYPED = "typed-test-key-91c2"
@@ -44,7 +44,7 @@ class _FakeWS:
 
 @pytest.fixture(autouse=True)
 def _tool(monkeypatch):
-    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
+    monkeypatch.setattr("trid3nt_harness.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
     monkeypatch.delenv("TRID3NT_AIRNOW_API_KEY", raising=False)
     resolver._SESSION_CREDENTIALS.clear()
     _calls.clear()

@@ -15,19 +15,19 @@ import pytest
 from affine import Affine
 from rasterio.crs import CRS
 
-from trid3nt_server.render.cog import array_to_cog_bytes
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.errors import (
+from trid3nt.render.cog import array_to_cog_bytes
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.tools.fetchers._router.executors import raster_cog
-from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+from trid3nt.tools.fetchers._router.executors import raster_cog
+from trid3nt.tools.fetchers._router.spec import load_spec_from_path
 
 SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[2]
-    / "trid3nt_server/tools/fetchers/terrain/fetch_3dep_extra/source.yaml"
+    / "trid3nt/tools/fetchers/terrain/fetch_3dep_extra/source.yaml"
 )
 
 _FORT_MYERS = (-82.0, 26.4, -81.7, 26.7)  # small in-US AOI
@@ -59,7 +59,7 @@ def _patch_tnm_read(monkeypatch, values: Any = None, nodata: Any = None, exc: Ex
 
 
 def test_3dep_promoted_as_library_delegate_spec():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY["fetch_3dep_extra"]
     assert entry.metadata.source_class == "3dep_extra"
@@ -72,7 +72,7 @@ def test_3dep_promoted_as_library_delegate_spec():
 
 
 def test_3dep_docstring_carried_verbatim():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     doc = TOOL_REGISTRY["fetch_3dep_extra"].fn.__doc__ or ""
     assert "3DEP" in doc and "arc-second" in doc

@@ -13,11 +13,11 @@ from typing import Any
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.modules import T2D, field, max_over_time, series
-from trid3nt_server.workflows.runtime.module import Output
-from trid3nt_server.workflows.runtime.primitives import OutputEmpty, profile
-from trid3nt_server.workflows.telemac.modules.outputs import Solved
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.workflows.telemac.modules import T2D, field, max_over_time, series
+from trid3nt.workflows.runtime.module import Output
+from trid3nt.workflows.runtime.primitives import OutputEmpty, profile
+from trid3nt.workflows.telemac.modules.outputs import Solved
+from trid3nt.workflows.runtime.sheet import fill
 
 #: Four nodes the run holds two metres of water on, and one bank film a
 #: centimetre deep - the shape that put 45 C into a reach-wide answer.
@@ -48,7 +48,7 @@ def filmed(monkeypatch, telemac_result):
                    times=[0.0, 60.0],
                    data={"WATER DEPTH": depth, "TEMPERATURE": temperature})
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     return Solved({"run_id": "RID", "utm_epsg": 32610, "result_basename": "r2d.slf",
                    "module": "telemac2d", "name": "reach", "mesh_size_m": 7.5,
@@ -82,7 +82,7 @@ def test_the_envelope_reads_each_node_over_the_instants_it_held_water(filmed):
 def test_the_temporal_layers_legend_is_ranged_over_the_same_nodes(filmed):
     """The picture and the number agree by construction: the legend spans the
     water, and the film saturates at the top rather than owning the ramp."""
-    from trid3nt_server.workflows.runtime.primitives import deliver
+    from trid3nt.workflows.runtime.primitives import deliver
 
     primitive = field("T1", t="every").animate()
     read = T2D.READS["field"](primitive, filmed)
@@ -113,7 +113,7 @@ def test_a_profile_down_the_reach_leaves_the_bank_film_off_it(monkeypatch,
                          "VELOCITY U": [[0.5] * 16] * 2,
                          "VELOCITY V": [[0.0] * 16] * 2})
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     solved = Solved({"run_id": "RID", "utm_epsg": 32610,
                      "result_basename": "r2d.slf", "module": "telemac2d",
@@ -136,7 +136,7 @@ def test_a_variable_the_run_never_wet_answers_with_why_rather_than_a_number(
                    data={"WATER DEPTH": [[0.0] * 3] * 2,
                          "TEMPERATURE": [[45.0] * 3] * 2})
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     solved = Solved({"run_id": "RID", "utm_epsg": 32610,
                      "result_basename": "r2d.slf", "module": "telemac2d",
@@ -160,7 +160,7 @@ def infinite(monkeypatch, telemac_result):
                    times=[0.0, 60.0],
                    data={"WATER DEPTH": depth, "TEMPERATURE": temperature})
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     return Solved({"run_id": "RID", "utm_epsg": 32610, "result_basename": "r2d.slf",
                    "module": "telemac2d", "name": "reach", "mesh_size_m": 7.5,
@@ -181,8 +181,8 @@ def test_a_non_finite_value_is_neither_summed_nor_painted(infinite):
 def test_a_non_finite_value_is_not_written_onto_the_mesh(monkeypatch, infinite):
     """The dataset the render seam writes beside the result carries nothing
     where the engine wrote infinity."""
-    from trid3nt_server.workflows.telemac.modules import outputs
-    from trid3nt_server.workflows.runtime.primitives import deliver
+    from trid3nt.workflows.telemac.modules import outputs
+    from trid3nt.workflows.runtime.primitives import deliver
 
     written: dict[str, Any] = {}
 
@@ -192,10 +192,10 @@ def test_a_non_finite_value_is_not_written_onto_the_mesh(monkeypatch, infinite):
 
     monkeypatch.setattr(outputs, "write_ascii_dataset", _capture, raising=False)
     monkeypatch.setattr(
-        "trid3nt_server.render.mesh_display.write_ascii_dataset", _capture)
-    monkeypatch.setattr("trid3nt_server.store.objects.client",
+        "trid3nt.render.mesh_display.write_ascii_dataset", _capture)
+    monkeypatch.setattr("trid3nt.store.objects.client",
                         lambda: type("C", (), {"put_object": lambda *a, **k: None})())
-    monkeypatch.setattr("trid3nt_server.store.objects.runs_bucket", lambda: "runs")
+    monkeypatch.setattr("trid3nt.store.objects.runs_bucket", lambda: "runs")
     primitive = field("T1", t=0)
     read = T2D.READS["field"](primitive, infinite)
     deliver(primitive, read, infinite, caption="water temperature",

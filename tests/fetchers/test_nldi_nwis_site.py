@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.tools.fetchers.hydrology.fetch_nhdplus_nldi_navigate import hooks
+from trid3nt.tools.fetchers._router.errors import RouterEmptyError
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.tools.fetchers.hydrology.fetch_nhdplus_nldi_navigate import hooks
 
 _NLDI = Path(__file__).resolve().parents[1] / "fixtures" / "nhdplus_nldi"
 _KINGSTON = _NLDI / "nwissite_USGS-02395000.json"

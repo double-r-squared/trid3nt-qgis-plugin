@@ -15,11 +15,11 @@ import yaml
 
 @pytest.fixture(scope="session")
 def class_routes_to_the_match():
-    from trid3nt_server.tools.search import find_sources as pkg
-    from trid3nt_server.tools.search.find_sources.find_sources import FIND_SOURCES
-    from trid3nt_server.tools.search.match import covered_sources
-    from trid3nt_server.tools.search.search_tools import search_tools as dd
-    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
+    from trid3nt_harness.tools.search import find_sources as pkg
+    from trid3nt_harness.tools.search.find_sources.find_sources import FIND_SOURCES
+    from trid3nt.tools.search.match import covered_sources
+    from trid3nt_harness.tools.search.search_tools import search_tools as dd
+    from trid3nt_harness.tools.search.tool_retrieval import retrieve_visible_tools
 
     path = pathlib.Path(pkg.__file__).resolve().parent / "corpus.yaml"
     corpus = yaml.safe_load(path.read_text()) or {}

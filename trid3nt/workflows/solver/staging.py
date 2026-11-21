@@ -1,0 +1,168 @@
+"""What the box receives: the authored run directory, uploaded, and its manifest.
+
+Nothing here reads a mesh or a physical value. The manifest is written last, so it exists
+only for a fully staged run.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import shutil
+from pathlib import Path
+from typing import Any, Callable, Mapping, Sequence
+
+__all__ = ["case_section", "discard_run", "new_rundir", "stage_run", "stage_manifest"]
+
+
+def case_section(*, module: str, steering: str, results: list[str],
+                 server_facts: Mapping[str, Any],
+                 user_fortran: Sequence[str] = (),
+                 coupling: str | None = None,
+                 continue_from: str | None = None,
+                 cores: int = 1) -> dict[str, Any]:
+    """The case a worker runs: which engine, which file, what it must produce.
+
+    ``cores`` is the partition the steering file states; ``server_facts`` is copied into the
+    worker's metrics verbatim.
+    """
+    return {"module": module, "steering": steering,
+            **({"user_fortran": list(user_fortran)} if user_fortran else {}),
+            **({"coupling": coupling} if coupling else {}),
+            **({"continue_from": continue_from} if continue_from else {}),
+            **({"cores": int(cores)} if int(cores) > 1 else {}),
+            "results": list(results), "server_facts": dict(server_facts)}
+
+
+# ``inputs`` rows are ``{gs_uri, dest}``, staged into the run directory before the container starts (the worker has no network).
+def stage_manifest(*, section: str, config: Mapping[str, Any],
+                   run_id: str, outputs: list[str],
+                   inputs: list[dict[str, str]] | None = None,
+                   prefix: str | None = None,
+                   extra: Mapping[str, Any] | None = None) -> str:
+    """Write the worker manifest to the cache bucket -> its ``s3://`` URI.
+
+    ``section`` is the dispatch key, ``prefix`` the staging word; they differ.
+    """
+    cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
+    if not cache_bucket:
+        from .solver import SolverDispatchError
+
+        raise SolverDispatchError(
+            "TRID3NT_CACHE_BUCKET must be set to stage a run's manifest.")
+    from trid3nt.store import objects as storage
+
+    manifest = {section: dict(config), "run_id": run_id,
+                "inputs": list(inputs or []),
+                "outputs": list(outputs), **dict(extra or {})}
+    key = f"{prefix or section}/{run_id}/manifest.json"
+    storage.client().put_object(
+        Bucket=cache_bucket, Key=key,
+        Body=json.dumps(manifest, indent=2).encode("utf-8"),
+        ContentType="application/json")
+    return f"s3://{cache_bucket}/{key}"
+
+
+def _run_directory(run_id: str, *, stem: str) -> Path:
+    return Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"{stem}-{run_id}"
+
+
+def _cache_bucket() -> str:
+    bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
+    if not bucket:
+        from .solver import SolverDispatchError
+
+        raise SolverDispatchError(
+            "TRID3NT_CACHE_BUCKET must be set to stage an authored run.")
+    return bucket
+
+
+def _clear_prefix(run_id: str, prefix: str) -> None:
+    from trid3nt.store import objects as storage
+
+    storage.delete_prefix(_cache_bucket(), f"{prefix}/{run_id}/")
+
+
+def _upload_authored(rundir: Path, run_id: str, names: Sequence[str],
+                     prefix: str) -> list[dict[str, str]]:
+    from trid3nt.store import objects as storage
+
+    bucket = _cache_bucket()
+    s3 = storage.client()
+    rows: list[dict[str, str]] = []
+    for name in names:
+        key = f"{prefix}/{run_id}/{name}"
+        s3.put_object(Bucket=bucket, Key=key, Body=(rundir / name).read_bytes())
+        rows.append({"gs_uri": f"s3://{bucket}/{key}", "dest": name})
+    return rows
+
+
+def _write_manifest(case: Mapping[str, Any], run_id: str, *, outputs: list[str],
+                    inputs: list[dict[str, str]], prefix: str) -> str:
+    """Write the worker manifest for an authored case -> its ``s3://`` URI.
+
+    Written under the ``case`` dispatch key.
+    """
+    return stage_manifest(
+        section="case", config=case, run_id=run_id, outputs=outputs,
+        inputs=inputs, prefix=prefix)
+
+
+def new_rundir(run_id: str, *, stem: str) -> Path:
+    """The run's directory, emptied: a re-authoring replaces what the last one wrote."""
+    rundir = _run_directory(run_id, stem=stem)
+    shutil.rmtree(rundir, ignore_errors=True)
+    rundir.mkdir(parents=True)
+    return rundir
+
+
+def discard_run(run_id: str, prefix: str, *, stem: str) -> None:
+    """Remove a run's directory and its staged prefix; a run that does not proceed leaves neither."""
+    shutil.rmtree(_run_directory(run_id, stem=stem), ignore_errors=True)
+    # With no cache bucket stated, staging refused and nothing was uploaded.
+    if (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip():
+        _clear_prefix(run_id, prefix)
+
+
+async def stage_run(rundir: Path, run_id: str, *, module: str, steering: str,
+                    results: list[str], outputs: list[str],
+                    mesh_inputs: list[dict[str, str]], prefix: str,
+                    sheet: Mapping[str, Any], server_facts: Mapping[str, Any],
+                    result_basename: str, check: Callable[..., Any],
+                    user_fortran: Sequence[str] = (),
+                    coupling: str | None = None,
+                    continue_from: str | None = None,
+                    cores: int = 1,
+                    case: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """An authored run directory -> the staged run the box receives.
+
+    The manifest is written last. ``check`` is the engine's own staged check,
+    run against the uploaded directory before the manifest exists. ``case`` is
+    the manifest's case section for a worker that reads fewer keys than
+    ``case_section`` writes.
+    """
+    # Paths stay relative to the run directory: the oil module's user fortran is a directory the engine compiles, so the walk is recursive.
+    authored = sorted(str(p.relative_to(rundir))
+                      for p in rundir.rglob("*") if p.is_file())
+    # A re-staging replaces the prefix whole: a file the last deck wrote and this one does not must not remain.
+    await asyncio.to_thread(_clear_prefix, run_id, prefix)
+    inputs = [*mesh_inputs,
+              *await asyncio.to_thread(_upload_authored, rundir, run_id,
+                                       authored, prefix)]
+    case = dict(case) if case is not None else case_section(
+        module=module, steering=steering, results=results,
+        user_fortran=user_fortran, coupling=coupling,
+        continue_from=continue_from, cores=cores, server_facts=server_facts)
+    # The staged directory is checked against itself: a steering naming an unstaged file, a mis-numbered boundary, a holed bed, a clock outside its window or an unseatable partition dies in the solve's first second.
+    await asyncio.to_thread(
+        check, rundir, steering=steering, inputs=inputs,
+        written_by_the_engine=[*results, *outputs],
+        duration_s=server_facts.get("duration_s"), cores=cores)
+    manifest_uri = await asyncio.to_thread(
+        _write_manifest, case, run_id, outputs=outputs, inputs=inputs,
+        prefix=prefix)
+    return {"run_id": run_id, "rundir": str(rundir), "sheet": dict(sheet),
+            "case": case, "manifest_uri": manifest_uri, "authored": authored,
+            "outputs": outputs, "inputs": inputs,
+            "result_basename": result_basename}

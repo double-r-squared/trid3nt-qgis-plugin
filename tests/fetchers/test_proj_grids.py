@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.fetchers import _proj_grids as seam
+from trid3nt.tools.fetchers import _proj_grids as seam
 
 _JBCC_SW = (-70.62, 41.59)
 _SAND_POINT = (-160.505, 55.333)

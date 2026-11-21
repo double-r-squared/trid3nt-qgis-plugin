@@ -143,7 +143,7 @@ _CHOICES: Mapping[str, tuple[str, ...]] = {
 
 def module_input_dir() -> Path:
     """Where the committed module inputs live."""
-    return (Path(__file__).resolve().parents[1] / "trid3nt_server" / "workflows"
+    return (Path(__file__).resolve().parents[1] / "trid3nt" / "workflows"
             / "geoclaw" / "modules" / "module_input")
 
 

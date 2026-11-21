@@ -12,7 +12,7 @@ import asyncio
 from typing import Any
 
 import pytest
-from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
+from trid3nt.inputs.slots import BED, DISCHARGE, DOMAIN
 from seated import row_inputs, value_inputs
 
 _PORTLAND = (-122.6735, 45.5175)  # the Willamette at USGS 14211720
@@ -24,7 +24,7 @@ def _auto_input_mode(user_settings):
 
 
 def _workflow():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY["telemac_dye_release"].fn.workflow
 
@@ -45,13 +45,13 @@ def _resolve(**supplied):
 
 
 def _template():
-    from trid3nt_server.workflows.telemac.templates.dye_release import dye_release
+    from trid3nt.workflows.telemac.templates.dye_release import dye_release
 
     return dye_release
 
 
 def test_registered_as_an_engine_template():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get("telemac_dye_release")
     assert entry is not None
@@ -64,7 +64,7 @@ def test_registered_as_an_engine_template():
 
 
 def test_the_routing_view_says_the_question_class_not_one_body():
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+    from trid3nt.workflows.telemac.templates.dye_release.dye_release import (
         telemac_dye_release,
     )
 
@@ -81,7 +81,7 @@ def test_the_routing_view_says_the_question_class_not_one_body():
     {"coordinates": [-122.6735, 45.5175], "name": "outfall-a"},
 ])
 def test_every_release_point_form_reaches_the_one_point_slot(value):
-    from trid3nt_server.inputs import Point
+    from trid3nt.inputs import Point
 
     supplied, err = _norm(release=value)
     assert err is None
@@ -90,7 +90,7 @@ def test_every_release_point_form_reaches_the_one_point_slot(value):
 
 
 def test_a_malformed_release_point_refuses_it_never_falls_back():
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+    from trid3nt.workflows.telemac.templates.dye_release.dye_release import (
         telemac_dye_release,
     )
 
@@ -102,14 +102,14 @@ def test_a_malformed_release_point_refuses_it_never_falls_back():
 
 def test_a_core_count_past_the_box_refuses_by_name():
     """Refused, never cut down to fit: the caller is told the box's own count."""
-    from trid3nt_server.workflows.solver.cores import docker_cores
+    from trid3nt.workflows.solver.cores import docker_cores
 
     _supplied, err = _norm(keywords={"PARALLEL PROCESSORS": docker_cores() + 1})
     assert "PARALLEL PROCESSORS" in err and str(docker_cores()) in err
 
 
 def test_a_declared_bound_refuses_rather_than_clamps():
-    from trid3nt_server.workflows.runtime import GateRefusedError
+    from trid3nt.workflows.runtime import GateRefusedError
 
     with pytest.raises(GateRefusedError, match="outside the declared range"):
         _resolve(spill_duration_s=0.0)
@@ -117,7 +117,7 @@ def test_a_declared_bound_refuses_rather_than_clamps():
 
 
 def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
-    from trid3nt_server.workflows.runtime import GateRefusedError
+    from trid3nt.workflows.runtime import GateRefusedError
 
     with pytest.raises(GateRefusedError):
         _resolve(spill_duration_s="a while")
@@ -127,8 +127,8 @@ def test_the_inflow_flow_is_the_discharge_slots_value_and_not_a_param():
     """The flow the inflow run carries is the observation ROW's - a reading, or
     the number stated on it - so no param of this question declares one, and the
     row states the CLASS it needs rather than the source that reports it."""
-    from trid3nt_server.inputs.input import declared
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+    from trid3nt.inputs.input import declared
+    from trid3nt.workflows.telemac.templates.dye_release.dye_release import (
         INPUTS,
     )
 
@@ -149,13 +149,13 @@ def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
     describe the water, the mesh ask declares the granularity, the engine the
     moment and the bed its frame."""
     from seated import REACH, SEATED
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+    from trid3nt.workflows.telemac.templates.dye_release.dye_release import (
         INPUTS,
     )
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+    from trid3nt.workflows.telemac.templates.dye_release.dye_release import (
         STEERING,
     )
-    from trid3nt_server.inputs.input import declared
+    from trid3nt.inputs.input import declared
 
     declared = {p.name for p in declared(INPUTS) if not p.is_row}
     assert not declared & {"friction_law", "friction_coefficient",
@@ -177,8 +177,8 @@ def test_the_params_are_the_questions_own_and_the_deck_states_the_keywords():
 def test_the_data_body_is_the_slots_and_the_classes_they_need():
     """The domain, the bed, the discharge
     and the level as the CLASSES they need - no fetcher named on any of them."""
-    from trid3nt_server.inputs.input import declared
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import INPUTS
+    from trid3nt.inputs.input import declared
+    from trid3nt.workflows.telemac.templates.dye_release.dye_release import INPUTS
 
     rows = row_inputs(INPUTS)
     assert [d.name for d in rows] == ["domain", "bed", "discharge", "level"]
@@ -209,9 +209,9 @@ def test_the_release_point_seeds_the_domain_producer():
     carries no second spelling of the same point."""
     import inspect
 
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.inputs.input import declared
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import INPUTS
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.inputs.input import declared
+    from trid3nt.workflows.telemac.templates.dye_release.dye_release import INPUTS
 
     domain = INPUTS.domain
     # THE POINT the reach is cut from is the one fact about the world the row
@@ -230,7 +230,7 @@ def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
     from - are the template's own working and stay off the wire."""
     import inspect
 
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_dye_release"].fn).parameters)
     assert {"domain", "bed", "discharge"} <= wire
@@ -238,7 +238,7 @@ def test_the_domain_and_the_bed_reach_the_wire_as_the_slots_they_are():
 
 
 def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import INPUTS
+    from trid3nt.workflows.telemac.templates.dye_release.dye_release import INPUTS
 
     with pytest.raises(AttributeError):
         INPUTS.centreline
@@ -247,8 +247,8 @@ def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
 def test_the_deck_states_the_four_source_keywords_and_a_sources_composite():
     """The release enters through the engine's own keywords, one element per
     source, and the composite shrinks to the sources file plus the window."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import T2D as _T2D
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+    from trid3nt.workflows.telemac.modules.telemac2d import T2D as _T2D
+    from trid3nt.workflows.telemac.templates.dye_release.dye_release import (
         STEERING,
     )
 
@@ -271,7 +271,7 @@ def test_the_sources_file_the_deck_writes_is_the_series_the_engine_reads():
     """The four keywords plus ``sources`` write the finite pulse: held at the
     stated discharge and concentration, then stepped to nothing so the slug
     advects and passes, with a tail past the last simulated instant."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import (
+    from trid3nt.workflows.telemac.modules.telemac2d import (
         Sources,
         T2D as _T2D,
     )
@@ -291,8 +291,8 @@ async def _normalized(workflow, args):
     the rows the fill produces are stood in for, so the params alone answer."""
     from unittest.mock import patch
 
-    from trid3nt_server.workflows.runtime import fill as fill_mod
-    from trid3nt_server.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
+    from trid3nt.workflows.runtime import fill as fill_mod
+    from trid3nt.workflows.runtime.fill import ACCEPTED, REJECTED, Fill, fill
 
     async def _held(env, decl):
         return decl.name

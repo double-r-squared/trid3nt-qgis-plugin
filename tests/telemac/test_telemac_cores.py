@@ -11,14 +11,14 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.solver.cores import docker_cores, local_cores
-from trid3nt_server.workflows.solver.staging import case_section
-from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.telemac.modules.artemis import ART
-from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.workflows.telemac.modules.module import PROCESSORS
-from trid3nt_server.workflows.runtime.sheet import fill
-from trid3nt_server.workflows.telemac.modules.sheet import (
+from trid3nt.workflows.solver.cores import docker_cores, local_cores
+from trid3nt.workflows.solver.staging import case_section
+from trid3nt.workflows.telemac.modules import T2D
+from trid3nt.workflows.telemac.modules.artemis import ART
+from trid3nt.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.telemac.modules.module import PROCESSORS
+from trid3nt.workflows.runtime.sheet import fill
+from trid3nt.workflows.telemac.modules.sheet import (
     SOLVER,
     solve_cores,
 )
@@ -40,8 +40,8 @@ def test_a_run_that_states_no_count_leaves_the_modules_own_keyword_standing():
 def test_a_count_past_this_box_refuses_by_name():
     """Refused, never clamped: a partition cut down to fit is one the caller
     was never told about - on the sheet, and on the call before any stage."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    import trid3nt_server.workflows.telemac.templates  # noqa: F401
+    from trid3nt.tools import TOOL_REGISTRY
+    import trid3nt.workflows.telemac.templates  # noqa: F401
 
     with pytest.raises(SlotRefused) as raised:
         fill(T2D, **{PROCESSORS: docker_cores() + 1})
@@ -54,8 +54,8 @@ def test_a_count_past_this_box_refuses_by_name():
 
 def test_no_template_takes_a_cores_argument():
     """The count is stated once, under the engine's own name for it."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    import trid3nt_server.workflows.telemac.templates  # noqa: F401
+    from trid3nt.tools import TOOL_REGISTRY
+    import trid3nt.workflows.telemac.templates  # noqa: F401
 
     templates = [tool.fn.workflow for tool in TOOL_REGISTRY.values()
                  if getattr(getattr(tool.fn, "workflow", None), "engine", "") == "telemac"]
@@ -68,9 +68,9 @@ def test_no_template_takes_a_cores_argument():
 def test_a_coupled_run_states_the_count_once_and_it_is_the_carriers():
     """The launcher partitions a run once, so the bare keyword on a coupled
     run is the carrier's and asks for no body to be named."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    import trid3nt_server.workflows.telemac.templates  # noqa: F401
-    from trid3nt_server.workflows.telemac.workflow import run_bodies
+    from trid3nt.tools import TOOL_REGISTRY
+    import trid3nt.workflows.telemac.templates  # noqa: F401
+    from trid3nt.workflows.telemac.workflow import run_bodies
 
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     assert len(run_bodies(workflow.steering)) > 1
@@ -108,7 +108,7 @@ def test_the_direct_solver_runs_serial_whatever_was_asked_for():
 def test_the_run_says_why_the_cores_it_asked_for_are_not_used():
     """The caption is the run's, not a log line: a reader who asked for every
     core on the box and got one reads WHY on the record."""
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     token = bind_notes()
     try:

@@ -11,13 +11,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.geoclaw.authoring.rundata import serialize
-from trid3nt_server.workflows.geoclaw.authoring.staged_check import check_staged_run
-from trid3nt_server.workflows.geoclaw.errors import GeoclawError
-from trid3nt_server.workflows.geoclaw.modules import GEO, GEOB
-from trid3nt_server.workflows.geoclaw.templates.storm_surge import storm_surge
-from trid3nt_server.workflows.geoclaw.templates.tsunami_inundation import tsunami_inundation
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.workflows.geoclaw.authoring.rundata import serialize
+from trid3nt.workflows.geoclaw.authoring.staged_check import check_staged_run
+from trid3nt.workflows.geoclaw.errors import GeoclawError
+from trid3nt.workflows.geoclaw.modules import GEO, GEOB
+from trid3nt.workflows.geoclaw.templates.storm_surge import storm_surge
+from trid3nt.workflows.geoclaw.templates.tsunami_inundation import tsunami_inundation
+from trid3nt.workflows.runtime.sheet import fill
 
 _STATED = dict(CLAW_TFINAL=10.0, CLAW_NUM_OUTPUT_TIMES=2)
 _AUX = ["center", "capacity", "yleft", "center", "center", "center", "center"]

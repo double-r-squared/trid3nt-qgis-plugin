@@ -11,14 +11,14 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.errors import RouterInputError
-from trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries import hooks as FB
-from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.errors import RouterInputError
+from trid3nt.tools.fetchers.socioeconomic.fetch_field_boundaries import hooks as FB
+from trid3nt.tools.fetchers._router.spec import load_spec_from_path
 
 SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[2]
-    / "trid3nt_server/tools/fetchers/socioeconomic/fetch_field_boundaries/source.yaml"
+    / "trid3nt/tools/fetchers/socioeconomic/fetch_field_boundaries/source.yaml"
 )
 
 _AMES = (-93.70, 42.00, -93.60, 42.08)  # US cropland (USDA CSB)

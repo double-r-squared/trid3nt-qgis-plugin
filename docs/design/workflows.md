@@ -458,7 +458,7 @@ window member holding JSON names the reading's keys (`time_key`, `value_key`). A
 restates only the members that differ for its class and, once loaded, carries its
 source's map with its own over it.
 
-The one reader is `trid3nt_server/inputs/fields.py`: `records(layer, fields,
+The one reader is `trid3nt/inputs/fields.py`: `records(layer, fields,
 source=)` gives one `Record` per feature, `rec.value` / `rec.accuracy` as a
 `Measured` (number, unit), `rec.time` as written, `rec.raw[...]` every field
 untouched. A member the source does not map refuses `FIELD_UNMAPPED`, a mapped
@@ -610,7 +610,7 @@ is.** A step that computed a depth field says `flood_depth`; a fetcher carries a
 manifest entry's kind, quantity and units. There are no preset NAMES, so there
 is no table a quantity can be missing from and nothing to drift between.
 
-**One family, four kinds.** `trid3nt_server/render/presets.py` holds the four
+**One family, four kinds.** `trid3nt/render/presets.py` holds the four
 renderer shapes (continuous raster, classed, reference, mesh) and everything a
 quantity contributes is a PARAMETER of one of them. It resolves a row plus a
 raster into a concrete scale, into the sentence the legend says about it, and
@@ -726,7 +726,7 @@ land-cover table `telemac_rain_on_grid` reads.
 
 RAINFALL-RUNOFF MODEL 2 (Horton) reads only the constant RAIN_MMPD keyword (`runoff_horton.f` fixes its rain
 definition; no routine of it reads a hyetograph). A deck stating model 2 beside a measured series or matched record
-runs on the constant rate and journals the generic `INPUT_NOT_USED` warning (`trid3nt_server/errors.py`,
+runs on the constant rate and journals the generic `INPUT_NOT_USED` warning (`trid3nt/errors.py`,
 `unused_input_warning`): code, "the storm input was handed and is not used, because the option stated under
 RAINFALL_RUNOFF_MODEL does not read it", and what to do. A warning names only the slot and the keyword identifier,
 never a source's or a person's value, and is a run note opening with its code. The ask card's badge and the AUTO

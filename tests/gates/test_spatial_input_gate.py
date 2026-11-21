@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.inputs.gate.cards.spatial_input import (
+from trid3nt_harness.inputs.gate.cards.spatial_input import (
     _spatial_response_to_result,
 )
 from trid3nt_server.server import (
@@ -24,9 +24,9 @@ from trid3nt_server.server import (
     _emit_spatial_input_and_wait,
 
 )
-from trid3nt_server.inputs.gate.pending import _PENDING_SPATIAL_INPUTS
+from trid3nt_harness.inputs.gate.pending import _PENDING_SPATIAL_INPUTS
 
-from trid3nt_server.inputs.gate.spatial_roles import (
+from trid3nt_harness.inputs.gate.spatial_roles import (
     DrawnRoles,
     SpatialInputParseError,
     parse_drawn_roles,
@@ -47,7 +47,7 @@ def _cap_gate_waits(monkeypatch):
 
     Production leaves ``GATE_WAIT_CAP_S`` unset; the emit-and-await timeout
     test tightens the cap so it reaches the honest None-return path fast."""
-    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
+    monkeypatch.setattr("trid3nt_harness.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
 
 
 
@@ -343,7 +343,7 @@ def test_emit_and_wait_timeout_returns_none(monkeypatch):
     # The F6 local-lane gate ignores the payload timeout and would wait 24h; the
     # LANE C cap forces the honest timeout quickly (tight override of the autouse
     # 5s net) so this asserts the real None-return path without hanging.
-    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 0.05)
+    monkeypatch.setattr("trid3nt_harness.inputs.gate.confirm.GATE_WAIT_CAP_S", 0.05)
 
     async def _run() -> SpatialInputResponsePayload | None:
         ws = _MockWebSocket()
@@ -363,7 +363,7 @@ def test_emit_and_wait_timeout_returns_none(monkeypatch):
 
 
 def test_request_spatial_input_tool_returns_sentinel():
-    from trid3nt_server.inputs.gate.spatial_input_tool import (
+    from trid3nt_harness.inputs.gate.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -380,7 +380,7 @@ def test_request_spatial_input_tool_returns_sentinel():
 
 
 def test_request_spatial_input_tool_rejects_bad_mode():
-    from trid3nt_server.inputs.gate.spatial_input_tool import (
+    from trid3nt_harness.inputs.gate.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )

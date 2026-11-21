@@ -17,14 +17,14 @@ import pytest
 import yaml
 
 from trid3nt_contracts.coverage import Coverage
-from trid3nt_server.tools.fetchers._fetch_common import PixelBudgetExceededError
-from trid3nt_server.tools.fetchers._router import spec as _spec
-from trid3nt_server.tools.fetchers._router.errors import (
+from trid3nt.tools.fetchers._fetch_common import PixelBudgetExceededError
+from trid3nt.tools.fetchers._router import spec as _spec
+from trid3nt.tools.fetchers._router.errors import (
     RouterEmptyError, RouterInputError)
-from trid3nt_server.tools.fetchers._router.spec import (
+from trid3nt.tools.fetchers._router.spec import (
     SpecLoadError, compose_specs_from_tree, load_spec, served_frames)
-from trid3nt_server.tools.fetchers.ocean.fetch_chs_nonna import hooks as nonna
-from trid3nt_server.tools.search.match import Need, match
+from trid3nt.tools.fetchers.ocean.fetch_chs_nonna import hooks as nonna
+from trid3nt.tools.search.match import Need, match
 
 #: Port Huron, on the St. Clair River where it leaves Lake Huron.
 PORT_HURON = (-82.4213, 42.9636)
@@ -264,7 +264,7 @@ def test_the_source_is_found_through_its_class(class_routes_to_the_match):
 def _wcs_client(monkeypatch, statuses: list[int], calls: list[int]):
     import httpx
 
-    from trid3nt_server.tools.fetchers._router.transport import client as transport_client
+    from trid3nt.tools.fetchers._router.transport import client as transport_client
 
     def handler(request):
         calls.append(1)
@@ -287,7 +287,7 @@ def test_a_wcs_503_is_retried_by_the_transport(spec, monkeypatch):
 
 def test_a_lasting_wcs_failure_is_upstream_with_the_provider_message(spec, monkeypatch):
     from trid3nt_server.render.pipeline_emitter import PipelineEmitter
-    from trid3nt_server.tools.fetchers._router.errors import RouterUpstreamError
+    from trid3nt.tools.fetchers._router.errors import RouterUpstreamError
     calls: list[int] = []
     _wcs_client(monkeypatch, [503] * 99, calls)
     with pytest.raises(RouterUpstreamError) as ei:

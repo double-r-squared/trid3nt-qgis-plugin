@@ -15,10 +15,10 @@ from typing import Any
 import numpy as np
 import pytest
 
-from trid3nt_server.render import presets
-from trid3nt_server.render.formats import Published
-from trid3nt_server.workflows.runtime.primitives import Field, Frames, Series
-from trid3nt_server.workflows.telemac.modules import (
+from trid3nt.render import presets
+from trid3nt.render.formats import Published
+from trid3nt.workflows.runtime.primitives import Field, Frames, Series
+from trid3nt.workflows.telemac.modules import (
     T2D,
     extent,
     field,
@@ -27,8 +27,8 @@ from trid3nt_server.workflows.telemac.modules import (
     mesh,
     series,
 )
-from trid3nt_server.workflows.runtime.primitives import OutputEmpty
-from trid3nt_server.workflows.telemac.modules.outputs import Solved
+from trid3nt.workflows.runtime.primitives import OutputEmpty
+from trid3nt.workflows.telemac.modules.outputs import Solved
 from seated import value_inputs
 
 
@@ -55,7 +55,7 @@ def _table(body: Any = T2D, tracers: int = 1) -> list[dict[str, Any]]:
 
     A read asks the RECORD what a variable draws by and whether it has a visible
     edge, so a test that states no table is testing a run nobody could have."""
-    from trid3nt_server.workflows.runtime.sheet import fill
+    from trid3nt.workflows.runtime.sheet import fill
 
     sheet = fill(body, NUMBER_OF_TRACERS=tracers,
                  NAMES_OF_TRACERS=["DYE             MG/L"][:tracers])
@@ -83,7 +83,7 @@ def _store(fake_s3):
 def solved(monkeypatch, telemac_result):
     _reach(telemac_result)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     return _solved()
 
@@ -96,7 +96,7 @@ def tabled(monkeypatch, telemac_result):
     that masks at one is read off a run that carries the table a solve writes."""
     _reach(telemac_result)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     return _solved({"module": "telemac2d", "module_output": _table()})
 
@@ -154,7 +154,7 @@ def test_an_envelope_is_delivered_as_a_dataset_group_beside_the_results(tabled,
     """A field the result file carries no group for is written beside it as the
     SMS ASCII dataset MDAL loads onto the mesh it was measured over, with the
     nodes below its floor written as nothing."""
-    from trid3nt_server.workflows.runtime.primitives import deliver
+    from trid3nt.workflows.runtime.primitives import deliver
 
     primitive = max_over_time("T1").layer(style={"kind": "continuous",
                                                  "ramp": "reds"})
@@ -179,7 +179,7 @@ def test_an_envelope_is_delivered_as_a_dataset_group_beside_the_results(tabled,
 def test_a_node_below_the_read_s_floor_is_written_as_nothing(tabled, _store):
     """Where a tracer is below its own visible edge the dataset carries nothing,
     so the basemap shows through rather than the ramp's palest colour."""
-    from trid3nt_server.workflows.runtime.primitives import deliver
+    from trid3nt.workflows.runtime.primitives import deliver
 
     primitive = field("T1", t=0).layer(style={"kind": "continuous"})
     read = T2D.READS["field"](primitive, tabled)
@@ -200,7 +200,7 @@ def test_the_series_is_the_domain_maximum_at_each_instant(solved):
 
 
 def test_a_series_at_a_point_reads_the_nearest_node(solved):
-    from trid3nt_server.inputs import Point
+    from trid3nt.inputs import Point
 
     lon, lat = solved.lonlat
     at = Point(float(lon[1]), float(lat[1]), "outfall-a")
@@ -212,7 +212,7 @@ def test_a_series_at_a_point_reads_the_nearest_node(solved):
 def test_a_series_at_a_point_is_measured_at_that_point(solved):
     """A question asked at a place is answered there. The domain's own extremes
     answer a different question, and reading them here was a wrong number."""
-    from trid3nt_server.inputs import Point
+    from trid3nt.inputs import Point
 
     lon, lat = solved.lonlat
     at = Point(float(lon[1]), float(lat[1]), "outfall-a")
@@ -247,8 +247,8 @@ def test_the_animations_style_row_carries_the_floor_the_shader_clips_at(tabled):
     This tracer PEAKS at 80 and flushes to nothing: the temporal layer's range is
     the record's, so the legend spans what the run carried rather than collapsing
     onto the empty last frame."""
-    from trid3nt_server.render.formats import _mesh_layer
-    from trid3nt_server.workflows.runtime.primitives import deliver
+    from trid3nt.render.formats import _mesh_layer
+    from trid3nt.workflows.runtime.primitives import deliver
 
     primitive = field("T1", t="every").animate()
     read = T2D.READS["field"](primitive, tabled)
@@ -280,7 +280,7 @@ def test_a_tracer_that_is_zero_everywhere_refuses(monkeypatch, telemac_result):
                    ikle=[[0, 1, 2]], times=[0.0, 1.0],
                    data={"DYE": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]})
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     with pytest.raises(OutputEmpty, match="zero at every node"):
         T2D.READS["max_over_time"](
@@ -297,7 +297,7 @@ def test_a_variable_the_engine_grows_reads_zero_rather_than_refusing(
                    y=[0.0, 0.0, 1.0], ikle=[[0, 1, 2]], times=[0.0, 1.0],
                    data={"ICE COVER FRAC.": [[0.0] * 3, [0.0] * 3]})
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     grown = _solved({"module": "telemac2d", "module_output": [
         {"token": "DYNCOVC", "module": "telemac2d", "name": "ICE COVER FRAC.",
@@ -315,7 +315,7 @@ def test_a_trace_substance_is_drawn_against_its_own_range(monkeypatch,
                    ikle=[[0, 1, 2]], times=[0.0, 1.0],
                    data={"DYE": [[0.0, 0.0, 0.0], [5e-4, 1e-5, 0.0]]})
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     read = T2D.READS["max_over_time"](
         max_over_time("T1"),
@@ -335,7 +335,7 @@ def test_the_extent_and_the_mesh_are_measures_off_the_result_and_the_run(solved)
 
 def test_the_mass_balance_is_the_engine_s_own_closure(monkeypatch, solved):
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: _listing(monkeypatch))
     read = T2D.READS["mass_balance"](mass_balance(), solved)
     assert read.measures["continuity_rel_error"] == pytest.approx(-1.2e-7)
@@ -367,8 +367,8 @@ def test_a_field_at_an_instant_carries_its_spread(solved):
 def test_a_published_variable_with_no_caption_refuses_at_import():
     """A template publishes what it LISTS and names each one; the plan is built
     at import, so a listing nothing captions never reaches a run."""
-    from trid3nt_server.workflows.runtime import DeclarationError
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+    from trid3nt.workflows.runtime import DeclarationError
+    from trid3nt.workflows.telemac.templates.dye_release.dye_release import (
         telemac_dye_release,
     )
 
@@ -393,7 +393,7 @@ def test_publish_outputs_reads_once_and_publishes_each(monkeypatch, solved):
     listed order."""
     from trid3nt_contracts.execution import LayerURI
 
-    from trid3nt_server.workflows.telemac import workflow as door
+    from trid3nt.workflows.telemac import workflow as door
 
     seen: dict[str, Any] = {}
 
@@ -404,7 +404,7 @@ def test_publish_outputs_reads_once_and_publishes_each(monkeypatch, solved):
             layer_type="raster", uri="s3://runs/RID/dye_concentration.tif",
             quantity="dye_concentration"),))
 
-    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
+    monkeypatch.setattr("trid3nt.workflows.runtime.primitives.publish", _publish)
     run = {**solved.run, "module": "telemac2d"}
     result = asyncio.run(door.publish_outputs(
         run=run,
@@ -441,8 +441,8 @@ def test_every_restored_output_can_be_asked_for_on_a_run_and_publishes(
     closure publish what they measured as notes on the run's record."""
     from trid3nt_contracts.execution import LayerURI
 
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-    from trid3nt_server.workflows.telemac import workflow as door
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.workflows.telemac import workflow as door
 
     seen: dict[str, Any] = {}
 
@@ -452,9 +452,9 @@ def test_every_restored_output_can_be_asked_for_on_a_run_and_publishes(
             layer_id="L", name="n", layer_type="mesh", uri="s3://runs/RID/x.dat",
             quantity="dye_concentration"),))
 
-    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
+    monkeypatch.setattr("trid3nt.workflows.runtime.primitives.publish", _publish)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: _listing(monkeypatch))
     token = bind_notes()
     asyncio.run(door.publish_outputs(
@@ -479,7 +479,7 @@ def test_the_sediment_closure_carries_the_dredge_s_volumes():
     volumes NESTOR printed ride beside it."""
     from types import SimpleNamespace
 
-    from trid3nt_server.workflows.telemac.modules import GAIA
+    from trid3nt.workflows.telemac.modules import GAIA
 
     listing = "\n".join((
         "FINAL MASS-BALANCE OF SEDIMENTS",
@@ -530,7 +530,7 @@ def _coupled_reach(telemac_result) -> dict[str, Any]:
 def coupled(monkeypatch, telemac_result):
     _coupled_reach(telemac_result)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     return _solved()
 
@@ -576,8 +576,8 @@ def test_a_profile_is_the_variable_per_station_down_the_line_at_the_instant(
         coupled):
     """Depth-weighted per station, the dry node dropped, the minimum found and
     placed, and the along-line speed the flow travelled at."""
-    from trid3nt_server.workflows.runtime.primitives import Profile
-    from trid3nt_server.workflows.runtime.primitives import profile
+    from trid3nt.workflows.runtime.primitives import Profile
+    from trid3nt.workflows.runtime.primitives import profile
 
     read = T2D.READS["profile"](profile("T2", along=_line(coupled)), coupled)
     assert isinstance(read, Profile)
@@ -593,7 +593,7 @@ def test_a_profile_is_the_variable_per_station_down_the_line_at_the_instant(
 def test_a_profile_keeps_only_the_nodes_within_the_stated_band(coupled):
     """A transect through a domain reads the nodes beside the line, not a mean
     over the whole width; without a band the whole domain is the profile."""
-    from trid3nt_server.workflows.runtime.primitives import profile
+    from trid3nt.workflows.runtime.primitives import profile
 
     whole = T2D.READS["profile"](profile("T2", along=_line(coupled)), coupled)
     assert whole.measures["stations"] == 4
@@ -633,14 +633,14 @@ def test_a_tracer_that_stopped_being_a_number_fails_the_solve_by_its_name(
     a dry line does, and the two are not the same answer: the read names the
     variable and the instant it stopped being a number, and the run fails by
     that name rather than reporting an empty output."""
-    from trid3nt_server.workflows.runtime.primitives import profile
-    from trid3nt_server.workflows.telemac.modules.outputs import SolveNonFinite
+    from trid3nt.workflows.runtime.primitives import profile
+    from trid3nt.workflows.telemac.modules.outputs import SolveNonFinite
 
     nan = [float("nan")] * 5
     _five_nodes(telemac_result, oxygen=[[9.0] * 5, nan, nan],
                 depth=[[2.0] * 5] * 3)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     solved = _solved()
     with pytest.raises(SolveNonFinite) as caught:
@@ -654,12 +654,12 @@ def test_a_line_with_no_water_on_it_is_still_a_dry_line(
         monkeypatch, telemac_result):
     """The discrimination, the other way: every value is a number and the water
     is gone, which is an empty output and not a failed solve."""
-    from trid3nt_server.workflows.runtime.primitives import profile
+    from trid3nt.workflows.runtime.primitives import profile
 
     _five_nodes(telemac_result, oxygen=[[9.0] * 5] * 2,
                 depth=[[2.0] * 5, [0.0] * 5])
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     solved = _solved()
     with pytest.raises(OutputEmpty, match="no wet node"):
@@ -669,7 +669,7 @@ def test_a_line_with_no_water_on_it_is_still_a_dry_line(
 def test_a_profile_runs_the_way_the_solved_flow_goes(coupled):
     """A line drawn against the flow is read downstream regardless: the flow
     orients the chainage, so the mix point stays where the water carries it."""
-    from trid3nt_server.workflows.runtime.primitives import profile
+    from trid3nt.workflows.runtime.primitives import profile
 
     forward = T2D.READS["profile"](profile("T3", along=_line(coupled)),
                                           coupled)
@@ -685,7 +685,7 @@ def test_the_drogues_are_the_track_at_three_written_instants(monkeypatch, couple
     import tempfile
     from pathlib import Path
 
-    from trid3nt_server.workflows.runtime.primitives import Track
+    from trid3nt.workflows.runtime.primitives import Track
 
     track = Path(tempfile.mkdtemp(dir=_SCRATCH.name)) / "drogues.txt"
     track.write_text(
@@ -695,9 +695,9 @@ def test_the_drogues_are_the_track_at_three_written_instants(monkeypatch, couple
         "ZONE T=\"t\", SOLUTIONTIME= 120.0\n1, 500200.0, 4400000.0\n"
         "ZONE T=\"t\", SOLUTIONTIME= 180.0\n1, 500300.0, 4400000.0\n")
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: str(track))
-    from trid3nt_server.workflows.telemac.modules.outputs import drogues
+    from trid3nt.workflows.telemac.modules.outputs import drogues
 
     read = T2D.READS["drogues"](drogues(), coupled)
     assert isinstance(read, Track)
@@ -709,7 +709,7 @@ def test_the_drogues_are_the_track_at_three_written_instants(monkeypatch, couple
 
 def test_a_primitive_names_the_coupled_module_whose_result_it_reads():
     """A module's own file is read through its own wrapper, keyed by the module."""
-    from trid3nt_server.workflows.telemac.modules import GAIA
+    from trid3nt.workflows.telemac.modules import GAIA
 
     bed = field("E", t=-1, module="gaia")
     assert bed.module == "gaia" and bed.key.module == "gaia"
@@ -725,8 +725,8 @@ def test_a_bed_that_did_not_move_states_what_it_was_measured_against():
     the engine's own shear stress, which the threshold of motion is a value of."""
     import numpy as np
 
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-    from trid3nt_server.workflows.telemac.modules import gaia
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.workflows.telemac.modules import gaia
 
     class _Solved:
         def frames(self, name, plane):
@@ -752,9 +752,9 @@ def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(
         monkeypatch, coupled):
     from trid3nt_contracts.execution import LayerURI
 
-    from trid3nt_server.workflows.runtime.primitives import Line
-    from trid3nt_server.workflows.telemac import workflow as door
-    from trid3nt_server.workflows.runtime.primitives import profile
+    from trid3nt.workflows.runtime.primitives import Line
+    from trid3nt.workflows.telemac import workflow as door
+    from trid3nt.workflows.runtime.primitives import profile
 
     seen: dict[str, Any] = {}
 
@@ -768,7 +768,7 @@ def test_publish_outputs_rejoins_the_anchors_and_draws_the_reference_lines(
         assert params["do_standard_mgl"] == 5.0
         return [Line(label="standard", x=[0.0, 1.0], values=[5.0, 5.0])]
 
-    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
+    monkeypatch.setattr("trid3nt.workflows.runtime.primitives.publish", _publish)
     run = {**coupled.run, "module": "telemac2d"}
     result = asyncio.run(door.publish_outputs(
         run=run,
@@ -810,7 +810,7 @@ def catchment(monkeypatch, solved):
     """The reach's result read as a catchment's: two liquid boundaries the settle
     placed, the outlet at the east face, and the listing the engine printed."""
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: _catchment_listing(monkeypatch))
     return _solved({"liquid_boundaries": [
         {"number": 1, "role": "rating_curve", "x": 500120.0, "y": 4400055.0},
@@ -821,7 +821,7 @@ def test_a_series_of_the_printed_flux_reads_the_boundary_nearest_the_point(catch
     """FLUX is the token the module prints rather than writes: the series is the
     listing's own discharge across the liquid boundary the Point lies on,
     outflow-positive, and the station sits at that boundary."""
-    from trid3nt_server.inputs import Point
+    from trid3nt.inputs import Point
 
     lon, lat = catchment.lonlat
     outlet = Point(float(lon[1]), float(lat[1]), "outlet")
@@ -852,7 +852,7 @@ def test_the_water_balance_carries_the_final_block_and_the_rain_that_fell(catchm
     """The volumes are the engine's own, outflow-positive across the boundaries
     like the flux series; the rain volume is the accumulated depth the runoff
     routine printed over the meshed area, and the coefficient their ratio."""
-    from trid3nt_server.workflows.telemac.modules.outputs import mesh_area_m2
+    from trid3nt.workflows.telemac.modules.outputs import mesh_area_m2
 
     read = T2D.READS["mass_balance"](mass_balance(), catchment)
     area = mesh_area_m2(catchment.result)
@@ -870,7 +870,7 @@ def test_the_envelope_carries_its_p99_beside_its_maximum_and_the_extent_its_area
         solved):
     """One pit can set the maximum while the field sits far below it, so the
     99th percentile of the envelope rides beside it."""
-    from trid3nt_server.workflows.telemac.modules.outputs import mesh_area_m2
+    from trid3nt.workflows.telemac.modules.outputs import mesh_area_m2
 
     read = T2D.READS["max_over_time"](max_over_time("T1"), solved)
     assert read.measures["max"] == 80.0
@@ -881,7 +881,7 @@ def test_the_envelope_carries_its_p99_beside_its_maximum_and_the_extent_its_area
 
 
 def test_a_series_at_a_point_carries_the_station_it_was_read_at(solved):
-    from trid3nt_server.inputs import Point
+    from trid3nt.inputs import Point
 
     lon, lat = solved.lonlat
     read = T2D.READS["series"](
@@ -906,8 +906,8 @@ def test_the_agitation_coefficient_is_the_wave_height_over_the_stamped_incident(
         monkeypatch, telemac_result, tmp_path):
     """KD is a token ARTEMIS defines over its own result: the wave height over
     the incident height its boundary file stamps on the KINC rows."""
-    from trid3nt_server.workflows.telemac.modules import ART
-    from trid3nt_server.workflows.telemac.modules.artemis import stamp_boundary_rows
+    from trid3nt.workflows.telemac.modules import ART
+    from trid3nt.workflows.telemac.modules.artemis import stamp_boundary_rows
 
     _harbour(telemac_result)
     cli = tmp_path / "artemis.cli"
@@ -916,7 +916,7 @@ def test_the_agitation_coefficient_is_the_wave_height_over_the_stamped_incident(
         "2 2 2 0.0 0.0 0.0 0.0 2 0.0 0.0 0.0 3 3\n",
         open_nodes=[0, 1], structure_nodes=[2], height_m=2.0, reflection_coef=0.5))
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: str(cli))
     solved = _solved({"result_basename": "res_agitation.slf"}, body=ART)
     kd = ART.READS["field"](field("KD", t=-1), solved)
@@ -928,7 +928,7 @@ def test_the_agitation_coefficient_is_the_wave_height_over_the_stamped_incident(
 
 
 def test_a_boundary_file_stamping_no_single_incident_height_refuses():
-    from trid3nt_server.workflows.telemac.modules.artemis import incident_height
+    from trid3nt.workflows.telemac.modules.artemis import incident_height
 
     with pytest.raises(ValueError, match="exactly one"):
         incident_height("2 5 5  0.0000 0.000 0.000 0.000  2  0.000 0.000 0.000  1 1\n")
@@ -957,11 +957,11 @@ def _basin(telemac_result) -> dict[str, Any]:
 
 @pytest.fixture()
 def basin(monkeypatch, telemac_result):
-    from trid3nt_server.workflows.telemac.modules import T3D
+    from trid3nt.workflows.telemac.modules import T3D
 
     _basin(telemac_result)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.solver.solver.download_result",
+        "trid3nt.workflows.solver.solver.download_result",
         lambda run_id, basename, error_code=None: "/tmp/does-not-matter.slf")
     return _solved({"result_basename": "res3d_basin.slf",
                     "tracer_names": ["TEMPERATURE     DEGC"]}, body=T3D)
@@ -969,7 +969,7 @@ def basin(monkeypatch, telemac_result):
 
 def test_a_column_reads_the_planes_at_the_deepest_node_as_depth_below_the_surface(
         basin):
-    from trid3nt_server.workflows.telemac.modules import T3D, column
+    from trid3nt.workflows.telemac.modules import T3D, column
 
     read = T3D.READS["column"](column("T1"), basin)
     assert (read.name, read.units, read.along) == (
@@ -989,7 +989,7 @@ def test_a_column_reads_the_planes_at_the_deepest_node_as_depth_below_the_surfac
 
 
 def test_a_column_at_a_point_reads_the_nearest_node(basin):
-    from trid3nt_server.workflows.telemac.modules import T3D, column
+    from trid3nt.workflows.telemac.modules import T3D, column
 
     lon, lat = basin.lonlat
     read = T3D.READS["column"](
@@ -1000,15 +1000,15 @@ def test_a_column_at_a_point_reads_the_nearest_node(basin):
 
 
 def test_a_column_needs_the_planes_of_a_3d_result(solved):
-    from trid3nt_server.workflows.telemac.modules import column
-    from trid3nt_server.workflows.telemac.modules.outputs import read_column
+    from trid3nt.workflows.telemac.modules import column
+    from trid3nt.workflows.telemac.modules.outputs import read_column
 
     with pytest.raises(OutputEmpty, match="one plane"):
         read_column(column("T1"), solved)
 
 
 def test_a_plane_of_a_3d_field_is_named_bottom_first(basin):
-    from trid3nt_server.workflows.telemac.modules import T3D
+    from trid3nt.workflows.telemac.modules import T3D
 
     surface = T3D.READS["field"](field("T1", t=-1), basin)
     bottom = T3D.READS["field"](field("T1", t=-1, plane=0), basin)
@@ -1022,7 +1022,7 @@ def test_a_plane_of_a_3d_field_is_named_bottom_first(basin):
 def test_a_3d_read_stands_on_the_plane_s_own_nodes(basin):
     """A 3D result's coordinate arrays span every plane and a read holds one
     plane's values, so the nodes a measure is taken over are the 2D mesh's."""
-    from trid3nt_server.workflows.telemac.modules import T3D
+    from trid3nt.workflows.telemac.modules import T3D
 
     assert basin.result["npoin"] == 9 and basin.result["npoin2"] == 3
     assert len(basin.xy[0]) == 3 and len(basin.lonlat[0]) == 3
@@ -1034,7 +1034,7 @@ def test_a_3d_read_stands_on_the_plane_s_own_nodes(basin):
 def test_a_tracer_everywhere_above_its_edge_is_drawn_and_ranged_whole(basin):
     """A temperature is a tracer with no absent region: nothing is cut at a
     visible edge, so the layer ranges over the field rather than from zero."""
-    from trid3nt_server.workflows.telemac.modules import T3D
+    from trid3nt.workflows.telemac.modules import T3D
 
     surface = T3D.READS["field"](field("T1", t=-1), basin)
     assert surface.floor is None
@@ -1051,8 +1051,8 @@ def test_a_chart_s_reference_may_be_another_primitive_drawn_as_a_line(
     as a line labeled by the caption and its instant."""
     from trid3nt_contracts.execution import LayerURI
 
-    from trid3nt_server.workflows.telemac import workflow as door
-    from trid3nt_server.workflows.telemac.modules import column
+    from trid3nt.workflows.telemac import workflow as door
+    from trid3nt.workflows.telemac.modules import column
 
     seen: dict[str, Any] = {}
 
@@ -1062,7 +1062,7 @@ def test_a_chart_s_reference_may_be_another_primitive_drawn_as_a_line(
             layer_id="L", name="Water temperature (basin)", layer_type="raster",
             uri="s3://runs/RID/water_temperature.tif", quantity="water_temperature"),))
 
-    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
+    monkeypatch.setattr("trid3nt.workflows.runtime.primitives.publish", _publish)
     run = {**basin.run, "module": "telemac3d"}
     result = asyncio.run(door.publish_outputs(
         run=run,

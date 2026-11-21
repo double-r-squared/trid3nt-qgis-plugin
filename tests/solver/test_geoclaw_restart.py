@@ -10,12 +10,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.store import objects as storage
-from trid3nt_server.workflows.geoclaw import workflow
-from trid3nt_server.workflows.geoclaw.authoring import restart
-from trid3nt_server.workflows.geoclaw.errors import GeoclawError
-from trid3nt_server.workflows.geoclaw.modules import GEO
-from trid3nt_server.workflows.geoclaw.templates.tsunami_inundation import tsunami_inundation as template
+from trid3nt.store import objects as storage
+from trid3nt.workflows.geoclaw import workflow
+from trid3nt.workflows.geoclaw.authoring import restart
+from trid3nt.workflows.geoclaw.errors import GeoclawError
+from trid3nt.workflows.geoclaw.modules import GEO
+from trid3nt.workflows.geoclaw.templates.tsunami_inundation import tsunami_inundation as template
 
 _WORKER = Path(__file__).resolve().parents[2] / "workers" / "geoclaw" / "entrypoint.py"
 _spec = importlib.util.spec_from_file_location("geoclaw_entrypoint_restart", _WORKER)

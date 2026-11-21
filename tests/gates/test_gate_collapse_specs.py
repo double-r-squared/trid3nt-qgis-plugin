@@ -9,9 +9,9 @@ from __future__ import annotations
 import pytest
 
 import trid3nt_server  # noqa: F401 -- triggers tool registration
-from trid3nt_server.inputs.gate.cards.estimate import resolve_provider
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.inputs.gate import confirm as _core
+from trid3nt_harness.inputs.gate.cards.estimate import resolve_provider
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt_harness.inputs.gate import confirm as _core
 
 
 #: No engine declares a per-engine solver card: the mesh session presents the

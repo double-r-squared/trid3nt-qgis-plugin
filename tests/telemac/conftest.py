@@ -28,7 +28,7 @@ def _offline_cas_parse(monkeypatch: pytest.MonkeyPatch) -> None:
     # function so its tests exercise it with the container boundary stubbed one
     # level lower.
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.authoring.serializer.validate_authored_steering",
+        "trid3nt.workflows.telemac.authoring.serializer.validate_authored_steering",
         _parsed)
 
 
@@ -68,7 +68,7 @@ def telemac_result(monkeypatch: pytest.MonkeyPatch):
                      for name in varnames},
         }
         monkeypatch.setattr(
-            "trid3nt_server.workflows.telemac.modules.outputs.read_selafin",
+            "trid3nt.workflows.telemac.modules.outputs.read_selafin",
             lambda _path: mesh)
         return mesh
 

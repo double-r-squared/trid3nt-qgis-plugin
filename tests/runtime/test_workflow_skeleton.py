@@ -14,8 +14,8 @@ from typing import Any
 import pytest
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server.inputs.input import Input
-from trid3nt_server.workflows.runtime import DeclarationError, Workflow
+from trid3nt.inputs.input import Input
+from trid3nt.workflows.runtime import DeclarationError, Workflow
 
 
 # --- (2) hooks: silent by default, effective when filled --------------------- #
@@ -61,15 +61,15 @@ def _workflow(cls=_Stub, **kw):
 
 def test_the_hooks_are_silent_by_default():
     wf = _workflow()
-    from trid3nt_server.workflows.runtime.workflow import RunResult
+    from trid3nt.workflows.runtime.workflow import RunResult
 
     assert wf.checks(RunResult(value=_Layer()), {}) == ()
 
 
 @pytest.mark.asyncio
 async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
-    from trid3nt_server.workflows.runtime import RunResult
-    from trid3nt_server.workflows.runtime import run_output
+    from trid3nt.workflows.runtime import RunResult
+    from trid3nt.workflows.runtime import run_output
 
     class Checked(_Stub):
         def checks(self, run, inputs):
@@ -86,7 +86,7 @@ async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
 
 # --- (3) the registration factory synthesizes the wire ---------------------- #
 def test_the_generated_signature_is_the_declaration_plus_controls():
-    from trid3nt_server.workflows.runtime.workflow import _wire_signature
+    from trid3nt.workflows.runtime.workflow import _wire_signature
 
     params = (
         Input(name="location", desc="a place"),
@@ -115,7 +115,7 @@ def test_an_argument_the_tool_does_not_declare_is_refused_by_name():
     nothing is close to says so, and nothing is launched."""
     import asyncio
 
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     out = asyncio.run(TOOL_REGISTRY["telemac_dye_release"].fn(
         spill_duraton_s=600.0, cores=8, description="a dye run"))
@@ -134,7 +134,7 @@ def test_a_call_carrying_input_mode_is_refused_by_name():
     """The mode is the person's setting, so a call stating it is an unknown input like any other."""
     import asyncio
 
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     out = asyncio.run(TOOL_REGISTRY["telemac_dye_release"].fn(input_mode="auto"))
     assert out["status"] == "error" and out["error_code"] == "INPUT_UNNAMED"
@@ -144,8 +144,8 @@ def test_a_call_carrying_input_mode_is_refused_by_name():
 def test_a_required_param_is_required_on_the_schema_and_says_so_on_its_line():
     """What the fill refuses unstated is what the model is told it must state:
     the schema's ``required`` and the docstring line read the same predicate."""
-    from trid3nt_server.model.adapters.adapter import _tool_schema
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_harness.model.adapters.adapter import _tool_schema
+    from trid3nt.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["telemac_rain_on_grid"].fn
     wired = [p for p in fn.workflow.inputs if p.fills_from_user]
@@ -163,7 +163,7 @@ def test_values_and_rows_are_documented_in_one_section_in_wire_order():
     """One body, one section: required values, defaulted ones, then the optional
     values and the rows in the order the wire carries them, each row's line still
     saying what a supplied layer is and how the run fills it otherwise."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["telemac_rain_on_grid"].fn
     doc = fn.__doc__
@@ -182,7 +182,7 @@ def test_values_and_rows_are_documented_in_one_section_in_wire_order():
 
 
 def test_every_declared_param_is_on_the_real_tools_wire_and_docstring():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     for name in ("telemac_do_sag", "telemac_dye_release"):
         fn = TOOL_REGISTRY[name].fn
@@ -195,11 +195,11 @@ def test_every_declared_param_is_on_the_real_tools_wire_and_docstring():
 def test_a_stated_seated_input_reaches_the_sheet_as_the_users():
     import asyncio
 
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
     from seated import resolve_params
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
-    from trid3nt_server.workflows.runtime.fill import ACCEPTED, Fill, fill
+    from trid3nt.workflows.runtime.fill import ACCEPTED, Fill, fill
 
     state = asyncio.run(fill(Fill(workflow=wf), {"vertical_frame": "IGLD85",
                                                   "mesh_resolution_m": 30.0}))
@@ -217,9 +217,9 @@ def test_a_param_edited_on_the_review_card_is_what_the_run_records():
     template's starting one."""
     import asyncio
 
-    from trid3nt_server.workflows.runtime import RunResult
-    from trid3nt_server.workflows.runtime.fill import Fill, fill
-    from trid3nt_server.workflows.telemac.workflow import _seat_on
+    from trid3nt.workflows.runtime import RunResult
+    from trid3nt.workflows.runtime.fill import Fill, fill
+    from trid3nt.workflows.telemac.workflow import _seat_on
 
     class Edited(_Stub):
         async def launch(self, state):
@@ -245,7 +245,7 @@ def test_a_param_edited_on_the_review_card_is_what_the_run_records():
 
 def _reach_mesh(**params):
     """The MESH recipe a reach template writes, with test values for its ask."""
-    from trid3nt_server.tools.mesh.tool import tool
+    from trid3nt.tools.mesh.tool import tool
 
     params.setdefault("extent", "reach_polygon")
     return tool.build_mesh(mesher="om2d", kind="unstructured_tri", **params)
@@ -272,7 +272,7 @@ async def test_a_retryable_coercion_failure_propagates_with_its_suggestions():
 
 @pytest.mark.asyncio
 async def test_a_typed_coercion_refusal_keeps_its_own_error_code():
-    from trid3nt_server.inputs.user_input import WireArgsError
+    from trid3nt.inputs.user_input import WireArgsError
 
     def _typed(args):
         raise WireArgsError("needs a location", error_code="TELEMAC_PARAMS_INCOMPLETE")

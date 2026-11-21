@@ -17,18 +17,18 @@ from trid3nt_contracts.coverage import UnitField, Member
 _DATED = {"value": Member(field="value", unit=UnitField(field="unit")), "time": Member(field="result_date"),
           "site": Member(field="site_id")}
 
-from trid3nt_server.inputs.boundary import OPEN_TYPES, RATING, RUN_TYPES, boundary_runs
-from trid3nt_server.inputs.boundary import roles_from_runs
-from trid3nt_server.inputs.domain import domain
-from trid3nt_server.inputs.observation import (
+from trid3nt.inputs.boundary import OPEN_TYPES, RATING, RUN_TYPES, boundary_runs
+from trid3nt.inputs.boundary import roles_from_runs
+from trid3nt.inputs.domain import domain
+from trid3nt.inputs.observation import (
     Observation,
     ObservationError,
     observation,
 )
-from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.inputs.input import Input
-from trid3nt_server.workflows.runtime.data import tool
-from trid3nt_server.inputs.slots import OBSERVE, ingest_slot
+from trid3nt.inputs.user_input import UserInputError
+from trid3nt.inputs.input import Input
+from trid3nt.workflows.runtime.data import tool
+from trid3nt.inputs.slots import OBSERVE, ingest_slot
 from seated import row_inputs
 
 _POLYGON = {"type": "Polygon", "coordinates": [[

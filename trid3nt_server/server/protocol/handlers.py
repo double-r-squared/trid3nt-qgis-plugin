@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from trid3nt_contracts.secrets import SecretAddEnvelopePayload
-from trid3nt_server.model.credentials.resolver import set_session_credential
+from trid3nt.credentials.resolver import set_session_credential
 from trid3nt_server.server.dispatch.emitter import _dispatch_tool_and_persist, _ensure_emitter
 from trid3nt_server.server.dispatch.results import _reconstruct_run_signature
 from trid3nt_server.server.session.state import SessionState, _ROOT_STREAM_KEY

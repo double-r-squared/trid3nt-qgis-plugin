@@ -12,19 +12,19 @@ from pathlib import Path
 import pytest
 from pyproj import Transformer
 
-from trid3nt_server.inputs.point import PointNotViableError
-from trid3nt_server.inputs.temporal import Series
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow import workflow as W
-from trid3nt_server.workflows.modflow.authoring import mesh_files as MF
-from trid3nt_server.workflows.modflow.authoring.observations import observation_files, place_observations
-from trid3nt_server.workflows.modflow.authoring.simulation import serialize
-from trid3nt_server.workflows.modflow.authoring.validate import validate_authored_simulation
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF, GWT
-from trid3nt_server.workflows.modflow.modules.outputs import Solved
-from trid3nt_server.workflows.runtime import primitives as P
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.inputs.point import PointNotViableError
+from trid3nt.inputs.temporal import Series
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow import workflow as W
+from trid3nt.workflows.modflow.authoring import mesh_files as MF
+from trid3nt.workflows.modflow.authoring.observations import observation_files, place_observations
+from trid3nt.workflows.modflow.authoring.simulation import serialize
+from trid3nt.workflows.modflow.authoring.validate import validate_authored_simulation
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF, GWT
+from trid3nt.workflows.modflow.modules.outputs import Solved
+from trid3nt.workflows.runtime import primitives as P
+from trid3nt.workflows.runtime.sheet import fill
 
 _SIDE = 3
 _N = _SIDE * _SIDE
@@ -356,7 +356,7 @@ def solved(monkeypatch, tmp_path):
         dest.write_text(_CSV)
         return str(dest)
 
-    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result", download)
+    monkeypatch.setattr("trid3nt.workflows.solver.solver.download_result", download)
     sheet = _fill(Observations=[{"type": "head", "name": "h1", "at": "p_centre", "layer": 1},
                                 {"type": "head", "name": "h2", "at": "p_corner", "layer": 1}])
     return Solved({"run_id": "R1", "utm_epsg": 32617, "sheet": sheet, "mesh": {}}, GWF)

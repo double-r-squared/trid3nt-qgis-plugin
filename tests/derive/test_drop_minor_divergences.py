@@ -15,8 +15,8 @@ import geopandas as gpd
 import pytest
 
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_server.tools.derive import DeriveError
-from trid3nt_server.tools.derive.drop_minor_divergences.drop_minor_divergences import (
+from trid3nt.tools.derive import DeriveError
+from trid3nt.tools.derive.drop_minor_divergences.drop_minor_divergences import (
     dendritic, drop_minor_divergences)
 
 _FIXTURE = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "nhd_hr" / "des_moines_braid_flowlines.geojson"
@@ -59,7 +59,7 @@ def test_each_divergence_is_left_by_its_main_line_alone(tmp_path):
 
 def test_a_kept_line_running_into_a_dropped_one_is_counted(tmp_path, monkeypatch):
     notes: list[str] = []
-    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
+    monkeypatch.setattr("trid3nt.inputs.run_notes.journal_note", notes.append)
 
     def tributary_into_the_minor_branch(frame):
         minor = frame.loc[frame["nhdplusid"] == 22000900030701, "hydroseq"].iloc[0]
@@ -95,7 +95,7 @@ def test_a_layer_of_minor_paths_only_refuses(tmp_path):
 
 
 def test_an_unknown_layer_id_refuses_by_name(monkeypatch):
-    monkeypatch.setattr("trid3nt_server.render.uri_registry.lookup_layer_for_handle", lambda _h: None)
+    monkeypatch.setattr("trid3nt.render.uri_registry.lookup_layer_for_handle", lambda _h: None)
 
     with pytest.raises(DeriveError, match="nope") as refused:
         asyncio.run(drop_minor_divergences(flowlines="nope"))

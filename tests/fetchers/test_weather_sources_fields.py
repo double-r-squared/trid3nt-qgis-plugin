@@ -19,20 +19,20 @@ from types import SimpleNamespace
 import pyogrio
 import pytest
 
-from trid3nt_server.errors import untabled_readings_note
-from trid3nt_server.inputs import run_notes
-from trid3nt_server.inputs.fields import FieldError, Measured, records
-from trid3nt_server.inputs.observation import ObservationError
-from trid3nt_server.inputs.weather import weather
-from trid3nt_server.tools.fetchers._router import registration
-from trid3nt_server.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
-from trid3nt_server.tools.fetchers.climate.fetch_climate_normals import hooks as normals
-from trid3nt_server.tools.fetchers.soil.fetch_snotel_snow import hooks as snotel
-from trid3nt_server.tools.fetchers.weather.fetch_airnow_air_quality import hooks as airnow
-from trid3nt_server.tools.fetchers.weather.fetch_asos_metar import hooks as asos
-from trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements import hooks as openaq
-from trid3nt_server.tools.fetchers.weather.fetch_raws_weather import hooks as raws
-from trid3nt_server.tools.fetchers.weather.fetch_storm_events_db import hooks as storms
+from trid3nt.errors import untabled_readings_note
+from trid3nt.inputs import run_notes
+from trid3nt.inputs.fields import FieldError, Measured, records
+from trid3nt.inputs.observation import ObservationError
+from trid3nt.inputs.weather import weather
+from trid3nt.tools.fetchers._router import registration
+from trid3nt.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
+from trid3nt.tools.fetchers.climate.fetch_climate_normals import hooks as normals
+from trid3nt.tools.fetchers.soil.fetch_snotel_snow import hooks as snotel
+from trid3nt.tools.fetchers.weather.fetch_airnow_air_quality import hooks as airnow
+from trid3nt.tools.fetchers.weather.fetch_asos_metar import hooks as asos
+from trid3nt.tools.fetchers.weather.fetch_openaq_measurements import hooks as openaq
+from trid3nt.tools.fetchers.weather.fetch_raws_weather import hooks as raws
+from trid3nt.tools.fetchers.weather.fetch_storm_events_db import hooks as storms
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "fetcher_fields"
 _SOURCES = ("fetch_asos_metar", "fetch_raws_weather", "fetch_openaq_measurements", "fetch_airnow_air_quality",

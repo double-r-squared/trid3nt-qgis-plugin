@@ -13,10 +13,10 @@ from typing import Any
 import pytest
 
 from trid3nt_contracts.execution import NWMStreamflowLayerURI
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._fetch_common import FetchError
-from trid3nt_server.tools.fetchers.hydrology.fetch_noaa_nwm_streamflow import hooks as ns
-from trid3nt_server.tools.fetchers.hydrology.fetch_noaa_nwm_streamflow.hooks import (
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.fetchers._fetch_common import FetchError
+from trid3nt.tools.fetchers.hydrology.fetch_noaa_nwm_streamflow import hooks as ns
+from trid3nt.tools.fetchers.hydrology.fetch_noaa_nwm_streamflow.hooks import (
     NWMStreamflowEmptyError,
     NWMStreamflowError,
     NWMStreamflowInputError,

@@ -11,7 +11,7 @@ rest and make up the sixth slice.
 | `_fakes/` | shared doubles: the MCP client, the websocket, the case summary, the reach chain, the read-through injector | - | - |
 | `fixtures/` | data the tests read; no code | - | - |
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 23 | 274 |
-| `contracts/` | the typed wire and registry contracts, the schema mirror and its drift | 16 | 351 |
+| `contracts/` | the typed wire and registry contracts, the schema mirror and its drift, the one-way package imports | 17 | 366 |
 | `credentials/` | credential resolution, the access-token gate and the connect handshake | 4 | 50 |
 | `derive/` | the derive tools, the two session tools | 4 | 58 |
 | `render/` | the emitter, the uri registry, publication, the format set, charts | 35 | 431 |

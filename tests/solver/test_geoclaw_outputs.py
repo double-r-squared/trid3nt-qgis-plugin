@@ -17,15 +17,15 @@ import numpy as np
 import pytest
 import shapely.geometry
 
-from trid3nt_server.inputs import Point
-from trid3nt_server.inputs.point import PointNotViableError
-from trid3nt_server.store import objects as storage
-from trid3nt_server.workflows.geoclaw.errors import GeoclawError
-from trid3nt_server.workflows.geoclaw.modules import GEO
-from trid3nt_server.workflows.geoclaw.modules.outputs import _READ_BY, Solved
-from trid3nt_server.workflows.runtime.primitives import OutputEmpty, Primitive, field, max_over_time, outline, peak, series
-from trid3nt_server.workflows.runtime.sheet import fill
-from trid3nt_server.workflows.solver.solver import RunOutputMissing
+from trid3nt.inputs import Point
+from trid3nt.inputs.point import PointNotViableError
+from trid3nt.store import objects as storage
+from trid3nt.workflows.geoclaw.errors import GeoclawError
+from trid3nt.workflows.geoclaw.modules import GEO
+from trid3nt.workflows.geoclaw.modules.outputs import _READ_BY, Solved
+from trid3nt.workflows.runtime.primitives import OutputEmpty, Primitive, field, max_over_time, outline, peak, series
+from trid3nt.workflows.runtime.sheet import fill
+from trid3nt.workflows.solver.solver import RunOutputMissing
 
 _FIXTURE = Path(__file__).parents[1] / "fixtures" / "geoclaw" / "chile2010_fgmax_fgout"
 _RUN = "run-geoclaw-outputs"
@@ -325,7 +325,7 @@ def test_the_table_names_exactly_the_outputs_the_reads_know(store):
 
 
 def test_a_run_whose_first_frame_holds_no_wet_cell_refuses_as_no_water(store):
-    from trid3nt_server.workflows.geoclaw.modules.outputs import refuse_dry_start
+    from trid3nt.workflows.geoclaw.modules.outputs import refuse_dry_start
 
     with pytest.raises(GeoclawError) as caught:
         refuse_dry_start(_solved(GEO_DRY_TOLERANCE=1.0e9))
@@ -334,7 +334,7 @@ def test_a_run_whose_first_frame_holds_no_wet_cell_refuses_as_no_water(store):
 
 
 def test_a_run_whose_first_frame_holds_water_or_no_frame_at_its_start_passes(store):
-    from trid3nt_server.workflows.geoclaw.modules.outputs import refuse_dry_start
+    from trid3nt.workflows.geoclaw.modules.outputs import refuse_dry_start
 
     refuse_dry_start(_solved())
     refuse_dry_start(_solved(GEO_DRY_TOLERANCE=1.0e9, CLAW_T0=5.0))

@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.inputs.extent import as_bbox
-from trid3nt_server.tools.tool_arg_normalizer import (
+from trid3nt.inputs.extent import as_bbox
+from trid3nt_harness.tools.tool_arg_normalizer import (
     normalize_args,
     parse_forcing_string,
     snake_case,

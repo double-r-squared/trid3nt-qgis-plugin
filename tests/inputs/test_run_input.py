@@ -12,14 +12,14 @@ import json
 
 import pytest
 
-from trid3nt_server.inputs import run as run_input
-from trid3nt_server.inputs.run import FinishedRun, FinishedRunError
-from trid3nt_server.inputs.slots import RUN, ingest_slot
-from trid3nt_server.render import uri_registry
-from trid3nt_server.store import objects as storage
-from trid3nt_server.tools.mesh import step
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.runtime import journal
+from trid3nt.inputs import run as run_input
+from trid3nt.inputs.run import FinishedRun, FinishedRunError
+from trid3nt.inputs.slots import RUN, ingest_slot
+from trid3nt.render import uri_registry
+from trid3nt.store import objects as storage
+from trid3nt.tools.mesh import step
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.runtime import journal
 
 _RUN = "01M76H6GJN2RN18XTTVBSHFBZ1"
 _OTHER = "01M76H6GJN2RN18XTTVBSHFBZ9"
@@ -151,7 +151,7 @@ def _hold(run_id, **over):
 
 @pytest.fixture
 def said(monkeypatch):
-    from trid3nt_server.inputs import run_notes
+    from trid3nt.inputs import run_notes
 
     lines: list[str] = []
     monkeypatch.setattr(run_notes, "journal_note", lines.append)
@@ -161,7 +161,7 @@ def said(monkeypatch):
 @pytest.fixture
 def card(monkeypatch):
     """The review card: what it was handed, and the run a person picks on it (unpicked, the offered one)."""
-    from trid3nt_server.inputs.gate import input_review
+    from trid3nt_harness.inputs.gate import input_review
 
     seen: dict = {"pick": None}
 
@@ -212,8 +212,8 @@ def test_a_case_holding_no_finished_run_of_the_engines_refuses_naming_them(case,
 
 
 def test_the_fill_reads_an_unstated_run_from_the_case(case, said, card):
-    from trid3nt_server.inputs.input import Input
-    from trid3nt_server.workflows.runtime import fill
+    from trid3nt.inputs.input import Input
+    from trid3nt.workflows.runtime import fill
 
     row = Input(RUN, name="run", coercion={"engines": ("modflow",)})
     env = fill._Env(data={"run": row}, workflow="calibrate")

@@ -12,7 +12,7 @@ import pytest
 import rasterio
 from rasterio.io import MemoryFile
 
-from trid3nt_server.render.publish import (
+from trid3nt.render.publish import (
     PublishLayerError,
     _build_cog_with_overviews,
     _ensure_raster_has_overviews,
@@ -85,7 +85,7 @@ def test_publish_layer_vector_returns_its_uri_and_registers_nothing(
     """A vector: NO raise, NO registration."""
     calls: list[tuple] = []
     monkeypatch.setattr(
-        "trid3nt_server.render.publish.observe_published_layer",
+        "trid3nt.render.publish.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
 
@@ -198,10 +198,10 @@ def test_publish_layer_auto_translates_no_overview_cog(
         return new_uri
 
     monkeypatch.setattr(
-        "trid3nt_server.render.publish._read_raster_bytes", _fake_read
+        "trid3nt.render.publish._read_raster_bytes", _fake_read
     )
     monkeypatch.setattr(
-        "trid3nt_server.render.publish._write_overview_cog", _fake_write
+        "trid3nt.render.publish._write_overview_cog", _fake_write
     )
 
     out = publish_layer(
@@ -221,7 +221,7 @@ def test_publish_layer_overview_cog_published_unchanged(
     good = _cog_with_overviews_bytes()
 
     monkeypatch.setattr(
-        "trid3nt_server.render.publish._read_raster_bytes",
+        "trid3nt.render.publish._read_raster_bytes",
         lambda uri: good,
     )
 
@@ -229,7 +229,7 @@ def test_publish_layer_overview_cog_published_unchanged(
         raise AssertionError("must NOT re-translate an overview-bearing COG")
 
     monkeypatch.setattr(
-        "trid3nt_server.render.publish._write_overview_cog", _must_not_write
+        "trid3nt.render.publish._write_overview_cog", _must_not_write
     )
 
     out = publish_layer(

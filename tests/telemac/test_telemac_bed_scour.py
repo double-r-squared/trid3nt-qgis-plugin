@@ -14,13 +14,13 @@ from pathlib import Path
 
 import yaml
 
-from trid3nt_server.workflows.telemac.workflow import stated
+from trid3nt.workflows.telemac.workflow import stated
 from seated import REACH, SEATED, row_inputs, value_inputs
-from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.telemac.templates.bed_scour import (
+from trid3nt.workflows.telemac.modules import T2D
+from trid3nt.workflows.telemac.templates.bed_scour import (
     bed_scour,
 )
-from trid3nt_server.inputs.slots import BED, DISCHARGE, DOMAIN
+from trid3nt.inputs.slots import BED, DISCHARGE, DOMAIN
 from seated import value_inputs, row_inputs
 
 _MODULE = bed_scour
@@ -48,7 +48,7 @@ def _rows() -> dict:
 
 
 def _recipe():
-    from trid3nt_server.tools.mesh.tool import recipe_from_plan_value
+    from trid3nt.tools.mesh.tool import recipe_from_plan_value
 
     return recipe_from_plan_value(_step("mesh").kwargs["mesh"])
 
@@ -131,7 +131,7 @@ def test_the_marker_is_stated_as_the_four_source_keywords_by_name():
 def test_the_sources_composite_writes_only_the_sources_file():
     """``Sources(window_s=)`` reads the discharge and the tracer value
     off the sheet by the keywords stated above, and writes the SOURCES FILE."""
-    from trid3nt_server.workflows.telemac.modules.telemac2d import SOURCES_FILENAME
+    from trid3nt.workflows.telemac.modules.telemac2d import SOURCES_FILENAME
 
     slots, files = T2D.COMPOSITES["sources"].expand(
         {"window_s": 300.0, "settled": {"until_s": 3600.0},

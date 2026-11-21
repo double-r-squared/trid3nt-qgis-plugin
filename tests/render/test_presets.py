@@ -11,8 +11,8 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from trid3nt_server.render import presets
-from trid3nt_server.render.presets import Preset, Scale
+from trid3nt.render import presets
+from trid3nt.render.presets import Preset, Scale
 
 
 def _doc(resolved):

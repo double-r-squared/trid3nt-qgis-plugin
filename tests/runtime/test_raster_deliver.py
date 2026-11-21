@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 import rasterio
 
-from trid3nt_server.store import objects as storage
-from trid3nt_server.workflows.runtime import primitives as P
+from trid3nt.store import objects as storage
+from trid3nt.workflows.runtime import primitives as P
 
 _BOUNDS = (-77.0, -45.0, -72.0, -41.0)
 

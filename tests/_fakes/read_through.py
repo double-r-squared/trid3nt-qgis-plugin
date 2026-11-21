@@ -12,7 +12,7 @@ def make_read_through_s3_injector(store: dict[str, bytes]):
 
     Mints ``s3://`` URIs, honours hit / miss / write against ``store`` keyed by object
     KEY, and short-circuits ``live-no-cache`` as the real shim does."""
-    from trid3nt_server.tools.cache import (
+    from trid3nt.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,

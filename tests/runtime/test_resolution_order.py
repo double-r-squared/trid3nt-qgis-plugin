@@ -13,10 +13,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.workflows.runtime.errors import StepFailedError
-from trid3nt_server.inputs.input import Input
-from trid3nt_server.inputs.slots import DOMAIN
-from trid3nt_server.workflows.runtime import fill
+from trid3nt.workflows.runtime.errors import StepFailedError
+from trid3nt.inputs.input import Input
+from trid3nt.inputs.slots import DOMAIN
+from trid3nt.workflows.runtime import fill
 
 
 @pytest.fixture
@@ -45,7 +45,7 @@ def rungs(monkeypatch):
     monkeypatch.setattr(fill, "_matched", _matched)
     monkeypatch.setattr(fill, "_produced", _produced)
     monkeypatch.setattr(fill, "_fetcher_row", lambda *a: None)
-    monkeypatch.setattr("trid3nt_server.inputs.slots.ask_on_canvas", _canvas)
+    monkeypatch.setattr("trid3nt.inputs.slots.ask_on_canvas", _canvas)
     return SimpleNamespace(reached=reached, answer=reached_answer)
 
 
@@ -112,9 +112,9 @@ async def test_a_row_with_no_source_is_drawn_then_refused(rungs):
 
 
 def test_the_fill_over_the_template_over_the_engine_default():
-    from trid3nt_server.workflows.telemac.templates.dye_release.dye_release import (
+    from trid3nt.workflows.telemac.templates.dye_release.dye_release import (
         STEERING)
-    from trid3nt_server.workflows.telemac.workflow import stated
+    from trid3nt.workflows.telemac.workflow import stated
 
     engine = STEERING.slot("FRICTION_COEFFICIENT").engine_default
     template = stated(steering=STEERING, keywords={})["FRICTION_COEFFICIENT"]

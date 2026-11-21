@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.processing_contracts import ProcessingRequestPayload
 
-from trid3nt_server.inputs.gate.pending import _PENDING_PROCESSING
-from trid3nt_server.settings import setting
+from trid3nt_harness.inputs.gate.pending import _PENDING_PROCESSING
+from trid3nt.settings import setting
 
 if TYPE_CHECKING:
     from trid3nt_contracts.processing_contracts import ProcessingResponsePayload

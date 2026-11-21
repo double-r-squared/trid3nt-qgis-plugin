@@ -16,9 +16,9 @@ from typing import Any
 import pytest
 from botocore.exceptions import ClientError
 
-import trid3nt_server.workflows.solver.solver as solver_mod
-from trid3nt_server.store import objects as storage
-from trid3nt_server.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
+import trid3nt.workflows.solver.solver as solver_mod
+from trid3nt.store import objects as storage
+from trid3nt.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
 
 
 
@@ -115,7 +115,7 @@ def test_launch_writes_manifest_to_rundir(
 ) -> None:
     """launch_local_solver must write manifest.json to the rundir so the shim
     can read it via the ``--manifest manifest.json`` flag."""
-    from trid3nt_server.workflows.solver.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt.workflows.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     storage.set_client(s3)
@@ -176,7 +176,7 @@ def test_subprocess_runner_exit0_produces_ok_completion(
 ) -> None:
     """With a real subprocess that exits 0, the supervisor must write
     completion.json with status='ok' and upload it to the runs bucket."""
-    from trid3nt_server.workflows.solver.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt.workflows.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     storage.set_client(s3)
@@ -228,7 +228,7 @@ def test_subprocess_runner_nonzero_exit_produces_error_completion(
 ) -> None:
     """A subprocess that exits non-zero must produce status='error' in
     completion.json."""
-    from trid3nt_server.workflows.solver.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt.workflows.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     storage.set_client(s3)

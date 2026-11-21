@@ -18,13 +18,13 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.geoclaw.authoring.rundata import serialize
-from trid3nt_server.workflows.geoclaw.authoring.staged_check import (
+from trid3nt.workflows.geoclaw.authoring.rundata import serialize
+from trid3nt.workflows.geoclaw.authoring.staged_check import (
     check_staged_run,
 )
-from trid3nt_server.workflows.geoclaw.errors import GeoclawError
-from trid3nt_server.workflows.geoclaw.modules import GEO
-from trid3nt_server.workflows.runtime.sheet import Sheet, fill
+from trid3nt.workflows.geoclaw.errors import GeoclawError
+from trid3nt.workflows.geoclaw.modules import GEO
+from trid3nt.workflows.runtime.sheet import Sheet, fill
 
 #: chile2010's setrun as its own rundata leaves it: every attribute the
 #: example assigns, final value, paths already the staged file names the
@@ -150,7 +150,7 @@ def test_a_mandatory_keyword_nothing_stated_refuses_naming_it(tmp_path):
 
 
 def test_an_identifier_no_data_attribute_answers_refuses_naming_it(tmp_path):
-    from trid3nt_server.workflows.runtime.sheet import Provenance, Filled
+    from trid3nt.workflows.runtime.sheet import Provenance, Filled
     from trid3nt_contracts.common import Origin
 
     slot = GEO.MODULE_INPUT["CLAW_TFINAL"]

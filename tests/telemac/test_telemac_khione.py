@@ -10,22 +10,22 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring.atmosphere import COLUMNS
-from trid3nt_server.workflows.telemac.errors import TelemacError
-from trid3nt_server.workflows.telemac.modules import (
+from trid3nt.workflows.telemac.authoring.atmosphere import COLUMNS
+from trid3nt.workflows.telemac.errors import TelemacError
+from trid3nt.workflows.telemac.modules import (
     KHIONE,
     T2D,
     T3D,
     SlotRefused,
     fill,
 )
-from trid3nt_server.workflows.telemac.modules.khione import (
+from trid3nt.workflows.telemac.modules.khione import (
     RESULT_FILENAME,
     STEERING_FILENAME,
 )
-from trid3nt_server.workflows.runtime.module import identify_on
-from trid3nt_server.workflows.telemac.modules.telemac2d import Atmosphere
-from trid3nt_server.workflows.telemac.workflow import run_bodies
+from trid3nt.workflows.runtime.module import identify_on
+from trid3nt.workflows.telemac.modules.telemac2d import Atmosphere
+from trid3nt.workflows.telemac.workflow import run_bodies
 
 #: The column a DAMOCLES line is read to, which is where the engine truncates
 #: this keyword's own value.
@@ -214,7 +214,7 @@ def test_a_column_two_readers_of_this_run_disagree_on_refuses_by_name(
         column: str, beside: dict):
     """One file carries one number per instant, so a column the host reads in
     one unit and the ice in another has no value both can be driven by."""
-    from trid3nt_server.workflows.telemac.modules import WAQTEL
+    from trid3nt.workflows.telemac.modules import WAQTEL
 
     coupling = [_ice()] + ([WAQTEL.thermal()] if beside.pop("coupling", None)
                            else [])
@@ -252,7 +252,7 @@ def test_an_ice_run_writes_no_solar_column_because_it_computes_its_own():
 
 
 def test_every_row_the_table_carries_is_a_mnemonic_the_dictionary_spells():
-    from trid3nt_server.workflows.runtime.module import _spelled
+    from trid3nt.workflows.runtime.module import _spelled
 
     slot = KHIONE.slot(KHIONE.PRINTOUTS)
     assert len(KHIONE.MODULE_OUTPUT) == 20

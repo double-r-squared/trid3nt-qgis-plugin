@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.key_statement import arcgis_states_key, ogc_states_key, openapi_states_key
+from trid3nt.tools.fetchers._router.key_statement import arcgis_states_key, ogc_states_key, openapi_states_key
 
 
 def test_an_arcgis_token_answer_states_a_key_and_a_service_document_states_open() -> None:

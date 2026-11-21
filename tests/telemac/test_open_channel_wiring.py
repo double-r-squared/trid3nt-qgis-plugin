@@ -11,7 +11,7 @@ import asyncio
 
 
 def test_an_absent_carrier_authors_no_channel_and_hands_back_the_level():
-    from trid3nt_server.workflows.telemac.authoring.opening import open_channel
+    from trid3nt.workflows.telemac.authoring.opening import open_channel
 
     stage = object()
     opened = asyncio.run(open_channel(mesh={}, files={}, friction_law=4,

@@ -16,13 +16,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.tools.mesh.session import MeshSession
-from trid3nt_server.tools.mesh.tool import mesh_op, tool
-from trid3nt_server.workflows.geoclaw.authoring import grid_keywords, serialize
-from trid3nt_server.workflows.geoclaw.authoring.staged_check import check_staged_run
-from trid3nt_server.workflows.geoclaw.modules import GEO
-from trid3nt_server.workflows.geoclaw.templates.storm_surge import storm_surge as template
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.tools.mesh.session import MeshSession
+from trid3nt.tools.mesh.tool import mesh_op, tool
+from trid3nt.workflows.geoclaw.authoring import grid_keywords, serialize
+from trid3nt.workflows.geoclaw.authoring.staged_check import check_staged_run
+from trid3nt.workflows.geoclaw.modules import GEO
+from trid3nt.workflows.geoclaw.templates.storm_surge import storm_surge as template
+from trid3nt.workflows.runtime.sheet import fill
 
 _STORM = Path(__file__).with_name("test_geoclaw_storm.py")
 _spec = importlib.util.spec_from_file_location("geoclaw_storm_fixes", _STORM)
@@ -63,7 +63,7 @@ def test_the_sheet_writes_the_surge_data_and_the_storm_file_and_passes_the_stage
 
 
 def test_a_storm_file_the_run_directory_lacks_refuses_at_the_staged_check(tmp_path):
-    from trid3nt_server.workflows.geoclaw.errors import GeoclawError
+    from trid3nt.workflows.geoclaw.errors import GeoclawError
 
     rundir = tmp_path / "run"
     sheet = _sheet(tmp_path)
@@ -107,7 +107,7 @@ def test_the_template_reads_only_inputs_it_declares_and_states_no_sea_level():
 
 def _data(monkeypatch, run, own=None):
     """The rows `_data` asks the world for, over a stand-in environment and a recording fetch."""
-    from trid3nt_server.workflows.geoclaw import workflow as gw
+    from trid3nt.workflows.geoclaw import workflow as gw
 
     asked = []
 
@@ -116,7 +116,7 @@ def _data(monkeypatch, run, own=None):
         return _fixes._doc()
 
     monkeypatch.setattr(gw, "_fetch", _fetch)
-    monkeypatch.setattr("trid3nt_server.inputs.geometry.read_geometry_doc", lambda source: source)
+    monkeypatch.setattr("trid3nt.inputs.geometry.read_geometry_doc", lambda source: source)
     standin = SimpleNamespace(steering=template.STEERING, template=template)
     standin._storm = lambda env, statement: gw.GeoclawWorkflow._storm(standin, env, statement)
     asyncio.run(gw.GeoclawWorkflow._data(standin, SimpleNamespace(run=run), {"GEO_SEA_LEVEL": 0.0, **(own or {})}, template.STEERING))
@@ -129,7 +129,7 @@ def _held(tmp_path, **over):
 
 
 def test_the_run_fetches_the_named_storm_over_the_level_1_box_and_counts_from_its_landfall(monkeypatch, tmp_path):
-    from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
+    from trid3nt.inputs.run_notes import bind_notes, drain_notes
 
     run = _held(tmp_path)
     token = bind_notes()
@@ -153,7 +153,7 @@ def test_a_stated_event_time_stands_and_a_supplied_track_is_not_fetched(monkeypa
 
 
 def test_a_run_naming_no_storm_refuses_before_any_fetch(monkeypatch, tmp_path):
-    from trid3nt_server.workflows.geoclaw.errors import GeoclawError
+    from trid3nt.workflows.geoclaw.errors import GeoclawError
 
     with pytest.raises(GeoclawError) as caught:
         _data(monkeypatch, _held(tmp_path, season=None))
@@ -162,8 +162,8 @@ def test_a_run_naming_no_storm_refuses_before_any_fetch(monkeypatch, tmp_path):
 
 
 def test_the_workflow_answers_for_the_storm_row_and_names_its_product():
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.geoclaw import workflow as gw
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.workflows.geoclaw import workflow as gw
 
     workflow = TOOL_REGISTRY["geoclaw_storm_surge"].fn.workflow
 

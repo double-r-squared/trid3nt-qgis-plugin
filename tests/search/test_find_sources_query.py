@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.tools.search.find_sources.find_sources import (
+from trid3nt_harness.tools.search.find_sources.find_sources import (
     FindSourcesAskError, find_sources, params_line)
 
 
@@ -16,27 +16,27 @@ def registry():
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY
 
 
 @pytest.fixture(scope="module")
 def source_index(registry):
-    import trid3nt_server.tools.search.search_tools.search_tools as dd
+    import trid3nt_harness.tools.search.search_tools.search_tools as dd
 
     dd._reset_index_for_tests()
     return dd._get_source_index()
 
 
 def _ranked(text, index):
-    from trid3nt_server.tools.search.tool_retrieval import ranked_docs
+    from trid3nt_harness.tools.search.tool_retrieval import ranked_docs
 
     return [index.tool_names[at] for at, _ in ranked_docs(text, index)]
 
 
 def test_the_source_index_holds_every_spec_served_fetcher_and_nothing_else(registry, source_index):
-    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+    from trid3nt.tools.fetchers._router.registration import registered_spec_names
 
     assert set(source_index.tool_names) == registered_spec_names()
     assert len(source_index.tool_names) == len(set(source_index.tool_names))
@@ -51,7 +51,7 @@ async def test_flood_zones_ranks_the_fema_zones_source_in_the_top_three(registry
 
 @pytest.mark.asyncio
 async def test_a_row_carries_what_the_source_is_what_it_takes_and_the_request_it_holds(registry):
-    from trid3nt_server.render.uri_registry import (
+    from trid3nt.render.uri_registry import (
         SessionUriRegistry, activate_registry, deactivate_registry)
 
     reg = SessionUriRegistry(session_id="query-case")
@@ -68,7 +68,7 @@ async def test_a_row_carries_what_the_source_is_what_it_takes_and_the_request_it
 
 
 def test_every_source_with_phrasings_is_in_the_top_three_of_at_least_one_of_them(registry, source_index):
-    import trid3nt_server.tools.search.search_tools.search_tools as dd
+    import trid3nt_harness.tools.search.search_tools.search_tools as dd
 
     corpus = dd._load_corpus()
     unreached = [name for name in sorted(source_index.tool_names) if corpus.get(name)
@@ -77,7 +77,7 @@ def test_every_source_with_phrasings_is_in_the_top_three_of_at_least_one_of_them
 
 
 def test_every_source_is_among_the_rows_its_own_name_returns(registry, source_index):
-    from trid3nt_server.tools.search.match import RANKED_ROWS
+    from trid3nt.tools.search.match import RANKED_ROWS
 
     wrong = [name for name in source_index.tool_names
              if name not in _ranked(name, source_index)[:RANKED_ROWS]]
@@ -85,7 +85,7 @@ def test_every_source_is_among_the_rows_its_own_name_returns(registry, source_in
 
 
 def test_a_source_left_out_of_the_index_is_no_longer_found_by_its_phrasings(registry):
-    import trid3nt_server.tools.search.search_tools.search_tools as dd
+    import trid3nt_harness.tools.search.search_tools.search_tools as dd
 
     snapshot = {name: entry for name, entry in registry.items() if name != "fetch_fema_nfhl_zones"}
     index = dd._build_source_index(registry_snapshot=snapshot)
@@ -100,7 +100,7 @@ async def test_neither_or_both_of_need_and_query_refuses_naming_both(args):
 
 
 def test_the_params_line_marks_required_enums_and_types(registry):
-    from trid3nt_server.tools.fetchers._router.registration import get_spec
+    from trid3nt.tools.fetchers._router.registration import get_spec
 
     assert params_line(get_spec("fetch_fema_nfhl_zones")).startswith("bbox*, zone")
     lines = [params_line(get_spec(n)) for n in ("fetch_usgs_nwis_gauges", "fetch_nws_event")]

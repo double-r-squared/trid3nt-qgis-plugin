@@ -16,13 +16,13 @@ import pytest
 from trid3nt_contracts.coverage import Member
 from shapely.geometry import box, mapping
 
-from trid3nt_server.inputs.bound_domain import Domain as Bound, bind_domain, reset_domain
-from trid3nt_server.inputs.domain import Domain
-from trid3nt_server.inputs.input import Input
-from trid3nt_server.inputs.observation import ObservationError, observation
-from trid3nt_server.inputs.slots import DISCHARGE, DOMAIN, LEVEL
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.workflows.runtime import fill
+from trid3nt.inputs.bound_domain import Domain as Bound, bind_domain, reset_domain
+from trid3nt.inputs.domain import Domain
+from trid3nt.inputs.input import Input
+from trid3nt.inputs.observation import ObservationError, observation
+from trid3nt.inputs.slots import DISCHARGE, DOMAIN, LEVEL
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.workflows.runtime import fill
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 _NLDI = _FIXTURES / "nhdplus_nldi"
@@ -47,7 +47,7 @@ _SITES = {site: _NLDI / f"nwis_{site}_dm_0km.fgb" for site in (
 @pytest.fixture(autouse=True)
 def _fixtures_are_the_layers_their_fetchers_wrote(monkeypatch):
     """A recorded layer is the product of the fetcher whose folder holds it, so it reads by that source's map."""
-    from trid3nt_server.render import uri_registry
+    from trid3nt.render import uri_registry
 
     made = {"usgs_nwis_gauges": "fetch_usgs_nwis_gauges", "nws_river_forecast": "fetch_nws_river_forecast",
             "noaa_nwm_streamflow": "fetch_noaa_nwm_streamflow"}

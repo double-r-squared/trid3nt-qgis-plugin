@@ -8,22 +8,22 @@ import logging
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.ws import AgentMessageChunkPayload, AgentThinkingChunkPayload, PipelineStatePayload, PipelineStep
 from trid3nt_contracts.message import Message
-from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.model.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_layers_present_note, build_tool_declarations, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result, system_prompt
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.render.charts import is_chart_emission_result
-from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
-from trid3nt_server.tools.search.fetch import FETCH, resolve_fetch
-from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
+from trid3nt_harness.model.adapters.model_selection import ModelSettings
+from trid3nt_harness.model.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_layers_present_note, build_tool_declarations, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result, system_prompt
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.render.charts import is_chart_emission_result
+from trid3nt.tools.fetchers._router.registration import registered_spec_names
+from trid3nt_harness.tools.search.fetch import FETCH, resolve_fetch
+from trid3nt_harness.tools.search.tool_retrieval import CORE_FLOOR
 from trid3nt_server.render.pipeline_emitter import bind_turn_case
 from trid3nt_server.server.turn.compaction import complete_compaction_card, mint_compaction_card
-from trid3nt_server.render.uri_registry import get_uri_registry
-from trid3nt_server.model.guards.circuit_breaker import CircuitBreakerError
-# The gate engine (trid3nt_server.inputs.gate.confirm) is imported function-locally in
+from trid3nt.render.uri_registry import get_uri_registry
+from trid3nt_harness.model.guards.circuit_breaker import CircuitBreakerError
+# The gate engine (trid3nt_harness.inputs.gate.confirm) is imported function-locally in
 # _stream_model_reply -- deferred to break the server<->gates load cycle.
-from trid3nt_server.model.guards.context_budget import ContextWindowExceededError, FABRICATION_CAVEAT, build_context_window_abort_note, looks_like_fabricated_action_claim
-from trid3nt_server.model.guards.runaway_guard import ABORT_WALL_CLOCK, LoopWatchdog, abort_message
-from trid3nt_server.settings import setting
+from trid3nt_harness.model.guards.context_budget import ContextWindowExceededError, FABRICATION_CAVEAT, build_context_window_abort_note, looks_like_fabricated_action_claim
+from trid3nt_harness.model.guards.runaway_guard import ABORT_WALL_CLOCK, LoopWatchdog, abort_message
+from trid3nt.settings import setting
 from trid3nt_server.server.config import _env_flag, _tool_retrieval_k
 from trid3nt_server.server.dispatch.emitter import _invoke_tool_via_emitter
 from trid3nt_server.server.dispatch.helpers import _DELIVERABLE_COMPLETE_DIRECTIVE, _DISCOVERY_EXPAND_CAP, _EMPTY_COMPLETION_NUDGE, _EMPTY_COMPLETION_RETRY_CAP, _POST_DELIVERABLE_WRAPUP_ROUNDS, _default_declarable_registry, _dispatch_made_progress, _gate_expander_tool_names, _is_terminal_composer, _tool_names_from_search_result
@@ -31,7 +31,7 @@ from trid3nt_server.server.dispatch.persist import _TURN_NARRATION_BY_TASK, _TUR
 from trid3nt_server.server.dispatch.results import _maybe_emit_chart
 from trid3nt_server.server.session.case_state import _turn_case_bbox, _turn_case_id
 from trid3nt_server.server.session.state import SessionState
-from trid3nt_server.inputs.extent import as_bbox
+from trid3nt.inputs.extent import as_bbox
 from trid3nt_server.server.spatial import _aoi_zoom_to_bbox
 from trid3nt_server.server.turn.cases import _emit_case_list, _maybe_autoname_case
 from trid3nt_server.server.turn.engine import _CONTINUATION_NUDGE, _asks_for_data_or_analysis, _geocode_drift_note, _maybe_emit_tool_candidates, _session_routing_mode, _union_pinned_tool
@@ -45,15 +45,15 @@ logger = logging.getLogger("trid3nt_server.server")
 def _effective_model_id(requested: str | None) -> str:
     """The model id a turn runs on: the active provider adapter's resolution of
     ``requested``, else the selection or, with none, the provider name."""
-    from trid3nt_server.model.adapters.model_selection import model_provider
+    from trid3nt_harness.model.adapters.model_selection import model_provider
 
     provider = model_provider()
     if provider == "openai":
-        from trid3nt_server.model.adapters.openai_adapter import openai_model
+        from trid3nt_harness.model.adapters.openai_adapter import openai_model
 
         return openai_model(requested)
     if provider == "anthropic":
-        from trid3nt_server.model.adapters.anthropic_adapter import anthropic_model
+        from trid3nt_harness.model.adapters.anthropic_adapter import anthropic_model
 
         return anthropic_model(requested)
     return requested or provider
@@ -70,7 +70,7 @@ async def _stream_model_reply(
     """Stream one user-message reply with multi-turn tool dispatch: each round forwards text
     deltas, dispatches the round's tool calls and feeds their results back, until a round makes
     no call; a cancel aborts the whole loop."""
-    from trid3nt_server.inputs.gate.confirm import (
+    from trid3nt_harness.inputs.gate.confirm import (
         SPATIAL_INPUT_SENTINEL_KEY,
         _handle_request_spatial_input,
     )
@@ -136,7 +136,7 @@ async def _stream_model_reply(
         )
     )
 
-    from trid3nt_server.model.adapters.model_selection import model_provider as _model_provider
+    from trid3nt_harness.model.adapters.model_selection import model_provider as _model_provider
 
     _provider = _model_provider()
     # The EFFECTIVE model, so a default-model turn's log line names the real
@@ -152,7 +152,7 @@ async def _stream_model_reply(
 
     _retrieval_registry = _default_declarable_registry()
     try:
-        from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
+        from trid3nt_harness.tools.search.tool_retrieval import retrieve_visible_tools
 
         _retrieval_k = _tool_retrieval_k()
         _visible = retrieve_visible_tools(

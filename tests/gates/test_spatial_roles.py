@@ -1,6 +1,6 @@
 """Unit tests for the shared drawn-geometry role vocabulary.
 
-Covers the generalized role parser in ``trid3nt_server.inputs.gate.spatial_roles`` --
+Covers the generalized role parser in ``trid3nt_harness.inputs.gate.spatial_roles`` --
 the canonical DOMAIN stage every engine consumes. The adapter surface over it is
 covered by ``test_spatial_input_gate.py`` / ``test_spatial_input_neutral_line.py``;
 here we exercise the roles + the alias + the honesty floor.
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.gate.spatial_roles import (
+from trid3nt_harness.inputs.gate.spatial_roles import (
     CANONICAL_ROLES,
     ROLE_ALIASES,
     SpatialRoleError,
@@ -40,7 +40,7 @@ _BOX = [[[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]]]
 
 
 def test_a_drawn_breakline_routes_to_the_mesher_s_line_constraint() -> None:
-    from trid3nt_server.tools.mesh.op_tool import drawn_ops
+    from trid3nt.tools.mesh.op_tool import drawn_ops
 
     roles = parse_drawn_roles(_fc(_feat("breakline", "LineString", _RIDGE)))
     assert drawn_ops(roles) == [{"fn": "set_obstacle", "kwargs": {
@@ -49,7 +49,7 @@ def test_a_drawn_breakline_routes_to_the_mesher_s_line_constraint() -> None:
 
 
 def test_a_drawn_refine_region_routes_to_a_size_inside_the_polygon() -> None:
-    from trid3nt_server.tools.mesh.op_tool import drawn_ops
+    from trid3nt.tools.mesh.op_tool import drawn_ops
 
     roles = parse_drawn_roles(_fc(_feat("refine_region", "Polygon", _BOX,
                                         target_size_m=15.0)))
@@ -63,8 +63,8 @@ def test_a_drawn_refine_region_routes_to_a_size_inside_the_polygon() -> None:
 
 
 def test_a_drawn_boundary_routes_to_a_typed_run_of_the_edge() -> None:
-    from trid3nt_server.inputs.boundary import boundary_runs
-    from trid3nt_server.tools.mesh.op_tool import drawn_ops
+    from trid3nt.inputs.boundary import boundary_runs
+    from trid3nt.tools.mesh.op_tool import drawn_ops
 
     roles = parse_drawn_roles(_fc(_feat("boundary", "LineString", _RIDGE,
                                         boundary_type="inflow")))

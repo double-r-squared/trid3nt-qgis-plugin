@@ -15,14 +15,14 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.model.adapters.adapter import (
+from trid3nt_harness.model.adapters.model_selection import ModelSettings
+from trid3nt_harness.model.adapters.adapter import (
     FunctionCallEvent,
     TextDeltaEvent,
     _classify_error,
     summarize_tool_result,
 )
-from trid3nt_server.settings import entry
+from trid3nt.settings import entry
 from trid3nt_contracts import new_ulid
 
 
@@ -294,7 +294,7 @@ async def test_stream_model_reply_failed_retry_caps_at_max_iterations(fake_llm):
     the loop by its iteration cap, whichever comes first."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.model.guards.circuit_breaker import ToolCircuitBreaker
+    from trid3nt_harness.model.guards.circuit_breaker import ToolCircuitBreaker
 
     # Every round retries fetch_dem with a slightly different arg (so the
     # loop-repeat watchdog does not short-circuit before MAX_TURN_ITERATIONS

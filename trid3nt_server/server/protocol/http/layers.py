@@ -22,14 +22,14 @@ class _BadRequest(Exception):
 def _ingest_layer_fn():
     """Lazy-import seam for the ingest core (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from trid3nt_server.inputs.user_layer import ingest_user_layer
+    from trid3nt.inputs.user_layer import ingest_user_layer
 
     return ingest_user_layer
 
 
 def _upload_layer_file_fn():
     """Lazy-import seam for the staging-upload helper (monkeypatchable)."""
-    from trid3nt_server.inputs.user_layer import upload_layer_file
+    from trid3nt.inputs.user_layer import upload_layer_file
 
     return upload_layer_file
 
@@ -37,13 +37,13 @@ def _upload_layer_file_fn():
 def _probe_point_fn():
     """Lazy-import seam for the probe tool (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from trid3nt_server.tools.derive.probe_point.probe_point import probe_point
+    from trid3nt.tools.derive.probe_point.probe_point import probe_point
 
     return probe_point
 
 
 def _max_ingest_bytes() -> int:
-    from trid3nt_server.inputs.user_layer import MAX_INGEST_BYTES
+    from trid3nt.inputs.user_layer import MAX_INGEST_BYTES
 
     return MAX_INGEST_BYTES
 
@@ -134,7 +134,7 @@ async def _upload_body(request: web.Request) -> bytes:
 async def _ingest_layer_file(request: web.Request) -> web.Response:
     """``POST /api/ingest-layer-file``: stage the client's raw upload bytes to
     object storage."""
-    from trid3nt_server.inputs.user_layer import ImportLayerError, ObjectTooLargeError
+    from trid3nt.inputs.user_layer import ImportLayerError, ObjectTooLargeError
 
     body = await _upload_body(request)
     filename = request.query.get("filename", "").strip()
@@ -154,7 +154,7 @@ async def _ingest_layer(request: web.Request) -> web.Response:
     """``POST /api/ingest-layer``: register an already-uploaded object onto the
     case, through the ingest core, which merges it into the case's durable
     layer summaries and best-effort-pins the AOI."""
-    from trid3nt_server.inputs.user_layer import (
+    from trid3nt.inputs.user_layer import (
         CaseNotFoundError,
         ImportLayerError,
         ObjectNotFoundError,
@@ -174,8 +174,8 @@ async def _ingest_layer(request: web.Request) -> web.Response:
 async def _probe_point(request: web.Request) -> web.Response:
     """``POST /api/probe-point``: the deterministic map-click probe, sampling
     every raster layer and any detected frame sequence on the case at one point."""
-    from trid3nt_server.inputs.user_input import UserInputError
-    from trid3nt_server.tools.derive.probe_point.probe_point import (
+    from trid3nt.inputs.user_input import UserInputError
+    from trid3nt.tools.derive.probe_point.probe_point import (
         ProbePointCaseNotFoundError,
         ProbePointInputError,
     )

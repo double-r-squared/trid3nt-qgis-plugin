@@ -16,7 +16,7 @@ import pytest
 # from every slice; nothing puts their directory on the path but this.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from trid3nt_server import tools as agent_tools
+from trid3nt import tools as agent_tools
 
 
 @pytest.fixture(autouse=True)
@@ -41,14 +41,14 @@ def docker_on_this_box(monkeypatch):
     """The docker host of every test is this box, so no test asks docker."""
     import os
 
-    from trid3nt_server.workflows.solver import cores
+    from trid3nt.workflows.solver import cores
 
     monkeypatch.setattr(cores, "_HOST", (os.cpu_count() or 1, True))
 
 
 # Shared in-memory S3 double (GCP decommissioned — cache shim is S3-only).
 #
-# The cache read-through (``trid3nt_server.tools.cache``) and every tool
+# The cache read-through (``trid3nt.tools.cache``) and every tool
 # download-helper build their boto3 S3 client lazily via ``boto3.client``.
 # Tests that exercise the cache miss/hit/write paths monkeypatch that factory
 # to this in-memory double so no AWS credentials / network are needed and the
@@ -127,7 +127,7 @@ def _reset_fake_llm_harness():
     Prevents an installed fake-turn source (``fake_llm``) from leaking across
     tests. Cheap no-op when the harness was never installed.
     """
-    from trid3nt_server.model.adapters import scripted_adapter as _sa
+    from trid3nt_harness.model.adapters import scripted_adapter as _sa
 
     _sa.reset_harness()
     yield
@@ -140,7 +140,7 @@ def fake_llm(monkeypatch: pytest.MonkeyPatch):
 
     Pins ``MODEL_PROVIDER=scripted`` so the REAL server dispatch routes to the
     scripted adapter, and returns a handle over the fake turns and recorded calls."""
-    from trid3nt_server.model.adapters import scripted_adapter as sa
+    from trid3nt_harness.model.adapters import scripted_adapter as sa
 
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
     sa.reset_harness()

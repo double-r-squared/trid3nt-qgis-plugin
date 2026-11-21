@@ -11,7 +11,7 @@ import importlib
 
 import pytest
 
-from trid3nt_server.tools.mesh.tool import (
+from trid3nt.tools.mesh.tool import (
     mesh_op,
     recipe_from_plan_value,
     recipe_plan_value,
@@ -24,8 +24,8 @@ from seated import value_inputs
 #: question: a catchment triangulated as a BAND, a harbour with a structure
 #: punched out of the water.
 _TEMPLATES = (
-    "trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid",
-    "trid3nt_server.workflows.telemac.templates.agitation.agitation",
+    "trid3nt.workflows.telemac.templates.rain_on_grid.rain_on_grid",
+    "trid3nt.workflows.telemac.templates.agitation.agitation",
 )
 
 
@@ -79,7 +79,7 @@ def test_a_step_override_replaces_a_param_and_leaves_the_program_alone(dotted):
 
 def test_two_entries_of_one_op_survive_the_trip_in_order():
     """Two distance-sizing lines refine two corridors, so both must arrive."""
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid import rain_on_grid as template
+    from trid3nt.workflows.telemac.templates.rain_on_grid import rain_on_grid as template
 
     declared = template.MESH.appending(
         mesh_op("distance_sizing_from_line_function", line_file="/tmp/second.geojson",
@@ -97,7 +97,7 @@ def test_two_entries_of_one_op_survive_the_trip_in_order():
 def _every_template_workflow():
     import pkgutil
 
-    import trid3nt_server.workflows.telemac.templates as templates
+    import trid3nt.workflows.telemac.templates as templates
 
     for found in pkgutil.iter_modules(templates.__path__):
         if found.ispkg:

@@ -329,8 +329,8 @@ class TestMeshProbe(unittest.TestCase):
 
         import numpy as np
 
-        from trid3nt_server.render.mesh_display import write_ugrid
-        from trid3nt_server.tools.mesh.meshers import Mesh
+        from trid3nt.render.mesh_display import write_ugrid
+        from trid3nt.tools.mesh.meshers import Mesh
 
         py = _qgis_python()
         if py is None:

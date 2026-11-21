@@ -6,9 +6,9 @@ import types
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime import fill as fill_mod
-from trid3nt_server.workflows.runtime.fill import (
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.runtime import fill as fill_mod
+from trid3nt.workflows.runtime.fill import (
     ACCEPTED,
     DEFAULTED,
     MISSING,
@@ -16,15 +16,15 @@ from trid3nt_server.workflows.runtime.fill import (
     Fill,
     fill,
 )
-from trid3nt_server.workflows.runtime.module import (
+from trid3nt.workflows.runtime.module import (
     ENGINE_UNAVAILABLE,
     SlotRefused,
     accept,
 )
-from trid3nt_server.workflows.telemac.modules import (
+from trid3nt.workflows.telemac.modules import (
     module as module_mod,
 )
-from trid3nt_server.workflows.telemac.modules import wrapper_for
+from trid3nt.workflows.telemac.modules import wrapper_for
 
 
 def _wf():
@@ -41,7 +41,7 @@ def _filled(values):
 
 
 def _skeleton(*inputs):
-    from trid3nt_server.workflows.runtime import Workflow
+    from trid3nt.workflows.runtime import Workflow
 
     return Workflow(metadata=types.SimpleNamespace(name="probe", engine=""),
                     inputs=inputs, template=types.SimpleNamespace())
@@ -171,7 +171,7 @@ def test_a_value_outside_its_range_is_rejected_with_its_remedy():
 
 
 def test_a_required_input_nothing_filled_is_missing_and_not_ready():
-    from trid3nt_server.inputs.input import Input
+    from trid3nt.inputs.input import Input
 
     wf = _skeleton(Input(name="depth", desc="d", type=float))
     state = asyncio.run(fill(Fill(workflow=wf), {}))
@@ -184,7 +184,7 @@ def test_a_required_input_nothing_filled_is_missing_and_not_ready():
 def test_a_required_param_left_unstated_refuses_in_every_mode(mode, user_settings):
     """No default and not optional is the whole floor: the fill refuses before
     any launch, and no mode shows the input to anybody to approve instead."""
-    from trid3nt_server.inputs.input import Input
+    from trid3nt.inputs.input import Input
 
     user_settings(AUTO=(mode == "auto"))
     wf = _skeleton(Input(name="wave_height_m", desc="d", bounds=(0.01, 10.0)),
@@ -301,7 +301,7 @@ def test_a_keyword_the_module_refuses_is_rejected_by_name():
 
 
 def _journal(monkeypatch, line):
-    from trid3nt_server.store import journal
+    from trid3nt.store import journal
 
     monkeypatch.setattr(journal, "read_records", lambda: [line])
 
@@ -314,8 +314,8 @@ def test_a_card_edit_refills_through_the_modules_accept_rule(monkeypatch):
         seen.append(name)
         return real(body, name, value)
 
-    from trid3nt_server.workflows.runtime import review
-    from trid3nt_server.workflows.runtime import review as tw
+    from trid3nt.workflows.runtime import review
+    from trid3nt.workflows.runtime import review as tw
 
     monkeypatch.setattr(review, "accept", _spy)
     monkeypatch.setattr(review, "card_rows", lambda sheet: [])
@@ -329,7 +329,7 @@ def test_a_card_edit_refills_through_the_modules_accept_rule(monkeypatch):
         await apply_revision({"LAW OF BOTTOM FRICTION": 4})
         return types.SimpleNamespace(proceed=True)
 
-    monkeypatch.setitem(sys.modules["trid3nt_server.inputs.gate.input_review"].__dict__,
+    monkeypatch.setitem(sys.modules["trid3nt_harness.inputs.gate.input_review"].__dict__,
                         "gate_input_review", _gate)
     sheet = asyncio.run(tw._review(_fill, {}, steering=steering, workflow="w",
                                    title="", spent=()))
@@ -338,7 +338,7 @@ def test_a_card_edit_refills_through_the_modules_accept_rule(monkeypatch):
 
 
 def _place_registers_a_row(monkeypatch):
-    from trid3nt_server.inputs.slots import DOMAIN
+    from trid3nt.inputs.slots import DOMAIN
 
     async def _produce(env, decl):
         if decl.slot == DOMAIN:
@@ -378,11 +378,11 @@ def test_an_untyped_fault_is_refused_and_its_trace_logged(monkeypatch, caplog):
 ])
 def test_a_refusal_keeps_the_code_of_its_reason_through_the_review(
         monkeypatch, cancel_code, code):
-    from trid3nt_server.errors import DeclarativeError
-    from trid3nt_server.inputs.gate import input_review
-    from trid3nt_server.inputs.gate.input_review import ReviewOutcome
-    from trid3nt_server.workflows.runtime import review
-    from trid3nt_server.workflows.runtime import review as tw
+    from trid3nt.errors import DeclarativeError
+    from trid3nt_harness.inputs.gate import input_review
+    from trid3nt_harness.inputs.gate.input_review import ReviewOutcome
+    from trid3nt.workflows.runtime import review
+    from trid3nt.workflows.runtime import review as tw
 
     monkeypatch.setattr(review, "card_rows", lambda sheet: [])
 
@@ -405,9 +405,9 @@ def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch, use
     user_settings(AUTO=True)
     """The fill runs before the run's channels open, so the site a row chose
     and what a cut covers reach the run only because the launch restates them."""
-    from trid3nt_server.inputs import run_notes
-    from trid3nt_server.workflows.runtime import journal
-    from trid3nt_server.workflows.runtime.workflow import RunResult
+    from trid3nt.inputs import run_notes
+    from trid3nt.workflows.runtime import journal
+    from trid3nt.workflows.runtime.workflow import RunResult
 
     async def _produce(env, decl):
         run_notes.cut_coverage(f"the {decl.name} covers the cut")
@@ -462,7 +462,7 @@ def test_a_keyword_stated_as_none_is_not_stated_with_or_without_a_module_default
 
 
 def test_a_coverage_line_a_restaged_run_says_again_stands_on_the_card_once():
-    from trid3nt_server.inputs.run_notes import bind_coverage, cut_coverage, drain_coverage, run_coverage
+    from trid3nt.inputs.run_notes import bind_coverage, cut_coverage, drain_coverage, run_coverage
 
     token = bind_coverage()
     try:
@@ -479,7 +479,7 @@ def test_a_refused_layer_input_lists_the_case_layers_its_slot_takes(tmp_path):
     refuses, and that leaving it unstated lets the run match a source."""
     import json
 
-    from trid3nt_server.render.uri_registry import (
+    from trid3nt.render.uri_registry import (
         SessionUriRegistry, activate_registry, deactivate_registry)
 
     ring = [[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6], [0.4, 0.4]]

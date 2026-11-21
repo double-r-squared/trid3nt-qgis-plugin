@@ -11,8 +11,8 @@ import math
 
 import pytest
 
-from trid3nt_server.workflows.telemac.modules import listing as R
-from trid3nt_server.workflows.telemac.modules.outputs import wetted_fraction
+from trid3nt.workflows.telemac.modules import listing as R
+from trid3nt.workflows.telemac.modules.outputs import wetted_fraction
 
 #: The in-image listing shape - the block GAIA prints once its run closes.
 _LISTING = """
@@ -224,7 +224,7 @@ def test_a_run_still_draining_its_opening_reads_unsteady_off_its_own_listing():
     1697-1820 m3/s left through the elevation face against 886-888 m3/s in over the last three balance printouts."""
     from pathlib import Path
 
-    from trid3nt_server.workflows.telemac.modules.listing import steadiness
+    from trid3nt.workflows.telemac.modules.listing import steadiness
 
     text = (Path(__file__).resolve().parents[1] / "fixtures" / "telemac_missouri" / "full_listing.txt").read_text()
     found = steadiness(text)

@@ -18,12 +18,12 @@ from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
 
 from trid3nt_server.render import pipeline_emitter as pe
 from trid3nt_server.server import processing
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.derive.run_pyqgis.run_pyqgis import (
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.derive.run_pyqgis.run_pyqgis import (
     CodeExecConfirmationRequired,
     run_pyqgis,
 )
-from trid3nt_server.tools.derive.run_qgis_algorithm.run_qgis_algorithm import (
+from trid3nt.tools.derive.run_qgis_algorithm.run_qgis_algorithm import (
     run_qgis_algorithm,
 )
 
@@ -171,8 +171,8 @@ async def _a_qgis_output(monkeypatch, tmp_path, store, session: str):
     import rasterio
     from rasterio.transform import from_origin
 
-    from trid3nt_server.store import objects as storage
-    from trid3nt_server.render.uri_registry import (
+    from trid3nt.store import objects as storage
+    from trid3nt.render.uri_registry import (
         activate_registry, deactivate_registry, get_uri_registry)
 
     values = np.full((10, 10), 2.0, dtype="float32")
@@ -214,7 +214,7 @@ async def test_an_output_is_a_case_layer_carrying_what_its_input_carried(
     from trid3nt_contracts.execution import LayerURI
 
     from trid3nt_server.render.layer_uri_emit import emit_layer_uri
-    from trid3nt_server.render.uri_registry import (
+    from trid3nt.render.uri_registry import (
         activate_registry, deactivate_registry, lookup_layer_for_handle)
 
     registry, out = await _a_qgis_output(monkeypatch, tmp_path, fake_s3, "qgis-pub")
@@ -238,7 +238,7 @@ async def test_a_case_layer_rides_the_wire_as_its_store_uri(
         monkeypatch, tmp_path, fake_s3) -> None:
     """The next QGIS step names the output by its id; the session is handed the
     store uri it opens the way the dock does, every other string untouched."""
-    from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry
+    from trid3nt.render.uri_registry import activate_registry, deactivate_registry
 
     registry, out = await _a_qgis_output(monkeypatch, tmp_path, fake_s3, "qgis-wire")
     emitter = _FakeEmitter()
@@ -261,8 +261,8 @@ async def test_a_case_layer_rides_the_wire_as_its_store_uri(
 @pytest.mark.asyncio
 async def test_the_bed_slot_takes_a_qgis_output_by_its_id(
         monkeypatch, tmp_path, fake_s3) -> None:
-    from trid3nt_server.inputs.bed import RASTER, bed
-    from trid3nt_server.render.uri_registry import activate_registry, deactivate_registry
+    from trid3nt.inputs.bed import RASTER, bed
+    from trid3nt.render.uri_registry import activate_registry, deactivate_registry
 
     registry, out = await _a_qgis_output(monkeypatch, tmp_path, fake_s3, "qgis-bed")
     token = activate_registry(registry)

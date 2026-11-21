@@ -11,14 +11,14 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.temporal import Series
-from trid3nt_server.workflows.telemac.authoring.boundaries import (
+from trid3nt.inputs.temporal import Series
+from trid3nt.workflows.telemac.authoring.boundaries import (
     LIQUID_BOUNDARIES_FILENAME,
     column_name,
     liquid_boundaries_file,
 )
-from trid3nt_server.workflows.telemac.errors import TelemacError
-from trid3nt_server.workflows.telemac.modules.telemac2d import _boundaries
+from trid3nt.workflows.telemac.errors import TelemacError
+from trid3nt.workflows.telemac.modules.telemac2d import _boundaries
 
 _FLOW = Series([0.0, 3600.0, 7200.0], [10.0, 20.0, 30.0], units="m3/s")
 _LEVEL = Series([0.0, 3600.0, 7200.0], [2.0, 2.5, 3.0], units="m")

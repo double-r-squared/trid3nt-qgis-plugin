@@ -21,7 +21,7 @@ def _cap_gate_waits(monkeypatch):
 
     Production leaves ``GATE_WAIT_CAP_S`` unset; the dedicated timeout test
     tightens the cap so it reaches the honest fail-closed path fast."""
-    monkeypatch.setattr("trid3nt_server.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
+    monkeypatch.setattr("trid3nt_harness.inputs.gate.confirm.GATE_WAIT_CAP_S", 5)
 
 
 class _FakeWS:
@@ -46,7 +46,7 @@ class _FakeState:
 def test_session_tools_in_hot_set() -> None:
     """The two session tools sit in the always-visible retrieval floor, so the
     model never narrates a false 'cannot run that' when one is not retrieved."""
-    from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
+    from trid3nt_harness.tools.search.tool_retrieval import CORE_FLOOR
 
     assert "run_pyqgis" in CORE_FLOOR
     assert "run_qgis_algorithm" in CORE_FLOOR

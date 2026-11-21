@@ -14,8 +14,8 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.model.adapters.adapter import TextDeltaEvent
+from trid3nt_harness.model.adapters.model_selection import ModelSettings
+from trid3nt_harness.model.adapters.adapter import TextDeltaEvent
 
 
 
@@ -178,7 +178,7 @@ async def test_solve_tool_path_unaffected_by_model_bound():
     The model read-timeout bound does not reach into the tool dispatch path."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.model.adapters.adapter import FunctionCallEvent
+    from trid3nt_harness.model.adapters.adapter import FunctionCallEvent
     from trid3nt_contracts import new_ulid
 
     settings = ModelSettings(

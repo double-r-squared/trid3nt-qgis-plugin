@@ -13,9 +13,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.geoclaw.authoring.storm import landfall_instant, storm_track, write_stormfiles
-from trid3nt_server.workflows.geoclaw.errors import GeoclawError
-from trid3nt_server.workflows.geoclaw.modules import GEO
+from trid3nt.workflows.geoclaw.authoring.storm import landfall_instant, storm_track, write_stormfiles
+from trid3nt.workflows.geoclaw.errors import GeoclawError
+from trid3nt.workflows.geoclaw.modules import GEO
 
 #: IBTrACS v04r01 NA rows of IKE 2008: time, lat, lon, record, USA_WIND kt, USA_PRES mb, USA_RMW nmi, USA_ROCI nmi.
 _ROWS = [

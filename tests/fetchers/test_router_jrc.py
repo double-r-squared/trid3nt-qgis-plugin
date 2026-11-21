@@ -16,11 +16,11 @@ import pytest
 import rasterio
 from rasterio.io import MemoryFile
 
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.executors import stac_raster
-from trid3nt_server.tools.fetchers.hydrology.fetch_jrc_global_surface_water import hooks as jrc_hook
-from trid3nt_server.tools.fetchers._router.router import synthesize_metadata
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.executors import stac_raster
+from trid3nt.tools.fetchers.hydrology.fetch_jrc_global_surface_water import hooks as jrc_hook
+from trid3nt.tools.fetchers._router.router import synthesize_metadata
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
 # Small AOI well inside the 2.0 deg^2 guardrail (Mississippi floodplain, LA).
 _BBOX = (-91.30, 30.30, -91.00, 30.55)

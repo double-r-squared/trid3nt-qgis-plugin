@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from trid3nt_server.render.uri_registry import SESSIONS_HELD
+from trid3nt.render.uri_registry import SESSIONS_HELD
 
 # Live-turn registry keyed by session and stream: an in-flight turn OUTLIVES its connection. Each
 # entry holds the task and the emitter it drives, so a reconnect can rebind the sink; a done-callback

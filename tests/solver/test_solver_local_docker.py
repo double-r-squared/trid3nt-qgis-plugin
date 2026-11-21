@@ -20,10 +20,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
-import trid3nt_server.workflows.solver.solver as solver_mod
-from trid3nt_server.workflows.solver.cores import container_default
-from trid3nt_server.store import objects as storage
-from trid3nt_server.workflows.solver.solver import (
+import trid3nt.workflows.solver.solver as solver_mod
+from trid3nt.workflows.solver.cores import container_default
+from trid3nt.store import objects as storage
+from trid3nt.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     SolverDispatchError,
     run_solver,
@@ -547,8 +547,8 @@ async def test_local_wait_has_no_time_limit_and_only_a_cancel_ends_it(
 async def test_a_stop_ends_the_wait_as_the_stop_with_the_last_step_and_what_the_run_wrote(
     reset_seams, local_env: Path, docker_shim: Path
 ) -> None:
-    from trid3nt_server.workflows.solver.solver import dispatch_and_wait
-    from trid3nt_server.workflows.solver.stop import SolveStopped
+    from trid3nt.workflows.solver.solver import dispatch_and_wait
+    from trid3nt.workflows.solver.stop import SolveStopped
 
     (docker_shim / "behavior").write_text("steps")
     s3 = FakeS3Client()

@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.inputs.domain import _clipped, _one_line, above_on, flowline_ids
-from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.tools.fetchers.hydrology.fetch_nhdplus_nldi_navigate import hooks
+from trid3nt.inputs.domain import _clipped, _one_line, above_on, flowline_ids
+from trid3nt.inputs.user_input import UserInputError
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.tools.fetchers.hydrology.fetch_nhdplus_nldi_navigate import hooks
 
 _NLDI = Path(__file__).resolve().parents[1] / "fixtures" / "nhdplus_nldi"
 _RELEASE = (-95.921233757, 41.257659140)

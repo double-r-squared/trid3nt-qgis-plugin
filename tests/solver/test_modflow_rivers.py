@@ -16,10 +16,10 @@ from pyproj import Transformer
 from rasterio.transform import from_origin
 
 from tests.solver.test_modflow_lakes import _CELLS, _N, _POINTS, _fill, _mesh, _rundir, staged_beside  # noqa: F401
-from trid3nt_server.workflows.modflow.authoring.simulation import serialize
-from trid3nt_server.workflows.modflow.authoring.stress import place, place_river_areas, river_area
-from trid3nt_server.workflows.modflow.authoring.validate import validate_authored_simulation
-from trid3nt_server.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.authoring.simulation import serialize
+from trid3nt.workflows.modflow.authoring.stress import place, place_river_areas, river_area
+from trid3nt.workflows.modflow.authoring.validate import validate_authored_simulation
+from trid3nt.workflows.modflow.errors import ModflowError
 
 _TO_LONLAT = Transformer.from_crs(32617, 4326, always_xy=True).transform
 _FRAME = ("meters", "days")
@@ -267,7 +267,7 @@ def _drain_cells(rundir):
 def test_a_drain_line_inside_the_river_writes_no_drain_where_the_river_is_placed_and_mf6_validates(
         staged_beside, tmp_path, monkeypatch):  # noqa: F811
     notes = []
-    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
+    monkeypatch.setattr("trid3nt.inputs.run_notes.journal_note", notes.append)
     mesh = _mesh(tmp_path)
     surface = _levels(tmp_path, [7.5, 7.5, 8.0, 8.0, 9.0, 9.0], [7.5, 7.5, 8.0, 8.0, 12.0, 12.0])
     line = {"type": "LineString", "coordinates": [list(_TO_LONLAT(1.0, 15.0)), list(_TO_LONLAT(29.0, 15.0))]}

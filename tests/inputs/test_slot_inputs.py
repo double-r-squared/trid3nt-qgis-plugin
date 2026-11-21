@@ -11,16 +11,16 @@ import sys
 
 import pytest
 
-from trid3nt_server.inputs import Point
-from trid3nt_server.inputs.bed import DEPTH, RASTER, bed
-from trid3nt_server.inputs.boundary import (
+from trid3nt.inputs import Point
+from trid3nt.inputs.bed import DEPTH, RASTER, bed
+from trid3nt.inputs.boundary import (
     BoundaryRun,
     boundary_runs,
     roles_from_runs,
 )
-from trid3nt_server.inputs.domain import domain, domain_ring
-from trid3nt_server.inputs.user_input import UserInputError
-from trid3nt_server.inputs.slots import (
+from trid3nt.inputs.domain import domain, domain_ring
+from trid3nt.inputs.user_input import UserInputError
+from trid3nt.inputs.slots import (
     BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, OBSERVE, Slot, ingest_slot)
 
 _RING = [[-123.0, 45.0], [-122.9, 45.0], [-122.9, 45.1], [-123.0, 45.1]]
@@ -107,7 +107,7 @@ def test_the_bed_row_states_one_class_and_carries_no_surface_under_it():
     states one class."""
     import inspect
 
-    from trid3nt_server.inputs.input import Input
+    from trid3nt.inputs.input import Input
 
     assert "over" not in inspect.signature(bed).parameters
     assert not Input().need("bathymetry").coercion.get("near")
@@ -139,7 +139,7 @@ def test_a_domain_says_its_own_name_when_it_is_read_as_text():
     """A mesh session, a layer title and a run's own name are all written from
     the domain, so a domain that read as its geometry named every one of them
     after its coordinates."""
-    from trid3nt_server.tools.mesh.step import _session_name
+    from trid3nt.tools.mesh.step import _session_name
 
     named = domain({"type": "FeatureCollection", "name": "Willamette River",
                     "features": [{"type": "Feature", "properties": {},
@@ -156,7 +156,7 @@ def test_a_domain_says_its_own_name_when_it_is_read_as_text():
 
 def test_only_the_shapes_a_user_can_draw_are_offered_on_the_canvas():
     """A bed is a survey or a number, so there is no shape to draw for it."""
-    from trid3nt_server.inputs import slots
+    from trid3nt.inputs import slots
 
     assert {slot for slot in vars(slots).values()
             if isinstance(slot, Slot) and slot.geometry} == {DOMAIN, EXTENT, LINE}
@@ -171,7 +171,7 @@ def test_only_the_shapes_a_user_can_draw_are_offered_on_the_canvas():
 def test_a_row_states_its_slot_and_its_name_is_free():
     """A row is the slot it STATES: one called ``bed`` that states none is a
     plain row, and one called anything at all that states BED is the bed."""
-    from trid3nt_server.inputs.input import Input
+    from trid3nt.inputs.input import Input
 
     assert Input(name="bed").slot is None
     assert Input(name="surveyed_bed", slot=BED).slot is BED
@@ -180,8 +180,8 @@ def test_a_row_states_its_slot_and_its_name_is_free():
 
 def test_a_slot_states_which_classes_it_serves_and_a_row_outside_them_refuses():
     """The bed reads a measurement or the ground; a level reads a level."""
-    from trid3nt_server.inputs.input import Input
-    from trid3nt_server.workflows.runtime import DeclarationError
+    from trid3nt.inputs.input import Input
+    from trid3nt.workflows.runtime import DeclarationError
 
     assert BED.classes == frozenset(
         {"bathymetry", "terrain", "channel survey"})
@@ -195,7 +195,7 @@ def test_a_domain_producer_hands_over_the_runs_it_cut_the_polygon_between():
     as rows of one artifact. The slot reads the producer's own word for which
     row is which; a row that prescribes nothing is the wall the edge already
     is, and a drawn outline states no run at all."""
-    from trid3nt_server.inputs.domain import domain
+    from trid3nt.inputs.domain import domain
 
     reach = {"type": "FeatureCollection", "features": [
         {"type": "Feature", "properties": {"part": "reach"},
@@ -219,7 +219,7 @@ def test_a_line_reads_the_same_from_every_shape_it_arrives_in():
     """A drawn collection, a bare geometry and a typed vertex list are one line
     after the slot, so a profile down a reach and a profile across a lake are
     the same read."""
-    from trid3nt_server.inputs.line import line
+    from trid3nt.inputs.line import line
 
     drawn = {"type": "FeatureCollection", "features": [
         {"type": "Feature", "properties": {"role": "line"},
@@ -235,7 +235,7 @@ def test_a_line_reads_the_same_from_every_shape_it_arrives_in():
 def test_a_reach_mapped_in_two_pieces_stays_two_pieces():
     """Merging them would decide where the gap closes, which is a measurement
     nobody made."""
-    from trid3nt_server.inputs.line import line
+    from trid3nt.inputs.line import line
 
     two = {"type": "MultiLineString",
            "coordinates": [[[0.0, 0.0], [1.0, 0.0]], [[2.0, 0.0], [3.0, 0.0]]]}
@@ -245,8 +245,8 @@ def test_a_reach_mapped_in_two_pieces_stays_two_pieces():
 def test_a_shape_that_carries_no_polyline_refuses_rather_than_reading_one():
     """An outline is not a line down it, and squaring one into the other would
     measure a profile along a shoreline."""
-    from trid3nt_server.inputs.line import line
-    from trid3nt_server.inputs.user_input import UserInputError
+    from trid3nt.inputs.line import line
+    from trid3nt.inputs.user_input import UserInputError
 
     for carries_none in ({"type": "Polygon",
                           "coordinates": [[[0.0, 0.0], [1.0, 0.0],
@@ -262,7 +262,7 @@ def test_a_bed_the_runs_frame_cannot_reach_names_its_zero_once():
     the run's; the slot re-raises that under its own code rather than saying the
     same three facts again in its own words."""
     from trid3nt_contracts.execution import LayerURI
-    from trid3nt_server.inputs.bed import elevations
+    from trid3nt.inputs.bed import elevations
 
     charted = LayerURI(layer_id="x", name="a charted survey", layer_type="raster",
                        uri="s3://b/k/survey.tif", vertical_datum="CRD")
@@ -300,9 +300,9 @@ def test_an_empty_artifact_and_an_absent_producer_refuse_DIFFERENTLY(tmp_path):
     assert "producer RAN" not in str(wrong_shape.value)
 
 
-@pytest.mark.parametrize("module", ["trid3nt_server.inputs.slots",
-                                    "trid3nt_server.workflows.runtime.data",
-                                    "trid3nt_server.workflows.runtime.fill"])
+@pytest.mark.parametrize("module", ["trid3nt.inputs.slots",
+                                    "trid3nt.workflows.runtime.data",
+                                    "trid3nt.workflows.runtime.fill"])
 def test_each_slot_module_imports_first_in_a_fresh_interpreter(module):
     ran = subprocess.run([sys.executable, "-c", f"import {module}"],
                          capture_output=True, text=True, timeout=240)
@@ -312,7 +312,7 @@ def test_each_slot_module_imports_first_in_a_fresh_interpreter(module):
 @pytest.mark.parametrize("slot", [BED, LEVEL, DISCHARGE, OBSERVE],
                          ids=lambda slot: slot.name)
 def test_a_slot_that_takes_a_number_states_one_on_the_wire(slot):
-    from trid3nt_server.inputs.input import Input
+    from trid3nt.inputs.input import Input
 
     one = str | float | None
     assert Input(name="x", slot=slot).wire_type == (one | list if slot.listed else one)
@@ -320,7 +320,7 @@ def test_a_slot_that_takes_a_number_states_one_on_the_wire(slot):
 
 
 def test_only_the_bed_takes_an_ordered_list_on_the_wire():
-    from trid3nt_server.inputs import slots
+    from trid3nt.inputs import slots
 
     assert sorted(slot.name for slot in vars(slots).values()
                   if isinstance(slot, slots.Slot) and slot.listed) == ["bed"]

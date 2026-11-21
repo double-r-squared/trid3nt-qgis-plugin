@@ -294,27 +294,27 @@ package DataSeam {
 
     part fetcherRouter : FetcherRouter {
         doc /*
-        code: trid3nt_server/tools/fetchers/_router/router.py
+        code: trid3nt/tools/fetchers/_router/router.py
         */
     }
 
     part stacRasterReader : CatalogRasterReader {
         doc /*
-        code: trid3nt_server/tools/fetchers/_router/executors/stac_raster.py
+        code: trid3nt/tools/fetchers/_router/executors/stac_raster.py
         */
         port declarationIn : DeclarationIn;
     }
 
     part copernicusDeclaration : BedSourceDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/terrain/fetch_copernicus_dem/source.yaml
+        code: trid3nt/tools/fetchers/terrain/fetch_copernicus_dem/source.yaml
         */
         port declarationOut : DeclarationOut;
     }
 
     part blueTopoSource : BlueTopoSource {
         doc /*
-        code: trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/hooks.py
+        code: trid3nt/tools/fetchers/ocean/fetch_bluetopo/hooks.py
         */
         port declarationIn : DeclarationIn;
         port provenanceOut : ProvenanceOut;
@@ -322,45 +322,45 @@ package DataSeam {
 
     part blueTopoDeclaration : BedSourceDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/source.yaml
+        code: trid3nt/tools/fetchers/ocean/fetch_bluetopo/source.yaml
         */
         port declarationOut : DeclarationOut;
     }
 
     part cudemDeclaration : BedSourceDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/ocean/fetch_cudem/source.yaml
+        code: trid3nt/tools/fetchers/ocean/fetch_cudem/source.yaml
         */
     }
 
     part regionalCoastalDemDeclaration : BedSourceDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/ocean/fetch_regional_coastal_dem/source.yaml
+        code: trid3nt/tools/fetchers/ocean/fetch_regional_coastal_dem/source.yaml
         */
     }
 
     part nceiTsunamiDemDeclaration : BedSourceDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/ocean/fetch_ncei_tsunami_dem/source.yaml
+        code: trid3nt/tools/fetchers/ocean/fetch_ncei_tsunami_dem/source.yaml
         */
     }
 
     part etopoDeclaration : BedSourceDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/ocean/fetch_etopo/source.yaml
+        code: trid3nt/tools/fetchers/ocean/fetch_etopo/source.yaml
         */
     }
 
     part firmsDeclaration : KeyedSourceDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/hazard/fetch_firms_active_fire/source.yaml
+        code: trid3nt/tools/fetchers/hazard/fetch_firms_active_fire/source.yaml
         */
         port credentialOut : CredentialOut;
     }
 
     part credentialResolver : CredentialResolver {
         doc /*
-        code: trid3nt_server/model/credentials/resolver.py
+        code: trid3nt/credentials/resolver.py
         */
         port credentialIn : CredentialIn;
         port keyedCatalogOut : KeyedCatalogOut;
@@ -389,7 +389,7 @@ package DataSeam {
 
     part borrowedProviderExecutor : BorrowedProviderExecutor {
         doc /*
-        code: trid3nt_server/tools/fetchers/_router/executors/qgis_provider.py
+        code: trid3nt/tools/fetchers/_router/executors/qgis_provider.py
         */
         port layerCredentialOut : LayerCredentialOut;
     }
@@ -403,19 +403,19 @@ package DataSeam {
 
     part waterCut : WaterCut {
         doc /*
-        code: trid3nt_server/tools/mesh/water.py
+        code: trid3nt/tools/mesh/water.py
         */
     }
 
     part coastlineDeclaration : BedSourceDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/socioeconomic/fetch_osm_features/source.yaml
+        code: trid3nt/tools/fetchers/socioeconomic/fetch_osm_features/source.yaml
         */
     }
 
     part bedPainter : BedPainter {
         doc /*
-        code: trid3nt_server/tools/mesh/shared/primitives.py
+        code: trid3nt/tools/mesh/shared/primitives.py
         */
     }
 
@@ -529,43 +529,43 @@ package DataSeam {
 
     part domainSlot : DomainSlot {
         doc /*
-        code: trid3nt_server/inputs/domain.py
+        code: trid3nt/inputs/domain.py
         */
     }
 
     part bedSlot : BedSlot {
         doc /*
-        code: trid3nt_server/inputs/bed.py
+        code: trid3nt/inputs/bed.py
         */
     }
 
     part bedComposer : BedComposer {
         doc /*
-        code: trid3nt_server/inputs/bed_merge.py
+        code: trid3nt/inputs/bed_merge.py
         */
     }
 
     part boundaryRunSlot : BoundaryRunSlot {
         doc /*
-        code: trid3nt_server/inputs/boundary.py
+        code: trid3nt/inputs/boundary.py
         */
     }
 
     part slotDoor : DomainSlot {
         doc /*
-        code: trid3nt_server/inputs/slots.py
+        code: trid3nt/inputs/slots.py
         */
     }
 
     part lineSlot : LineSlot {
         doc /*
-        code: trid3nt_server/inputs/line.py
+        code: trid3nt/inputs/line.py
         */
     }
 
     part extentSlot : ExtentSlot {
         doc /*
-        code: trid3nt_server/inputs/extent.py
+        code: trid3nt/inputs/extent.py
         */
     }
 
@@ -577,121 +577,121 @@ package DataSeam {
 
     part gaugeDeclaration : SourceCoverage {
         doc /*
-        code: trid3nt_server/tools/fetchers/hydrology/fetch_usgs_nwis_gauges/source.yaml
+        code: trid3nt/tools/fetchers/hydrology/fetch_usgs_nwis_gauges/source.yaml
         */
     }
 
     part needDeclaration : SlotNeed {
         doc /*
-        code: trid3nt_server/inputs/input.py
+        code: trid3nt/inputs/input.py
         */
     }
 
     part sourceMatch : SourceMatch {
         doc /*
-        code: trid3nt_server/tools/search/match.py
+        code: trid3nt/tools/search/match.py
         */
     }
 
     part matchedSlot : SourceMatch {
         doc /*
-        code: trid3nt_server/workflows/runtime/fill.py
+        code: trid3nt/workflows/runtime/fill.py
         */
     }
 
     part modelMatch : SourceMatch {
         doc /*
-        code: trid3nt_server/tools/search/find_sources/find_sources.py
+        code: trid3nt_harness/tools/search/find_sources/find_sources.py
         */
     }
 
     part sourceDoorFind : SourceDoor {
         doc /*
-        code: trid3nt_server/tools/search/find_sources/find_sources.py
+        code: trid3nt_harness/tools/search/find_sources/find_sources.py
         */
     }
 
     part sourceDoorFetch : SourceDoor {
         doc /*
-        code: trid3nt_server/tools/search/fetch/fetch.py
+        code: trid3nt_harness/tools/search/fetch/fetch.py
         */
     }
 
     part rankedListCard : RankedSourceList {
         doc /*
-        code: trid3nt_server/workflows/telemac/workflow.py
+        code: trid3nt/workflows/telemac/workflow.py
         */
     }
 
     part rankedListRecord : RankedSourceList {
         doc /*
-        code: trid3nt_server/workflows/runtime/journal.py
+        code: trid3nt/workflows/runtime/journal.py
         */
     }
 
     part seriesOnTheRunsClock : FreeSurfaceReader {
         doc /*
-        code: trid3nt_server/inputs/temporal.py
+        code: trid3nt/inputs/temporal.py
         */
     }
 
     part verticalFrame : VerticalFrame {
         doc /*
-        code: trid3nt_server/inputs/vertical_datum.py
+        code: trid3nt/inputs/vertical_datum.py
         */
     }
 
     part frameLever : VerticalFrame {
         doc /*
-        code: trid3nt_server/inputs/slots.py
+        code: trid3nt/inputs/slots.py
         */
     }
 
     part lakeDeclaration : BedSourceDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_bathymetry/source.yaml
+        code: trid3nt/tools/fetchers/ocean/fetch_greatlakes_bathymetry/source.yaml
         */
     }
 
     part lakeLevelDeclaration : BedSourceDeclaration {
         doc /*
-        code: trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_water_level/source.yaml
+        code: trid3nt/tools/fetchers/ocean/fetch_greatlakes_water_level/source.yaml
         */
     }
 
     part freeSurfaceReader : FreeSurfaceReader {
         doc /*
-        code: trid3nt_server/inputs/observation.py
+        code: trid3nt/inputs/observation.py
         */
     }
 
     part seaStateReader : SeaStateReader {
         doc /*
-        code: trid3nt_server/inputs/wave.py
+        code: trid3nt/inputs/wave.py
         */
     }
 
     part weatherReader : WeatherReader {
         doc /*
-        code: trid3nt_server/inputs/weather.py
+        code: trid3nt/inputs/weather.py
         */
     }
 
     part cloudReader : WeatherReader {
         doc /*
-        code: trid3nt_server/inputs/cloud.py
+        code: trid3nt/inputs/cloud.py
         */
     }
 
     part rainReader : RainReader {
         doc /*
-        code: trid3nt_server/inputs/rain.py
+        code: trid3nt/inputs/rain.py
         */
     }
 
     part offsetRowDeclaration : VerticalFrame {
         doc /*
-        code: trid3nt_server/workflows/runtime/fill.py
+        code: trid3nt/workflows/runtime/fill.py
         */
     }
 
@@ -704,13 +704,13 @@ package DataSeam {
 
     part cacheRetention : CacheRetention {
         doc /*
-        code: trid3nt_server/store/sweep.py
+        code: trid3nt/store/sweep.py
         */
     }
 
     part objectStore : ObjectStore {
         doc /*
-        code: trid3nt_server/store/objects.py
+        code: trid3nt/store/objects.py
         */
     }
 
@@ -1391,8 +1391,8 @@ package DataSeam {
         imported them would be conditioning terrain and calling the result a
         survey.
 
-        forbid: trid3nt_server.tools.fetchers.ocean.fetch_bluetopo.hooks -> trid3nt_server.tools.derive
-        forbid: trid3nt_server.tools.fetchers.ocean.fetch_cudem.hooks -> trid3nt_server.tools.derive
+        forbid: trid3nt.tools.fetchers.ocean.fetch_bluetopo.hooks -> trid3nt.tools.derive
+        forbid: trid3nt.tools.fetchers.ocean.fetch_cudem.hooks -> trid3nt.tools.derive
         */
     }
 

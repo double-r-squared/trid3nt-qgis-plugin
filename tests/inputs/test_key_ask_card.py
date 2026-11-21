@@ -8,10 +8,10 @@ from typing import Any
 import pytest
 
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
-from trid3nt_server.inputs.gate import pending
-from trid3nt_server.inputs.gate.cards.key_ask import KeyDeclinedError, ask_for_key
-from trid3nt_server.model.credentials import resolver
-from trid3nt_server.tools.fetchers._fetch_common import KeyRejectedError, KeyRequiredError
+from trid3nt_harness.inputs.gate import pending
+from trid3nt_harness.inputs.gate.cards.key_ask import KeyDeclinedError, ask_for_key
+from trid3nt.credentials import resolver
+from trid3nt.tools.fetchers._fetch_common import KeyRejectedError, KeyRequiredError
 
 
 class _Emitter:

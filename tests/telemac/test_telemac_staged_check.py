@@ -10,10 +10,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring import selafin_io as IO
-from trid3nt_server.workflows.solver.cores import docker_cores
-from trid3nt_server.workflows.telemac.authoring import staged_check as C
-from trid3nt_server.workflows.telemac.errors import TelemacError
+from trid3nt.workflows.telemac.authoring import selafin_io as IO
+from trid3nt.workflows.solver.cores import docker_cores
+from trid3nt.workflows.telemac.authoring import staged_check as C
+from trid3nt.workflows.telemac.errors import TelemacError
 
 #: A unit square split in two: one contour of four boundary nodes, two of them
 #: an inflow face, which is what makes a prescribed list readable at all.
@@ -221,7 +221,7 @@ def test_a_mesh_still_in_the_store_is_read_through_its_staged_name(tmp_path, mon
         (store / name).write_bytes((rundir / name).read_bytes())
         (rundir / name).unlink()
     monkeypatch.setattr(
-        "trid3nt_server.tools.cache.read_object_bytes_s3",
+        "trid3nt.tools.cache.read_object_bytes_s3",
         lambda uri: (store / uri.rsplit("/", 1)[-1]).read_bytes())
 
     read = _check(rundir, inputs=[{"gs_uri": f"s3://bucket/{name}", "dest": name}
@@ -234,8 +234,8 @@ def test_a_mesh_still_in_the_store_is_read_through_its_staged_name(tmp_path, mon
 async def test_a_run_staged_against_a_clause_refuses_before_the_manifest(
         tmp_path, monkeypatch):
     """The clauses read on the real path: the staging seam calls them itself."""
-    from trid3nt_server.workflows.solver import staging
-    from trid3nt_server.workflows.telemac.authoring.staged_check import (
+    from trid3nt.workflows.solver import staging
+    from trid3nt.workflows.telemac.authoring.staged_check import (
         check_staged_run,
     )
 
@@ -263,8 +263,8 @@ def test_a_supplied_mesh_with_no_pair_is_taken_and_the_run_refuses_by_name(tmp_p
     A mesh carrying no pair is taken by its row - a mesh is not unsolvable in
     the abstract - and the run authored on it refuses here, naming the steering
     keyword and the file nobody staged."""
-    from trid3nt_server.tools.mesh.artifact import MeshArtifact
-    from trid3nt_server.inputs.mesh import mesh
+    from trid3nt.tools.mesh.artifact import MeshArtifact
+    from trid3nt.inputs.mesh import mesh
 
     bare = MeshArtifact(
         mesh_id="01BARE", name="square", mode="om2d",
@@ -285,7 +285,7 @@ def test_an_object_store_object_is_read_into_a_scratch_directory_the_check_remov
         monkeypatch, tmp_path):
     from pathlib import Path
 
-    monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3",
+    monkeypatch.setattr("trid3nt.tools.cache.read_object_bytes_s3",
                         lambda uri: b"bytes")
     seen = {}
 

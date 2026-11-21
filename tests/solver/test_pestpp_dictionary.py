@@ -12,12 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.search.describe_keywords.describe_keywords import describe_keywords
-from trid3nt_server.workflows.pestpp.authoring.control import Observed, Parameter, write_control
-from trid3nt_server.workflows.pestpp.errors import PestppError
-from trid3nt_server.workflows.pestpp.modules import LOCKED, PESTPP
-from trid3nt_server.workflows.pestpp.staging import interface_files
-from trid3nt_server.workflows.runtime.module import SlotRefused, accept
+from trid3nt.tools.search.describe_keywords.describe_keywords import describe_keywords
+from trid3nt.workflows.pestpp.authoring.control import Observed, Parameter, write_control
+from trid3nt.workflows.pestpp.errors import PestppError
+from trid3nt.workflows.pestpp.modules import LOCKED, PESTPP
+from trid3nt.workflows.pestpp.staging import interface_files
+from trid3nt.workflows.runtime.module import SlotRefused, accept
 
 _ROOT = Path(__file__).resolve().parents[2]
 _RECORDS = _ROOT / "tests" / "fixtures" / "pestpp" / "defaults"
@@ -32,7 +32,7 @@ def _extractor():
 
 
 def _rows() -> list[dict]:
-    return json.loads((_ROOT / "trid3nt_server" / "workflows" / "pestpp" / "modules" / "module_input"
+    return json.loads((_ROOT / "trid3nt" / "workflows" / "pestpp" / "modules" / "module_input"
                        / "pestpp.json").read_text())["keywords"]
 
 

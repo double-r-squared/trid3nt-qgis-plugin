@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.input import Input
-from trid3nt_server.inputs.point import Point
-from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT
-from trid3nt_server.model.adapters.adapter import _tool_schema
+from trid3nt.inputs.input import Input
+from trid3nt.inputs.point import Point
+from trid3nt.inputs.slots import BED, DOMAIN, EXTENT
+from trid3nt_harness.model.adapters.adapter import _tool_schema
 
 _SHAPE_WORDS = ("point [lon, lat]", "true/false", "integer", "number", "text", "layer name",
                 "polygon layer", "polyline layer", "point layer", "rectangle layer", "raster",
@@ -22,7 +22,7 @@ def templates():
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     return {name: entry for name, entry in TOOL_REGISTRY.items()
             if getattr(entry.metadata, "tier", "") == "template"}
@@ -60,7 +60,7 @@ def test_a_sentence_end_is_not_an_abbreviation():
 
 
 def test_every_template_input_carries_a_description_within_the_cut_that_leads_with_its_unit_or_shape(templates):
-    from trid3nt_server.model.adapters.adapter import input_desc_cap
+    from trid3nt_harness.model.adapters.adapter import input_desc_cap
 
     cap = input_desc_cap()
     assert cap == 120 and templates
@@ -93,7 +93,7 @@ def test_the_fetch_arguments_are_described():
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     props = _tool_schema(TOOL_REGISTRY["fetch"].fn)["properties"]
     assert set(props) == {"source", "args", "edits"}

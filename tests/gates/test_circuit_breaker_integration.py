@@ -16,12 +16,12 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.model.adapters.adapter import (
+from trid3nt_harness.model.adapters.model_selection import ModelSettings
+from trid3nt_harness.model.adapters.adapter import (
     summarize_tool_result,
 )
-from trid3nt_server.settings import entry
-from trid3nt_server.model.guards.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
+from trid3nt.settings import entry
+from trid3nt_harness.model.guards.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
 from trid3nt_server.server import SessionState
 from trid3nt_contracts import new_ulid
 

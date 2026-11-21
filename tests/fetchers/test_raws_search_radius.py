@@ -10,9 +10,9 @@ import json
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.weather.fetch_raws_weather import hooks as raws
+from trid3nt.tools.fetchers._router.errors import RouterEmptyError
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.weather.fetch_raws_weather import hooks as raws
 
 #: The Willamette reach at Portland - a bbox with no RAWS in it at all.
 _REACH_BBOX = [-122.68697, 45.515863, -122.66549, 45.539677]

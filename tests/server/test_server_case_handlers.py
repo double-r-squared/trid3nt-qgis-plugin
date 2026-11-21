@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import pytest
 
 from trid3nt_server import server as server_mod
-from trid3nt_server.store.cases import (
+from trid3nt.store.cases import (
     CASES_COLLECTION,
     CHAT_COLLECTION,
     Persistence,

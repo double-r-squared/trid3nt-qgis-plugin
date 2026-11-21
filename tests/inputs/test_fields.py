@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from trid3nt_contracts.coverage import Coverage
-from trid3nt_server.inputs.fields import FieldError, Measured, records
+from trid3nt.inputs.fields import FieldError, Measured, records
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "fetcher_fields"
 

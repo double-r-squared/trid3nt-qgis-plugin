@@ -14,7 +14,7 @@ import asyncio
 import pytest
 
 from seated import resolve_params
-from trid3nt_server.workflows.runtime.resolution import (
+from trid3nt.workflows.runtime.resolution import (
     CLASSES,
     SensitivityDecl,
     sensitivity_notes,
@@ -49,7 +49,7 @@ def _inputs_of(workflow, supplied):
 
 def _resolved_rows(**supplied):
     """The REAL rows: what the fill answers for this template's values."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY[_TEMPLATE].fn.workflow
     return workflow, _inputs_of(workflow, supplied)
@@ -94,7 +94,7 @@ def test_a_granularity_stated_as_a_keyword_is_read_off_the_one_map() -> None:
     """A lever the module carries as a KEYWORD is read where a value's is - the
     run's inputs by name: a run whose plane count the user stated is refined,
     and one left at the deck's own is a bound."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY["telemac3d_stratified_flow"].fn.workflow
     lever = workflow.sensitivity.lever
@@ -133,7 +133,7 @@ def test_no_declaration_and_nothing_published_are_both_no_note() -> None:
 def test_every_telemac_template_declares_its_sensitive_reads(
         template: str, quantity: str, cls: str) -> None:
     """The three named templates plus the rest of the family, from one evidence set."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY[template].fn.workflow
     assert (quantity, cls) in workflow.sensitivity.rows
@@ -146,9 +146,9 @@ def test_every_declared_quantity_is_one_a_template_publishes() -> None:
     """A declaration names what the RUN publishes, so every row has to be a
     caption this template gives one of its own reads or a variable its module
     writes - never a field of its own."""
-    from trid3nt_server.render.formats import quantity_of
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.telemac.modules import wrapper_for
+    from trid3nt.render.formats import quantity_of
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.workflows.telemac.modules import wrapper_for
 
     for entry in TOOL_REGISTRY.values():
         workflow = getattr(getattr(entry, "fn", None), "workflow", None)
@@ -169,8 +169,8 @@ def test_every_declared_quantity_is_one_a_template_publishes() -> None:
 def test_the_spacing_is_read_off_the_mesh_the_run_published() -> None:
     """The edge is a fact of the SOLVE, so the note reads the solve step's own
     record rather than a field on the layer."""
-    from trid3nt_server.workflows.runtime.workflow import RunResult
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.workflows.runtime.workflow import RunResult
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY[_TEMPLATE].fn.workflow
     run = RunResult(value=None)
@@ -180,8 +180,8 @@ def test_the_spacing_is_read_off_the_mesh_the_run_published() -> None:
 
 def test_the_published_set_is_the_run_s_own_layers() -> None:
     """What a run published is read off its own record."""
-    from trid3nt_server.workflows.runtime.workflow import RunResult
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.workflows.runtime.workflow import RunResult
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY[_TEMPLATE].fn.workflow
     run = RunResult(value=None)

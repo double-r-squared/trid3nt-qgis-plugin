@@ -12,9 +12,9 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.modflow.modules import GWF, GWE, GWT, PRT, wrapper_for
-from trid3nt_server.workflows.modflow.modules.module import module_input_dir
-from trid3nt_server.workflows.runtime.module import (
+from trid3nt.workflows.modflow.modules import GWF, GWE, GWT, PRT, wrapper_for
+from trid3nt.workflows.modflow.modules.module import module_input_dir
+from trid3nt.workflows.runtime.module import (
     UNSET, SlotRefused, load_module_input,
 )
 

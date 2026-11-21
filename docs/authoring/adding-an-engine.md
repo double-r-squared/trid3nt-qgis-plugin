@@ -6,7 +6,7 @@ process to the steps that author its deck, a **worker** runs the solver inside
 its image, and a **postprocess** turns the raw outputs into published layers plus
 the typed scalars the agent narrates from.
 
-The live engine is TELEMAC (`trid3nt_server/workflows/telemac/`), and it is the
+The live engine is TELEMAC (`trid3nt/workflows/telemac/`), and it is the
 precedent every path below names. This doc covers the two patterns:
 
 - **Adding a template to an existing engine** (a new QUESTION the engine can
@@ -50,7 +50,7 @@ list, from the TELEMAC templates:
    module does not carry refuses by name.
 
 4. **Discovery + wiring**:
-   - import the template in `trid3nt_server/tools/__init__.py` so its
+   - import the template in `trid3nt/tools/__init__.py` so its
      registration fires at startup;
    - add the routing phrasings to the template package's `corpus.yaml` and run
      the retrieval-visibility check;

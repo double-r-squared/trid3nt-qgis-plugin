@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.runtime.module import Slot, SlotRefused
+from trid3nt.workflows.runtime.module import Slot, SlotRefused
 
 
 def _slot(**over) -> Slot:

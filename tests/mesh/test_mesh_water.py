@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.tools.mesh.meshers import MeshToolError
-from trid3nt_server.tools.mesh.water import water_polygon
+from trid3nt.tools.mesh.meshers import MeshToolError
+from trid3nt.tools.mesh.water import water_polygon
 
 _BOX = [-70.0, 42.0, -69.0, 43.0]
 
@@ -58,7 +58,7 @@ def test_the_water_polygon_fills_the_domain_slot_as_it_stands(tmp_path):
     other - drawn, fetched, or produced."""
     import json
 
-    from trid3nt_server.inputs.domain import domain
+    from trid3nt.inputs.domain import domain
 
     path = tmp_path / "water.geojson"
     path.write_text(json.dumps(water_polygon(_WEST_IS_LAND, _BOX)))

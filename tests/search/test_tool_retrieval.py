@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import pytest
 
-import trid3nt_server.tools.search.search_tools.search_tools as dd
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.search import tool_retrieval as trmod
-from trid3nt_server.tools.search.tool_retrieval import (
+import trid3nt_harness.tools.search.search_tools.search_tools as dd
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt_harness.tools.search import tool_retrieval as trmod
+from trid3nt_harness.tools.search.tool_retrieval import (
     CORE_FLOOR,
     DEFAULT_K,
     MAX_K,
@@ -100,7 +100,7 @@ def _pool_hidden_names() -> set[str]:
     import trid3nt_server.main as _m
 
     _m._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY as _full
+    from trid3nt.tools import TOOL_REGISTRY as _full
 
     return {
         n for n, e in _full.items()
@@ -112,7 +112,7 @@ def _assert_full_failopen(res):
     # The fail-open floor filters ONLY tier=internal (a cold index must not leak
     # the internal seam); engine templates are pool members and MUST appear.
     # Expect the full registry MINUS the internal seam and the data sources, which are called through fetch.
-    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+    from trid3nt.tools.fetchers._router.registration import registered_spec_names
 
     full = _full_registry_names() - _pool_hidden_names() - registered_spec_names()
     assert full <= res, f"fail-open dropped: {sorted(full - res)}"
@@ -234,7 +234,7 @@ def test_recall_surfaces_expected_tool(warm_index, query, want):
 def test_a_source_question_routes_to_the_door_and_the_door_names_the_source(warm_index, query, source):
     import asyncio
 
-    from trid3nt_server.tools.search.find_sources.find_sources import find_sources
+    from trid3nt_harness.tools.search.find_sources.find_sources import find_sources
 
     assert "find_sources" in retrieve_visible_tools(query, None, DEFAULT_K)
     rows = asyncio.run(find_sources(query=query))["results"]
@@ -253,13 +253,13 @@ def _full_registry_names() -> set[str]:
     import trid3nt_server.main as _m
 
     _m._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY as _full
+    from trid3nt.tools import TOOL_REGISTRY as _full
 
     return set(_full)
 
 
 def test_every_registered_tool_has_corpus_queries():
-    from trid3nt_server.tools.fetchers._router.registration import registered_spec_names
+    from trid3nt.tools.fetchers._router.registration import registered_spec_names
 
     corpus = _load_corpus()
     # Engine templates ARE required to have corpus queries -- their co-located

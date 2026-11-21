@@ -10,19 +10,19 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.slots import BED, DOMAIN, EXTENT
+from trid3nt.inputs.slots import BED, DOMAIN, EXTENT
 from seated import value_inputs, row_inputs
 
 
 def _declared():
     """The template module the registration was handed, by its own names."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow.template
 
 
 def _rows():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     return {row.name: row
             for row in row_inputs(TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow)}
@@ -45,7 +45,7 @@ def test_the_domain_is_asked_for_as_the_land_water_edge():
 def test_the_coastline_is_the_only_hydrography_source_this_row_can_take():
     """The feature the row asks for is what selects: a waterbody, a reach and a
     traced basin are the same class and none of them is a land-water edge."""
-    from trid3nt_server.tools.search.match import (
+    from trid3nt.tools.search.match import (
         Need, match, sources_with_coverage)
 
     domain = _rows()["domain"]
@@ -83,7 +83,7 @@ def test_the_mesh_is_cut_from_the_domain_polygon_and_not_from_a_box():
     """The domain polygon's own edge IS the shoreline every sizing function
     measures, so the recipe hands the mesher that polygon; a box is not a domain
     and the mesher refuses one by name."""
-    from trid3nt_server.workflows.telemac.templates.agitation.agitation import MESH
+    from trid3nt.workflows.telemac.templates.agitation.agitation import MESH
 
     assert MESH.extent == "domain"
     set_bed = next(op for op in MESH.ops if op.fn == "set_bed")
@@ -93,7 +93,7 @@ def test_the_mesh_is_cut_from_the_domain_polygon_and_not_from_a_box():
 def test_the_template_declares_no_domain_twin():
     """The domain, its bed and its resolution are the slots' - a param of the
     same name beside them would be two statements of one thing."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     params = {p.name for p in
               value_inputs(TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow)}
@@ -106,7 +106,7 @@ def test_every_slot_reaches_the_wire(name: str):
     """A slot the caller cannot name is a slot only a fetcher can fill."""
     import inspect
 
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["artemis_harbor_agitation"].fn
     assert name in inspect.signature(fn).parameters

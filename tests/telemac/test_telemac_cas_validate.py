@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring import cas_validate as V
+from trid3nt.workflows.telemac.authoring import cas_validate as V
 
 class _Completed:
     def __init__(self, returncode=0, stdout="", stderr=""):
@@ -84,7 +84,7 @@ def test_a_driver_that_could_not_run_at_all_refuses_too(tmp_path, monkeypatch):
 
 def _submitted(monkeypatch, tmp_path, sheet) -> dict:
     """What the serializer offers the parser, and under which dictionary."""
-    from trid3nt_server.workflows.telemac.authoring import serializer as Z
+    from trid3nt.workflows.telemac.authoring import serializer as Z
 
     seen: dict = {}
 
@@ -110,7 +110,7 @@ def _submitted(monkeypatch, tmp_path, sheet) -> dict:
 
 
 def test_a_tracer_reach_submits_only_its_own_steering(tmp_path, monkeypatch):
-    from trid3nt_server.workflows.telemac.modules import T2D, fill
+    from trid3nt.workflows.telemac.modules import T2D, fill
 
     assert _submitted(monkeypatch, tmp_path, fill(T2D, DURATION=600.0)) == {
         "t2d_river.cas": "telemac2d"}
@@ -119,7 +119,7 @@ def test_a_tracer_reach_submits_only_its_own_steering(tmp_path, monkeypatch):
 def test_a_coupled_reach_submits_the_coupled_modules_steering_too(tmp_path,
                                                                   monkeypatch):
     """Each file is read against the dictionary of the module that reads it."""
-    from trid3nt_server.workflows.telemac.modules import GAIA, T2D, WAQTEL, fill
+    from trid3nt.workflows.telemac.modules import GAIA, T2D, WAQTEL, fill
 
     o2 = fill(T2D, coupling=[WAQTEL.o2(
         WATER_TEMPERATURE=20.0, WATER_SALINITY=0.0,
@@ -142,7 +142,7 @@ def test_a_coupled_reach_submits_the_coupled_modules_steering_too(tmp_path,
 
 def _written(monkeypatch, tmp_path, sheet) -> dict:
     """The keywords each deck the serializer writes states, by file."""
-    from trid3nt_server.workflows.telemac.authoring import serializer as Z
+    from trid3nt.workflows.telemac.authoring import serializer as Z
 
     decks: dict = {}
 
@@ -164,7 +164,7 @@ def test_a_coupled_steering_names_the_hosts_partitioned_files(tmp_path,
                                                               monkeypatch):
     """On more than one core the launcher partitions the files EACH deck names,
     so the coupled deck names the host's mesh and boundary conditions itself."""
-    from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, fill
+    from trid3nt.workflows.telemac.modules import T2D, WAQTEL, fill
 
     sheet = fill(T2D, GEOMETRY_FILE="river.slf",
                  BOUNDARY_CONDITIONS_FILE="river.cli",

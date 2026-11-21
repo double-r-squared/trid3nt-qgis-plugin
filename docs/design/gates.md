@@ -1,6 +1,6 @@
 # gates -- the one card a person answers before a run
 
-`trid3nt_server/inputs/gate/` is where a turn waits on a person. Its files are
+`trid3nt_harness/inputs/gate/` is where a turn waits on a person. Its files are
 listed in that folder's README; this page says how the one card works.
 
 ## One gate machine

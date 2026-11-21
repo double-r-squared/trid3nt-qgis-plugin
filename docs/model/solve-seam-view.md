@@ -8,27 +8,27 @@ Plane: **workflow**. System: **assembler -> solver -> products**. One seam of th
 
 ```mermaid
 flowchart LR
-    acceptedMesh["Assembler<br/>trid3nt_server/workflows/telemac/authoring/accepted_mesh.py"]
-    bedPainter["BedPainter<br/>trid3nt_server/tools/mesh/shared/primitives.py"]
-    diagnosticsReader["DiagnosticsReader<br/>trid3nt_server/workflows/telemac/diagnostics.py"]
-    initialState["Assembler<br/>trid3nt_server/workflows/telemac/authoring/initial_state.py"]
-    launcherArm["LauncherArm<br/>trid3nt_server/workflows/telemac/engine.py"]
-    manifestStager["ManifestStager<br/>trid3nt_server/workflows/solver/staging.py"]
-    meshAcceptance["MeshAcceptance<br/>trid3nt_server/tools/mesh/step.py"]
-    opening["Assembler<br/>trid3nt_server/workflows/telemac/authoring/opening.py"]
-    ratingCurve["Assembler<br/>trid3nt_server/workflows/telemac/authoring/rating_curve.py"]
-    referenceSurface["Assembler<br/>trid3nt_server/workflows/telemac/authoring/reference_surface.py"]
-    releasePoint["Assembler<br/>trid3nt_server/workflows/telemac/authoring/release_point.py"]
-    resultReader["ResultReader<br/>trid3nt_server/workflows/telemac/modules/outputs.py"]
-    runReader["RunReader<br/>trid3nt_server/workflows/telemac/modules/listing.py"]
-    solveStep["SolveStep<br/>trid3nt_server/workflows/telemac/engine.py"]
-    stagedCheck["StagedCheck<br/>trid3nt_server/workflows/telemac/authoring/staged_check.py"]
-    steeringStatements["Serializer<br/>trid3nt_server/workflows/telemac/authoring/serializer.py"]
-    supervisor["Supervisor<br/>trid3nt_server/workflows/solver/solver.py"]
+    acceptedMesh["Assembler<br/>trid3nt/workflows/telemac/authoring/accepted_mesh.py"]
+    bedPainter["BedPainter<br/>trid3nt/tools/mesh/shared/primitives.py"]
+    diagnosticsReader["DiagnosticsReader<br/>trid3nt/workflows/telemac/diagnostics.py"]
+    initialState["Assembler<br/>trid3nt/workflows/telemac/authoring/initial_state.py"]
+    launcherArm["LauncherArm<br/>trid3nt/workflows/telemac/engine.py"]
+    manifestStager["ManifestStager<br/>trid3nt/workflows/solver/staging.py"]
+    meshAcceptance["MeshAcceptance<br/>trid3nt/tools/mesh/step.py"]
+    opening["Assembler<br/>trid3nt/workflows/telemac/authoring/opening.py"]
+    ratingCurve["Assembler<br/>trid3nt/workflows/telemac/authoring/rating_curve.py"]
+    referenceSurface["Assembler<br/>trid3nt/workflows/telemac/authoring/reference_surface.py"]
+    releasePoint["Assembler<br/>trid3nt/workflows/telemac/authoring/release_point.py"]
+    resultReader["ResultReader<br/>trid3nt/workflows/telemac/modules/outputs.py"]
+    runReader["RunReader<br/>trid3nt/workflows/telemac/modules/listing.py"]
+    solveStep["SolveStep<br/>trid3nt/workflows/telemac/engine.py"]
+    stagedCheck["StagedCheck<br/>trid3nt/workflows/telemac/authoring/staged_check.py"]
+    steeringStatements["Serializer<br/>trid3nt/workflows/telemac/authoring/serializer.py"]
+    supervisor["Supervisor<br/>trid3nt/workflows/solver/solver.py"]
     telapyChild["TelapyChild<br/>workers/telemac/entrypoint.py"]
-    topologyWriter["TopologyWriter<br/>trid3nt_server/workflows/telemac/authoring/topology.py"]
-    uniformFlow["UniformFlow<br/>trid3nt_server/workflows/telemac/helpers/uniform_flow.py"]
-    walkedBoundary["Assembler<br/>trid3nt_server/workflows/telemac/authoring/walked_boundary.py"]
+    topologyWriter["TopologyWriter<br/>trid3nt/workflows/telemac/authoring/topology.py"]
+    uniformFlow["UniformFlow<br/>trid3nt/workflows/telemac/helpers/uniform_flow.py"]
+    walkedBoundary["Assembler<br/>trid3nt/workflows/telemac/authoring/walked_boundary.py"]
     workerEntrypoint["WorkerEntrypoint<br/>workers/telemac/entrypoint.py"]
     manifestStager -- "ManifestCaseSection" --> workerEntrypoint
     supervisor -- "FoldedRunPhysics (supervisor pass through)" --> diagnosticsReader
@@ -191,4 +191,4 @@ The run's only report, written whatever the child did. Success is not the worker
 - **ReadersNeverImportTheWorker** - What a solved run says is read from the artifacts the supervisor uploaded. A reader importing worker code is a second computation of the same quantity, running outside the image that produced it.
 - **ServerFactsDoctrine** - Server-known facts are stated by the server, copied by the worker VERBATIM, and never re-derived in the container. Worker-measured facts are the worker's own: the frame count is measured off the file the server facts name, and an unmeasurable result is the ABSENCE of the key rather than a zero.
 - **StrictGateRefusesUnknownFields** - A dropped key silently no-ops the knob the caller meant to set. The gate refuses instead, and names the parser stamp so a stale image reads as a drifted version rather than as a knob that did nothing.
-- **WorkersNeverImportServer** - The container is the engine room: a worker that reaches into the server package has an opinion, a default or a fetch in it.
+- **WorkersNeverImportServer** - The container is the engine room: a worker that reaches into the product packages has an opinion, a default or a fetch in it.

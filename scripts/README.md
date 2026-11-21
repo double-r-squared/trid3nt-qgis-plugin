@@ -14,7 +14,7 @@ a dev tool and lives under `dev/`, which git does not carry.
 | `extract_modflow_dictionary.py` | Regenerate the committed MODFLOW body dictionaries from the mf6 definition files at the release the worker carries. |
 | `extract_geoclaw_dictionary.py` | Regenerate the committed GeoClaw module dictionaries (`geoclaw` and `geoclaw_bouss`) from Clawpack's own Data classes (run with the spike venv interpreter; clawpack never enters `venvs/agent`). |
 | `extract_pestpp_dictionary.py` | Regenerate the committed PEST++ option dictionary from the 5.2.27 users manual at the release tag (`--manual` for a local copy, held to the tag's blob) read against the binary's own parse-only records in `tests/fixtures/pestpp/defaults`. |
-| `generate_us_state_envelopes.py` | Regenerate the committed US state envelope table (`trid3nt_server/tools/fetchers/us_state_envelopes.py`) and the conterminous land envelope from the Census cartographic boundary file. |
+| `generate_us_state_envelopes.py` | Regenerate the committed US state envelope table (`trid3nt/tools/fetchers/us_state_envelopes.py`) and the conterminous land envelope from the Census cartographic boundary file. |
 | `fetch_binaries.sh` | Idempotent downloader for `mf6`, `minio` and `mc`. |
 | `init_minio.sh` | Create the runs and cache buckets in the local MinIO. |
 | `install_plugin.sh` | THE plugin deploy step: sync the plugin into the live QGIS profile. |

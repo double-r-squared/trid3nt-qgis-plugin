@@ -13,14 +13,14 @@ from pathlib import Path
 import pytest
 from pyproj import Transformer
 
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow.authoring import mesh_files as MF
-from trid3nt_server.workflows.modflow.authoring.simulation import serialize
-from trid3nt_server.workflows.modflow.authoring.stress import hold_lakes, place_lakes
-from trid3nt_server.workflows.modflow.authoring.validate import validate_authored_simulation
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow.authoring import mesh_files as MF
+from trid3nt.workflows.modflow.authoring.simulation import serialize
+from trid3nt.workflows.modflow.authoring.stress import hold_lakes, place_lakes
+from trid3nt.workflows.modflow.authoring.validate import validate_authored_simulation
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF
+from trid3nt.workflows.runtime.sheet import fill
 
 _SIDE = 3
 _N = _SIDE * _SIDE
@@ -172,7 +172,7 @@ def test_a_lake_with_no_flat_surface_starts_at_the_median_of_the_pixels_inside_i
 
 def test_a_constant_lake_with_no_majority_is_skipped_and_the_one_line_note_counts_it(tmp_path, monkeypatch):
     notes = []
-    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
+    monkeypatch.setattr("trid3nt.inputs.run_notes.journal_note", notes.append)
     ragged = _surface(tmp_path, [254.75, 257.0, 260.0])
 
     packagedata, _, _ = _place([_constant(_MIDDLE_ROW, ragged)])
@@ -195,7 +195,7 @@ def test_a_constant_lake_counts_pixels_within_the_tolerance_as_one_and_a_pixel_o
 
 def test_the_skipped_waterbodies_are_counted_in_one_line_with_no_id_area_or_reason(tmp_path, monkeypatch):
     notes = []
-    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
+    monkeypatch.setattr("trid3nt.inputs.run_notes.journal_note", notes.append)
     ragged = _surface(tmp_path, [254.75, 257.0, 260.0])
 
     _place([_constant(_box(11.0, 11.0, 14.0, 14.0), ragged), _constant(_MIDDLE_ROW, ragged)])
@@ -206,7 +206,7 @@ def test_the_skipped_waterbodies_are_counted_in_one_line_with_no_id_area_or_reas
 
 def test_the_journal_calls_a_stage_read_from_the_surface_the_start_stage(tmp_path, monkeypatch):
     notes = []
-    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
+    monkeypatch.setattr("trid3nt.inputs.run_notes.journal_note", notes.append)
     _place([_statement(_MIDDLE_ROW, stage={"surface": _surface(tmp_path, [7.5, 7.5, 7.5])})])
     assert "start stage" in notes[0]
 
@@ -262,8 +262,8 @@ def test_a_length_unit_the_run_does_not_state_refuses():
 
 def test_a_pond_inside_a_lake_cell_is_not_captured_and_the_note_counts_it(monkeypatch):
     notes, covered = [], []
-    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
-    monkeypatch.setattr("trid3nt_server.inputs.run_notes.cut_coverage", covered.append)
+    monkeypatch.setattr("trid3nt.inputs.run_notes.journal_note", notes.append)
+    monkeypatch.setattr("trid3nt.inputs.run_notes.cut_coverage", covered.append)
     inside_the_lake_cell = _box(12.0, 12.0, 14.0, 14.0)
 
     packagedata, connectiondata, _ = _place([_statement(inside_the_lake_cell), _statement(_CENTRE)])
@@ -286,8 +286,8 @@ def _features(statements, grid=_ONE_LAYER, **over):
 
 def test_a_pond_wholly_inside_one_cell_is_embedded_in_it(monkeypatch):
     notes, covered = [], []
-    monkeypatch.setattr("trid3nt_server.inputs.run_notes.journal_note", notes.append)
-    monkeypatch.setattr("trid3nt_server.inputs.run_notes.cut_coverage", covered.append)
+    monkeypatch.setattr("trid3nt.inputs.run_notes.journal_note", notes.append)
+    monkeypatch.setattr("trid3nt.inputs.run_notes.cut_coverage", covered.append)
 
     packagedata, connectiondata, _, _, features = _features([_statement(_POND)])
 
@@ -308,7 +308,7 @@ def test_a_polygon_crossing_cells_that_holds_no_cell_centre_is_not_placed():
 
 def _card_rows(statements, monkeypatch, **over):
     covered = []
-    monkeypatch.setattr("trid3nt_server.inputs.run_notes.cut_coverage", covered.append)
+    monkeypatch.setattr("trid3nt.inputs.run_notes.cut_coverage", covered.append)
     _features(statements, **over)
     return [line for line in covered if "refine toward" in line]
 

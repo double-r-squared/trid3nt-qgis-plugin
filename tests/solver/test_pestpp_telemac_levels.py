@@ -13,10 +13,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.workflows.pestpp.authoring import telemac as piece
-from trid3nt_server.workflows.pestpp.authoring.control import Parameter
-from trid3nt_server.workflows.pestpp.errors import PestppError
-from trid3nt_server.workflows.telemac.authoring.staged_check import read_steering
+from trid3nt.workflows.pestpp.authoring import telemac as piece
+from trid3nt.workflows.pestpp.authoring.control import Parameter
+from trid3nt.workflows.pestpp.errors import PestppError
+from trid3nt.workflows.telemac.authoring.staged_check import read_steering
 
 _MISSOURI = Path(__file__).resolve().parents[1] / "fixtures" / "telemac_missouri"
 _STEERING = "telemac2d_telemac_dye_release.cas"
@@ -25,7 +25,7 @@ _TRIAL = Path(__file__).resolve().parents[2] / "workers" / "pestpp" / "telemac_t
 
 @pytest.fixture
 def staged(tmp_path, monkeypatch):
-    from trid3nt_server.tools.mesh.shared.nodes import read_accepted_mesh_nodes
+    from trid3nt.tools.mesh.shared.nodes import read_accepted_mesh_nodes
 
     shutil.copy(_MISSOURI / _STEERING, tmp_path / _STEERING)
     shutil.copy(_MISSOURI / "domain.cli", tmp_path / "domain.cli")

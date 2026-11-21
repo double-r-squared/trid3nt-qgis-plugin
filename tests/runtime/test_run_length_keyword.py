@@ -6,10 +6,10 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime.module import SlotRefused
-from trid3nt_server.workflows.telemac.modules import wrapper_for
-from trid3nt_server.workflows.telemac.modules.telemac2d import _sources
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.telemac.modules import wrapper_for
+from trid3nt.workflows.telemac.modules.telemac2d import _sources
 
 
 def test_until_refuses_naming_the_keyword_the_template_states_the_run_length_in():
@@ -21,7 +21,7 @@ def test_until_refuses_naming_the_keyword_the_template_states_the_run_length_in(
 
 
 def test_a_module_with_no_run_length_keyword_is_refused_as_before():
-    from trid3nt_server.workflows.runtime.fill import _run_length_said
+    from trid3nt.workflows.runtime.fill import _run_length_said
 
     class _Workflow:
         steering = wrapper_for("tomawac")

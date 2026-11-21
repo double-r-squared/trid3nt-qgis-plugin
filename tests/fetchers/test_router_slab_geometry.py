@@ -19,9 +19,9 @@ import netCDF4
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.fetchers import _slab2_grids as slab2
-from trid3nt_server.tools.fetchers._router.registration import get_spec
-from trid3nt_server.tools.fetchers.hazard.fetch_slab_geometry import hooks
+from trid3nt.tools.fetchers import _slab2_grids as slab2
+from trid3nt.tools.fetchers._router.registration import get_spec
+from trid3nt.tools.fetchers.hazard.fetch_slab_geometry import hooks
 
 _TAR = Path(__file__).parents[1] / "fixtures" / "geoclaw" / "slab2" / "slab2_excerpt.tar.gz"
 

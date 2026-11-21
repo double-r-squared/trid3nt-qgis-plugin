@@ -1,6 +1,6 @@
 """Entry point for the ``trid3nt-server`` console script.
 
-Importing ``trid3nt_server.tools`` populates ``TOOL_REGISTRY`` through the
+Importing ``trid3nt.tools`` populates ``TOOL_REGISTRY`` through the
 import-time ``@register_tool`` decorators; a tool whose ``AtomicToolMetadata``
 is misconfigured raises there and the service refuses to start."""
 
@@ -14,14 +14,14 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 def _import_tools_registry() -> int:
-    """Import ``trid3nt_server.tools`` to populate ``TOOL_REGISTRY`` and return
+    """Import ``trid3nt.tools`` to populate ``TOOL_REGISTRY`` and return
     the number of registered tools; an empty registry is a packaging fault.
     """
-    from . import tools  # noqa: F401 -- side-effect: registers atomic tools
+    from trid3nt import tools  # noqa: F401 -- side-effect: registers atomic tools
     # Coded tools register only when imported; row-driven fetchers need no import.
-    from .tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: F401
-    from .tools.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401
-    from .workflows.solver import solver  # noqa: F401
+    from trid3nt.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: F401
+    from trid3nt.tools.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401
+    from trid3nt.workflows.solver import solver  # noqa: F401
 
     return len(tools.TOOL_REGISTRY)
 
@@ -30,7 +30,7 @@ def _maybe_bind_dev_persistence() -> None:
     """Bind the file-backed Persistence singleton at ``TRID3NT_DEV_PERSISTENCE_DIR``
     or ``~/.trid3nt/dev_persistence/``; ``TRID3NT_DEV_PERSISTENCE=0`` refuses the bind.
     """
-    from .store.cases import (
+    from trid3nt.store.cases import (
         is_dev_persistence_enabled,
         make_persistence_for_backend,
         resolve_persistence_backend,
@@ -127,13 +127,13 @@ def run(argv: list[str] | None = None) -> int:
     startup_only = "--startup-only" in args
 
     n_tools = _import_tools_registry()
-    from . import tools
+    from trid3nt import tools
 
     tool_names = sorted(tools.TOOL_REGISTRY.keys())
     logger.info("tool registry loaded: %d tool(s): %s", n_tools, tool_names)
 
     # Built once the registry is complete: the routing prompt names the tools this registry holds.
-    from .model.adapters.adapter import system_prompt
+    from trid3nt_harness.model.adapters.adapter import system_prompt
 
     logger.info("routing prompt built: %d chars", len(system_prompt()))
 
@@ -141,7 +141,7 @@ def run(argv: list[str] | None = None) -> int:
     _maybe_bind_dev_persistence()
 
     # Must exist before the socket does; minted on a first start and printed once.
-    from .model.credentials.auth_handshake import ensure_access_token
+    from trid3nt.credentials.auth_handshake import ensure_access_token
 
     ensure_access_token()
 

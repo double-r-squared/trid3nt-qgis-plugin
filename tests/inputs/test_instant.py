@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.inputs.instant import event_time, instant
-from trid3nt_server.inputs.user_input import WireArgsError
+from trid3nt.inputs.instant import event_time, instant
+from trid3nt.inputs.user_input import WireArgsError
 
 
 def test_a_bare_date_is_midnight_utc() -> None:
@@ -54,7 +54,7 @@ def test_the_wire_coercion_pins_the_cycle() -> None:
 def test_now_is_the_current_utc_minute():
     import datetime as dt
 
-    from trid3nt_server.inputs.instant import instant
+    from trid3nt.inputs.instant import instant
 
     before = dt.datetime.now(dt.timezone.utc).replace(second=0, microsecond=0)
     read = dt.datetime.fromisoformat(instant(" Now "))

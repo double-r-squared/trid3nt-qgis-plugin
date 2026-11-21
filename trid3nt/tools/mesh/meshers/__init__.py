@@ -1,0 +1,425 @@
+"""What a MESHER is: namespaces, a role adapter, a default recipe.
+
+A mesher registers those three and nothing else; the recipe, validation, the
+gate, regeneration and the artifact are shared. Every mesher returns the SAME
+neutral :class:`Mesh` - nodes, cells, an optional bed."""
+
+from __future__ import annotations
+
+import difflib
+import hashlib
+import inspect
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable, Iterable, Mapping
+from types import MappingProxyType
+
+__all__ = [
+    "POST",
+    "PRE",
+    "BoundOp",
+    "Mesh",
+    "MeshOp",
+    "MeshToolError",
+    "Mesher",
+    "OpNamespace",
+    "bind_build",
+    "bind_ops",
+    "fetch_notes",
+    "get_mesher",
+    "input_digest",
+    "mesh_op",
+    "nearest_names",
+    "op_names",
+    "register_mesher",
+    "registered_meshers",
+    "resolve_op",
+]
+
+#: The two phases an op can run in. Which one an op is in is DERIVED from the
+#: namespace it was registered in - the caller never says it, and a namespace
+#: that spans both would make the derivation a guess.
+PRE = "pre"
+POST = "post"
+
+
+class MeshToolError(RuntimeError):
+    """A typed mesh refusal: an error code plus the reason, never a silent skip.
+
+    ``escalation`` names the call that DOES what the refused ask could not."""
+
+    def __init__(self, error_code: str, message: str,
+                 escalation: Mapping[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+        self.escalation = dict(escalation) if escalation else None
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (type(self), (self.error_code, str(self), self.escalation))
+
+
+def nearest_names(name: str, known: Iterable[str]) -> str:
+    """The closest declared spellings to ``name``, as a ready-to-quote phrase."""
+    pool = sorted(known)
+    close = difflib.get_close_matches(str(name), pool, n=3, cutoff=0.6)
+    if close:
+        return f"did you mean {', '.join(repr(c) for c in close)}? declared: {pool}"
+    return f"declared: {pool}"
+
+
+def input_digest(value: Any) -> str:
+    """``sha256:<hex>`` for an input whose content is not its declaration.
+
+    A LOCAL file is digested by its bytes; anything else by its own text."""
+    text = str(value)
+    try:
+        path = Path(text)
+        if path.is_file():
+            return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        pass
+    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _field_of(layer: Any, name: str) -> Any:
+    """One field of a fetched layer, whichever shape the registry handed back.
+
+    A fetcher returns a typed layer OR the same layer as a mapping."""
+    if isinstance(layer, Mapping):
+        return layer.get(name)
+    return getattr(layer, name, None)
+
+
+def fetch_notes(layer: Any) -> list[str]:
+    """The sentences a fetch stated about its layer, in either shape."""
+    return [str(note) for note in _field_of(layer, "notes") or [] if note]
+
+
+@dataclass(frozen=True)
+class MeshOp:
+    """One entry of a recipe's ops list: a function NAME and its kwargs.
+
+    The name is VERBATIM - the library's own spelling, never an alias."""
+
+    fn: str
+    kwargs: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "fn", str(self.fn))
+        object.__setattr__(self, "kwargs", MappingProxyType(dict(self.kwargs)))
+
+    def __reduce__(self) -> tuple:
+        return MeshOp, (self.fn, dict(self.kwargs))
+
+    def __repr__(self) -> str:
+        args = ", ".join(f"{k}={v!r}" for k, v in self.kwargs.items())
+        return f"mesh_op({self.fn!r}{', ' + args if args else ''})"
+
+
+def mesh_op(fn: str, **kwargs: Any) -> MeshOp:
+    """One recipe entry, frozen. Builds NOTHING."""
+    return MeshOp(fn=fn, kwargs=kwargs)
+
+
+@dataclass(frozen=True)
+class OpNamespace:
+    """A set of callables a recipe's ops may name, and WHEN they run.
+
+    ``module`` when this process can import it, else ``names`` as the roster."""
+
+    origin: str
+    phase: str
+    module: Any = None
+    names: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.phase not in (PRE, POST):
+            raise MeshToolError(
+                "MESH_NAMESPACE_PHASE",
+                f"namespace {self.origin!r} declares phase {self.phase!r}; a "
+                f"namespace runs in {PRE!r} or {POST!r}.")
+        if self.module is None and not self.names:
+            raise MeshToolError(
+                "MESH_NAMESPACE_EMPTY",
+                f"namespace {self.origin!r} declares neither a module to read "
+                "its callables from nor a roster of names.")
+        if self.module is not None and not getattr(self.module, "__all__", ()):
+            raise MeshToolError(
+                "MESH_NAMESPACE_UNDECLARED",
+                f"namespace {self.origin!r} reads its roster off "
+                f"{self.module.__name__}.__all__, and that module declares none.")
+
+    def roster(self) -> tuple[str, ...]:
+        """Every name this namespace answers to.
+
+        A module's own ``__all__`` is the roster: what it DECLARES it offers."""
+        if self.names:
+            return self.names
+        return tuple(sorted(getattr(self.module, "__all__", ())))
+
+    def callable_for(self, fn: str) -> Callable[..., Any] | None:
+        """The real callable behind ``fn``, or ``None`` when it lives elsewhere."""
+        if self.module is None:
+            return None
+        return getattr(self.module, str(fn), None)
+
+
+def _shared_primitives() -> tuple[OpNamespace, ...]:
+    """The primitives namespace that rides along for EVERY mesher."""
+    # Imported where it is asked rather than at module scope: the primitives are
+    # written against :class:`Mesh`, which is declared here.
+    from trid3nt.tools.mesh.shared import primitives
+
+    return (OpNamespace(origin="primitives", phase=POST, module=primitives),)
+
+
+@dataclass(frozen=True)
+class BoundOp:
+    """One recipe entry resolved against the namespace that owns it.
+
+    ``fn`` is ``None`` when this process cannot import the callable."""
+
+    op: MeshOp
+    origin: str
+    phase: str
+    fn: Callable[..., Any] | None = None
+    note: str | None = None
+
+    @property
+    def name(self) -> str:
+        return self.op.fn
+
+    @property
+    def kwargs(self) -> Mapping[str, Any]:
+        return self.op.kwargs
+
+
+def _namespaces(mesher: "Mesher") -> tuple[OpNamespace, ...]:
+    return tuple(mesher.namespaces) + _shared_primitives()
+
+
+def op_names(mesher: "Mesher") -> tuple[str, ...]:
+    """Every name this mesher's ops may use, across both origins, sorted."""
+    seen: set[str] = set()
+    for space in _namespaces(mesher):
+        seen.update(space.roster())
+    return tuple(sorted(seen))
+
+
+def resolve_op(mesher: "Mesher", fn: str) -> tuple[OpNamespace, Callable[..., Any] | None]:
+    """Which namespace owns ``fn`` -> ``(namespace, callable | None)``.
+
+    A name in BOTH origins refuses: its phase would not be derivable."""
+    found = [space for space in _namespaces(mesher) if str(fn) in space.roster()]
+    if len(found) > 1:
+        raise MeshToolError(
+            "MESH_OP_AMBIGUOUS",
+            f"{fn!r} is registered in {[s.origin for s in found]} for mesher "
+            f"{mesher.name!r}; an op's phase is derived from its namespace, so a "
+            "name two of them answer to has no derivable phase.")
+    if not found:
+        raise MeshToolError(
+            "MESH_OP_UNKNOWN",
+            f"mesher {mesher.name!r} registers no op {fn!r} "
+            f"({nearest_names(fn, op_names(mesher))}).")
+    space = found[0]
+    return space, space.callable_for(fn)
+
+
+def bind_ops(mesher: "Mesher",
+             ops: Iterable[MeshOp]) -> tuple[BoundOp, ...]:
+    """Validate a recipe's ops against the mesher's namespaces -> bound entries.
+
+    THE SIGNATURE IS THE SCHEMA. Order is preserved; duplicates are legal."""
+    bound: list[BoundOp] = []
+    for op in ops:
+        space, fn = resolve_op(mesher, op.fn)
+        note = None
+        if fn is None:
+            note = (f"{op.fn!r} is a {space.origin} function this process cannot "
+                    "import, so its kwargs were not bound here; the driver that "
+                    "runs it binds them against the real signature")
+        else:
+            _bind_signature(mesher, op, fn)
+        bound.append(BoundOp(op=op, origin=space.origin, phase=space.phase,
+                             fn=fn, note=note))
+    return tuple(bound)
+
+
+def _bind_signature(mesher: "Mesher", op: MeshOp,
+                    fn: Callable[..., Any]) -> None:
+    """Bind ``op``'s kwargs to the real callable, or refuse in its own words."""
+    try:
+        signature = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return
+    try:
+        signature.bind_partial(**{k: None for k in op.kwargs})
+    except TypeError as exc:
+        declared = [name for name, prm in signature.parameters.items()
+                    if prm.kind not in (prm.VAR_POSITIONAL, prm.VAR_KEYWORD)]
+        raise MeshToolError(
+            "MESH_OP_BAD_KWARGS",
+            f"mesh_op({op.fn!r}, ...) on mesher {mesher.name!r}: {exc}. The "
+            f"function's own parameters are {declared}.") from None
+
+
+def bind_build(mesher: "Mesher", build: Mapping[str, Any]) -> None:
+    """Check a recipe's ``build`` keys against the backend's constructor roster.
+
+    The roster is the mesher's own declaration, exactly like an op namespace:
+    the library lives only in the container, so its kwargs bind there against
+    the real signature. An empty roster is a constructor that takes none."""
+    unknown = [key for key in build if key not in mesher.build_params]
+    if unknown:
+        raise MeshToolError(
+            "MESH_BUILD_UNKNOWN_PARAM",
+            f"mesher {mesher.name!r} takes build parameter(s) "
+            f"{list(mesher.build_params) or 'none'}; {unknown} is not among "
+            f"them ({nearest_names(unknown[0], mesher.build_params)}).")
+
+
+@dataclass(frozen=True)
+class Mesh:
+    """A built mesh in the ONE shape every mesher returns and every writer reads."""
+
+    #: ``(N, 2)`` node coordinates in ``crs_authid`` units; ``None`` for a mesh
+    #: whose realized topology lives in an ENGINE BUNDLE, which the engine
+    #: re-realizes from the authoring inputs the mesher staged.
+    points: Any
+    #: ``(M, 3)`` triangles, ``(M, 4)`` quads, or a RAGGED sequence of index
+    #: rows of any vertex count (Voronoi polygons, quadtree hanging nodes);
+    #: ``None`` carries the same meaning as a ``None`` ``points``, and such a
+    #: mesh states its counts in ``meta["artifact"]`` and carries its own
+    #: display face.
+    cells: Any
+    crs_authid: str
+    #: Node elevation, positive up; ``None`` when no bed was painted - a solver
+    #: that needs bathymetry declines rather than reading zeros as ground.
+    bed: Any | None = None
+    meta: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "meta", MappingProxyType(dict(self.meta)))
+
+    def _declared_count(self, name: str) -> int:
+        return int((self.meta.get("artifact") or {}).get(name, 0))
+
+    @property
+    def node_count(self) -> int:
+        if self.points is None:
+            return self._declared_count("node_count")
+        return int(self.points.shape[0])
+
+    @property
+    def element_count(self) -> int:
+        if self.cells is None:
+            return self._declared_count("element_count")
+        return int(len(self.cells))
+
+    @property
+    def nodes_per_cell(self) -> int:
+        """The one vertex count every cell shares, or 0 for a ragged mesh."""
+        if self.cells is None:
+            return 0
+        shape = getattr(self.cells, "shape", None)
+        return int(shape[1]) if shape is not None and len(shape) == 2 else 0
+
+    @property
+    def ragged(self) -> bool:
+        """Do the cells vary in vertex count? A 2-D array never does."""
+        if self.cells is None:
+            return False
+        shape = getattr(self.cells, "shape", None)
+        return shape is None or len(shape) != 2
+
+    @property
+    def has_cells(self) -> bool:
+        return self.cells is not None
+
+    @property
+    def has_bed(self) -> bool:
+        return self.bed is not None
+
+
+@dataclass(frozen=True)
+class Mesher:
+    """A registered mesh library: namespaces, a role adapter, a default recipe.
+
+    ``build`` IS the role adapter; ``kinds[0]`` is what an undeclared ask gets.
+    ``build_params`` is the backend CONSTRUCTOR's own parameter roster, declared
+    like an op namespace - the library lives only in the container, so a
+    recipe's ``build`` kwargs bind there against the real signature. An empty
+    roster is a constructor that takes none (om2d, reg_grid)."""
+
+    name: str
+    build: Callable[[Any], Mesh]
+    kinds: tuple[str, ...]
+    namespaces: tuple[OpNamespace, ...] = ()
+    default_ops: tuple[MeshOp, ...] = ()
+    build_params: tuple[str, ...] = ()
+    #: A MEASURED claim about the library: False where identical inputs have been
+    #: observed to produce different meshes, so a replay is read as an equivalent
+    #: rebuild rather than as the same mesh.
+    deterministic: bool = True
+
+    def kind_or_default(self, kind: Any) -> str:
+        """The kind this ask builds, checked against what this mesher makes."""
+        if kind is None:
+            return self.kinds[0]
+        if str(kind) not in self.kinds:
+            raise MeshToolError(
+                "MESH_KIND_UNSUPPORTED",
+                f"mesher {self.name!r} makes {list(self.kinds)} meshes, not "
+                f"{kind!r}.")
+        return str(kind)
+
+
+_MESHERS: dict[str, Mesher] = {}
+
+
+def register_mesher(
+    name: str,
+    build: Callable[[Any], Mesh],
+    *,
+    kinds: Iterable[str],
+    namespaces: Iterable[OpNamespace] = (),
+    default_ops: Iterable[MeshOp] = (),
+    build_params: Iterable[str] = (),
+    deterministic: bool = True,
+) -> Mesher:
+    """Record a mesher under ``name`` -> the registered :class:`Mesher`.
+
+    A duplicate name raises at import: two libraries under one name cannot route."""
+    key = str(name)
+    if key in _MESHERS:
+        raise MeshToolError(
+            "MESH_DUPLICATE_MESHER",
+            f"a mesher named {key!r} is already registered.")
+    mesher = Mesher(
+        name=key, build=build, kinds=tuple(str(k) for k in kinds),
+        namespaces=tuple(namespaces), default_ops=tuple(default_ops),
+        build_params=tuple(str(p) for p in build_params),
+        deterministic=bool(deterministic))
+    if not mesher.kinds:
+        raise MeshToolError(
+            "MESH_KIND_UNDECLARED",
+            f"mesher {key!r} declares no kind of mesh it makes.")
+    _MESHERS[key] = mesher
+    return mesher
+
+
+def get_mesher(name: str) -> Mesher:
+    """The mesher registered under ``name``, or a typed refusal naming the roster."""
+    found = _MESHERS.get(str(name))
+    if found is None:
+        raise MeshToolError(
+            "MESH_UNKNOWN_MESHER",
+            f"no mesher named {name!r} is registered "
+            f"({nearest_names(name, _MESHERS)}).")
+    return found
+
+
+def registered_meshers() -> tuple[str, ...]:
+    """The registered mesher names, sorted."""
+    return tuple(sorted(_MESHERS))

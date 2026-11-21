@@ -12,12 +12,12 @@ import json
 
 import pytest
 
-from trid3nt_server.tools.fetchers._router.errors import RouterError, RouterInputError
-from trid3nt_server.tools.fetchers._router.executors import http_json
-from trid3nt_server.tools.fetchers._router.executors.vector_fgb import (
+from trid3nt.tools.fetchers._router.errors import RouterError, RouterInputError
+from trid3nt.tools.fetchers._router.executors import http_json
+from trid3nt.tools.fetchers._router.executors.vector_fgb import (
     apply_ingest_transforms)
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.tools.fetchers.hydrology.fetch_nhd_water_surface import (
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.hydrology.fetch_nhd_water_surface import (
     hooks as ws)
 
 #: The Willamette at Portland - a river wide enough for NHD to map its surface.

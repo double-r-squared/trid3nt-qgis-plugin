@@ -9,8 +9,8 @@ import time
 
 import numpy as np
 
-from trid3nt_server.inputs.run_notes import journal_note
-from trid3nt_server.tools.mesh.meshers import Mesh, MeshToolError
+from trid3nt.inputs.run_notes import journal_note
+from trid3nt.tools.mesh.meshers import Mesh, MeshToolError
 
 #: Taken by a parent thread while a child starts: a child that copied the parent's memory finds it held.
 HELD = threading.Lock()
@@ -48,8 +48,8 @@ def reports_cores(_recipe):
 
 
 def reports_context(key_name):
-    from trid3nt_server.model.credentials.resolver import stored_value
-    from trid3nt_server.tools.mesh.inputs import _rasters_dir
+    from trid3nt.credentials.resolver import stored_value
+    from trid3nt.tools.mesh.inputs import _rasters_dir
 
     raise MeshToolError("SEEN", f"{_rasters_dir()} {stored_value(key_name)}")
 

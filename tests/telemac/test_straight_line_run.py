@@ -7,14 +7,14 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime import fill as fill_mod
-from trid3nt_server.workflows.runtime.fill import Fill
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.runtime import fill as fill_mod
+from trid3nt.workflows.runtime.fill import Fill
 from seated import resolve_params
-from trid3nt_server.workflows.telemac import workflow as tw
-from trid3nt_server.workflows.telemac.authoring import (mesh_files, opening,
+from trid3nt.workflows.telemac import workflow as tw
+from trid3nt.workflows.telemac.authoring import (mesh_files, opening,
                                                         release_point)
-from trid3nt_server.tools.mesh import step as mesh_step
+from trid3nt.tools.mesh import step as mesh_step
 from seated import value_inputs
 
 
@@ -45,14 +45,14 @@ def _launched(monkeypatch, *, keywords=None, restart_clean=False):
     calls: list = []
     _faked(monkeypatch, calls)
     from trid3nt_contracts.common import Origin
-    from trid3nt_server.workflows.runtime.fill import ACCEPTED, Verdict
+    from trid3nt.workflows.runtime.fill import ACCEPTED, Verdict
 
     state = Fill(workflow=workflow, carried={"restart_clean": restart_clean},
                  inputs=asyncio.run(resolve_params(value_inputs(workflow), {})))
     state.inputs.update({name: Verdict(ACCEPTED, value, origin=Origin.USER)
                          for name, value in (keywords or {}).items()})
     # The release is stated: a point the run would place by itself is never invented.
-    from trid3nt_server.inputs.point import Point
+    from trid3nt.inputs.point import Point
 
     state.inputs["release"] = Verdict(ACCEPTED, Point(-122.65, 45.53), origin=Origin.USER)
     run = asyncio.run(workflow.launch(state))
@@ -83,7 +83,7 @@ def test_the_solve_is_handed_the_run_the_sheet_stage_staged(monkeypatch):
 
     monkeypatch.setattr(tw, "stage_sheet", staged)
     monkeypatch.setattr(tw, "fill_sheet", sheet)
-    from trid3nt_server.workflows.runtime.fill import Fill
+    from trid3nt.workflows.runtime.fill import Fill
 
     state = Fill(workflow=workflow, carried={"restart_clean": False},
                  inputs=asyncio.run(resolve_params(value_inputs(workflow), {})))
@@ -133,8 +133,8 @@ def test_the_settle_s_keywords_go_straight_to_the_sheet(monkeypatch):
 
 
 def test_a_launch_that_raises_carries_its_own_error_and_its_notes(monkeypatch):
-    from trid3nt_server.workflows.runtime.errors import StepFailedError
-    from trid3nt_server.inputs.run_notes import journal_note
+    from trid3nt.workflows.runtime.errors import StepFailedError
+    from trid3nt.inputs.run_notes import journal_note
 
     class Refused(Exception):
         """The run's own failure, which nothing may replace."""
@@ -260,9 +260,9 @@ class _Store:
 
 def _card_edited(monkeypatch, tmp_path, *, cancel):
     """Launch a run whose card is edited once, then cancelled or proceeded on -> the store, the solve's staged run."""
-    from trid3nt_server.store import objects
-    from trid3nt_server.workflows.solver import staging
-    from trid3nt_server.workflows.telemac.errors import TelemacError
+    from trid3nt.store import objects
+    from trid3nt.workflows.solver import staging
+    from trid3nt.workflows.telemac.errors import TelemacError
 
     store, solved = _Store(), []
     monkeypatch.setattr(objects, "_CLIENT", store)

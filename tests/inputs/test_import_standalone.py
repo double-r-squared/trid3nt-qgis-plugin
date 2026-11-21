@@ -18,8 +18,8 @@ def _import_first(module: str) -> None:
 
 
 def test_inputs_imports_with_nothing_else_imported_first() -> None:
-    _import_first("trid3nt_server.inputs")
+    _import_first("trid3nt.inputs")
 
 
 def test_runtime_imports_with_nothing_else_imported_first() -> None:
-    _import_first("trid3nt_server.workflows.runtime")
+    _import_first("trid3nt.workflows.runtime")

@@ -11,17 +11,17 @@ from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_contracts.processing_contracts import ProcessingResponsePayload
 from trid3nt_contracts.secrets import SecretAddEnvelopePayload
 from trid3nt_contracts.ws import CancelPayload, ErrorPayload, LayerResponsePayload, SessionResumePayload, SpatialInputResponsePayload, UserMessagePayload
-from trid3nt_server.model.adapters.model_selection import ModelSettings
-from trid3nt_server.inputs.gate.pending import (
+from trid3nt_harness.model.adapters.model_selection import ModelSettings
+from trid3nt_harness.inputs.gate.pending import (
     _PENDING_CONFIRMATIONS,
     _PENDING_LAYER,
     _PENDING_PROCESSING,
     _PENDING_SPATIAL_INPUTS,
     _PENDING_TOOL_CHOICES,
 )
-from trid3nt_server.settings import setting
+from trid3nt.settings import setting
 from trid3nt_server.server.dispatch.emitter import _assert_sync_offload_safe, _ensure_emitter
-from trid3nt_server.inputs.gate.errors import SpatialInputInvalidResponseError
+from trid3nt_harness.inputs.gate.errors import SpatialInputInvalidResponseError
 from trid3nt_server.server.protocol.auth import _handle_auth_token, _handle_session_resume, reject_auth_handshake
 from trid3nt_server.server.protocol.connections import _deregister_session_connection, session_connection_count
 from trid3nt_server.server.protocol.handlers import _BG_TASKS, _drain_bg_tasks, _handle_dev_tool_invoke, _handle_secret_add
@@ -209,7 +209,7 @@ def _make_handler(settings: ModelSettings):
                         # default with a logged notice, so the turn runs rather
                         # than crashing.
                         if um.model_id is not None:
-                            from trid3nt_server.model.adapters.model_selection import (
+                            from trid3nt_harness.model.adapters.model_selection import (
                                 resolve_selected_model as _resolve_selected_model,
                             )
 
@@ -593,7 +593,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # Bind-host override so the agent is reachable off the loopback interface;
     # the default stays loopback-only.
     host = os.environ.get("TRID3NT_AGENT_HOST", host)
-    from trid3nt_server.model.adapters.model_selection import model_provider
+    from trid3nt_harness.model.adapters.model_selection import model_provider
 
     _active_provider = model_provider()
     _active_model = _effective_model_id(None)
@@ -616,7 +616,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # a failed warm leaves the fail-open in place and never delays serving.
     async def _warm_discover_index() -> None:
         try:
-            from trid3nt_server.tools.search.search_tools import search_tools as _dd_warm
+            from trid3nt_harness.tools.search.search_tools import search_tools as _dd_warm
             await asyncio.to_thread(_dd_warm._get_index)
             logger.info("tool_retrieval: discover index warmed at startup")
         except Exception:  # noqa: BLE001 -- warm is best-effort

@@ -12,13 +12,13 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.workflows.telemac.modules import (
+from trid3nt.workflows.telemac.modules import (
     T2D,
     WAQTEL,
     fill,
     waqtel,
 )
-from trid3nt_server.workflows.runtime.module import SlotRefused
+from trid3nt.workflows.runtime.module import SlotRefused
 from seated import value_inputs, row_inputs
 
 #: The process, its rows and its body, read off the wrapper that carries them.
@@ -121,7 +121,7 @@ def test_the_rows_are_declared_data_on_the_wrapper():
 
 
 def _template():
-    from trid3nt_server.workflows.telemac.templates.micropollutant_release import (
+    from trid3nt.workflows.telemac.templates.micropollutant_release import (
         micropollutant_release as template,
     )
 
@@ -222,7 +222,7 @@ def test_the_four_slots_are_the_world_this_run_stands_on():
     """One domain, one bed, both stated as the CLASS the match fills them from -
     no ladder, no producer, no separate runs row: the boundary runs ride on
     whichever source answers the domain."""
-    from trid3nt_server.inputs.slots import BED, DOMAIN
+    from trid3nt.inputs.slots import BED, DOMAIN
 
     data = {decl.name: decl for decl in
             row_inputs(_template().telemac_micropollutant_release.workflow)}
@@ -237,7 +237,7 @@ def test_the_four_slots_are_the_world_this_run_stands_on():
 def test_the_discharge_reaches_the_channel_as_ONE_reading_never_the_record():
     """The step that opens the channel refuses a record nobody chose a site
     from, so the flow is an OBSERVATION ranked against the domain's own point."""
-    from trid3nt_server.inputs.slots import DISCHARGE
+    from trid3nt.inputs.slots import DISCHARGE
 
     data = {decl.name: decl for decl in
             row_inputs(_template().telemac_micropollutant_release.workflow)}

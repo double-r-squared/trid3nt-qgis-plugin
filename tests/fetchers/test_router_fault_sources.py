@@ -14,11 +14,11 @@ import tempfile
 import geopandas as gpd
 import pytest
 
-from trid3nt_server.tools.fetchers._router.executors.vector_fgb import (
+from trid3nt.tools.fetchers._router.executors.vector_fgb import (
     features_to_fgb_bytes,
 )
-from trid3nt_server.tools.fetchers.hazard.fetch_fault_sources import hooks as fsh
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers.hazard.fetch_fault_sources import hooks as fsh
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
 _SF_BBOX = [-122.55, 37.45, -122.15, 37.90]
 
@@ -163,7 +163,7 @@ def test_empty_record_shape(spec):
 
 
 def test_the_request_is_the_one_whole_world_file(spec):
-    from trid3nt_server.tools.fetchers._router.executors import http_json
+    from trid3nt.tools.fetchers._router.executors import http_json
 
     plans = http_json._plans(spec, {"bbox": _SF_BBOX})
     assert len(plans) == 1

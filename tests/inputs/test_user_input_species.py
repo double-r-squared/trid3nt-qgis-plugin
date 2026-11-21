@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.inputs.user_input import (
+from trid3nt.inputs.user_input import (
     UserInputError,
     lonlat_bbox,
     lonlat_point,
@@ -117,13 +117,13 @@ def test_a_malformed_bbox_refuses(bad):
 def _drawn(geometry: str, response) -> object:
     import asyncio
 
-    from trid3nt_server.inputs.gate.draw_input import _value_from
+    from trid3nt_harness.inputs.gate.draw_input import _value_from
 
     return asyncio.run(_value_from(response, geometry))
 
 
 def test_a_drawn_point_equals_the_typed_point_and_keeps_its_name():
-    from trid3nt_server.inputs import Point
+    from trid3nt.inputs import Point
 
     reply = SimpleNamespace(coordinates=[-124.1, 40.5], features=None,
                             cancelled=False, name="point-1")

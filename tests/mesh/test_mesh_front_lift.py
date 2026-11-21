@@ -12,27 +12,27 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.render.mesh_display import write_2dm
-from trid3nt_server.tools.mesh.meshers import (
+from trid3nt.render.mesh_display import write_2dm
+from trid3nt.tools.mesh.meshers import (
     Mesh,
     MeshToolError,
     _MESHERS,
     register_mesher,
 )
-from trid3nt_server.tools.mesh.recipe import (
+from trid3nt.tools.mesh.recipe import (
     MeshRecipe,
     build_recipe,
     recipe_from_plan_value,
     recipe_plan_value,
 )
-from trid3nt_server.tools.mesh.session import (
+from trid3nt.tools.mesh.session import (
     MeshSession,
     _probes,
     mesh_digest,
     replay_recipe,
 )
-from trid3nt_server.tools.mesh.step import mesh_key
-from trid3nt_server.tools.mesh.tool import MeshTool
+from trid3nt.tools.mesh.step import mesh_key
+from trid3nt.tools.mesh.tool import MeshTool
 
 _AOI = (-83.5, 35.0, -83.4, 35.09)
 

@@ -8,9 +8,9 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.runtime import fill as fill_module
-from trid3nt_server.workflows.runtime.fill import Fill, fill
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.workflows.runtime import fill as fill_module
+from trid3nt.workflows.runtime.fill import Fill, fill
 
 _RING = [[-122.6769, 45.5153], [-122.6615, 45.5153], [-122.6615, 45.5198], [-122.6769, 45.5198]]
 _STATED = {"domain": _RING, "bed": 4.0, "release": [-122.669784, 45.518485], "discharge": 56.6,

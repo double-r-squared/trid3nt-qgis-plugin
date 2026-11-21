@@ -10,10 +10,10 @@ import inspect
 
 import pytest
 
-from trid3nt_server.model.adapters.adapter import _tool_schema
+from trid3nt_harness.model.adapters.adapter import _tool_schema
 
-from trid3nt_server.workflows.telemac.templates.do_sag import do_sag as do_sag_mod
-from trid3nt_server.workflows.telemac.templates.dye_release import dye_release as dye_mod
+from trid3nt.workflows.telemac.templates.do_sag import do_sag as do_sag_mod
+from trid3nt.workflows.telemac.templates.dye_release import dye_release as dye_mod
 from seated import value_inputs
 
 
@@ -45,7 +45,7 @@ async def test_malformed_event_time_refuses_it_never_falls_back_to_latest(
 
 
 def test_event_time_is_required_exactly_where_a_record_is_read():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     for name, entry in TOOL_REGISTRY.items():
         workflow = getattr(entry.fn, "workflow", None)
@@ -57,6 +57,6 @@ def test_event_time_is_required_exactly_where_a_record_is_read():
 
 
 def test_a_template_reading_no_record_keeps_event_time_stated_only():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     assert not TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow.input("event_time").required

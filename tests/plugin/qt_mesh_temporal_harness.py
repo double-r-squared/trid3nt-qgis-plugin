@@ -156,7 +156,7 @@ def _dataset_beside_the_mesh(layers, slf_path: str, tmp: str) -> None:
     This is the whole of what a field output is now: the values the module
     measured, as the SMS ASCII dataset MDAL reads, on the mesh they were
     measured over."""
-    from trid3nt_server.render.mesh_display import write_ascii_dataset
+    from trid3nt.render.mesh_display import write_ascii_dataset
 
     mesh = QgsMeshLayer(slf_path, "with a derived group", "mdal")
     assert mesh.isValid(), f"MDAL rejected {slf_path}"

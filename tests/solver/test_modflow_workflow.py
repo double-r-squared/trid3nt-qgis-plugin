@@ -16,14 +16,14 @@ import pytest
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.inputs.run_notes import bind_notes, drain_notes
-from trid3nt_server.render.formats import Chart, Mesh, Published
-from trid3nt_server.tools.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.modflow import workflow as door
-from trid3nt_server.workflows.modflow.errors import ModflowError
-from trid3nt_server.workflows.modflow.modules import GWF
-from trid3nt_server.workflows.runtime.primitives import mass_balance, unanchored
-from trid3nt_server.workflows.runtime.sheet import fill
+from trid3nt.inputs.run_notes import bind_notes, drain_notes
+from trid3nt.render.formats import Chart, Mesh, Published
+from trid3nt.tools.mesh.artifact import MeshArtifact
+from trid3nt.workflows.modflow import workflow as door
+from trid3nt.workflows.modflow.errors import ModflowError
+from trid3nt.workflows.modflow.modules import GWF
+from trid3nt.workflows.runtime.primitives import mass_balance, unanchored
+from trid3nt.workflows.runtime.sheet import fill
 
 _FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "modflow" / "lattice_solved"
 
@@ -72,7 +72,7 @@ def publish(monkeypatch, tmp_path, fake_s3):
         shutil.copy(_FIXTURE / basename, dest)
         return str(dest)
 
-    monkeypatch.setattr("trid3nt_server.workflows.solver.solver.download_result", download)
+    monkeypatch.setattr("trid3nt.workflows.solver.solver.download_result", download)
     handed: list[Any] = []
 
     async def _publish(*, run_id, engine, name, items):
@@ -83,7 +83,7 @@ def publish(monkeypatch, tmp_path, fake_s3):
                      uri=f"s3://runs/{run_id}/{item.product.file}")
             for rank, item in enumerate(items) if isinstance(item.product, Mesh)))
 
-    monkeypatch.setattr("trid3nt_server.workflows.runtime.primitives.publish", _publish)
+    monkeypatch.setattr("trid3nt.workflows.runtime.primitives.publish", _publish)
 
     def run(outputs=(mass_balance().chart(),), captions=None, anchors=(), **over):
         display = _lattice(tmp_path / "mesh.2dm")
@@ -140,8 +140,8 @@ def test_a_run_that_saved_no_head_has_no_record_to_return(publish):
 def test_the_template_s_well_check_is_said_on_the_run_s_record(publish):
     from pyproj import Transformer
 
-    from trid3nt_server.inputs.observation import Observation
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.inputs.observation import Observation
+    from trid3nt.tools import TOOL_REGISTRY
 
     template = TOOL_REGISTRY["modflow_water_table"].fn.workflow.template
     lon, lat = Transformer.from_crs(32617, 4326, always_xy=True).transform(18.0, 12.0)
@@ -159,7 +159,7 @@ def test_the_template_s_well_check_is_said_on_the_run_s_record(publish):
 
 
 def test_the_template_registers_over_the_modflow_workflow():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY["modflow_water_table"]
     workflow = entry.fn.workflow
@@ -185,10 +185,10 @@ def test_the_template_registers_over_the_modflow_workflow():
 
 
 def test_every_row_the_sheet_reads_is_in_the_mapping_after_the_fill(monkeypatch):
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.tools.mesh.recipe import input_names
-    from trid3nt_server.workflows.runtime import fill as fill_mod
-    from trid3nt_server.workflows.runtime.fill import Fill
+    from trid3nt.tools import TOOL_REGISTRY
+    from trid3nt.tools.mesh.recipe import input_names
+    from trid3nt.workflows.runtime import fill as fill_mod
+    from trid3nt.workflows.runtime.fill import Fill
 
     async def _produce(env, decl):
         return decl.name

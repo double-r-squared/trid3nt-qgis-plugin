@@ -14,15 +14,15 @@ import geopandas as gpd
 import pytest
 
 from trid3nt_contracts.source_spec import SourceSpec
-from trid3nt_server.tools.fetchers._router import router as R
-from trid3nt_server.tools.fetchers._router.errors import (RouterEmptyError,
+from trid3nt.tools.fetchers._router import router as R
+from trid3nt.tools.fetchers._router.errors import (RouterEmptyError,
                                                           RouterInputError,
                                                           RouterUpstreamError)
-from trid3nt_server.tools.fetchers._router.executors import chained_resolution as C
-from trid3nt_server.tools.fetchers._router.executors import http_json as _HJ
-from trid3nt_server.tools.fetchers._router.executors.chained_resolution import DetailResult
-from trid3nt_server.tools.fetchers._router.hooks import RequestPlan
-from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt.tools.fetchers._router.executors import chained_resolution as C
+from trid3nt.tools.fetchers._router.executors import http_json as _HJ
+from trid3nt.tools.fetchers._router.executors.chained_resolution import DetailResult
+from trid3nt.tools.fetchers._router.hooks import RequestPlan
+from trid3nt.tools.fetchers._router.spec import compose_specs_from_tree
 
 _SPECS = compose_specs_from_tree()
 
@@ -73,7 +73,7 @@ def _err(name: str, raw: dict, url_map):
     "fetch_nws_alerts_conus", "fetch_nws_river_forecast",
 ])
 def test_spec_loads_and_hooks_resolve(name):
-    from trid3nt_server.tools.fetchers._router.hooks import has_hook
+    from trid3nt.tools.fetchers._router.hooks import has_hook
     spec = _spec(name)
     assert spec.hooks is not None
     for pt in ("resolve_build", "resolve_parse", "build_request", "next_page", "enrich_plan", "enrich_merge"):
@@ -240,8 +240,8 @@ def test_river_gauge_id_detail_mode():
 
 
 
-from trid3nt_server.tools.fetchers.hazard.fetch_openfema_disasters import hooks as _OF
-from trid3nt_server.tools.fetchers.weather.fetch_storm_events_db import hooks as _SE
+from trid3nt.tools.fetchers.hazard.fetch_openfema_disasters import hooks as _OF
+from trid3nt.tools.fetchers.weather.fetch_storm_events_db import hooks as _SE
 
 
 def _decl(fips_state, fips_county, dnum, itype, dtype="DR", date="2020-06-01T00:00:00.000Z",

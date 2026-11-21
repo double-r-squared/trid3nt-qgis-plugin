@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.workflows.telemac.modules import (
+from trid3nt.workflows.telemac.modules import (
     ART,
     T2D,
     T3D,
@@ -20,12 +20,12 @@ from trid3nt_server.workflows.telemac.modules import (
     SlotRefused,
     fill,
 )
-from trid3nt_server.workflows.runtime.module import identify_on
-from trid3nt_server.workflows.telemac.modules.tomawac import (
+from trid3nt.workflows.runtime.module import identify_on
+from trid3nt.workflows.telemac.modules.tomawac import (
     RESULT_FILENAME,
     STEERING_FILENAME,
 )
-from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow, run_bodies
+from trid3nt.workflows.telemac.workflow import TelemacWorkflow, run_bodies
 
 #: The column a DAMOCLES line is read to, which is where the engine truncates
 #: this keyword's own value.

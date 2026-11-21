@@ -14,9 +14,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.workflows.pestpp import outputs, staging
-from trid3nt_server.workflows.pestpp.charts import fit_chart, parameter_chart, phi_chart, residual_chart
-from trid3nt_server.workflows.pestpp.errors import PestppError
+from trid3nt.workflows.pestpp import outputs, staging
+from trid3nt.workflows.pestpp.charts import fit_chart, parameter_chart, phi_chart, residual_chart
+from trid3nt.workflows.pestpp.errors import PestppError
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "pestpp"
 _GLM = _FIXTURES / "glm"
@@ -97,7 +97,7 @@ def test_a_glm_study_is_staged_held_to_what_glm_writes(tmp_path, monkeypatch):
 
 
 def test_the_study_states_its_method_ies_unstated_and_refuses_another():
-    from trid3nt_server.workflows.pestpp.workflow import METHODS, _calibration, _method
+    from trid3nt.workflows.pestpp.workflow import METHODS, _calibration, _method
 
     assert (_method(None), _method("GLM"), set(METHODS)) == ("ies", "glm", {"ies", "glm"})
     with pytest.raises(PestppError) as refused:
@@ -113,7 +113,7 @@ def test_the_template_states_the_method_and_fill_refuses_one_pestpp_does_not_cal
     import trid3nt_server.main as main
 
     main._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY["calibrate"].fn.workflow
     (method,) = [row for row in workflow.inputs if row.name == "method"]

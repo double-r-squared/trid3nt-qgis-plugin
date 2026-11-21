@@ -15,10 +15,10 @@ import dataclasses
 
 import pytest
 
-from trid3nt_server.inputs.point import Point
-from trid3nt_server.inputs.slots import BED, DOMAIN, needs_of
-from trid3nt_server.workflows.runtime import fill
-from trid3nt_server.inputs.input import Input
+from trid3nt.inputs.point import Point
+from trid3nt.inputs.slots import BED, DOMAIN, needs_of
+from trid3nt.workflows.runtime import fill
+from trid3nt.inputs.input import Input
 from seated import resolve_params
 
 

@@ -9,10 +9,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.inputs.boundary import BoundaryRun
-from trid3nt_server.inputs.point import Point
-from trid3nt_server.tools.mesh.meshers import Mesh, MeshToolError
-from trid3nt_server.tools.mesh.shared import primitives as P
+from trid3nt.inputs.boundary import BoundaryRun
+from trid3nt.inputs.point import Point
+from trid3nt.tools.mesh.meshers import Mesh, MeshToolError
+from trid3nt.tools.mesh.shared import primitives as P
 
 
 def _lattice_mesh() -> Mesh:
@@ -54,7 +54,7 @@ def test_a_stated_depth_is_a_flat_bed_below_the_free_surface():
 
 def _written_under(monkeypatch, tmp_path):
     """Every raster the bed slot writes lands under the test's own directory."""
-    from trid3nt_server.tools.derive import _hydrology_common as common
+    from trid3nt.tools.derive import _hydrology_common as common
 
     real = common.write_cog
     monkeypatch.setattr(common, "write_cog", lambda band, **kw: real(
@@ -63,7 +63,7 @@ def _written_under(monkeypatch, tmp_path):
 
 def _laid(layers):
     """The bed slot's own lay of an ordered list -> the one layer it hands on."""
-    from trid3nt_server.inputs.bed import bed
+    from trid3nt.inputs.bed import bed
 
     return bed(layers, frame="NAVD88").source
 
@@ -98,7 +98,7 @@ def test_the_journal_states_the_share_of_nodes_each_input_painted_off_band_2(
         tmp_path, monkeypatch):
     """The per-node shares of a laid bed are read off its own band 2 and named by
     the surfaces it lists, so the journal says which painted what."""
-    from trid3nt_server.inputs import run_notes
+    from trid3nt.inputs import run_notes
     from trid3nt_contracts.execution import LayerURI
 
     _written_under(monkeypatch, tmp_path)
@@ -194,7 +194,7 @@ def test_the_nodes_a_source_may_enter_the_water_at_are_the_interior_ones():
     source placed there is one the solver reads as outside its own domain."""
     import numpy as np
 
-    from trid3nt_server.tools.mesh.shared.nodes import interior_nodes
+    from trid3nt.tools.mesh.shared.nodes import interior_nodes
 
     # a 3x3 lattice cut into triangles: the middle node is the only inside
     nodes = [[i, j] for i in range(3) for j in range(3)]

@@ -1,0 +1,46 @@
+# `tools/` - the atomic-tool surface
+
+Every tool the model can call is registered here at import time. A tool is one
+of two kinds: a fetcher produces data from outside - a declared row the
+router executes - and a derive tool ingests data and outputs data - a function.
+Search and the meta tools stand beside them as infrastructure. The registry and
+the cache shim are the two seams they all pass through.
+
+## Files
+
+| file | what it is |
+| --- | --- |
+| `__init__.py` | The registry: the `@register_tool(metadata)` decorator, `TOOL_REGISTRY`, and the sorted snapshot the agent loop builds its tool declarations from. |
+| `cache.py` | The cache shim - content-addressed read-through / write-on-miss, the sole writer of the cache bucket's `cache/` prefix, and the read of that address back to the dataset and key it names. |
+| `_uri_util.py` | The layer-uri query-strip helper, shared by the tools that read a published layer's object. |
+
+## Subfolders
+
+| folder | what it is |
+| --- | --- |
+| `derive/` | The simulation-automation tools - domain geometry, observation pairing and skill, the analytic overlays, point reads, restyle - one folder per tool, flat, plus the shared GDAL, geometry, hydrology and chart cores; and the two session tools (`run_qgis_algorithm`, `run_pyqgis`), each a request the plugin runs in the user's QGIS session. A derive tool takes a layer and never fetches. |
+| `fetchers/` | Data fetchers, one folder per phenomenon measured (`climate`, `hazard`, `hydrology`, `imagery`, `ocean`, `socioeconomic`, `soil`, `terrain`, `weather`), plus the shared helpers at its root and `_router/`. See below. |
+| `mesh/` | The one mesh front, which knows no engine: router, meshers, session, gate, artifact. An engine's template calls it; what an engine needs written out of a mesh is that engine's. Has its own map. |
+| `meta/` | Calls about the system itself: `set_config`, which changes a setting after the person approves it on a card. |
+| `search/` | `match.py` (the source ranking, returned as data) and `describe_keywords` (what a carried module's dictionary says); the other asks are the harness's. |
+
+## `fetchers/` - the router and its shared root
+
+| entry | what it is |
+| --- | --- |
+| `fetchers/_fetch_common.py` | The typed fetch errors and bbox helpers every fetcher shares. |
+| `fetchers/_public_s3.py` | Anonymous access to public AWS S3 buckets, independent of the caller's credentials. |
+| `fetchers/_proj_grids.py` | The offline vertical seam: NGVD29, NAVD88 and EGM2008 heights converted per point on PROJ grids `scripts/fetch_proj_grids.sh` installs (`TRID3NT_PROJ_GRIDS`, else `third_party/proj`). |
+| `fetchers/us_states.py` | US state and NWS area-code resolution, shared by the alert fetchers. |
+| `fetchers/_router/router.py` | The router engine: a declared row plus the ask to a request, a response and a typed layer. |
+| `fetchers/_router/spec.py` | The source-spec loader - schema validation, co-located corpus pickup, tree walk. |
+| `fetchers/_router/registration.py` | Promotion: a row becomes a registered tool with a synthesized signature and schema. |
+| `fetchers/_router/key_answer.py` | A provider's 401/403/498/499 answer read in one place and turned into the typed `KEY_REQUIRED` / `KEY_REJECTED` ask. |
+| `fetchers/_router/key_statement.py` | What a provider states machine-readably about a key: ArcGIS service document, OGC capabilities, OpenAPI security. |
+| `fetchers/_router/emit_on_fetch.py` | Surfacing a fetched INPUT as a `role=context` layer through the emission seam. |
+| `fetchers/_router/errors.py` | The router's typed-error hierarchy over the shared fetch bases. |
+| `fetchers/_router/executors/` | How a request is actually run: HTTP JSON, raster COG, vector FlatGeobuf, zipped vector, station timeseries, library delegates, animation frames. |
+| `fetchers/_router/hooks/` | The hook contract (`RequestPlan`, `register_hook`, `resolve_hook`) and the modules SEVERAL rows share; the loader walks both this folder and the co-located `hooks.py` files. |
+| `fetchers/<group>/<spec>/hooks.py` | One row's own `build_request` / `parse_response` overrides - what the row cannot declare, beside the row, registered by the tree walk. |
+| `fetchers/_router/transforms/` | Post-fetch shaping: the tiled mosaic - a bbox split over the tile size, each tile through the executor, merged first-non-nodata. |
+| `fetchers/_router/transport/` | The one retry authority: the pooled HTTP client, the GDAL read policy every remote raster opens under, staged-object resolution, zip-object reads, and their typed errors. |

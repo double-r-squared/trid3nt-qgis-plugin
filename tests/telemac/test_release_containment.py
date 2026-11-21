@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring.release_point import _domain_m
-from trid3nt_server.workflows.telemac.errors import TelemacError
+from trid3nt.workflows.telemac.authoring.release_point import _domain_m
+from trid3nt.workflows.telemac.errors import TelemacError
 
 
 class _Artifact:

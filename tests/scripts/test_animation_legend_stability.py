@@ -18,7 +18,7 @@ pytest.importorskip("PIL")
 
 import numpy as np  # noqa: E402
 
-from trid3nt_server.render import presets  # noqa: E402
+from trid3nt.render import presets  # noqa: E402
 
 DEV = Path(__file__).resolve().parents[2] / "dev"
 SCRIPT = DEV / "packet" / "render_selafin_animation.py"
@@ -333,7 +333,7 @@ def test_a_coupled_module_animates_off_its_own_result_file():
     """A coupled module writes its own SELAFIN and the carrier's carries none of
     its variables, so a declared module resolves the frames onto that file."""
     from dev.testing.proof_animations import ProofAnimation
-    from trid3nt_server.workflows.telemac.modules.gaia import RESULT_FILENAME
+    from trid3nt.workflows.telemac.modules.gaia import RESULT_FILENAME
 
     packet = _packet_module()
     completion = {"result_slf": "r2d_river.slf"}
@@ -370,8 +370,8 @@ def test_the_ice_pictures_field_and_the_ice_charted_field_are_one():
     """The thickness the ice deck charts and the field its animation paints are
     the SAME variable, named once by the template."""
     from dev.testing.proof_animations import PROOF_ANIMATIONS
-    from trid3nt_server.workflows.telemac.modules.khione import KHIONE
-    from trid3nt_server.workflows.telemac.templates.ice_cover import (
+    from trid3nt.workflows.telemac.modules.khione import KHIONE
+    from trid3nt.workflows.telemac.templates.ice_cover import (
         ice_cover as template,
     )
 

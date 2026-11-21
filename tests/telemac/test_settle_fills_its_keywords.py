@@ -9,9 +9,9 @@ import importlib
 
 import pytest
 
-from trid3nt_server.workflows.telemac.modules import T2D
-from trid3nt_server.workflows.runtime.sheet import SheetIncomplete, fill
-from trid3nt_server.workflows.telemac.modules.sheet import stage
+from trid3nt.workflows.telemac.modules import T2D
+from trid3nt.workflows.runtime.sheet import SheetIncomplete, fill
+from trid3nt.workflows.telemac.modules.sheet import stage
 
 _SETTLED = {"TITLE": "reach DOMAIN", "TIME_STEP": 0.7, "DURATION": 3600.0,
             "INITIAL_CONDITIONS": "CONSTANT DEPTH", "INITIAL_DEPTH": 1.2,
@@ -43,7 +43,7 @@ def test_the_settle_s_six_values_reach_the_steering_file_with_no_template_line()
 @pytest.mark.parametrize("name", _TEMPLATES)
 def test_no_template_routes_a_settle_value_by_a_line_of_its_own(name):
     steering = importlib.import_module(
-        f"trid3nt_server.workflows.telemac.templates.{name}.{name}").STEERING
+        f"trid3nt.workflows.telemac.templates.{name}.{name}").STEERING
     routed = [keyword for keyword in _SETTLED
               if "settled" in repr(steering.ASSERTED.get(keyword))]
     assert routed == []
@@ -70,7 +70,7 @@ def test_a_settle_value_the_module_does_not_spell_is_not_written():
 
 
 def test_a_required_slot_left_empty_refuses_by_name_before_writing(monkeypatch):
-    from trid3nt_server.workflows.solver import staging
+    from trid3nt.workflows.solver import staging
 
     def _written(*_args, **_kwargs):
         raise AssertionError("nothing is written for an incomplete sheet")

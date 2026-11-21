@@ -13,14 +13,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import trid3nt_server.tools.cache as cache_mod
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers._router import registration as reg
-from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
-from trid3nt_server.tools.fetchers.hydrology import _usgs_model_grid as grid
-from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_model_thickness import hooks as MT
-from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_model_water_table import hooks as MW
+import trid3nt.tools.cache as cache_mod
+from trid3nt.tools import TOOL_REGISTRY
+from trid3nt.tools.fetchers._router import registration as reg
+from trid3nt.tools.fetchers._router import router
+from trid3nt.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
+from trid3nt.tools.fetchers.hydrology import _usgs_model_grid as grid
+from trid3nt.tools.fetchers.hydrology.fetch_usgs_model_thickness import hooks as MT
+from trid3nt.tools.fetchers.hydrology.fetch_usgs_model_water_table import hooks as MW
 
 _FIX = Path(__file__).resolve().parents[1] / "fixtures" / "usgs_model_k"
 _CC_BBOX = [-70.62, 41.59, -70.50, 41.68]
@@ -171,7 +171,7 @@ def test_the_rows_state_a_finer_cell_than_the_zell_sanford_rows():
 def _check_cells(arr, tf, want, arch, slack=1e-3, shift=False):
     """Each unmasked output cell is the archive value at the cell holding its centre or that cell's neighbour (plus the
     NGVD29 -> NAVD88 grid offset at its centre when ``shift``); the share exact."""
-    from trid3nt_server.tools.fetchers import _proj_grids
+    from trid3nt.tools.fetchers import _proj_grids
 
     exact = total = 0
     lons, lats = np.meshgrid(tf.c + (np.arange(arr.shape[1]) + 0.5) * tf.a,

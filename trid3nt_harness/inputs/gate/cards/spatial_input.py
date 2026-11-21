@@ -1,0 +1,184 @@
+"""Spatial-input request-card builder and response-to-result translation.
+
+Pure: no websocket and no session state.
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from pydantic import ValidationError
+
+from trid3nt_contracts.ws import SpatialInputRequestPayload
+
+from ..spatial_roles import SpatialInputParseError, parse_drawn_roles
+
+logger = logging.getLogger("trid3nt_harness.inputs.gate.cards.spatial_input")
+
+
+def _build_spatial_input_request_payload(
+    *,
+    request_id: str,
+    call_args: dict[str, Any],
+) -> "SpatialInputRequestPayload | None":
+    """Build a validated ``spatial-input-request`` from the LLM tool args.
+
+    ``None`` when the args cannot form one; the caller surfaces a typed param error."""
+    mode = call_args.get("mode") or "vector_draw"
+    title = str(call_args.get("title") or "Draw on the map")
+    description = str(
+        call_args.get("description")
+        or "Draw the area of interest."
+    )
+    payload_kwargs: dict[str, Any] = {
+        "request_id": request_id,
+        "mode": mode,
+        "title": title[:200],
+        "description": description[:1024],
+    }
+    # purpose (vector_draw only): "aoi" (the wire default -- rect/polygon tools,
+    # replying role=="aoi" polygons) or "line" (a NEUTRAL elevation/section line
+    # for compute_terrain_profile). Only forwarded when non-default.
+    if call_args.get("purpose") == "line":
+        payload_kwargs["purpose"] = "line"
+    # suggested_view: {bbox: [..4..], zoom: float} - optional camera hint.
+    sv = call_args.get("suggested_view")
+    if isinstance(sv, dict) and isinstance(sv.get("bbox"), (list, tuple)):
+        bbox = sv["bbox"]
+        if len(bbox) == 4:
+            try:
+                payload_kwargs["suggested_view"] = {
+                    "bbox": (
+                        float(bbox[0]),
+                        float(bbox[1]),
+                        float(bbox[2]),
+                        float(bbox[3]),
+                    ),
+                    "zoom": float(sv.get("zoom", 13.0)),
+                }
+            except (TypeError, ValueError):
+                pass
+    to = call_args.get("default_timeout_seconds")
+    if isinstance(to, (int, float)) and to > 0:
+        payload_kwargs["default_timeout_seconds"] = int(to)
+    try:
+        return SpatialInputRequestPayload(**payload_kwargs)
+    except ValidationError:
+        logger.warning(
+            "spatial-input: request payload validation failed args=%s",
+            call_args,
+            exc_info=True,
+        )
+        return None
+
+
+def _spatial_response_to_result(
+    response: "SpatialInputResponsePayload | None",
+) -> dict[str, Any]:
+    """Translate a ``spatial-input-response`` into the tool result the LLM reads.
+
+    A structurally invalid drawn FeatureCollection becomes a TYPED error, never a silent success."""
+    if response is None:
+        return {
+            "status": "error",
+            "error_code": "SPATIAL_INPUT_TIMEOUT",
+            "error_message": (
+                "No drawing was received from the user (the spatial-input "
+                "request timed out or no interactive client was connected). "
+                "Ask the user to draw the area, or proceed without it — do not "
+                "invent a geometry."
+            ),
+        }
+    if response.cancelled:
+        return {
+            "status": "cancelled",
+            "message": (
+                "The user cancelled the drawing. No area was provided; do not "
+                "fabricate one — ask how they want to proceed."
+            ),
+        }
+    gtype = response.geometry_type
+    if gtype in ("point", "bbox"):
+        if not response.coordinates:
+            return {
+                "status": "error",
+                "error_code": "SPATIAL_INPUT_MISSING_COORDINATES",
+                "error_message": (
+                    f"spatial-input-response geometry_type={gtype!r} carried no "
+                    f"coordinates."
+                ),
+            }
+        return {
+            "status": "ok",
+            "geometry_type": gtype,
+            "coordinates": list(response.coordinates),
+            **({"name": response.name} if gtype == "point" and response.name
+               else {}),
+        }
+    if gtype == "vector_draw":
+        if not isinstance(response.features, dict):
+            return {
+                "status": "error",
+                "error_code": "SPATIAL_INPUT_MISSING_FEATURES",
+                "error_message": (
+                    "vector_draw response carried no features FeatureCollection."
+                ),
+            }
+        try:
+            parsed = parse_drawn_roles(response.features)
+        except SpatialInputParseError as exc:
+            # Honesty floor: a malformed drawn FeatureCollection degrades to a
+            # TYPED error result, never a silent success.
+            return {
+                "status": "error",
+                "error_code": exc.error_code,
+                "error_message": (
+                    f"The drawn geometry could not be used: {exc}. Ask the "
+                    f"user to redraw; do not fabricate an AOI."
+                ),
+            }
+        result: dict[str, Any] = {
+            "status": "ok",
+            "geometry_type": "vector_draw",
+            "n_aoi": len(parsed.aoi_clip_features),
+            "n_lines": parsed.n_lines,
+            "points": parsed.points,
+        }
+        if parsed.aoi_bbox is not None:
+            result["aoi_bbox"] = list(parsed.aoi_bbox)
+        if parsed.line_coords is not None:
+            # A NEUTRAL drawn elevation/section line (purpose="line"): surface the plain
+            # LineString vertices so the LLM can pass them straight to
+            # compute_terrain_profile(line=...) / compute_cross_section(line=...); ``linestring``
+            # is the same line as GeoJSON.
+            result["line"] = [list(pt) for pt in parsed.line_coords]
+            result["linestring"] = {
+                "type": "LineString",
+                "coordinates": [list(pt) for pt in parsed.line_coords],
+            }
+        result.update(_drawn_constraints(parsed))
+        return result
+    return {
+        "status": "error",
+        "error_code": "SPATIAL_INPUT_UNKNOWN_GEOMETRY",
+        "error_message": (
+            f"spatial-input-response had unknown geometry_type={gtype!r}."
+        ),
+    }
+
+
+def _drawn_constraints(parsed: Any) -> dict[str, Any]:
+    """What a drawing states beyond an area, a point or a section: the mesh constraints as
+    ``mesh_op`` calls, and each breach line for the TELEMAC-2D ``breach`` composite."""
+    from trid3nt.tools.mesh.op_tool import drawn_ops
+
+    out: dict[str, Any] = {}
+    ops = drawn_ops(parsed)
+    if ops:
+        # A refine region drawn without a size leaves edge_length_m for the
+        # person to state; set_region_size refuses an entry without one.
+        out["mesh_ops"] = ops
+    if parsed.breach_lines:
+        out["breach_lines"] = [[list(pt) for pt in line]
+                               for line in parsed.breach_lines]
+    return out
