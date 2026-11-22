@@ -13,7 +13,7 @@ rest and make up the sixth slice.
 | `adapters/` | provider adapters, the message IR, the turn loop, the stream persistence | 23 | 274 |
 | `contracts/` | the typed wire and registry contracts, the schema mirror and its drift, the one-way package imports | 17 | 367 |
 | `credentials/` | credential resolution, the access-token gate and the connect handshake | 4 | 50 |
-| `derive/` | the derive tools, the two session tools | 4 | 58 |
+| `derive/` | the derive tools (the coverage operations among them), the two session tools | 5 | 64 |
 | `render/` | the emitter, the uri registry, publication, the format set, charts | 35 | 431 |
 | `fetchers/` | the fetch router, its executors, hooks and fallbacks | 89 | 2436 |
 | `gates/` | the gates, a declined card at each of them, the key card and the retry after it, the code-exec approval gate, the context budget, the circuit breaker | 21 | 306 |
@@ -21,10 +21,10 @@ rest and make up the sixth slice.
 | `mesh/` | the meshers, the mesh gate, topology, the bed over the one source it takes, the runs that prescribe a role and the shoreline the domain's own edge is | 11 | 294 |
 | `model/` | the SysML model conformance check | 1 | 23 |
 | `plugin/` | the QGIS dock: the client, the Qt bridge, the cards, the render seams; the Qt-wiring subset runs in a subprocess harness | 40 | 409 |
-| `runtime/` | the template runtime, its engine-neutral slots and dictionary marks, the run journal, the optional need, each engine's launch split at its deck with the card between the halves | 20 | 336 |
+| `runtime/` | the template runtime, its engine-neutral slots and dictionary marks, the run journal, the optional need, each engine's launch split at its deck with the card between the halves | 20 | 337 |
 | `scripts/` | the dev instruments, the live-run harness and the proof renderers, skipped when `dev/` is absent | 12 | 178 |
-| `sdk/` | the SDK's case and model: a set checked by the input's own accept, the form, no pick without the harness, the unattended stance, the record's template, case, model and version; the case directory, its lock, a replay that fetches nothing, a tampered pin, outside data, link and pack, a missing engine image, an unstated run input; the fill ending at the written deck and the run solving it while it is current | 3 | 21 |
-| `search/` | dataset and tool retrieval, the OGC adapter, the keyword dictionary read | 15 | 310 |
+| `sdk/` | the SDK's case and model: a set checked by the input's own accept, the form, no pick without the harness, the unattended stance, the record's template, case, model and version; the case directory, its lock, a replay that fetches nothing, a tampered pin, outside data, link and pack, a missing engine image, an unstated run input; the fill ending at the written deck and the run solving it while it is current; coverage as data, the declared steps, strict and a node with no bed value | 4 | 29 |
+| `search/` | dataset and tool retrieval, the OGC adapter, the keyword dictionary read | 15 | 314 |
 | `server/` | the HTTP and WS routes, the fetch short-circuit and the Case AOI, persistence | 29 | 261 |
 | `solver/` | the executor, the run reads, the engine-room posture, the MODFLOW engine, its authoring and staged check, the PEST++ engine with its staging, output table, option dictionary and the one calibration study with its MODFLOW piece, the GeoClaw engine, its module wrapper, its .data authoring, its grid recipe, its topofiles, its Fault dtopo and its fgmax, fgout and gauge outputs, the plume template, its body wrappers, the SFR keywords and Streams composite, the LAK keywords and Lakes composite, the Rivers composite over a river polygon, the MAW keywords and MultiAquiferWells composite, and the UZF keywords and UnsaturatedZone composite, and their period settings, the WaterMover and Diversions composites with the cross-section and lake tables, the values Streams, Lakes and the boundary composites read off a feature and the movers paired by a property, the Interbeds and TimeSeries composites with the boundary givers and the compaction reads, the Observations composite with the OBS files and charts, and the Storm composite and the storm-surge template, and the GeoClaw template's pieces (the SIFT row, the SiftFault, FiniteFault (static or kinematic, with the event-id fetch and the rupture-following flagregion window), SlabFault (a stated rectangle laid on the Slab2 interface), MomentTensorFault (a tensor sized by a named published scaling relation, Wells and Coppersmith or Thingbaijam), FixedGrids and InitialSurface composites, the staged case, the model exchanges: the LocalGridRefinement child, its exchange and transport, WaterMover across models and the sheet-stated DISU, and particle tracking: the ParticleTracking body, the Release composite and the pathline reads, and the GeoClaw restart from a checkpoint, and the Boussinesq module, and the module-fixed equation count with the friction regions, and the routed streams and the lake outlets drained into them) | 56 | 1367 |
 | `telemac/` | the TELEMAC templates, the module surface, what each module writes and the primitives that read it, the listing reads, authoring | 61 | 1001 |
@@ -46,12 +46,12 @@ instance fixtures, and nothing else has one.
 
 Six slices by subsystem, each its own foreground invocation, from the repo root:
 
-    make test-fetchers        # tests/fetchers                                                                              2435
-    make test-spatial         # tests/derive tests/render tests/mesh                                         806
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search tests/sdk                                  3041
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1348
+    make test-fetchers        # tests/fetchers                                                                              2597
+    make test-spatial         # tests/derive tests/render tests/mesh                                         851
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search tests/sdk                                  3210
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1370
     make test-model-surface   # tests/adapters tests/tools                                                                   599
-    make test-packages        # tests/contracts tests/plugin                                                                  765
+    make test-packages        # tests/contracts tests/plugin                                                                  781
 
 The source-text guards - history markers, dead references, the package maps,
 the template pages, banner comments, import walls, wiring pins, retired names,

@@ -3,7 +3,8 @@
 A layer of soundings is laid on the bed grid (each cell the mean of the points inside it) and the fill paints
 the rest. A surface is read on the RUN's vertical frame, and a surface of depths becomes elevations counted up from the zero it states. An
 ordered list of surfaces is laid into one, the first handed winning, and what none measured inside the cut
-is filled by the bed settings or REFUSED by name.
+is interpolated where the run declares that step, its coverage reported as data, a wet hole left REFUSED by name
+under strict.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from trid3nt_contracts.execution import LayerURI, layer_seed
 
 from trid3nt.settings import setting
 
+from .coverage import interpolation
 from .user_input import UserInputError
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,8 @@ logger = logging.getLogger(__name__)
 __all__ = ["Bed", "DEPTH", "RASTER", "bed", "elevations", "on_the_frame"]
 
 _CODE = "BED_INVALID"
+#: Water inside the cut nothing in the bed valued: the bed's one shortfall.
+_HOLE = "BED_WET_HOLE"
 
 #: The two shapes an elevation source arrives in.
 RASTER = "raster"
@@ -35,10 +39,6 @@ _DEPTH_QUANTITY = "depth_below_datum"
 #: How deep a stated depth may be. A bed stated as a depth below the free
 #: surface is a flat bottom, and a number outside this is not one.
 _DEPTH_RANGE_M = (0.0, 12000.0)
-
-#: The laid bed is an elevation in metres on the run's frame.
-_STYLE = {"kind": "continuous", "ramp": "terrain", "units": "m"}
-
 
 @dataclass(frozen=True, slots=True)
 class Bed:
@@ -58,19 +58,21 @@ class Bed:
 
 def bed(value: Any, *, frame: Any = None, offset: Any = None,
         water: Any = None, merge: bool = True, label: str = "bed",
-        code: str = _CODE) -> Bed | None:
+        code: str = _CODE, steps: Any = None, walking: bool = False) -> Bed | None:
     """THE ingestion: a raster, a case layer id, a depth in metres, or an ORDERED LIST of surfaces -> Bed.
 
-    A number is a DEPTH below the free surface; a layer of points is laid on the grid and filled. ``frame`` and ``offset`` (one per
+    A number is a DEPTH below the free surface; a layer of points is laid on the grid. ``frame`` and ``offset`` (one per
     surface of a list) are the run's vertical frame and shift; ``water`` is the cut polygon, inside which
-    coverage is stated and holes filled; ``merge`` False is an engine laying its own ladder of surfaces."""
+    coverage is stated and holes interpolated; ``merge`` False is an engine laying its own ladder of surfaces, of
+    which only soundings are interpolated. ``steps`` are the steps the run declared for the bed (``None``, a caller
+    outside a fill, interpolates by the settings); ``walking`` refuses every wet hole, for the walk that lays the next."""
     if isinstance(value, Bed):
         return value
     if value is None:
         return None
     if isinstance(value, (list, tuple)):
         return _listed(list(value), frame=frame, offset=offset, water=water,
-                       merge=merge, label=label, code=code)
+                       merge=merge, label=label, code=code, steps=steps, walking=walking)
     depth = _depth(value)
     if depth is not None:
         lo, hi = _DEPTH_RANGE_M
@@ -82,16 +84,17 @@ def bed(value: Any, *, frame: Any = None, offset: Any = None,
         return Bed(kind=DEPTH, depth_m=depth)
     if isinstance(value, Mapping) and "depth_m" in value:
         return bed(value["depth_m"], label=label, code=code)
-    held, surface = _surface(value, frame=frame, offset=offset, label=label, code=code)
+    held, surface = _surface(value, frame=frame, offset=offset, label=label, code=code, steps=steps)
     points = _is_points(held)
     if water is None and not points:
         return Bed(kind=RASTER, source=surface)
     return Bed(kind=RASTER, source=_composed(
-        [held], [surface], frame=frame, water=water, fill=merge or points, label=label))
+        [held], [surface], frame=frame, water=water, fill=interpolation(steps) if merge or points else None,
+        label=label, steps=steps, walking=walking))
 
 
 def _listed(values: list[Any], *, frame: Any, offset: Any, water: Any,
-            merge: bool, label: str, code: str) -> Bed:
+            merge: bool, label: str, code: str, steps: Any, walking: bool) -> Bed:
     """An ORDERED LIST of surfaces as one bed: each read on the run's frame through its own offset, the
     first handed winning every cell it measured."""
     if not values:
@@ -101,7 +104,7 @@ def _listed(values: list[Any], *, frame: Any, offset: Any, water: Any,
     offsets = list(offset) if isinstance(offset, (list, tuple)) else [offset] * len(values)
     if len(values) == 1:
         return bed(values[0], frame=frame, offset=offsets[0], water=water,
-                   merge=merge, label=label, code=code)
+                   merge=merge, label=label, code=code, steps=steps, walking=walking)
     if not merge:
         raise UserInputError(
             f"the {label} was handed {len(values)} surfaces, and this engine lays its own ladder of surfaces "
@@ -114,7 +117,7 @@ def _listed(values: list[Any], *, frame: Any, offset: Any, water: Any,
             raise UserInputError(
                 f"the {named} is a stated depth, which is a whole flat bed and not one surface of several: "
                 "hand the bed that depth alone, or hand it surfaces.", code=code)
-        original, surface = _surface(value, frame=frame, offset=offsets[rank], label=named, code=code)
+        original, surface = _surface(value, frame=frame, offset=offsets[rank], label=named, code=code, steps=steps)
         held.append(original)
         surfaces.append(surface)
         points = points or _is_points(original)
@@ -128,16 +131,19 @@ def _listed(values: list[Any], *, frame: Any, offset: Any, water: Any,
         except DatumError as exc:
             raise UserInputError(str(exc), code=code) from exc
     return Bed(kind=RASTER, source=_composed(
-        held, surfaces, frame=frame, water=water, fill=water is not None or points, label=label))
+        held, surfaces, frame=frame, water=water,
+        fill=interpolation(steps) if water is not None or points else None,
+        label=label, steps=steps, walking=walking))
 
 
-def _surface(value: Any, *, frame: Any, offset: Any, label: str, code: str) -> tuple[Any, Any]:
+def _surface(value: Any, *, frame: Any, offset: Any, label: str, code: str,
+             steps: Any = None) -> tuple[Any, Any]:
     """One surface by id or whole, soundings laid on a grid -> ``(as handed, read on the run's frame)``."""
     if isinstance(value, Mapping) and "layer" in value:
         value = value["layer"]
     value = _by_id(value)
     if _is_points(value):
-        gridded = _sounded(value, label=label, code=code)
+        gridded = _sounded(value, label=label, code=code, fill=interpolation(steps))
         return value, elevations(gridded, frame=frame, offset=offset, label=label, code=code)
     return value, elevations(value, frame=frame, offset=offset, label=label, code=code)
 
@@ -159,7 +165,7 @@ def _by_id(value: Any) -> Any:
     return lookup_layer_for_handle(value) or value
 
 
-def _sounded(layer: Any, *, label: str, code: str) -> Any:
+def _sounded(layer: Any, *, label: str, code: str, fill: Any) -> Any:
     """A layer of soundings as a sparse raster in metres, each cell the mean of the points inside it.
 
     The cell is the points' own median nearest-neighbour spacing, on the UTM zone of their extent; a point's
@@ -240,8 +246,9 @@ def _sounded(layer: Any, *, label: str, code: str) -> Any:
         shift, frame_of_shift = stated[0]["datum_offset_m"], stated[0]["datum_offset_frame"]
     journal_note(
         f"the {label} is {int(keep.sum())} soundings ({_said(layer, 'name') or 'a layer of points'}), laid "
-        f"on a {cell:.3g} m grid as the mean of the points in each cell and filled by "
-        f"{setting('FILL_ALGORITHM')} interpolation up to {setting('FILL_MAX_DISTANCE')} px from a sounding.")
+        f"on a {cell:.3g} m grid as the mean of the points in each cell"
+        + (f" and filled by {fill.algorithm} interpolation up to {fill.max_distance:g} px from a sounding."
+           if fill else "."))
     return LayerURI.published(
         "bed-soundings", seed=seed, name=str(_said(layer, "name") or "soundings"), layer_type="raster",
         uri=uri, role="primary", units="m", quantity=quantity, crs_authid=f"EPSG:{epsg}",
@@ -250,38 +257,48 @@ def _sounded(layer: Any, *, label: str, code: str) -> Any:
 
 
 def _composed(held: list[Any], surfaces: list[Any], *, frame: Any, water: Any,
-              fill: bool, label: str) -> Any:
-    """The surfaces laid into one, its coverage STATED and a wet hole past the fill REFUSED -> the layer.
+              fill: Any, label: str, steps: Any, walking: bool) -> Any:
+    """The surfaces laid into one and ``fill`` interpolating the holes inside the cut, its coverage STATED and
+    reported -> the layer.
 
     ``held`` is each surface as handed, which names it and dates it. One surface nothing was painted over
     is handed on as it came; anything else is written as one raster of two bands."""
     from trid3nt.tools.derive._raster_layers import label_of
+    from trid3nt.tools.derive.merge_surfaces.merge_surfaces import laid, published
 
-    from .bed_merge import laid
+    from .coverage import Coverage, report
     from .vertical_datum import datum_of
 
     grid = laid(surfaces, [label_of(surface, rank) for rank, surface in enumerate(held)],
                 region=water or None, fill=fill)
-    said = _covered(grid, water, label, fill=fill)
+    said, reached, blank, shortfall = _covered(grid, water, label, fill=fill, steps=steps, walking=walking)
     if len(surfaces) > 1:
         said.append(_aged(held, grid.labels))
+    report(Coverage(input=label, text=tuple(said), shares=tuple(reached), unmeasured=blank,
+                    steps=tuple(steps or ()), shortfall=shortfall))
     if not grid.changed:
         return surfaces[0]
-    return _written(grid, str(frame or "").strip() or datum_of(surfaces[0]) or None, label, said)
+    return published(grid, frame=str(frame or "").strip() or datum_of(surfaces[0]) or None,
+                     name=f"{label} ({', '.join(grid.labels)})", notes=said, kind="bed-laid", prefix="bed_laid")
 
 
-def _covered(grid: Any, water: Any, label: str, *, fill: bool) -> list[str]:
-    """State what the bed covers over water and land and what the fill painted -> the lines; REFUSE a WET hole.
+def _covered(grid: Any, water: Any, label: str, *, fill: Any, steps: Any,
+             walking: bool) -> tuple[list[str], list[tuple[str, float]], float, Any]:
+    """State what the bed covers over water and land and what the fill painted -> the lines, the share each source
+    reached over the water (the grid, where there is no cut), the share nothing reached, and the wet hole's
+    shortfall; REFUSE a WET hole where it refuses or the walk lays the next surface.
 
     Coverage is read on a grid over the whole cut; a dry hole is left to the mesh."""
     from trid3nt.tools.derive._raster_layers import (
         FILLED, coverage, over_the_cut, percent, stated)
     from .run_notes import cut_coverage
 
+    from .coverage import Coverage, refuses, report
+
     sources = [*grid.labels, *(["filled"] if (grid.won == FILLED).any() else [])]
     won, wet = (over_the_cut(grid.won, grid.crs, grid.transform, water)
                 if water else (grid.won, None))
-    said, blank = [], 0.0
+    said, blank, reached = [], 0.0, []
     if wet is not None:
         reached, blank = coverage(won, sources, wet)
         said.append(f"Over the WATER - the polygon the domain was cut with - "
@@ -292,22 +309,50 @@ def _covered(grid: Any, water: Any, label: str, *, fill: bool) -> list[str]:
     if fill and grid.filled.any():
         said.append(
             f"The fill painted {int(grid.filled.sum())} cells nothing measured inside the "
-            f"{'cut' if water else 'grid'}, by {setting('FILL_ALGORITHM')} interpolation reaching at most "
-            f"{setting('FILL_MAX_DISTANCE')} px ({setting('FILL_MAX_DISTANCE') * grid.cell_m:.4g} m) from a "
+            f"{'cut' if water else 'grid'}, by {fill.algorithm} interpolation reaching at most "
+            f"{fill.max_distance:g} px ({fill.max_distance * grid.cell_m:.4g} m) from a "
             "measured cell; band 2 marks each one filled.")
     for line in said:
         cut_coverage(line)
+    if wet is None:
+        return said, reached_land, ashore, None
     if not blank:
-        return said
+        return said, reached, blank, None
+    shortfall = _short(grid, label, blank, fill, steps)
+    if not (walking or refuses(shortfall)):
+        return said, reached, blank, shortfall
+    report(Coverage(input=label, text=tuple(said), shares=tuple(reached), unmeasured=blank,
+                    steps=tuple(steps or ()), shortfall=shortfall))
     remedy = (f"Hand the {label} a further surface after {'these' if len(grid.labels) > 1 else 'this one'} "
               "- an ordered list, the first handed winning - that measures it, or raise the setting "
-              f"FILL_MAX_DISTANCE (now {setting('FILL_MAX_DISTANCE')} px) so the fill reaches it."
+              f"FILL_MAX_DISTANCE (now {fill.max_distance:g} px) so the fill reaches it."
               if fill else
               f"Hand the {label} a surface that measures it.")
     raise UserInputError(
         f"{percent(blank)} of the water in this domain is measured by nothing in the {label}"
         f"{_where(grid)}, a WET hole: a node standing there has no bed. {remedy}",
-        code="BED_WET_HOLE")
+        code=_HOLE)
+
+
+def _short(grid: Any, label: str, blank: float, fill: Any, steps: Any) -> Any:
+    """The wet hole as a shortfall: the cells inside the cut nothing valued, their share of the water, the distance
+    from the farthest of them to a valued cell, and the remedies the bed itself can name - the interpolation that
+    reaches that far, and the accept line."""
+    import numpy as np
+
+    from trid3nt.tools.derive.interpolate_surface.interpolate_surface import farthest
+
+    from .coverage import ACCEPT, INTERPOLATE, Shortfall, accepted, step
+
+    within = grid.within if grid.within is not None else np.ones(grid.values.shape, dtype=bool)
+    far = farthest(grid.unreached, within & np.isfinite(grid.values))
+    remedies = []
+    if far and (fill is None or far > fill.max_distance):
+        remedies.append(step(INTERPOLATE, algorithm=fill.algorithm if fill else setting("FILL_ALGORITHM"),
+                             max_distance=far))
+    remedies.append(step(ACCEPT, code=_HOLE))
+    return Shortfall(code=_HOLE, input=label, cells=int(grid.unreached.sum()), share=blank, farthest_px=far,
+                     remedies=tuple(remedies), accepted=accepted(steps, _HOLE))
 
 
 def _where(grid: Any) -> str:
@@ -354,25 +399,6 @@ def _aged(surfaces: list[Any], labels: list[str]) -> str:
 def _said(layer: Any, field: str) -> Any:
     """One thing a layer states about itself, whole or as a mapping."""
     return layer.get(field) if isinstance(layer, Mapping) else getattr(layer, field, None)
-
-
-def _written(grid: Any, frame: str | None, label: str, said: list[str]) -> Any:
-    """The laid bed written once as two bands -> the layer the slot hands on."""
-    from trid3nt.tools.derive._raster_layers import (
-        RasterLayerURI, bbox_4326, coverage, written)
-
-    seed = layer_seed()
-    sources = [*grid.labels, "filled"]
-    uri = written(grid.values, grid.won, crs=grid.crs, transform=grid.transform,
-                  prefix="bed_laid", seed=seed, output_dir=None)
-    reached, blank = coverage(grid.won, sources)
-    height, width = grid.values.shape
-    return RasterLayerURI.published(
-        "bed-laid", seed=seed, name=f"{label} ({', '.join(grid.labels)})",
-        layer_type="raster", uri=uri, style=_STYLE, role="primary", units="m",
-        quantity="elevation", bbox=bbox_4326(grid.crs, grid.transform, width, height),
-        vertical_datum=frame, sources=sources, coverage=reached,
-        unmeasured_fraction=blank, notes=said)
 
 
 def _depth(value: Any) -> float | None:

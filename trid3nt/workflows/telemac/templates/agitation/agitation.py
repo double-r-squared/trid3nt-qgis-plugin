@@ -56,7 +56,7 @@ class INPUTS:
         "surveyed sea floor the wave refracts over, matched to this water and "
         "laid rung by rung. Hand it your own survey raster, a layer of "
         "soundings, or a depth in metres for a basin nobody has sounded.")).need(
-        "bathymetry")
+        "bathymetry").steps("merge_surfaces", "interpolate_surface")
     structure = Input(desc=(
         "The barrier the question is about, as a polyline LAYER (the uri or "
         "handle from fetch_osm_features feature='breakwaters', or any line "

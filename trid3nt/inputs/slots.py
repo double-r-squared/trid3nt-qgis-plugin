@@ -71,6 +71,8 @@ class Slot:
     #: What a row of this type's doc line leads with - the role this registry
     #: states; the row's own state (producer, class) picks the tail beside it.
     desc: str = ""
+    #: The coverage steps a row of this type may declare (by their names in ``coverage.STEPS``); none runs any.
+    steps: frozenset[str] = frozenset()
 
     @property
     def ingest(self) -> Callable[..., Any] | None:
@@ -95,6 +97,7 @@ DOMAIN = Slot("domain", ingestion="domain", classes=frozenset({"hydrography"}),
 BED = Slot("bed", ingestion="bed",
            classes=frozenset({"bathymetry", "terrain", "channel survey"}),
            number=True, listed=True,
+           steps=frozenset({"merge_surfaces", "interpolate_surface", "accept"}),
            desc="what the domain's nodes carry for elevation: a DEM, a "
                 "bathymetry or survey raster, a layer of soundings, or a "
                 "depth in metres below the free surface; or an ORDERED LIST "

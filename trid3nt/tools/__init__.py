@@ -163,7 +163,9 @@ _register_router_specs()
 from .derive.charts.generate_chart import generate_chart  # noqa: E402,F401
 from .derive.drop_minor_divergences import drop_minor_divergences  # noqa: E402,F401
 from .derive.green_ampt_parameters import green_ampt_parameters  # noqa: E402,F401
+from .derive.interpolate_surface import interpolate_surface  # noqa: E402,F401
 from .derive.mark_lake_outlets import mark_lake_outlets  # noqa: E402,F401
+from .derive.merge_surfaces import merge_surfaces  # noqa: E402,F401
 from .derive.probe_point import probe_point  # noqa: E402,F401
 from .derive.restyle_layer import restyle_layer  # noqa: E402,F401
 from .derive.run_pyqgis import run_pyqgis  # noqa: E402,F401

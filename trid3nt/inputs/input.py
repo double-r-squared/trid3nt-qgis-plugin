@@ -70,6 +70,8 @@ class Input:
     #: What the run tells this row's ingestion: ``near`` names the run input holding the point a nearest-site query ranks against,
     #: ``when`` the one holding the instant a record is read at; ``every`` takes each site.
     coercion: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+    #: The steps this row declares to answer what its data does not cover, in the order they run; none is none run.
+    coverage_steps: tuple[Any, ...] = ()
 
     def __post_init__(self) -> None:
         if self.slot is not None and not hasattr(self.slot, "ingestion"):
@@ -286,6 +288,19 @@ class Input:
         supplied mesh the builder replaces, the mesher's own edge. No verdict, no
         refusal, no sentence: the one standing where absence is the design."""
         return replace(self, stated_only=True)
+
+    def steps(self, *declared: Any) -> "Input":
+        """The steps this row declares when its data does not cover the run, by name or ``(name, {args})``: the
+        template's default, which a run states its own over. A step a row's slot does not run refuses here."""
+        from .coverage import steps as checked
+
+        held = checked(declared)
+        runs = getattr(self.slot, "steps", frozenset())
+        if any(s.name not in runs for s in held):
+            raise DeclarationError(
+                f"Input {self.name!r} declares the steps {[s.name for s in held]}, and its slot runs "
+                f"{sorted(runs) or 'none'}.")
+        return replace(self, coverage_steps=held)
 
     def optional_need(self, instead_of: str = "") -> "Input":
         """The need is asked of the match, and a place no source covers leaves the row unfilled: no verdict against the run, the absence said once in the journal.

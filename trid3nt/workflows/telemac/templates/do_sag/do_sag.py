@@ -50,7 +50,7 @@ class INPUTS:
     domain = Input(DOMAIN).need("hydrography", at="outfall_coords",
                                 span_km=_REACH_LENGTH_KM)
     line = Input(LINE).need(geometry="polyline")
-    bed = Input(BED).need("bathymetry")
+    bed = Input(BED).need("bathymetry").steps("merge_surfaces", "interpolate_surface")
     discharge = Input(DISCHARGE).need("discharge series")
     level = Input(LEVEL).need("water level series")
 

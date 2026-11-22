@@ -59,7 +59,7 @@ class INPUTS:
     bed = Input(BED, desc=(
         "The fine rung of the bed over the deep one: ONE bathymetry or survey raster, or a layer name, on the "
         "run's vertical frame - the engine takes the finest surface at each point, so the bed takes one surface; "
-        "unfilled, the run matches a source of bathymetry.")).need("bathymetry")
+        "unfilled, the run matches a source of bathymetry.")).need("bathymetry").steps("interpolate_surface")
 
 
 class STEERING(GEO):

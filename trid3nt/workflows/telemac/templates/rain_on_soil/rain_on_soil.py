@@ -45,7 +45,7 @@ class INPUTS:
 
     domain = Input(DOMAIN).need("hydrography", kind="basin", at="pour_point",
                                 span_km=_BASIN_WINDOW_KM)
-    bed = Input(BED).need("terrain")
+    bed = Input(BED).need("terrain").steps("merge_surfaces", "interpolate_surface")
     rivers = Input().need("hydrography", geometry="polyline")
     landcover = Input().need("land cover")
     soil = Input(SOIL).need("soil", of="sand")

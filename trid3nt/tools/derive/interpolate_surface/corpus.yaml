@@ -1,0 +1,8 @@
+interpolate_surface:
+- fill the holes in this bathymetry by interpolation
+- interpolate the gaps in the bed inside the water polygon
+- fill the nodata cells of this DEM up to 50 pixels from a measured cell
+- interpolate the survey's missing cells linearly
+- GDAL fill nodata inverse distance on this raster
+- paint the empty cells of the elevation surface from the measured ones
+- how much of this raster would an interpolation fill and what is left

@@ -43,7 +43,7 @@ class INPUTS:
     mesh_resolution_m = RESOLUTION
 
     domain = Input(DOMAIN).need("hydrography", at="seed")
-    bed = Input(BED).need("bathymetry")
+    bed = Input(BED).need("bathymetry").steps("merge_surfaces", "interpolate_surface")
     level = Input(LEVEL).need("water level series")
 
 

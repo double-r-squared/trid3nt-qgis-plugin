@@ -1,8 +1,8 @@
-"""The bed's MERGE and FILL: an ordered list of surfaces, each already on the run's frame, laid into one grid.
+"""``merge_surfaces`` - an ordered list of raster surfaces laid into one, the earlier handed winning every cell it measured.
 
-The earlier-handed surface wins every cell it measured and a later one paints only what the earlier left;
-band 2 names each cell's surface by its place, FILLED or UNMEASURED. What is left inside the region is filled
-by the FILL_ALGORITHM setting up to FILL_MAX_DISTANCE pixels from what was measured, and no further.
+A later surface paints only what the earlier left; band 2 names each cell's surface by its place, FILLED or
+UNMEASURED. The grid is the finest surface's CRS and cell over the union of the surfaces and the region; the seam is
+blended over MERGE_BUFFER_CELLS. It reads rasters and fetches nothing: surfaces on two zeros refuse by name.
 """
 
 from __future__ import annotations
@@ -11,14 +11,18 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
+
 from trid3nt.inputs.geometry import METRES_PER_DEGREE
+from trid3nt.inputs.user_input import UserInputError
 from trid3nt.settings import setting
+from trid3nt.tools import register_tool
+from trid3nt.tools.derive import DeriveError
 from trid3nt.tools.derive._raster_layers import (
     FILLED, NODATA, UNMEASURED, polygons, staged)
+from trid3nt.tools.derive.interpolate_surface.interpolate_surface import inside, interpolated
 
-from .user_input import UserInputError
-
-__all__ = ["Laid", "laid"]
+__all__ = ["Laid", "laid", "merge_surfaces", "published"]
 
 
 @dataclass(frozen=True)
@@ -36,6 +40,8 @@ class Laid:
     unreached: Any
     #: Did the grid differ from the one surface's own: a second surface, a seam blend, or a fill.
     changed: bool
+    #: The cells inside the region, every cell where it carries none.
+    within: Any = None
 
 
 def _metres_per_unit(crs: Any) -> float:
@@ -124,45 +130,6 @@ def _no_cliff(grids: list[Any], won: Any, labels: list[str]) -> None:
             "met. Hand surfaces on one frame, or ones whose zero the offset service knows.", code="BED_CLIFF")
 
 
-def _interpolated(values: Any, targets: Any, known: Any) -> Any:
-    """``values`` with the ``targets`` cells interpolated from the ``known`` cells alone, by the FILL_ALGORITHM
-    setting, NaN where a target lies farther than FILL_MAX_DISTANCE pixels from every known cell."""
-    import numpy as np
-
-    reach = float(setting("FILL_MAX_DISTANCE"))
-    work = np.where(known & ~targets, values, NODATA).astype("float32")
-    if setting("FILL_ALGORITHM") == "linear":
-        painted = _linear(work, targets, reach)
-    else:
-        from rasterio.fill import fillnodata
-
-        painted = fillnodata(work, mask=np.isfinite(work).astype("uint8"),
-                             max_search_distance=reach)
-    out = values.copy()
-    out[targets] = painted[targets]
-    return out
-
-
-def _linear(work: Any, targets: Any, reach: float) -> Any:
-    """Linear interpolation over the triangulation of the measured cells bordering the targets; a target
-    outside their hull or past ``reach`` pixels from every measured cell stays NaN."""
-    import numpy as np
-    from scipy.interpolate import griddata
-    from scipy.ndimage import binary_dilation, distance_transform_edt
-
-    known = np.isfinite(work)
-    rim = known & binary_dilation(targets, structure=np.ones((3, 3), dtype=bool))
-    out = work.copy()
-    if int(rim.sum()) < 3:
-        return out
-    rows, cols = np.nonzero(rim)
-    want_rows, want_cols = np.nonzero(targets)
-    out[want_rows, want_cols] = griddata((rows, cols), work[rows, cols],
-                                         (want_rows, want_cols), method="linear")
-    out[targets & (distance_transform_edt(~known) > reach)] = NODATA
-    return out
-
-
 def _seam(won: Any, ranks: int) -> Any:
     """The cells of each later surface within MERGE_BUFFER_CELLS of what the earlier ones measured.
 
@@ -180,27 +147,20 @@ def _seam(won: Any, ranks: int) -> Any:
     return seam
 
 
-def _inside(region: list[Any], crs: Any, transform: Any, shape: tuple[int, int]) -> Any:
-    """The cells inside the region's polygons (lon/lat, put on the grid's CRS here); every cell without one."""
-    import numpy as np
-    from rasterio.features import geometry_mask
-
-    if not region:
-        return np.ones(shape, dtype=bool)
-    return geometry_mask(region, out_shape=shape, transform=transform, invert=True, all_touched=True)
-
-
 def laid(surfaces: list[Any], labels: list[str], *, region: Any = None,
-         fill: bool = True) -> Laid:
+         fill: Any = None) -> Laid:
     """The surfaces, in the order handed and named by ``labels``, laid into one grid -> :class:`Laid`.
 
-    ``region`` is the polygon the fill reaches inside (every cell where it carries none); ``fill`` False lays
-    without filling. A grid nothing measured a cell of refuses BED_DISJOINT; a cliff refuses BED_CLIFF."""
+    ``region`` is the polygon the fill reaches inside (every cell where it carries none); ``fill`` is the
+    interpolation the holes inside it are filled by, ``None`` laying without filling.
+    A grid nothing measured a cell of refuses BED_DISJOINT; a cliff refuses BED_CLIFF."""
     import tempfile
     from contextlib import ExitStack
 
     import numpy as np
     import rasterio
+
+    from trid3nt.inputs.coverage import interpolation
 
     with tempfile.TemporaryDirectory(prefix="bed-merge-") as scratch:
         paths = [staged(surface, labels[rank], scratch) for rank, surface in enumerate(surfaces)]
@@ -221,16 +181,98 @@ def laid(surfaces: list[Any], labels: list[str], *, region: Any = None,
     _no_cliff(grids, won, labels)
     seam = _seam(won, len(grids))
     if seam.any():
-        values = _interpolated(values, seam, np.isfinite(values))
+        # The seam is the merge's own blend, interpolated by the settings in force.
+        blend = interpolation(None)
+        values = interpolated(values, seam, np.isfinite(values), algorithm=blend.algorithm,
+                              max_distance=blend.max_distance)
         won[seam] = np.where(np.isfinite(values[seam]), FILLED, UNMEASURED)
-    inside = _inside(shapes, crs, transform, values.shape)
-    holes = inside & ~np.isfinite(values)
+    within = inside(shapes, crs, transform, values.shape)
+    holes = within & ~np.isfinite(values)
     filled = np.zeros(values.shape, dtype=bool)
-    if fill and holes.any():
-        values = _interpolated(values, holes, inside & np.isfinite(values))
+    if fill is not None and holes.any():
+        values = interpolated(values, holes, within & np.isfinite(values), algorithm=fill.algorithm,
+                              max_distance=fill.max_distance)
         filled = holes & np.isfinite(values)
         won[filled] = FILLED
     return Laid(values=values, won=won, crs=crs, transform=transform,
                 cell_m=cell * _metres_per_unit(crs), labels=labels, filled=filled,
-                unreached=holes & ~filled,
+                unreached=holes & ~filled, within=within,
                 changed=len(surfaces) > 1 or bool(seam.any()) or bool(filled.any()))
+
+
+#: A laid surface is an elevation in metres.
+_STYLE = {"kind": "continuous", "ramp": "terrain", "units": "m"}
+
+
+def published(grid: Laid, *, frame: str | None, name: str, notes: list[str], kind: str = "merged",
+              prefix: str = "merged") -> Any:
+    """The laid grid written once as two bands -> the layer, with the share each source reached and nothing did."""
+    from trid3nt_contracts.execution import layer_seed
+
+    from trid3nt.tools.derive._raster_layers import RasterLayerURI, bbox_4326, coverage, written
+
+    seed = layer_seed()
+    sources = [*grid.labels, "filled"]
+    uri = written(grid.values, grid.won, crs=grid.crs, transform=grid.transform,
+                  prefix=prefix, seed=seed, output_dir=None)
+    reached, blank = coverage(grid.won, sources)
+    height, width = grid.values.shape
+    return RasterLayerURI.published(
+        kind, seed=seed, name=name,
+        layer_type="raster", uri=uri, style=_STYLE, role="primary", units="m",
+        quantity="elevation", bbox=bbox_4326(grid.crs, grid.transform, width, height),
+        vertical_datum=frame, sources=sources, coverage=reached,
+        unmeasured_fraction=blank, notes=notes)
+
+
+def merged_layer(layers: list[Any], *, region: Any = None, name: str | None = None) -> Any:
+    """The tool's body: each surface read as elevations on its own zero, the zeros held to one, laid -> the layer."""
+    from trid3nt.inputs.bed import elevations
+    from trid3nt.inputs.vertical_datum import DatumError, datum_of, one_datum
+    from trid3nt.render.uri_registry import lookup_layer_for_handle
+    from trid3nt.tools.derive._raster_layers import label_of
+
+    if not isinstance(layers, (list, tuple)) or not layers:
+        raise DeriveError("MERGE_ARGUMENT", "merge_surfaces takes an ordered list of raster layers, the first winning.")
+    held = [lookup_layer_for_handle(v) or v if isinstance(v, str) else v for v in layers]
+    surfaces = [elevations(layer, frame=None, label=f"surface {rank + 1}", code="MERGE_SURFACE")
+                for rank, layer in enumerate(held)]
+    stating = [surface for surface in surfaces if datum_of(surface)]
+    try:
+        frame = one_datum(*stating, code_prefix="MERGE_") if len(stating) > 1 else (
+            datum_of(stating[0]) if stating else None)
+    except DatumError as exc:
+        raise DeriveError(exc.error_code, str(exc)) from exc
+    labels = [label_of(layer, rank) for rank, layer in enumerate(held)]
+    grid = laid(surfaces, labels, region=_region(region))
+    return published(grid, frame=frame or None, name=name or f"merged ({', '.join(labels)})", notes=[])
+
+
+def _region(region: Any) -> Any:
+    from trid3nt.render.uri_registry import lookup_layer_for_handle
+
+    return (lookup_layer_for_handle(region) or region) if isinstance(region, str) else region
+
+
+_METADATA = AtomicToolMetadata(name="merge_surfaces", ttl_class="live-no-cache", source_class=None)
+
+
+@register_tool(_METADATA, read_only_hint=False, open_world_hint=False, destructive_hint=False, idempotent_hint=True)
+def merge_surfaces(layers: list[Any] | None = None, region: Any = None, name: str | None = None,
+                   **_extra_ignored: Any) -> Any:
+    """DERIVE: lay an ordered list of raster surfaces (beds, DEMs, bathymetry) into one, the first winning where it measured.
+
+    ROUTING: "merge the survey with the DEM", "combine these two bathymetry rasters, the survey first", "lay the eHydro
+    grid over CUDEM", "mosaic these elevation layers in this order". A new case layer; the inputs are not changed.
+
+    `layers` is an ordered list of case layer ids (or uris) of rasters: the first handed wins every cell it measured, a
+    later one paints only the cells left empty. Each is read as elevations on the zero it states (a surface of depths
+    counted up from its own); two surfaces stating different zeros refuse naming both - bring one onto the other's
+    first. `region` is an optional polygon layer id or GeoJSON the grid reaches over. Nothing is interpolated: holes
+    stay nodata (interpolate_surface fills them).
+
+    Returns a two-band raster on the finest surface's grid: band 1 the elevations, band 2 which surface valued each
+    cell, with the share each surface reached and the share nothing reached. Two populations farther apart than the
+    relief refuse (BED_CLIFF), and surfaces with no ground in common refuse (BED_DISJOINT).
+    """
+    return merged_layer(list(layers or []), region=region, name=name)

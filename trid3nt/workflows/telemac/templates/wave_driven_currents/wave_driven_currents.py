@@ -51,7 +51,7 @@ class INPUTS:
 
     extent = Input(EXTENT).need(geometry="rectangle")
     domain = Input(DOMAIN).need("hydrography", kind="coastline", geometry="polyline")
-    bed = Input(BED).need("bathymetry")
+    bed = Input(BED).need("bathymetry").steps("merge_surfaces", "interpolate_surface")
     wave = Input(WAVE).need("wave series", at="seed")
     level = Input(LEVEL).need("water level series")
     # The check: a station the run was NOT forced at, so the answers there are

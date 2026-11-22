@@ -439,7 +439,7 @@ package DataSeam {
         The bed slot's own coercion over an ORDERED LIST of surfaces, each
         already read on the run's frame: laid onto one grid, the earlier handed
         winning every cell it measured, and what nothing measured inside the
-        cut filled by the bed settings. Every fetched layer carries its vertical
+        cut interpolated where the run declares that step. Every fetched layer carries its vertical
         datum, its quantity and the shift its source publishes about that datum
         as fields on the layer record - a source whose rows each state their
         zero is stamped off what its rows agree on - and a layer named by id
@@ -541,7 +541,7 @@ package DataSeam {
 
     part bedComposer : BedComposer {
         doc /*
-        code: trid3nt/inputs/bed_merge.py
+        code: trid3nt/tools/derive/merge_surfaces/merge_surfaces.py
         */
     }
 
@@ -872,17 +872,22 @@ package DataSeam {
         BEFORE THE SOLVE where they meet the fill: on the run's own card beside
         the sources it matched, and on the journal.
 
-        A WET HOLE PAST THE FILL'S REACH REFUSES BY NAME AT THE FILL. Water
-        inside the cut that no surface measured - including water past every
-        surface's own edge - is filled from the cells measured inside the cut
-        alone, by the interpolator the FILL_ALGORITHM setting names, no farther
-        than FILL_MAX_DISTANCE pixels from a measured cell; each filled cell is
-        marked filled in the second band, so an interpolation is never read as
-        a sounding, and the share filled is stated with the coverage. Water
-        past that reach has no bed, and the slot refuses naming where it
-        stands, the setting that would reach it and a further surface handed
-        after these. A DRY hole is stated and left to the mesh, which refuses a
-        node no value reaches.
+        A WET HOLE LEFT BY THE DECLARED STEPS IS A SHORTFALL. Water inside the
+        cut that no surface measured - including water past every surface's own
+        edge - is filled only where the run declares the interpolation step (a
+        template's bed row states it as its default; the engine and the
+        framework state none): from the cells measured inside the cut alone, by
+        the step's algorithm (else the FILL_ALGORITHM setting), no farther than
+        its reach (else FILL_MAX_DISTANCE pixels) from a measured cell; each
+        filled cell is marked filled in the second band, so an interpolation is
+        never read as a sounding, and the share filled is stated with the
+        coverage. Water left unvalued is reported as data - its code, cells,
+        share and remedies, each a step - and under strict, which every daemon
+        run holds, the slot refuses naming where it stands, the setting that
+        would reach it and a further surface handed after these; an accept
+        line naming the code resolves it. With strict off the run goes on, and
+        the mesh refuses a node no value reaches under either setting, as it
+        does a DRY hole.
 
         A FURTHER SURFACE IS THE PERSON'S STATEMENT. No workflow is baked in:
         the person or the model reads the coverage, hands the bed a further
@@ -1459,6 +1464,14 @@ package DataSeam {
         "tests/inputs/test_bed_merge.py::test_linear_is_one_setting_away";
     verify requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by
         "tests/inputs/test_bed_merge.py::test_an_engine_laying_its_own_ladder_neither_merges_nor_fills";
+    verify requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by
+        "tests/sdk/test_coverage.py::test_a_spotty_bed_with_no_step_warns_with_its_coverage_and_remedies_and_runs";
+    verify requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by
+        "tests/sdk/test_coverage.py::test_the_same_bed_under_strict_refuses_naming_the_code_and_remedies";
+    verify requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by
+        "tests/sdk/test_coverage.py::test_a_node_left_with_no_bed_value_refuses_under_both_settings";
+    verify requirement WaterNothingMeasuredIsFilledOnlyWithinTheStatedReach by
+        "tests/sdk/test_coverage.py::test_a_template_call_states_its_default_steps_and_fills_as_before";
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeLevelDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by freeSurfaceReader;

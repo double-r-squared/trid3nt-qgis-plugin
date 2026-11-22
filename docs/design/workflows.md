@@ -29,8 +29,8 @@ Three things are not operations and stay:
   frame, an upload onto the store's lon/lat frame, a MODFLOW raster onto the
   sheet's length and time units (a raster publishing no unit refuses). Each is
   the slot's own coercion, never a row a template writes.
-- LAYING THE BED (`inputs/bed.py`, `inputs/bed_merge.py`) - the bed slot's own
-  coercion. The slot takes one surface or an ORDERED LIST of them (layer names,
+- LAYING THE BED (`inputs/bed.py`, through the `merge_surfaces` and `interpolate_surface` derives) - the bed
+  slot's own coercion. The slot takes one surface or an ORDERED LIST of them (layer names,
   or `{"source": fetcher}`, each fetched through the match under the class it
   serves): no workflow is baked in, the person or the model fetches, reads the
   coverage, hands a further surface or stops. Each surface is read onto the
@@ -38,22 +38,30 @@ Three things are not operations and stay:
   surface's CRS and cell over the union of the surfaces and the cut - the
   earlier-handed winning every cell it measured (HydroMT `merge_method`
   `first`), band 2 naming each cell's surface by its place. The seam is blended
-  over `MERGE_BUFFER_CELLS`; what nothing measured inside the cut is filled
-  from the cells inside the cut by `FILL_ALGORITHM` up to `FILL_MAX_DISTANCE`
-  pixels, each cell marked filled, and water past that reach refuses
-  `BED_WET_HOLE` naming the setting and a further surface. The coverage of each
+  over `MERGE_BUFFER_CELLS`. What else happens is a DECLARED COVERAGE STEP
+  (`inputs/coverage.py`; `docs/design/sdk.md` states them whole): the bed row of a
+  template states its defaults (`.steps("merge_surfaces", "interpolate_surface")`), a run or an SDK model
+  states its own over them, and the engine and the framework state none. Under
+  `interpolate_surface` what nothing measured inside the cut is filled from the
+  cells inside the cut by its algorithm up to its reach in pixels (each the
+  `FILL_ALGORITHM` / `FILL_MAX_DISTANCE` setting where unstated), each cell
+  marked filled. Water left unvalued is the bed's SHORTFALL, `BED_WET_HOLE`: under
+  strict (every daemon run) it refuses naming the setting and a further surface,
+  as before; with strict off it is a warning on the form and the run goes on to
+  the mesh, which refuses a node no value reaches. The coverage of each
   surface over the water and the land, the filled share and the age between
   the surfaces are cut-coverage lines: rows on the input review card in a gated
-  run, run notes in an auto one. An engine that lays its own ladder of
+  run, run notes in an auto one, and the text of the input's `Coverage` on an
+  SDK form. An engine that lays its own ladder of
   surfaces (`Workflow.lays_own_bed`, GeoClaw's topofiles, the finest at each
-  point) takes one surface on its bed row and neither merges nor fills.
-  Otherwise the bed walks its ranked rows: the first answering surface is laid,
-  and while the water is left a wet hole the next ranked surface is produced and
+  point) takes one surface on its bed row and neither merges nor fills a raster.
+  Otherwise, where the run declares `merge_surfaces`, the bed walks its ranked rows: the first answering surface
+  is laid, and while the water is left a wet hole the next ranked surface is produced and
   the ordered list ingested, the first winning where it measured; only a wet
   hole continues, and the refusal at the end names every surface tried.
   A layer of SOUNDINGS handed the bed is laid on that grid - each cell the mean
   of the points inside it, the cell the points' own median spacing - and the
-  same fill paints the rest; the run notes name the count and the fill.
+  declared interpolation paints the rest; the run notes name the count and the fill.
 - A FETCH reading its source onto the asked window and spacing. The kernel a
   row states is how that source's pixels are read; a grid past the pixel
   budget refuses naming the spacing to re-ask at.

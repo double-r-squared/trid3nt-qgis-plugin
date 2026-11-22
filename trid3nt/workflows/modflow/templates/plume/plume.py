@@ -46,7 +46,7 @@ class INPUTS:
     bed = Input(BED, desc=(
         "The land surface: the terrain the mesh paints, which the aquifer's top "
         "is and the streams drain at. A DEM, or a depth in metres below the "
-        "model's zero for a flat surface.")).need("terrain")
+        "model's zero for a flat surface.")).need("terrain").steps("merge_surfaces", "interpolate_surface")
     saturated_thickness = Input(desc=(
         "How thick the saturated aquifer is, its base that far below the water "
         "table: a number in metres, or a raster publishing its unit; unfilled, "

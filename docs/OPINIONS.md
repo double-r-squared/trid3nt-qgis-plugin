@@ -9,7 +9,7 @@ enforced opinion becomes a law in AGENTS.md. Laws and conventions already writte
 1. The developers never invent the world; the modeller may. A user may state any assumption, synthetic field or dataset of their own, and the run carries it as theirs. When testing, we are the modeller.
 2. Empirical data is preferred, never required. A ballpark run on a lumped value (one storm total, a constant rate) is allowed with a warning.
 3. Every number the system states shows where it came from: an engine default, a paper, a fetched field, or the user's word.
-4. Declared, not implicit. Anything that reshapes data or a run (a clip, a fill, a fit, a widening) is a stated step someone can read, never a hidden setting.
+4. Declared, not implicit. Anything that reshapes data or a run (a clip, a fill, a fit, a widening) is a stated step someone can read, never a hidden setting. Coverage steps (merge, interpolate) are such steps: a template states its defaults, a script or a run states its own over them, and the engine and the framework state none. A shortfall no declared step resolves is a warning where nobody has asked for strictness and a refusal where they have; what the engine cannot run without at all refuses either way.
 5. Warnings and errors are generic and direct: a code, what happened, what to do. Each is written once and reused across the system and the SDK. They name things by codes and controlled identifiers, never by inserting free text a source or user supplied.
 6. A failed fetch is visible through the fetch's own feedback; no extra mechanism enforces it.
 7. The YAML is the auditable surface. Coupling to it (fetch, fields, SDK access) is good coupling.

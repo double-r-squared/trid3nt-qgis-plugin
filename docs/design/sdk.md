@@ -134,8 +134,47 @@ A model is held `unattended` (`trid3nt/inputs/review.py`): every gate proceeds w
 is drawn, no run refuses `NO_SESSION`, and the person's AUTO setting is never read. What no source states still
 refuses where it is read (law 9): a river reach nobody states refuses `REACH_LENGTH_UNSTATED` as AUTO does.
 
+## Coverage and strictness
+
+    m.steps = {"bed": ["merge_surfaces", ("interpolate_surface", {"max_distance": 50})]}
+    form = m.fill()
+    form.coverage["bed"]        # Coverage: text, shares by source, unmeasured share, steps, shortfall
+    form.warnings               # each unresolved Shortfall the fill let run (strict off)
+    c = case("dye", strict=True); m.strict = False   # the model's own wins over its case's
+
+- A COVERAGE STEP is declared, never implicit: a name and its arguments (`trid3nt/inputs/coverage.py` `Step`),
+  the name being the derive that runs it - `merge_surfaces` (the bed walks the next ranked surface while the water
+  is left a wet hole; with no rank walk registered the walk ends at the sources the model named),
+  `interpolate_surface` (the holes inside the cut filled by `algorithm` up to `max_distance` pixels, each unstated
+  argument the setting in force, `FILL_ALGORITHM` / `FILL_MAX_DISTANCE`) - or `accept` naming a shortfall's code.
+  A slot states the steps it runs (`Slot.steps`; the bed's are those three); any other refuses at the set.
+- THE TEMPLATE STATES ITS DEFAULT STEPS on its row (`Input(BED).need("bathymetry").steps("merge_surfaces",
+  "interpolate_surface")`), so a bare template call and every daemon run lay the bed as before (a TELEMAC deck
+  filled from a raster bed is byte-identical to the one before the steps were declared). The engine and the
+  framework state none. A GeoClaw bed, an engine laying its own ladder, states `interpolate_surface`, which
+  interpolates a layer of soundings and never a raster the engine lays whole. `m.steps = {input: [...]}` states a
+  model's own over its template's, `()` none at all; the steps are part of the model's version.
+- THE OPERATIONS ARE FUNCTIONS. `merge_surfaces(layers, region=None, name=None)` and
+  `interpolate_surface(layer, region=None, algorithm=None, max_distance=None, name=None)` are registered derive
+  tools (`trid3nt/tools/derive/`), callable from a script inside `c.bound()` as from chat: each returns a two-band
+  raster whose band 2 names each cell's source (`FILLED` for an interpolated cell), with the share each source
+  reached and the share nothing reached. The bed slot lays its surfaces through the same code.
+- COVERAGE AS DATA. Each input whose ingestion measures its coverage reports a `Coverage` on the form: the
+  coverage lines the ingestion already says (on the card and the journal), the share each source valued over the
+  water (the grid where the domain was cut with no polygon), the share nothing valued, the steps in force, and the
+  `Shortfall` its declared steps left: `code` (`BED_WET_HOLE`), `cells`, `share`, `farthest_px` (from the
+  farthest unvalued cell to a valued one) and `remedies`, each a `Step` - a `merge_surfaces` per ranked source
+  the bed has not laid (by `source`), the `interpolate_surface` that reaches `farthest_px` where none declared
+  reaches it, and the `accept` naming the code. No sentence is composed for a remedy.
+- STRICT. A shortfall is RESOLVED when the steps declared answer it (nothing is left short) or an `accept` names
+  its code. `strict=False` (the SDK's default): an unresolved shortfall is a warning on the form and the run goes
+  ahead where the engine can. `strict=True` (the harness registers it at import, so every daemon run): it refuses
+  `BED_WET_HOLE` as before, the shortfall and its remedies on the form. A node the engine would carry no value at is
+  not a strictness level: the mesh refuses `MESH_BED_UNPAINTED` under both. The record names `strict`.
+
 ## Out of scope here
 
-Coverage and strictness; copied templates; the generator; studies; remote
-execution; a case's own document store (a finished run of an SDK case is not offered as a run input) - each a
-later leg of the SDK plan.
+Rendering a shortfall's remedies as script lines (the generator); a fit of the domain to measured water
+(`fit_reach`) and a channel-aligned interpolation, neither in the tree; copied templates; the generator; studies;
+remote execution; a case's own document store (a finished run of an SDK case is not offered as a run input) - each
+a later leg of the SDK plan.

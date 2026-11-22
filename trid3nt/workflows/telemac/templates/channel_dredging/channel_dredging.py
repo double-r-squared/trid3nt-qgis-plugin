@@ -58,7 +58,7 @@ class INPUTS:
     domain = Input(DOMAIN).need("hydrography", at="seed_point",
                                 span_km=_REACH_LENGTH_KM)
     line = Input(LINE).need(geometry="polyline")
-    bed = Input(BED).need("channel survey")
+    bed = Input(BED).need("channel survey").steps("merge_surfaces", "interpolate_surface")
     discharge = Input(DISCHARGE).need("discharge series")
     dredge_area = Input().need(geometry="polygon")
     dump_area = Input().need(geometry="polygon")

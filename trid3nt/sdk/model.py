@@ -3,7 +3,8 @@
 Every name resolves through the workflow's one lookup, and a value is held as the run states it, so the fill
 takes it as it takes a call's. The model is held unattended: nothing asks a person, the person's AUTO setting
 is never read, and no source is picked for an input the model leaves unstated. It fills and runs in its case
-directory, and what it read, wrote and ran is written to the case's lock.
+directory, and what it read, wrote and ran is written to the case's lock. ``strict`` and ``steps`` are the model's
+own: whether an unresolved coverage shortfall refuses, and the coverage steps it states over its template's.
 """
 
 from __future__ import annotations
@@ -15,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
+from trid3nt.errors import DeclarationError
+from trid3nt.inputs.coverage import Coverage, Shortfall, strictness
 from trid3nt.inputs.review import unattended
 from trid3nt.render.emission import bind_turn_case
 from trid3nt.workflows.runtime.data import refuse_wrong_shape
@@ -47,7 +50,8 @@ class Staged:
 class Form:
     """What the fill answered: every input's verdict by name, whether the run is ready, the ``(code, sentence)``
     that keeps it from ready, the deck it wrote, and whether that staged deck passed the engine's own check
-    (a deck is staged only once it has; where the check refused, the refusal's code is ``<ENGINE>_STAGED_*``)."""
+    (a deck is staged only once it has; where the check refused, the refusal's code is ``<ENGINE>_STAGED_*``).
+    ``coverage`` is what each input's data covers, by name; ``warnings`` each shortfall left unresolved and let run."""
 
     verdicts: Mapping[str, Verdict]
     ready: bool
@@ -55,6 +59,8 @@ class Form:
     notes: tuple[str, ...] = ()
     deck: Staged | None = None
     checked: bool = False
+    coverage: Mapping[str, Coverage] = field(default_factory=dict)
+    warnings: tuple[Shortfall, ...] = ()
 
     def __getitem__(self, name: str) -> Verdict:
         return self.verdicts[name]
@@ -67,6 +73,12 @@ class Form:
                          + (f" [{origin}{', ' + verdict.source if verdict.source else ''}]" if origin else "")
                          + (f" {verdict.code}: {verdict.reason}" if verdict.code else "")
                          + (f" candidates: {', '.join(verdict.remedies)}" if verdict.remedies else ""))
+        for name, covered in self.coverage.items():
+            lines.append(f"  {name} coverage: " + ", ".join(f"{source} {share:.4g}" for source, share in covered.shares)
+                         + f", unmeasured {covered.unmeasured:.4g}")
+        for short in self.warnings:
+            lines.append(f"  warning {short.code} {short.input}: {short.cells} cells, share {short.share:.4g}; "
+                         f"remedies: {', '.join(map(repr, short.remedies))}")
         if self.deck is not None:
             lines.append(f"  deck {self.deck.sha256[:12]} ({len(self.deck.files)} files, run {self.deck.run_id}"
                          + (f", mesh {self.deck.mesh}" if self.deck.mesh else "") + "), checked")
@@ -128,8 +140,12 @@ class Model:
         object.__setattr__(self, "_taken", {})
         #: The deck the last fill wrote, held for the run until a set or another fill supersedes it.
         object.__setattr__(self, "_written", None)
+        #: Whether an unresolved shortfall refuses, where the model states it (else the case's), and the coverage
+        #: steps the model states by input over the ones its template's rows declare.
+        object.__setattr__(self, "_strict", None)
+        object.__setattr__(self, "_steps", {})
         for name, value in values.items():
-            self[name] = value
+            setattr(self, name, value)
 
     def _held(self, name: str) -> tuple[str, Any]:
         """The key a name is stated under and what it names: an input by its own name, a keyword by its identifier,
@@ -159,7 +175,40 @@ class Model:
             raise AttributeError(str(refused)) from refused
 
     def __setattr__(self, name: str, value: Any) -> None:
+        if name == "strict":
+            if value is not None and not isinstance(value, bool):
+                raise DeclarationError(f"strict is True or False, not {value!r}.")
+            object.__setattr__(self, "_strict", value)
+            return
+        if name == "steps":
+            object.__setattr__(self, "_steps", self._stepped(value))
+            return
         self[name] = value
+
+    @property
+    def strict(self) -> bool:
+        """Whether an unresolved coverage shortfall refuses: the model's own, else its case's."""
+        return self._case.strict if self._strict is None else self._strict
+
+    @property
+    def steps(self) -> dict[str, tuple[Any, ...]]:
+        """The coverage steps in force by input: the model's, else the ones its template's row declares."""
+        return {row.name: self._steps.get(row.name, row.coverage_steps)
+                for row in self._workflow.inputs if getattr(row.slot, "steps", None)}
+
+    def _stepped(self, value: Any) -> dict[str, tuple[Any, ...]]:
+        """The steps a model states, by input, each held to what its row's slot runs; ``None`` states none of its own."""
+        if value is None:
+            return {}
+        if not isinstance(value, Mapping):
+            raise DeclarationError("steps is a mapping of input name to its steps, in the order they run.")
+        held = {}
+        for name, declared in value.items():
+            row = next((r for r in self._workflow.inputs if r.name == name), None)
+            if row is None or not getattr(row.slot, "steps", None):
+                raise DeclarationError(f"{name!r} is no input of {self._workflow.name} that takes steps.")
+            held[name] = row.steps(*(declared or ())).coverage_steps
+        return held
 
     def __getitem__(self, name: str) -> Any:
         key, held = self._held(name)
@@ -206,8 +255,12 @@ class Model:
 
     @property
     def version(self) -> str:
-        """The content hash of what this model states: its template, its inputs and its keywords."""
-        stated = {"template": self._workflow.name, "inputs": self._stated, "keywords": self._keywords}
+        """The content hash of what this model states: its template, its inputs, its keywords, and its steps and
+        strictness where it states them."""
+        stated = {"template": self._workflow.name, "inputs": self._stated, "keywords": self._keywords,
+                  **({"steps": {k: [[s.name, list(s.args)] for s in v] for k, v in self._steps.items()}}
+                     if self._steps else {}),
+                  **({"strict": True} if self.strict else {})}
         return hashlib.sha256(json.dumps(stated, sort_keys=True, default=str).encode("utf-8")).hexdigest()
 
     def _named(self) -> dict[str, str]:
@@ -218,7 +271,7 @@ class Model:
         and the typed refusal the launch stopped on; the deck is held for the run, and the lock names what was read
         and written. Runs inside the case's binding."""
         self._drop()
-        state = await self._workflow.filled(self._wire(), model=self._named())
+        state = await self._workflow.filled(self._wire(), model=self._named(), steps=self._steps)
         deck, refusal = None, None
         if state.ready:
             try:
@@ -235,9 +288,9 @@ class Model:
 
     async def _fill(self) -> Form:
         bind_turn_case(self._case.name)
-        with self._case.bound(), unattended():
+        with self._case.bound(), unattended(), strictness(self.strict):
             state, staged, refusal = await self._filling()
-        return _form(state, staged, refusal)
+        return _form(state, staged, refusal, strict=self.strict)
 
     def fill(self) -> Form:
         """Every input answered and, where they all are, the deck written and checked -> the form; nothing is solved.
@@ -290,13 +343,13 @@ class Model:
     async def _run(self) -> Result | Failure:
         bind_turn_case(self._case.name)
         named = self._named()
-        with self._case.bound(), unattended():
+        with self._case.bound(), unattended(), strictness(self.strict):
             written = self._current()
             if written is None:
                 state, staged, refusal = await self._filling()
                 if not state.ready or refusal is not None:
                     code, sentence = refusal or state.refusal()
-                    return Failure(code, sentence, _form(state, staged, refusal))
+                    return Failure(code, sentence, _form(state, staged, refusal, strict=self.strict))
                 written = self._written
             # A deck is solved once: the next run fills again, under a new run id.
             object.__setattr__(self, "_written", None)
@@ -345,6 +398,9 @@ class Model:
             value = self._keywords[name] if stated else asserted[name]
             lines.append(f"  {name} = {_short(value)}  [{'user' if stated else 'template'}]")
         lines.append(f"  every other keyword = the module dictionary's own value  [{_ENGINE}]")
+        for name, declared in self.steps.items():
+            lines.append(f"  {name} steps = {list(declared)}  [{'user' if name in self._steps else 'template'}]")
+        lines.append(f"  strict = {self.strict}  [{'user' if self._strict is not None else 'case'}]")
         return "\n".join(lines)
 
 
@@ -359,12 +415,16 @@ class _Written:
     staged: Staged | None
 
 
-def _form(state: Fill, staged: Staged | None = None, refusal: tuple[str, str] | None = None) -> Form:
+def _form(state: Fill, staged: Staged | None = None, refusal: tuple[str, str] | None = None, *,
+          strict: bool = False) -> Form:
     ready = state.ready and refusal is None
+    coverage = dict(state.coverage)
     return Form(verdicts=dict(state.inputs), ready=ready,
                 refusal=None if ready else (refusal or state.refusal()),
                 notes=(*state.notes, *state.said[0], *state.moved),
-                deck=staged, checked=staged is not None)
+                deck=staged, checked=staged is not None, coverage=coverage,
+                warnings=() if strict else tuple(c.shortfall for c in coverage.values()
+                                                 if c.shortfall is not None and not c.shortfall.accepted))
 
 
 def _staged(root: Path, deck: Deck | None) -> Staged | None:

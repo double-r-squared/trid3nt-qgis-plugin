@@ -35,6 +35,7 @@ from trid3nt.inputs.slots import (
     BED, DISCHARGE, DOMAIN, EXTENT, LEVEL, LINE, MESH, RUN, Slot)
 from trid3nt.inputs.input import Input
 from trid3nt.inputs.bound_domain import Domain, bind_domain, current_domain
+from trid3nt.inputs.coverage import bind_reports, drain_reports
 from .errors import (DeclarativeError, StepFailedError,
                      SuppliedCoverageError, said)
 from . import journal
@@ -157,6 +158,8 @@ class _Env:
     published_units: Mapping[str, str] = field(default_factory=dict)
     #: The engine lays its own ladder of bed surfaces, so the bed slot neither merges nor fills.
     lays_own_bed: bool = False
+    #: The coverage steps the run states for an input, by name, over the ones its row declares.
+    steps: Mapping[str, tuple[Any, ...]] = field(default_factory=dict)
 
 
 def _data_step_label(name: str) -> str:
@@ -247,7 +250,7 @@ async def _matched(env: _Env, decl: Input) -> Any:
         raise _unstated(decl.name)
     await _somewhere_to_ask(env)
     if decl.slot is BED:
-        return await _bed_surface(env, decl, lambda laid: _ingested(env, decl, laid))
+        return await _bed_surface(env, decl, lambda laid, **told: _ingested(env, decl, laid, **told))
     if decl.slot is DOMAIN and not _asked_of(decl, await _seed(env, decl)):
         decl = await _kind_of_the_water_under(env, decl)
     if decl.slot is DOMAIN and _asked_of(decl, await _seed(env, decl)) == "flowline" and _span_km(env, decl) is None:
@@ -403,10 +406,14 @@ async def _named_surface(env: _Env, decl: Input, rank: int, named: str) -> Any:
 
 
 async def _bed_surface(env: _Env, decl: Input, ingest: Any = None) -> Any:
-    """THE BED: the row the match ranked first, then each next ranked surface while the water is left a wet hole.
+    """THE BED: the row the match ranked first, then - where the run declares the merge - each next ranked surface
+    while the water is left a wet hole.
 
     ``ingest`` reads what is laid; only BED_WET_HOLE continues the walk, and an engine laying its own bed
-    takes the one row. Soundings are laid and filled at the slot, not here."""
+    takes the one row. Soundings are laid at the slot, not here. A hole the walk leaves is judged as the slot
+    judges one: refused under strict unless accepted, else the bed laid as it stands and the shortfall reported."""
+    from trid3nt.inputs.coverage import MERGE, named, refuses, reported
+
     choice, top = await _probe(env, decl, decl.data_class,
                                f"{decl.name} {decl.data_class}")
     if top is None:
@@ -416,25 +423,60 @@ async def _bed_surface(env: _Env, decl: Input, ingest: Any = None) -> Any:
         return await ingest(top) if ingest is not None else top
     from trid3nt.inputs.user_input import UserInputError
 
+    walks = named(_steps_of(env, decl), MERGE) is not None
     laid, won = [top], [choice.picked]
     while True:
         try:
-            ingested = await ingest(laid[0] if len(laid) == 1 else list(laid))
+            ingested = await ingest(laid[0] if len(laid) == 1 else list(laid), walking=walks, taken=tuple(won))
         except Exception as hole:  # noqa: BLE001 - only a wet hole walks on
-            if getattr(hole, "error_code", None) != "BED_WET_HOLE":
+            if getattr(hole, "error_code", None) != "BED_WET_HOLE" or not walks:
                 raise
-            nxt, more = await _probe(env, decl, decl.data_class,
-                                     f"{decl.name} {decl.data_class}", skip=tuple(won))
+            # With nothing to take a ranked source the walk ends where the run's own sources do.
+            nxt, more = (await _probe(env, decl, decl.data_class, f"{decl.name} {decl.data_class}",
+                                      skip=tuple(won)) if "takes" in _RANKED else (None, None))
             if more is None:
-                raise UserInputError(f"{hole} Surfaces tried, in rank order: {', '.join(won)}.",
-                                     code="BED_WET_HOLE") from hole
+                held = reported(decl.name)
+                if held is None or held.shortfall is None or refuses(held.shortfall):
+                    await _remedied(env, decl, won)
+                    raise UserInputError(f"{hole} Surfaces tried, in rank order: {', '.join(won)}.",
+                                         code="BED_WET_HOLE") from hole
+                ingested = await ingest(laid[0] if len(laid) == 1 else list(laid), walking=False, taken=tuple(won))
+                break
             laid.append(more)
             won.append(nxt.picked)
             continue
-        if len(won) > 1:
-            journal_note(f"{decl.name}: the surfaces won in this order, each measuring where the one before did "
-                         f"not: {', '.join(won)}.")
-        return ingested
+        break
+    if len(won) > 1:
+        journal_note(f"{decl.name}: the surfaces won in this order, each measuring where the one before did "
+                     f"not: {', '.join(won)}.")
+    return ingested
+
+
+def _steps_of(env: _Env, decl: Input) -> tuple[Any, ...]:
+    """The coverage steps in force for one input: the run's, else its row's own."""
+    return tuple(env.steps.get(decl.name, decl.coverage_steps))
+
+
+async def _remedied(env: _Env, decl: Input, laid: Sequence[str] = ()) -> None:
+    """The input's reported shortfall with the merges that could answer it put first: each source the match ranks
+    for it that the bed has not laid, by name."""
+    import dataclasses as dc
+
+    from trid3nt.inputs.coverage import MERGE, report, reported, step
+
+    held = reported(decl.name)
+    if held is None or held.shortfall is None or not decl.data_class:
+        return
+    handed = env.supplied.get(decl.name)
+    taken = {*laid, *(str(i["source"]) for i in handed if isinstance(i, Mapping) and "source" in i)
+             } if isinstance(handed, list) else set(laid)
+    try:
+        choice = await _ranked(env, decl, decl.data_class, decl.name)
+    except Exception:  # noqa: BLE001 - no ranking is no merge to name
+        return
+    merges = tuple(step(MERGE, source=row.fetcher) for row in choice.rows
+                   if not row.excluded and row.fetcher not in taken)
+    report(dc.replace(held, shortfall=dc.replace(held.shortfall, remedies=(*merges, *held.shortfall.remedies))))
 
 
 async def _ranked(env: _Env, decl: Input, data_class: str,
@@ -764,7 +806,7 @@ async def _domain_companion(env: _Env, named: str) -> Any:
 
 async def _ingested(env: _Env, decl: Input, value: Any,
                     row: Any = None, beside: Mapping[str, Any] | None = None,
-                    stated_by: Any = None) -> Any:
+                    stated_by: Any = None, walking: bool = False, taken: Sequence[str] = ()) -> Any:
     """A SLOT's value through the one ingestion its type reads; a plain row's value as it came.
     ``row`` is the row the match took; ``stated_by`` the row of the fetch a handed-in layer came from, which says
     how its record reads and is put to no test of whether it is this run's water.
@@ -802,6 +844,8 @@ async def _ingested(env: _Env, decl: Input, value: Any,
         # inside it and refuses a wet hole, and an empty one says the run was cut with none.
         coercion["water"] = _cut_polygon() or {}
         coercion["merge"] = not env.lays_own_bed
+        coercion["steps"] = _steps_of(env, decl)
+        coercion["walking"] = walking
     if decl.slot is DOMAIN and row is not None:
         # A domain the run's own SEARCH found is cut to the box it was searched in; one handed in is never cut.
         searched = await _searched_in(env, decl)
@@ -810,8 +854,12 @@ async def _ingested(env: _Env, decl: Input, value: Any,
     if decl.slot is MESH:
         # The domain is filled before any other row, so a supplied mesh is held to the ground this run solves over.
         coercion["over"] = getattr(current_domain(), "bbox", None)
-    ingested = await asyncio.to_thread(ingest_slot, decl.slot, value,
-                                       label=decl.name, **coercion)
+    try:
+        ingested = await asyncio.to_thread(ingest_slot, decl.slot, value,
+                                           label=decl.name, **coercion)
+    finally:
+        if decl.slot is BED and not walking:
+            await _remedied(env, decl, taken)
     if decl.slot is DOMAIN and ingested is not None:
         # THE DOMAIN a run solves over IS the run's domain from the moment its
         # slot is filled: what a supplied artifact is checked against, and what
@@ -1227,6 +1275,10 @@ class Fill:
     settings_read: dict[str, dict[str, Any]] = field(default_factory=dict)
     #: The SDK model this is a fill of, by ``name`` and ``version``, which the run's record names; none on a call.
     model: Mapping[str, str] | None = None
+    #: The coverage steps the run states for an input, by name, over the ones its row declares; none on a call.
+    steps: Mapping[str, tuple[Any, ...]] = field(default_factory=dict)
+    #: What each input's data covers, by name, as its ingestion reported it.
+    coverage: dict[str, Any] = field(default_factory=dict)
 
     @property
     def ready(self) -> bool:
@@ -1289,6 +1341,7 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
     values.update({str(name): value for name, value in keywords.items()})
     tokens = (bind_notes(), journal.bind_choices(), bind_coverage())
     reading, run_token = journal.bind_settings(), bind_run(state.settings)
+    reports = bind_reports()
     try:
         moves: dict[str, str] = {}
         found = _looked_up(state, values, set(keywords), moves)
@@ -1338,6 +1391,7 @@ async def fill(state: Fill, values: Mapping[str, Any]) -> Fill:
             held += drain(token)
         state.settings_read.update(journal.drain_settings(reading))
         reset_run(run_token)
+        state.coverage.update(drain_reports(reports))
     return state
 
 
@@ -1506,7 +1560,7 @@ def production(state: Fill) -> _Env:
             workflow=wf.name,
             window_s=wf.run_window_s(state.keywords), moment=wf.moment,
             slot_units=wf.slot_units(), captions=wf.captions,
-            lays_own_bed=wf.lays_own_bed)
+            lays_own_bed=wf.lays_own_bed, steps=dict(state.steps))
     state.env.run.update({row.name: getattr(state.inputs.get(row.name), "value", None)
                           for row in wf.inputs if not row.is_row})
     # A unit the run states is published under it, so the table is read off the values just seated.

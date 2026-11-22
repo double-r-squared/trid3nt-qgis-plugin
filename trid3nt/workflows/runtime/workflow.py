@@ -378,14 +378,16 @@ class Workflow:
 
 
     async def filled(self, wire: Mapping[str, Any], *,
-                     model: Mapping[str, str] | None = None) -> Fill:
-        """Every input ``wire`` states answered -> the fill; ``model`` names the SDK model it is a fill of, for the record."""
+                     model: Mapping[str, str] | None = None,
+                     steps: Mapping[str, Any] | None = None) -> Fill:
+        """Every input ``wire`` states answered -> the fill; ``model`` names the SDK model it is a fill of, for the record,
+        and ``steps`` the coverage steps it states for an input over the ones the input's row declares."""
         from .fill import Fill, fill
 
         # Each call starts from no domain: a domain bound by an earlier call of the same turn is not this run's place.
         token = bind_domain(None)
         try:
-            return await fill(Fill(workflow=self, model=model), wire)
+            return await fill(Fill(workflow=self, model=model, steps=dict(steps or {})), wire)
         finally:
             reset_domain(token)
 
@@ -623,11 +625,13 @@ class Workflow:
                  model: Mapping[str, str] | None = None) -> None:
         """Append this run to the run journal, from publish where the inputs and wall time are both in hand.
         ``model`` is the SDK model the run was filled from, its name and version; a call carries none."""
+        from trid3nt.inputs.coverage import is_strict
         from trid3nt.render.emission import current_emitter, current_turn_case
 
         journal.append_record(journal.build_record(
             run_id=run_id, engine=self.recorded_engine(run), template=self.name,
             case=current_turn_case(), model=(model or {}).get("name"), version=(model or {}).get("version"),
+            strict=is_strict(),
             module=self._module(run), inputs=inputs,
             correct_end=self._correct_end(run),
             result=result, wall_seconds=round(wall_seconds, 3),

@@ -1,0 +1,7 @@
+merge_surfaces:
+- merge the survey with the DEM, the survey winning where it measured
+- combine these two bathymetry rasters in this order
+- lay the eHydro grid over CUDEM into one bed
+- mosaic these elevation layers, the first one first
+- one surface from several rasters with a band saying which source painted each cell
+- how much of the area does each of these surveys cover once merged

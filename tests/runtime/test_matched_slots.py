@@ -44,11 +44,12 @@ def _hole(code="BED_WET_HOLE"):
     return UserInputError("49.4% of the water in this domain is measured by nothing in the bed", code=code)
 
 
-def _walk(world, monkeypatch, holes, *, own_bed=False):
-    """Walk the bed with an ingestion that refuses ``holes[i]`` on its i-th call (None accepts); returns what it saw."""
+def _walk(world, monkeypatch, holes, *, own_bed=False, steps=("merge_surfaces", "interpolate_surface")):
+    """Walk the bed, its row declaring ``steps``, with an ingestion that refuses ``holes[i]`` on its i-th call (None
+    accepts); returns what it saw."""
     seen = []
 
-    async def ingest(laid):
+    async def ingest(laid, **_told):
         seen.append(laid)
         refusal = holes[len(seen) - 1] if len(seen) <= len(holes) else None
         if refusal is not None:
@@ -57,7 +58,7 @@ def _walk(world, monkeypatch, holes, *, own_bed=False):
 
     env = _env()
     env.lays_own_bed = own_bed
-    bed = _row(Input(BED).need("bathymetry"), "bed")
+    bed = _row(Input(BED).need("bathymetry").steps(*steps), "bed")
     return env, bed, ingest, seen
 
 
@@ -73,6 +74,16 @@ def test_a_wet_hole_walks_to_the_next_surface_and_hands_the_ordered_list(world, 
     out = asyncio.run(fill._bed_surface(env, bed, ingest))
     assert out == ["s3://b/fetch_soundings.geojson", "s3://b/fetch_bed_raster.tif"]
     assert [runner for runner, _kw in world] == ["fetch_soundings", "fetch_bed_raster"]
+
+
+def test_a_bed_declaring_no_merge_takes_the_one_surface_and_walks_no_further(world, monkeypatch):
+    from trid3nt.inputs.user_input import UserInputError
+
+    env, bed, ingest, seen = _walk(world, monkeypatch, [_hole(), None], steps=("interpolate_surface",))
+    with pytest.raises(UserInputError) as refused:
+        asyncio.run(fill._bed_surface(env, bed, ingest))
+    assert refused.value.error_code == "BED_WET_HOLE" and len(seen) == 1
+    assert [runner for runner, _kw in world] == ["fetch_soundings"]
 
 
 def test_every_surface_leaving_a_hole_refuses_the_last_hole_naming_each_surface(world, monkeypatch):
@@ -133,7 +144,7 @@ def test_two_surfaces_each_measuring_half_the_water_make_a_bed_through_the_slot(
     token = bind_domain(Domain(bbox=WILLAMETTE, geometry=water, label="reach"))
     reach = bind_run({"FILL_MAX_DISTANCE": 3})
     try:
-        asyncio.run(fill._matched(_env(), _row(Input(BED).need("bathymetry"), "bed")))
+        asyncio.run(fill._matched(_env(), _row(Input(BED).need("bathymetry").steps("merge_surfaces", "interpolate_surface"), "bed")))
     finally:
         reset_run(reach)
         reset_domain(token)
@@ -303,7 +314,7 @@ def test_a_wet_hole_past_the_fill_s_reach_is_refused_naming_the_setting(world,
     reach = bind_run({"FILL_MAX_DISTANCE": 3})
     try:
         with pytest.raises(UserInputError) as refused:
-            asyncio.run(fill._matched(_env(), _row(Input(BED).need("bathymetry"), "bed")))
+            asyncio.run(fill._matched(_env(), _row(Input(BED).need("bathymetry").steps("merge_surfaces", "interpolate_surface"), "bed")))
     finally:
         reset_run(reach)
         reset_domain(token)

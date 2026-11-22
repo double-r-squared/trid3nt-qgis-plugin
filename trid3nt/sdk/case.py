@@ -48,9 +48,13 @@ class Case:
     """One case directory: ``case.<template>(**values)`` makes a Model over that template, each value set as an
     attribute is; ``pack()`` and ``link(store)`` move it between packed and served."""
 
-    def __init__(self, where: str | os.PathLike[str]) -> None:
+    def __init__(self, where: str | os.PathLike[str], *, strict: bool = False) -> None:
         if not isinstance(where, (str, os.PathLike)) or not str(where).strip():
             raise WireArgsError(f"a case is a directory, named by a non-empty path; got {type(where).__name__}.")
+        if not isinstance(strict, bool):
+            raise WireArgsError(f"strict is True or False, not {strict!r}.")
+        #: Whether an unresolved coverage shortfall refuses in this case's models, where a model states none.
+        self.strict = strict
         self.root = Path(where).expanduser().resolve()
         for name in _LAYOUT:
             (self.root / name).mkdir(parents=True, exist_ok=True)
@@ -213,6 +217,7 @@ def _registered_fn(template: str) -> Any:
     return TOOL_REGISTRY[template].fn
 
 
-def case(where: str | os.PathLike[str]) -> Case:
-    """The case directory at ``where``, opened or created; a bare name is that directory under the current one."""
-    return Case(where)
+def case(where: str | os.PathLike[str], *, strict: bool = False) -> Case:
+    """The case directory at ``where``, opened or created; a bare name is that directory under the current one.
+    ``strict`` True refuses an unresolved coverage shortfall in its models; False warns and runs where the engine can."""
+    return Case(where, strict=strict)
