@@ -42,12 +42,18 @@ _UNATTENDED: contextvars.ContextVar[bool] = contextvars.ContextVar("trid3nt_unat
 @contextmanager
 def unattended() -> Iterator[None]:
     """Hold what runs inside as a caller with no person to ask: every gate proceeds with its inputs labeled, nothing
-    is drawn, and the person's AUTO setting is never read. What no source states still refuses where it is read."""
+    is drawn, and the person's AUTO setting is never read. What no source states still refuses where it is read, and a
+    choice among several candidates nobody named refuses naming them."""
     token = _UNATTENDED.set(True)
     try:
         yield
     finally:
         _UNATTENDED.reset(token)
+
+
+def is_unattended() -> bool:
+    """Whether a caller with no person to ask holds this task: a choice among several candidates is then nobody's to take."""
+    return _UNATTENDED.get()
 
 
 def resolve_input_gate_mode(forced: InputGateMode | None = None) -> InputGateMode:

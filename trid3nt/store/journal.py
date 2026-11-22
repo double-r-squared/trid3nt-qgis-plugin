@@ -20,8 +20,13 @@ _FILENAME = "run_journal.jsonl"
 
 
 def journal_path() -> Path:
-    """Where the journal lives - the persistence dir, which no sweep touches."""
+    """Where the journal lives - the bound case directory's ``runs/``, else the persistence dir, which no sweep touches."""
     from trid3nt.store.cases import _default_dev_persistence_dir
+    from trid3nt.store.objects import bound_store
+
+    store = bound_store()
+    if store is not None:
+        return store.root / "runs" / _FILENAME
 
     root = os.environ.get("TRID3NT_DEV_PERSISTENCE_DIR") or _default_dev_persistence_dir()
     return Path(root) / _FILENAME

@@ -114,10 +114,13 @@ def run_origin(*, live_session: bool) -> str:
 def append_record(record: Mapping[str, Any]) -> Path | None:
     """Append one run record. Best-effort: a journal write never fails a run,
     because the run already happened and its outputs already exist."""
+    from trid3nt.store.objects import case_relative
+
     path = store_journal.journal_path()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        line = json.dumps(record, default=str, separators=(",", ":"))
+        # A case directory's record names what it read and wrote by the path relative to the case, so the case moves whole.
+        line = json.dumps(case_relative(json.loads(json.dumps(record, default=str))), separators=(",", ":"))
         with path.open("a", encoding="utf-8") as handle:
             handle.write(line + "\n")
     except Exception:  # noqa: BLE001 - journalled, never propagated

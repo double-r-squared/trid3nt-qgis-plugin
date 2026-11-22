@@ -372,9 +372,10 @@ def test_local_manifest_dest_traversal_rejected(
 #: engine-identity field so read_run_diagnostics can recover the
 #: engine directly instead of inferring it from the stdout field name, and the
 #: ``code_sha`` / ``code_dirty`` stamp so a reader of this artifact
-#: can ask whether the engine has changed since it ran. Both are written by the
+#: can ask whether the engine has changed since it ran, beside the ``image`` the
+#: run launched on and the ``image_id`` docker held it under. All are written by the
 #: supervisor, never by a worker, so a worker-written completion.json lacks them
-#: and the readers of both fall back rather than requiring them.
+#: and the readers of each fall back rather than requiring them.
 _ENTRYPOINT_COMPLETION_KEYS = {
     "run_id",
     "status",
@@ -382,6 +383,8 @@ _ENTRYPOINT_COMPLETION_KEYS = {
     "engine",
     "code_sha",
     "code_dirty",
+    "image",
+    "image_id",
     "telemac_stdout_uri",
     "telemac_stderr_uri",
     "output_uris",

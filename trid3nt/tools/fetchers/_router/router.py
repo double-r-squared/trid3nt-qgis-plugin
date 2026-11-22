@@ -6,6 +6,7 @@ closure; the router owns everything around it and binds the four shared seams.""
 
 from __future__ import annotations
 
+import contextvars
 import datetime as _dt
 import json
 import logging
@@ -65,10 +66,29 @@ __all__ = [
     "prospective_cache_key",
     "try_dispatch",
     "route",
+    "bind_pin",
+    "reset_pin",
 ]
 
 #: Sentinel: no ``spec.dispatch`` condition matched; ``route()`` proceeds only on this.
 _NO_DISPATCH = object()
+
+#: What every fetch of this task is read through where a host binds one: ``pin(source, request, fetch)`` answers
+#: the fetch's result, from what it pinned for that request or by calling ``fetch`` and pinning what it read.
+_PIN: contextvars.ContextVar[Callable[[str, dict[str, Any], Callable[[], Any]], Any] | None] = \
+    contextvars.ContextVar("trid3nt_fetch_pin", default=None)
+
+#: The router's own controls: they reach no executor and are no part of what was asked.
+_CONTROLS = ("visualize", "purpose")
+
+
+def bind_pin(pin: Callable[[str, dict[str, Any], Callable[[], Any]], Any] | None) -> contextvars.Token:
+    """Read every fetch of this task through ``pin`` -> the token that unbinds it."""
+    return _PIN.set(pin)
+
+
+def reset_pin(token: contextvars.Token) -> None:
+    _PIN.reset(token)
 
 
 
@@ -378,7 +398,16 @@ def route(
 ) -> LayerURI | dict[str, Any] | list[LayerURI]:
     """The engine: validate, gate, dispatch, cache, emit. Returns a LayerURI, a record dict for
     ``shape: record``, or an ordered ``list[LayerURI]`` for ``shape: animation_frames``.
-    A provider's 401/403/498/499 that asks for a key leaves as a ``KEY_REQUIRED`` / ``KEY_REJECTED``."""
+    A provider's 401/403/498/499 that asks for a key leaves as a ``KEY_REQUIRED`` / ``KEY_REJECTED``.
+    A bound pin answers it from what it pinned for the same request."""
+    pin = _PIN.get()
+    if pin is not None:
+        request = {key: value for key, value in raw_params.items() if key not in _CONTROLS}
+        return pin(spec.name, request, lambda: _keyed(spec, raw_params))
+    return _keyed(spec, raw_params)
+
+
+def _keyed(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI | dict[str, Any] | list[LayerURI]:
     try:
         return _route(spec, raw_params)
     except Exception as exc:

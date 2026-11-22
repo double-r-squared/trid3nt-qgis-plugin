@@ -219,8 +219,9 @@ def _write_disv(work: Path, *, filename: str, nlay: int, top: Any, botm: Any,
     """Write just the one DISV file, flopy doing the formatting - never a whole simulation."""
     import flopy
 
+    # No FloPy header: it stamps the clock of the write, and a deck written twice from the same inputs is the same bytes.
     sim = flopy.mf6.MFSimulation(sim_name="disv", sim_ws=str(work),
-                                 verbosity_level=0)
+                                 verbosity_level=0, write_headers=False)
     model = flopy.mf6.ModflowGwf(sim, modelname="disv")
     kwargs: dict[str, Any] = {"nlay": nlay, "top": top, "botm": botm,
                               **dict(gridprops), **dict(options)}
@@ -244,7 +245,7 @@ def _stage(mesh_id: str, local: Path) -> str:
     """
     from trid3nt.store import objects as storage
 
-    bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
+    bucket = storage.cache_bucket()
     if not bucket:
         raise mesh_missing(
             f"TRID3NT_CACHE_BUCKET is unset, so {local.name} written for mesh "

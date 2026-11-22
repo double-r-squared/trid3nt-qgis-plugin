@@ -45,13 +45,14 @@ def stage_manifest(*, section: str, config: Mapping[str, Any],
 
     ``section`` is the dispatch key, ``prefix`` the staging word; they differ.
     """
-    cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
+    from trid3nt.store import objects as storage
+
+    cache_bucket = storage.cache_bucket()
     if not cache_bucket:
         from .solver import SolverDispatchError
 
         raise SolverDispatchError(
             "TRID3NT_CACHE_BUCKET must be set to stage a run's manifest.")
-    from trid3nt.store import objects as storage
 
     manifest = {section: dict(config), "run_id": run_id,
                 "inputs": list(inputs or []),
@@ -65,11 +66,15 @@ def stage_manifest(*, section: str, config: Mapping[str, Any],
 
 
 def _run_directory(run_id: str, *, stem: str) -> Path:
-    return Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"{stem}-{run_id}"
+    from trid3nt.store import objects as storage
+
+    return storage.work_dir("/tmp") / f"{stem}-{run_id}"
 
 
 def _cache_bucket() -> str:
-    bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
+    from trid3nt.store import objects as storage
+
+    bucket = storage.cache_bucket()
     if not bucket:
         from .solver import SolverDispatchError
 
@@ -121,7 +126,9 @@ def discard_run(run_id: str, prefix: str, *, stem: str) -> None:
     """Remove a run's directory and its staged prefix; a run that does not proceed leaves neither."""
     shutil.rmtree(_run_directory(run_id, stem=stem), ignore_errors=True)
     # With no cache bucket stated, staging refused and nothing was uploaded.
-    if (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip():
+    from trid3nt.store import objects as storage
+
+    if storage.cache_bucket():
         _clear_prefix(run_id, prefix)
 
 

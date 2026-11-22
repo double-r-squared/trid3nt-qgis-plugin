@@ -118,7 +118,7 @@ def upload_layer_file(filename: str, data: bytes) -> str:
     from trid3nt.store import objects as storage
     from trid3nt.tools.cache import CACHE_BUCKET
 
-    bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
+    bucket = storage.cache_bucket() or CACHE_BUCKET
     safe_name = _sanitize_filename(filename)
     key = f"{USER_UPLOAD_PREFIX}/{new_ulid()}/{safe_name}"
     s3_uri = f"s3://{bucket}/{key}"

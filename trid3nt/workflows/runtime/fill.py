@@ -1130,10 +1130,11 @@ async def _offset_row(env: _Env, owner: str, value: Any, frame: str,
 
 
 def _malformed_ask(exc: BaseException) -> bool:
-    """Is this the ASK being wrong rather than the source holding nothing?
+    """Is this the ASK being wrong, or the case's pinned bytes, rather than the source holding nothing?
 
     A producer's refusal arrives inside the step that called it, so the whole chain is read."""
     from trid3nt.inputs.user_input import EmptyResultError, UserInputError
+    from trid3nt.store.objects import DigestMismatchError
     from trid3nt.tools.fetchers._router.errors import RouterInputError
 
     seen: set[int] = set()
@@ -1141,7 +1142,7 @@ def _malformed_ask(exc: BaseException) -> bool:
     while found is not None and id(found) not in seen:
         if isinstance(found, EmptyResultError):
             return False
-        if isinstance(found, (UserInputError, RouterInputError)):
+        if isinstance(found, (UserInputError, RouterInputError, DigestMismatchError)):
             return True
         seen.add(id(found))
         found = getattr(found, "cause", None) or found.__cause__
@@ -1473,7 +1474,8 @@ async def _answer(state: Fill, name: str, held: Any, value: Any) -> None:
             REJECTED, value, code=code,
             reason=str(exc) if value is not None or not row
             else f"{name!r} could not be produced: {exc}",
-            remedies=await _instead(state.env, held, picked or "") if picked or code == _UNSTATED
+            remedies=tuple(exc.remedies) if getattr(exc, "remedies", None)
+            else await _instead(state.env, held, picked or "") if picked or code == _UNSTATED
             else (f"a value between {held.bounds[0]} and {held.bounds[1]}",)
             if getattr(held, "bounds", None)
             else await _otherwise(held, value) if row and code != _WAITS else ())

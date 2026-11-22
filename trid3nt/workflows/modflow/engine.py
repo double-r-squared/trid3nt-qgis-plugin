@@ -53,6 +53,14 @@ def _modflow_image() -> str:
     return os.environ.get("TRID3NT_MODFLOW_IMAGE") or DEFAULT_MODFLOW_IMAGE
 
 
+#: The command that builds the engine's image, run from the repository root.
+BUILD_COMMAND: str = "docker build -t trid3nt-local/modflow:latest workers/modflow/"
+
+
+def _image(rundir: Path) -> tuple[str, str]:
+    return _modflow_image(), BUILD_COMMAND
+
+
 def _build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
     """The volume-mount launch line. ``args`` (the manifest's optional
     ``modflow_args`` key) is normally empty - the image CMD drives the
@@ -119,6 +127,7 @@ def _spec() -> LocalSolverSpec:
         workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
         args_key="modflow_args",
         build_argv=_build_argv,
+        image=_image,
         network="none",
         stdout_name=f"{MODFLOW_SOLVER_NAME}.stdout",
         stderr_name=f"{MODFLOW_SOLVER_NAME}.stderr",

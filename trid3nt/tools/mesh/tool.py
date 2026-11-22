@@ -131,7 +131,9 @@ async def build_mesh(
     from trid3nt.tools.mesh.gate import gate_mesh_build
     from trid3nt.tools.mesh.session import MeshSession
 
-    if not (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip():
+    from trid3nt.store import objects as storage
+
+    if not storage.cache_bucket():
         raise MeshToolError(
             "MESH_STAGING_UNAVAILABLE",
             "TRID3NT_CACHE_BUCKET must be set to stage a built mesh into the case.")

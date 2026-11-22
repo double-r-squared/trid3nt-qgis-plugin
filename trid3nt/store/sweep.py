@@ -127,7 +127,7 @@ async def reap(*, now: datetime | None = None, client: Any = None) -> list[str]:
     Answers the keys it deleted."""
     pinned = await pinned_uris(client)
     # The bucket ``read_through`` writes, resolved the way it resolves it.
-    bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
+    bucket = storage.cache_bucket() or CACHE_BUCKET
     deleted = await asyncio.to_thread(
         _sweep, bucket, pinned, now or datetime.now(timezone.utc))
     logger.info("retention: %d spent objects deleted from %s, %d uris pinned",

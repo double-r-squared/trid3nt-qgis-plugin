@@ -67,7 +67,7 @@ class MeshSession:
         self.case_id = case_id
         self.name = name or f"{recipe.mesher} mesh"
         self.workdir = Path(workdir) if workdir is not None else (
-            Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"mesh-{self.mesh_id}")
+            _work_dir() / f"mesh-{self.mesh_id}")
         self.workdir.mkdir(parents=True, exist_ok=True)
         self._mesh: Mesh | None = None
         #: The stated edge a person accepted at the gate though it passes MESH_MAX_NODES or SOLVE_BUDGET_S.
@@ -277,7 +277,9 @@ class MeshSession:
         """Upload ``local`` beside this mesh's other objects -> its uri.
 
         With no cache bucket configured the file stays where it was written."""
-        bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
+        from trid3nt.store import objects as storage
+
+        bucket = storage.cache_bucket()
         if not bucket:
             return str(local)
         key = f"mesh/{self.mesh_id}/{local.name}"
@@ -305,6 +307,12 @@ class MeshSession:
     def _journal(self) -> None:
         self.recipe_path.write_text(
             "".join(json.dumps(line) + "\n" for line in self.recipe_lines()))
+
+
+def _work_dir() -> Path:
+    from trid3nt.store import objects as storage
+
+    return storage.work_dir("/tmp")
 
 
 def _s3_client() -> Any:

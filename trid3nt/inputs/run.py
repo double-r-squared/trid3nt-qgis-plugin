@@ -20,14 +20,16 @@ _RUN_ID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 
 
 class FinishedRunError(RuntimeError):
-    """A typed refusal: the named run is not a finished run of this case that this run can read."""
+    """A typed refusal: the named run is not a finished run of this case that this run can read.
+    ``remedies`` are the run ids that would answer it, where several would."""
 
     error_code: str
     retryable: bool = False
 
-    def __init__(self, error_code: str, message: str) -> None:
+    def __init__(self, error_code: str, message: str, remedies: Sequence[str] = ()) -> None:
         super().__init__(message)
         self.error_code = error_code
+        self.remedies = tuple(remedies)
 
 
 @dataclass(frozen=True)
@@ -93,12 +95,13 @@ def _case_runs(engines: Sequence[str]) -> list[Mapping[str, Any]]:
 async def case_run(engines: Sequence[str], *, label: str = "run", tool: str = "") -> str:
     """The run id of this case's finished run of ``engines`` where none is named: the one there is, taken; of
     several, the one confirmed on the review card, which lists them newest first and offers the newest (AUTO
-    takes it); none refuses naming the engines. What was taken is said on the run."""
+    takes it), and unattended none is taken: the run refuses naming them. None refuses naming the engines.
+    What was taken is said on the run."""
     import asyncio
 
     from trid3nt_contracts.common import Origin, SyntheticInput
 
-    from trid3nt.inputs.review import gate_input_review
+    from trid3nt.inputs.review import gate_input_review, is_unattended
     from trid3nt.inputs.run_notes import journal_note
 
     found = await asyncio.to_thread(_case_runs, tuple(engines))
@@ -110,6 +113,11 @@ async def case_run(engines: Sequence[str], *, label: str = "run", tool: str = ""
             "run of: finish one first, or name a run by its run id or the handle the case "
             "shows for one of its layers.")
     chosen = str(found[0]["run_id"])
+    if len(found) > 1 and is_unattended():
+        raise FinishedRunError(
+            "RUN_UNSTATED",
+            f"{label} is unstated, and this case holds {len(found)} finished runs of {kinds}: name the one "
+            f"{label} takes by its run id.", remedies=[str(record["run_id"]) for record in found])
     if len(found) > 1:
         outcome = await gate_input_review(
             tool_name=tool or label,
@@ -157,7 +165,7 @@ async def run(value: Any, *, label: str = "run", engines: Sequence[str] = ()) ->
             "RUN_ENGINE_UNTAKEN",
             f"run {run_id} is a {engine or 'engineless'} run, and {label} takes a run of "
             f"{' or '.join(engines)}.")
-    bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
+    bucket = storage.cache_bucket()
     try:
         manifest = json.loads(storage.client().get_object(
             Bucket=bucket, Key=f"{engine}/{run_id}/manifest.json")["Body"].read())

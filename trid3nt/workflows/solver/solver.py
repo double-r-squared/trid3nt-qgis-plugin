@@ -7,6 +7,7 @@ selected per solver by its ``LocalSolverSpec``; both tools are uncacheable.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import glob as _glob
 import json
 import logging
@@ -37,6 +38,7 @@ __all__ = [
     "SolverNotRegisteredError",
     "SolverDispatchError",
     "RunOutputMissing",
+    "EngineImageMissing",
     "LOCAL_DOCKER_WORKFLOW_NAME",
     "LocalSolverSpec",
     "launch_local_solver",
@@ -83,6 +85,12 @@ class SolverDispatchError(StorageError):
     re-emits it verbatim rather than re-deriving one."""
 
     error_code: str = "SOLVER_DISPATCH_FAILED"
+
+
+class EngineImageMissing(SolverDispatchError):
+    """The engine's image is not on this machine's docker, so nothing can run it."""
+
+    error_code: str = "ENGINE_IMAGE_MISSING"
 
 
 class RunOutputMissing(SolverDispatchError):
@@ -165,6 +173,9 @@ class LocalSolverSpec:
     log_name: str | None = None
     """The run-directory file that holds the engine's own words (its listing, or the stdout it
     prints them on). The tail of it rides into every failed run's error."""
+    image: Callable[[Path], tuple[str, str]] | None = None
+    """The image a run launches on and the command that builds it, read off the staged run directory.
+    A launch whose image docker does not hold refuses ``ENGINE_IMAGE_MISSING``; the image's id is recorded."""
 
 
 #: How much of an engine's log rides into a failed run's error - enough for the engine's own
@@ -437,9 +448,7 @@ def launch_local_solver(
 
     run_id = run_id or new_ulid()
     submitted_at = datetime.now(timezone.utc)
-    rundir = (
-        Path(os.environ.get("TRID3NT_RUNS_DIR") or DEFAULT_LOCAL_RUNS_DIR) / run_id
-    )
+    rundir = storage.work_dir(DEFAULT_LOCAL_RUNS_DIR) / run_id
     rundir.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -483,6 +492,9 @@ def launch_local_solver(
             exc,
         )
 
+    if spec.image is not None:
+        image, build = spec.image(rundir)
+        code = {**code, "image": image, "image_id": _image_id(image, build)}
     rundir_resolved = rundir.resolve()
     for item in inputs:
         try:
@@ -542,9 +554,10 @@ def launch_local_solver(
         code=code,
     )
     _LOCAL_RUNS[run_id] = run
+    # The supervisor writes through the store the launch was bound to: it runs in the launch's own context.
     supervisor = threading.Thread(
-        target=_supervise_local_run,
-        args=(run,),
+        target=contextvars.copy_context().run,
+        args=(_supervise_local_run, run),
         name=f"{spec.solver}-local-supervisor-{run_id}",
         daemon=True,
     )
@@ -569,6 +582,24 @@ def launch_local_solver(
         len(inputs),
     )
     return handle
+
+
+def _image_id(image: str, build: str) -> str | None:
+    """The id docker holds ``image`` under; an image it does not hold refuses naming the image and its build.
+    A docker that cannot be asked answers ``None``, and the launch itself says why."""
+    try:
+        asked = subprocess.run(  # noqa: S603 -- argv list, no shell
+            ["docker", "image", "inspect", "--format", "{{.Id}}", image],
+            capture_output=True, text=True, timeout=DOCKER_KILL_TIMEOUT_S, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if asked.returncode == 0:
+        return asked.stdout.strip() or None
+    if "no such image" in asked.stderr.lower():
+        raise EngineImageMissing(
+            f"the engine image {image} is not on this machine's docker, so the run cannot start: "
+            f"build it with {build}")
+    return None
 
 
 def _run_solver_local_docker(
@@ -728,7 +759,6 @@ async def _wait_for_completion_local(
     object under the run prefix on the caller's cadence until the container has
     exited. A cancel stops the container and re-raises; nothing else ends the wait."""
     runs_bucket = storage.local_runs_bucket()
-    loop = asyncio.get_running_loop()
 
     logger.info(
         "wait_for_completion(local-docker) handle_id=%s run_id=%s poll_interval=%ds",
@@ -739,8 +769,8 @@ async def _wait_for_completion_local(
 
     try:
         while True:
-            manifest = await loop.run_in_executor(
-                None, _try_get_completion_s3, runs_bucket, handle.run_id
+            manifest = await asyncio.to_thread(
+                _try_get_completion_s3, runs_bucket, handle.run_id
             )
             if manifest is not None:
                 return _build_local_run_result(handle, manifest, runs_bucket)

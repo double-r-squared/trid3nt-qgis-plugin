@@ -369,7 +369,9 @@ def read_through(
     never cached as a sentinel. ``storage_client`` is accepted and ignored."""
     del storage_client
     # The env override WINS over a caller-supplied bucket: an explicit wrong bucket silently degrades every cache write.
-    bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or bucket or CACHE_BUCKET
+    from trid3nt.store import objects as storage
+
+    bucket = storage.cache_bucket() or bucket or CACHE_BUCKET
     source_id = source_id or (metadata.source_class or metadata.name)
 
     # Uncacheable tools never touch the bucket; the recorder still binds so result-model fields populate (no sidecar).

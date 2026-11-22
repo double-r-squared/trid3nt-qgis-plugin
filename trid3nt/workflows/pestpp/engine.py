@@ -62,6 +62,19 @@ def _model(rundir: Path) -> str:
     return str(((manifest.get("case") or {}).get("server_facts") or {}).get("model") or "")
 
 
+#: The command that builds each image, run from the repository root: the mf6 trials' and each other model's.
+BUILD_COMMANDS: dict[str, str] = {
+    "": "docker build -t trid3nt-local/pestpp:latest workers/pestpp/",
+    "telemac": ("docker build -t trid3nt-local/pestpp-telemac:latest -f workers/pestpp/Dockerfile.telemac "
+                "--build-context engine=trid3nt/workflows/telemac/authoring/engine_scripts workers/pestpp/"),
+}
+
+
+def _image(rundir: Path) -> tuple[str, str]:
+    model = _model(rundir)
+    return _pestpp_image(model), BUILD_COMMANDS.get(model, BUILD_COMMANDS[""])
+
+
 def _build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
     """The volume-mount launch line, on the image whose trials run the case's model; ``args`` (the
     manifest's optional ``pestpp_args``) is appended after the image."""
@@ -103,6 +116,7 @@ def _spec() -> LocalSolverSpec:
         workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
         args_key="pestpp_args",
         build_argv=_build_argv,
+        image=_image,
         network="none",
         stdout_name=f"{PESTPP_SOLVER_NAME}.stdout",
         stderr_name=f"{PESTPP_SOLVER_NAME}.stderr",

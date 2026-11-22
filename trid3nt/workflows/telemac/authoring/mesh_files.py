@@ -92,7 +92,7 @@ def _stage(mesh_id: str, local: Path) -> str:
     """
     from trid3nt.store import objects as storage
 
-    bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
+    bucket = storage.cache_bucket()
     if not bucket:
         raise mesh_missing(
             f"TRID3NT_CACHE_BUCKET is unset, so {local.name} written for mesh "

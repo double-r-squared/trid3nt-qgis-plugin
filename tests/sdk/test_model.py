@@ -31,8 +31,9 @@ _ZERO_FETCH = dict(
     ("LAW_OF_BOTTOM_FRICTION", 99, "KEYWORD_REFUSED", "LAW OF BOTTOM FRICTION"),
     ("spill_duration_s", -5, "GATE_INPUT_REQUIRED", "spill_duration_s"),
 ])
-def test_a_bad_value_set_raises_the_input_s_own_refusal_naming_it_and_leaves_the_value(name, value, code, named):
-    m = case("sdk-set").telemac_dye_release()
+def test_a_bad_value_set_raises_the_input_s_own_refusal_naming_it_and_leaves_the_value(name, value, code, named,
+                                                                                         tmp_path):
+    m = case(tmp_path / "sdk-set").telemac_dye_release()
     before = getattr(m, name)
     with pytest.raises(DeclarativeError) as refused:
         setattr(m, name, value)
@@ -40,15 +41,15 @@ def test_a_bad_value_set_raises_the_input_s_own_refusal_naming_it_and_leaves_the
     assert getattr(m, name) == before
 
 
-def test_a_locked_option_set_raises_its_refusal_naming_it():
-    m = case("sdk-set").calibrate()
+def test_a_locked_option_set_raises_its_refusal_naming_it(tmp_path):
+    m = case(tmp_path / "sdk-set").calibrate()
     with pytest.raises(DeclarativeError) as refused:
         m.save_binary = True
     assert refused.value.error_code == "KEYWORD_REFUSED" and "save_binary" in str(refused.value)
 
 
-def test_every_spelling_of_a_name_is_the_one_lookup_and_repr_says_each_origin():
-    m = case("sdk-names").telemac_dye_release(release=[-122.669784, 45.518485])
+def test_every_spelling_of_a_name_is_the_one_lookup_and_repr_says_each_origin(tmp_path):
+    m = case(tmp_path / "sdk-names").telemac_dye_release(release=[-122.669784, 45.518485])
     assert m.FRICTION_COEFFICIENT == 33.0
     m.friction_coefficient = 35
     assert m["FRICTION COEFFICIENT"] == m.FRICTION_COEFFICIENT == 35
@@ -63,7 +64,7 @@ def test_every_spelling_of_a_name_is_the_one_lookup_and_repr_says_each_origin():
         m.no_such_name
 
 
-def test_with_no_walk_registered_an_unstated_sourced_input_refuses_naming_the_ranked_candidates(monkeypatch):
+def test_with_no_walk_registered_an_unstated_sourced_input_refuses_naming_the_ranked_candidates(monkeypatch, tmp_path):
     called = []
 
     async def _runner(runner, kwargs, label):
@@ -72,7 +73,7 @@ def test_with_no_walk_registered_an_unstated_sourced_input_refuses_naming_the_ra
 
     monkeypatch.setattr(fill_mod, "_call_runner", _runner)
     monkeypatch.setattr(fill_mod, "_RANKED", {})
-    form = case("sdk-nopick").telemac_dye_release(release=[-122.669784, 45.518485], event_time="now").fill()
+    form = case(tmp_path / "sdk-nopick").telemac_dye_release(release=[-122.669784, 45.518485], event_time="now").fill()
     domain = form["domain"]
     assert not form.ready and form.refusal[0] == "DATA_SOURCE_UNSTATED" and called == []
     assert domain.state == "rejected" and domain.code == "DATA_SOURCE_UNSTATED" and "domain" in domain.reason
@@ -81,7 +82,7 @@ def test_with_no_walk_registered_an_unstated_sourced_input_refuses_naming_the_ra
     assert form["spill_duration_s"].state == "defaulted" and form["spill_duration_s"].origin.value == "template"
 
 
-def test_with_no_walk_registered_a_named_source_that_held_nothing_refuses_naming_the_rest(monkeypatch):
+def test_with_no_walk_registered_a_named_source_that_held_nothing_refuses_naming_the_rest(monkeypatch, tmp_path):
     called = []
 
     async def _runner(runner, kwargs, label):
@@ -91,15 +92,15 @@ def test_with_no_walk_registered_a_named_source_that_held_nothing_refuses_naming
     monkeypatch.setattr(fill_mod, "_call_runner", _runner)
     monkeypatch.setattr(fill_mod, "_RANKED", {})
     stated = {key: value for key, value in _ZERO_FETCH.items() if key != "bed"}
-    unstated = case("sdk-named").telemac_dye_release(**stated).fill()["bed"]
+    unstated = case(tmp_path / "sdk-named").telemac_dye_release(**stated).fill()["bed"]
     top, *rest = unstated.remedies
-    bed = case("sdk-named").telemac_dye_release(**stated, bed={"source": top}).fill()["bed"]
+    bed = case(tmp_path / "sdk-named").telemac_dye_release(**stated, bed={"source": top}).fill()["bed"]
     assert called == [top]
     assert bed.code == "DATA_SOURCE_UNSTATED" and f"{top} held nothing" in bed.reason
     assert list(bed.remedies) == rest
 
 
-def test_with_the_harness_walk_registered_the_same_fill_asks_the_ranked_candidates(monkeypatch):
+def test_with_the_harness_walk_registered_the_same_fill_asks_the_ranked_candidates(monkeypatch, tmp_path):
     called = []
 
     async def _runner(runner, kwargs, label):
@@ -107,7 +108,7 @@ def test_with_the_harness_walk_registered_the_same_fill_asks_the_ranked_candidat
         raise RuntimeError("held nothing")
 
     monkeypatch.setattr(fill_mod, "_call_runner", _runner)
-    form = case("sdk-walk").telemac_dye_release(release=[-122.669784, 45.518485], event_time="now").fill()
+    form = case(tmp_path / "sdk-walk").telemac_dye_release(release=[-122.669784, 45.518485], event_time="now").fill()
     assert called and form["domain"].code != "DATA_SOURCE_UNSTATED"
 
 
@@ -128,11 +129,10 @@ def _stub_launch(monkeypatch):
 
 
 def test_the_record_names_the_template_case_model_and_version(monkeypatch, tmp_path):
-    monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path))
     _stub_launch(monkeypatch)
-    m = case("sdk-record").telemac_dye_release(**_ZERO_FETCH)
+    m = case(tmp_path / "sdk-record").telemac_dye_release(**_ZERO_FETCH)
     result = m.run()
-    record = read_records()[-1]
+    record = read_records(tmp_path / "sdk-record" / "runs" / "run_journal.jsonl")[-1]
     assert (record["template"], record["case"], record["model"], record["version"]) == (
         "telemac_dye_release", "sdk-record", "telemac_dye_release", m.version)
     assert result.run_id == "RUNSDKTEST" and result.record == record
@@ -169,7 +169,7 @@ async def launch(self, state):
 
 TelemacWorkflow.launch = launch
 from trid3nt import case
-m = case("sdk-stance").telemac_dye_release(**json.loads(sys.argv[1]))
+m = case(sys.argv[2]).telemac_dye_release(**json.loads(sys.argv[1]))
 form = m.fill()
 result = m.run()
 print(json.dumps({"ready": form.ready, "ran": type(result).__name__, "read": read, "asked": asked,
@@ -180,7 +180,8 @@ print(json.dumps({"ready": form.ready, "ran": type(result).__name__, "read": rea
 
 def test_fill_and_run_with_harness_and_server_blocked_never_ask_and_never_read_auto(tmp_path):
     env = {**os.environ, "TRID3NT_DEV_PERSISTENCE_DIR": str(tmp_path)}
-    done = subprocess.run([sys.executable, "-c", _STANCE, json.dumps(_ZERO_FETCH)], cwd=REPO, env=env,
+    done = subprocess.run([sys.executable, "-c", _STANCE, json.dumps(_ZERO_FETCH), str(tmp_path / "sdk-stance")],
+                          cwd=REPO, env=env,
                           capture_output=True, text=True, timeout=600)
     assert done.returncode == 0, done.stdout[-4000:] + done.stderr[-4000:]
     seen = json.loads(done.stdout.strip().splitlines()[-1])

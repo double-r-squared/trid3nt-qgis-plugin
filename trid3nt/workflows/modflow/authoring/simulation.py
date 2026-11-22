@@ -166,8 +166,9 @@ def _write(sheet: Any, work: Path, groups: dict[str, dict[str, Any]],
     for model in models:
         _unstated(model.sheet, set(model.groups) | set(_REQUIRED_PACKAGES[model.sheet.module]) | (
             {"TDIS"} if model is flow else set()), model.derived)
+    # No FloPy header: it stamps the clock of the write, and a deck written twice from the same inputs is the same bytes.
     sim = flopy.mf6.MFSimulation(sim_name="trid3nt", sim_ws=str(work),
-                                 verbosity_level=0)
+                                 verbosity_level=0, write_headers=False)
     _package(flopy, "ModflowTdis",
              _placed(groups.pop("TDIS", {}), **placed),
              owner=sim,
@@ -271,7 +272,7 @@ def _write_unstructured(sheet: Any, work: Path, groups: dict[str, dict[str, Any]
                     "run's grid is the DISU its sheet states; state the cells as node numbers, one integer per cell id.",
                     error_code="MODFLOW_WRONG_GRID")
     _unstated(sheet, set(groups) | set(_REQUIRED_PACKAGES[module]) | {"TDIS"}, set())
-    sim = flopy.mf6.MFSimulation(sim_name="trid3nt", sim_ws=str(work), verbosity_level=0)
+    sim = flopy.mf6.MFSimulation(sim_name="trid3nt", sim_ws=str(work), verbosity_level=0, write_headers=False)
     _package(flopy, "ModflowTdis", _stated(groups.pop("TDIS", {})), owner=sim, how="TDIS of the simulation")
     _model(flopy, sim, _Model(name=module, sheet=sheet, groups=groups, named=named, derived=set(), tables={}, series={},
                               observed={}, features=[], mesh=None, disv=f"{module}.disu"), solution=True)
