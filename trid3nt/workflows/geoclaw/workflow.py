@@ -29,7 +29,7 @@ from trid3nt.workflows.runtime.sheet import Keyword, Sheet, reference_time
 from trid3nt.workflows.runtime.sheet import run as run_sheet_
 from trid3nt.workflows.solver.cores import docker_cores
 from trid3nt.workflows.solver.stop import SolveStopped
-from trid3nt.workflows.runtime.workflow import EVENT_TIME
+from trid3nt.workflows.runtime.workflow import EVENT_TIME, Deck
 from trid3nt.workflows.solver.staging import discard_run
 
 from .authoring import check_staged_run, grid_keywords, serialize
@@ -468,11 +468,11 @@ class GeoclawWorkflow(Workflow):
                 keywords[raw] = {**value, "rise_shape": shape}
         return keywords
 
-    async def launch(self, state: Fill) -> RunResult:
-        """The run, in order: the grid, the rows, the data, the sheet written and staged under its review, the solve, the outputs."""
+    async def prepare(self, state: Fill) -> Deck:
+        """The run up to its deck, in order: the grid, the rows, the data, the sheet written and staged under its review, the rupture it states."""
         from trid3nt.render.emission import begin_substeps, current_emitter, substep
         from trid3nt.tools.mesh.step import build_declared_mesh, keep_mesh
-        from trid3nt.workflows.runtime.fill import anchors_of, call, production, read
+        from trid3nt.workflows.runtime.fill import production, read
 
         env = production(state)
         run = env.run
@@ -486,10 +486,8 @@ class GeoclawWorkflow(Workflow):
         emitter = current_emitter()
         begin_substeps(emitter, 4 + ("mesh" not in run))
 
-        async def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
-            async with substep(emitter, label):
-                run[label] = await call(fn, kwargs, label)
-            return run[label]
+        def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
+            return self._stage(run, label, fn, **kwargs)
 
         if "mesh" not in run:
             asked = await self._recipe(env, self.template.MESH, set())
@@ -532,6 +530,21 @@ class GeoclawWorkflow(Workflow):
             await asyncio.to_thread(discard_run, run_id, prefix, stem=self.engine)
             raise
         await publish_rupture(sheet=run["sheet"], rundir=staged["rundir"], run_id=run_id, name=name, catalogue=catalogue)
+        return Deck(state, run_id=run_id, prefix=prefix, staged=staged, held={"name": name, "previous": previous})
+
+    async def solve(self, deck: Deck) -> RunResult:
+        """The written deck handed to the box, what the engine printed of its start said, then its outputs read and published."""
+        from trid3nt.tools.mesh.step import keep_mesh
+        from trid3nt.workflows.runtime.fill import anchors_of
+
+        env = deck.state.env
+        run = env.run
+        name, previous = deck.held["name"], deck.held["previous"]
+        declared = {row.name for row in self.inputs if not row.is_row}
+
+        def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
+            return self._stage(run, label, fn, **kwargs)
+
         async def products(handle: Mapping[str, Any], partial: str | None) -> Any:
             outputs, captions = self._outputs()
             # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
@@ -541,7 +554,7 @@ class GeoclawWorkflow(Workflow):
                                params={key: run[key] for key in declared}, partial=partial)
 
         try:
-            solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=staged, mesh=run["mesh"], name=name,
+            solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=deck.staged, mesh=run["mesh"], name=name,
                                  moment=run.get(EVENT_TIME.name), frame=run.get(_FRAME.name) or _FRAME.default)
         except SolveStopped as stop:
             await self.stopped(stop, run, products)

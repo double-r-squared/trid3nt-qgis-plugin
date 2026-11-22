@@ -8,6 +8,7 @@ import pytest
 
 from trid3nt.tools import TOOL_REGISTRY
 from trid3nt.workflows.runtime import fill as fill_mod
+from trid3nt.workflows.runtime.workflow import Workflow
 from trid3nt.workflows.runtime.fill import (
     ACCEPTED,
     DEFAULTED,
@@ -149,6 +150,8 @@ def test_a_failed_launch_does_not_say_the_engine_check_was_out_of_reach(monkeypa
 
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = _wf()
+    monkeypatch.setattr(type(wf), "prepare", Workflow.prepare)
+    monkeypatch.setattr(type(wf), "solve", Workflow.solve)
     monkeypatch.setattr(type(wf), "launch", _launch)
     out = asyncio.run(wf.run({**_DYE,
                               "keywords": {"LAW OF BOTTOM FRICTION": 4}}))
@@ -456,6 +459,8 @@ def test_what_producing_said_at_the_fill_is_restated_on_the_run(monkeypatch, use
     covered = []
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = TOOL_REGISTRY["telemac_ice_cover"].fn.workflow
+    monkeypatch.setattr(type(wf), "prepare", Workflow.prepare)
+    monkeypatch.setattr(type(wf), "solve", Workflow.solve)
     monkeypatch.setattr(type(wf), "launch", _launch)
     state = asyncio.run(fill(Fill(workflow=wf), {
         "seed": [0.5, 0.5],

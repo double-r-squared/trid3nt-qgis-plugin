@@ -29,7 +29,7 @@ from trid3nt.workflows.runtime import (
     RunResult,
     Workflow,
 )
-from trid3nt.workflows.runtime.workflow import EVENT_TIME, _names_untaken
+from trid3nt.workflows.runtime.workflow import EVENT_TIME, Deck, _names_untaken
 from trid3nt.workflows.solver.staging import discard_run
 from trid3nt.workflows.telemac.errors import TelemacError
 from trid3nt.workflows.telemac.authoring.selafin_io import GEOMETRY_FILE_FORMAT
@@ -515,13 +515,12 @@ class TelemacWorkflow(Workflow):
             _signature(_MEASURES[ask.kind][0])
         self._outputs()
 
-    async def launch(self, state: Fill) -> RunResult:
-        """The run, in order: the world, the mesh and its files, what the run places and measures, the settle, the sheet written and checked under its review, the solve, the outputs.
+    async def prepare(self, state: Fill) -> Deck:
+        """The run up to its deck, in order: the world, the mesh and its files, what the run places and measures, the settle, the sheet written and checked under its review.
         Every stage writes into the run's one mapping and reads off it by plain name."""
         from trid3nt.tools.mesh.step import build_declared_mesh, keep_mesh
-        from trid3nt.render.emission import begin_substeps, current_emitter, substep
-        from trid3nt.workflows.runtime.fill import (
-            _load, _taken, anchors_of, call, given, production, read)
+        from trid3nt.render.emission import begin_substeps, current_emitter
+        from trid3nt.workflows.runtime.fill import given, production, read
         from .authoring.mesh_files import telemac_mesh_files
         from .authoring.opening import open_channel, open_water
         from .authoring.release_point import settle_release
@@ -540,11 +539,8 @@ class TelemacWorkflow(Workflow):
         begin_substeps(emitter, 5 + ("mesh" not in run) + len(asks) + len(placed)
                        + bool(inflow))
 
-        async def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
-            async with substep(emitter, label):
-                run[label] = await call(
-                    fn if callable(fn) else _load(fn), kwargs, label)
-            return run[label]
+        def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
+            return self._stage(run, label, fn, **kwargs)
 
         # What nobody stated - a measurement of no value, a point nobody placed - and the op set on it or the read at or along it are not composed either.
         untaken: set[str] = set()
@@ -628,7 +624,6 @@ class TelemacWorkflow(Workflow):
         if steps is not None:
             keywords = self._checked(run, keywords, int(steps))
             run["check_steps"] = int(steps)
-        check = None if steps is None else f"check run, stops at step {int(steps)}"
 
         async def write(sheet: TelemacSheet) -> None:
             # A card edit fills the sheet again, so the staged run is the one the last fill wrote.
@@ -659,6 +654,23 @@ class TelemacWorkflow(Workflow):
             await asyncio.to_thread(discard_run, run_id, prefix,
                                     stem=self.engine)
             raise
+        return Deck(state, run_id=run_id, prefix=prefix, staged=staged, held={"untaken": untaken})
+
+    async def solve(self, deck: Deck) -> RunResult:
+        """The written deck handed to the box, then its outputs read and published."""
+        from trid3nt.tools.mesh.step import keep_mesh
+        from trid3nt.workflows.runtime.fill import anchors_of
+
+        env = deck.state.env
+        run = env.run
+        untaken = deck.held["untaken"]
+        declared = {row.name for row in self.inputs if not row.is_row}
+        steps = deck.state.carried.get("check_steps")
+        check = None if steps is None else f"check run, stops at step {int(steps)}"
+
+        def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
+            return self._stage(run, label, fn, **kwargs)
+
         async def products(handle: Mapping[str, Any], partial: str | None) -> Any:
             outputs, captions = self._outputs()
             outputs = [p for p in outputs
@@ -673,7 +685,7 @@ class TelemacWorkflow(Workflow):
 
         try:
             solved = await stage(
-                "solve", run_sheet, sheet=run["sheet"], staged=staged,
+                "solve", run_sheet, sheet=run["sheet"], staged=deck.staged,
                 settled=run[_SETTLED], dispatch=_DISPATCH,
                 display=self._states("DISPLAY_FILE", ""),
                 moment=run.get(EVENT_TIME.name))

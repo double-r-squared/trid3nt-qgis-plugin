@@ -180,7 +180,7 @@ def test_a_row_its_producer_fails_is_refused_at_fill_before_any_stage(
     assert verdict.state == REJECTED and verdict.code == "DATA_NEED_UNMATCHED"
     assert "'weather'" in verdict.reason and "no weather station" in verdict.reason
     launched = []
-    monkeypatch.setattr(type(workflow), "launch",
+    monkeypatch.setattr(type(workflow), "prepare",
                         lambda self, state: launched.append(state))
     out = asyncio.run(workflow.run(_stated(workflow)))
     assert out["error_code"] == "DATA_NEED_UNMATCHED" and launched == []

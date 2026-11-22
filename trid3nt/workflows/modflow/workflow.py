@@ -35,7 +35,7 @@ from trid3nt.workflows.runtime.sheet import Filled, Keyword, Sheet
 from trid3nt.workflows.runtime.sheet import fill_coupled, reference_time
 from trid3nt.workflows.runtime.sheet import run as run_sheet_
 from trid3nt.workflows.solver.stop import SolveStopped
-from trid3nt.workflows.runtime.workflow import EVENT_TIME
+from trid3nt.workflows.runtime.workflow import EVENT_TIME, Deck
 from trid3nt.workflows.solver.staging import discard_run
 
 from .authoring import DISV_FILE, MFSIM_FILE
@@ -402,12 +402,12 @@ class ModflowWorkflow(Workflow):
         return tuple(row.name for row in self.inputs
                      if row.is_row and row is not _SUPPLIED_MESH)
 
-    async def launch(self, state: Fill) -> RunResult:
-        """The run, in order: the mesh, the sheet written, validated and staged under its review, the solve, the outputs.
+    async def prepare(self, state: Fill) -> Deck:
+        """The run up to its deck, in order: the mesh, the sheet written, validated and staged under its review.
         Every stage writes into the run's one mapping and reads off it by plain name."""
-        from trid3nt.render.emission import begin_substeps, current_emitter, substep
+        from trid3nt.render.emission import begin_substeps, current_emitter
         from trid3nt.tools.mesh.step import build_declared_mesh, keep_mesh
-        from trid3nt.workflows.runtime.fill import anchors_of, call, production, read
+        from trid3nt.workflows.runtime.fill import production, read
 
         env = production(state)
         run = env.run
@@ -417,10 +417,8 @@ class ModflowWorkflow(Workflow):
         emitter = current_emitter()
         begin_substeps(emitter, 3 + ("mesh" not in run))
 
-        async def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
-            async with substep(emitter, label):
-                run[label] = await call(fn, kwargs, label)
-            return run[label]
+        def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
+            return self._stage(run, label, fn, **kwargs)
 
         # A supplied mesh is already the run's mesh: its row's ingestion wrote the record the build would have.
         if "mesh" not in run:
@@ -472,6 +470,21 @@ class ModflowWorkflow(Workflow):
             # A run that does not reach the box leaves no staged copy behind.
             await asyncio.to_thread(discard_run, run_id, prefix, stem=self.engine)
             raise
+        return Deck(state, run_id=run_id, prefix=prefix, staged=staged, held={"name": name})
+
+    async def solve(self, deck: Deck) -> RunResult:
+        """The written deck handed to the box, then its outputs read and published."""
+        from trid3nt.tools.mesh.step import keep_mesh
+        from trid3nt.workflows.runtime.fill import anchors_of
+
+        env = deck.state.env
+        run = env.run
+        name = deck.held["name"]
+        declared = {row.name for row in self.inputs if not row.is_row}
+
+        def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
+            return self._stage(run, label, fn, **kwargs)
+
         async def products(handle: Mapping[str, Any], partial: str | None) -> Any:
             outputs, captions = self._outputs()
             # A primitive's point, line and band name run inputs; each is read here and rejoins its primitive at publish.
@@ -482,7 +495,7 @@ class ModflowWorkflow(Workflow):
                 anchors=anchors, params={key: run[key] for key in declared}, partial=partial)
 
         try:
-            solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=staged,
+            solved = await stage("solve", run_sheet, sheet=run["sheet"], staged=deck.staged,
                                  mesh=run["mesh"], name=name,
                                  moment=run.get(EVENT_TIME.name),
                                  frame=run.get(_FRAME.name) or _FRAME.default,

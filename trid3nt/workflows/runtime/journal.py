@@ -35,9 +35,9 @@ def journal_outputs(layers: Sequence[Mapping[str, Any]]) -> None:
         published.extend(dict(layer) for layer in layers)
 
 
-def bind_outputs() -> contextvars.Token:
-    """Open an outputs channel for one run -> the token that closes it."""
-    return _OUTPUTS.set([])
+def bind_outputs(held: Sequence[Mapping[str, Any]] = ()) -> contextvars.Token:
+    """Open an outputs channel for one run, holding what it already published -> the token that closes it."""
+    return _OUTPUTS.set([dict(layer) for layer in held])
 
 
 def drain_outputs(token: contextvars.Token) -> list[dict[str, Any]]:
@@ -64,9 +64,9 @@ def run_choices() -> list[Any]:
     return list(_CHOICES.get() or ())
 
 
-def bind_choices() -> contextvars.Token:
-    """Open a choices channel for one run -> the token that closes it."""
-    return _CHOICES.set([])
+def bind_choices(held: Sequence[Any] = ()) -> contextvars.Token:
+    """Open a choices channel for one run, holding the lists it already filled from -> the token that closes it."""
+    return _CHOICES.set(list(held))
 
 
 def drain_choices(token: contextvars.Token) -> list[Any]:
@@ -88,9 +88,9 @@ def setting_read(name: str, value: Any, level: str) -> None:
         read[name] = {"value": value, "level": level}
 
 
-def bind_settings() -> contextvars.Token:
-    """Open a settings-read channel for one run -> the token that closes it."""
-    return _SETTINGS.set({})
+def bind_settings(held: Mapping[str, dict[str, Any]] | None = None) -> contextvars.Token:
+    """Open a settings-read channel for one run, holding what it already read -> the token that closes it."""
+    return _SETTINGS.set(dict(held or {}))
 
 
 def drain_settings(token: contextvars.Token) -> dict[str, dict[str, Any]]:

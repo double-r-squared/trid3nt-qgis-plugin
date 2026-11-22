@@ -17,7 +17,7 @@ from trid3nt.workflows.runtime import fill as fill_mod
 from trid3nt.workflows.runtime import journal
 from trid3nt.workflows.runtime.fill import Fill, fill
 from trid3nt.workflows.runtime.module import SlotRefused
-from trid3nt.workflows.runtime.workflow import RunResult
+from trid3nt.workflows.runtime.workflow import RunResult, Workflow
 
 
 def test_every_entry_carries_its_family_default_and_where_the_default_comes_from():
@@ -131,6 +131,8 @@ def test_a_keyword_run_states_a_setting_and_the_run_journals_it_read(monkeypatch
 
     monkeypatch.setattr(fill_mod, "_produce", _produce)
     wf = TOOL_REGISTRY["telemac_ice_cover"].fn.workflow
+    monkeypatch.setattr(type(wf), "prepare", Workflow.prepare)
+    monkeypatch.setattr(type(wf), "solve", Workflow.solve)
     monkeypatch.setattr(type(wf), "launch", _launch)
     state = asyncio.run(fill(Fill(workflow=wf), {
         "seed": [0.5, 0.5], "event_time": "2024-06-01T00:00:00Z",

@@ -17,6 +17,11 @@ from trid3nt.workflows.telemac.authoring import mesh_files, opening, release_poi
 from trid3nt.tools.mesh import step as mesh_step
 
 
+async def _whole(workflow, state):
+    """The launch whole: its deck written, then solved."""
+    return await workflow.solve(await workflow.prepare(state))
+
+
 def _launched(monkeypatch, *, carried, settled=None):
     workflow = TOOL_REGISTRY["telemac_dye_release"].fn.workflow
     seen: dict = {}
@@ -47,7 +52,7 @@ def _launched(monkeypatch, *, carried, settled=None):
 
     state.inputs["release"] = Verdict(ACCEPTED, Point(-122.65, 45.53), origin=Origin.USER)
     token = bind_notes()
-    run = asyncio.run(workflow.launch(state))
+    run = asyncio.run(_whole(workflow, state))
     return run, seen, drain_notes(token)
 
 

@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from .fill import Fill
     from .primitives import Primitive
 
-__all__ = ["BANKS", "EVENT_TIME", "REACH_LENGTH", "RunResult", "Workflow", "register_workflow"]
+__all__ = ["BANKS", "Deck", "EVENT_TIME", "REACH_LENGTH", "RunResult", "Said", "Workflow", "register_workflow"]
 
 logger = logging.getLogger("trid3nt.workflows.runtime.workflow")
 
@@ -86,6 +86,34 @@ class RunResult:
     choices: list[SourceChoice] = field(default_factory=list)
     #: The settings the run read, by name, with the value in force and the level it resolved at.
     settings: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+
+@dataclass
+class Said:
+    """What a run has said so far: its notes, the layers it published, the lists it filled from, what its cut
+    covers and the settings it read."""
+
+    notes: list[str] = field(default_factory=list)
+    outputs: list[dict[str, Any]] = field(default_factory=list)
+    choices: list[Any] = field(default_factory=list)
+    coverage: list[str] = field(default_factory=list)
+    settings: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+
+@dataclass
+class Deck:
+    """A launch stopped at its written, checked deck: the fill it was made from, the run it is tagged with, the
+    staged run the box receives (its run directory, manifest and every file by its name in it), what the run said
+    on the way and how long it took; ``held`` is what the engine's solve reads that the run's mapping does not hold.
+    A launch that is not split writes its deck inside its solve, so its deck holds the fill alone."""
+
+    state: Fill
+    run_id: str | None = None
+    prefix: str = ""
+    staged: Mapping[str, Any] = field(default_factory=dict)
+    held: dict[str, Any] = field(default_factory=dict)
+    said: Said = field(default_factory=Said)
+    seconds: float = 0.0
 
 
 def _accuracies(value: Any) -> dict[str, Any]:
@@ -189,11 +217,31 @@ class Workflow:
         """Refuse at import what this template's declarations cannot run; the
         skeleton runs nothing of its own, so it refuses nothing."""
 
+    async def prepare(self, state: Fill) -> Deck:
+        """A READY fill launched up to its written, checked deck -> the deck; nothing is solved.
+        The review card is drawn here, from the deck it holds. A launch that is not split writes nothing here."""
+        return Deck(state)
+
+    async def solve(self, deck: Deck) -> RunResult:
+        """The deck ``prepare`` wrote, solved and read -> what the run produced.
+        A launch that is not split runs whole here."""
+        return await self.launch(deck.state)
+
     async def launch(self, state: Fill) -> RunResult:
-        """Write, solve and read a READY fill -> what the run produced.
+        """Write, solve and read a READY fill in one piece -> what the run produced.
 
         The skeleton knows no engine, so it launches nothing."""
         raise WireArgsError(f"{self.name} declares no engine to launch.")
+
+    async def _stage(self, run: dict[str, Any], label: str, fn: Any, /, **kwargs: Any) -> Any:
+        """One stage of a launch: ``fn`` (or the function a dotted name loads) called under its own substep, its value
+        held on the run's mapping by ``label``."""
+        from trid3nt.render.emission import current_emitter, substep
+        from .fill import _load, call
+
+        async with substep(current_emitter(), label):
+            run[label] = await call(fn if callable(fn) else _load(fn), kwargs, label)
+        return run[label]
 
     def judged(self, state: Fill) -> dict[str, Any]:
         """What refuses the whole run before any stage of it, as a verdict under the name it is said by.
@@ -359,11 +407,11 @@ class Workflow:
                     "error_message": sentence}
         return await self.execute(state)
 
-    async def execute(self, state: Fill) -> Any:
-        """Launch a READY fill, then post and publish what it produced."""
-        started = time.monotonic()
+    async def execute(self, state: Fill, deck: Deck | None = None) -> Any:
+        """Launch a READY fill - or solve the ``deck`` already written from it - then post and publish what it produced."""
+        started = time.monotonic() - (deck.seconds if deck is not None else 0.0)
         try:
-            run = await self._launched(state)
+            run = await (self._solved(deck) if deck is not None else self._launched(state))
         except Stopped as stop:
             await asyncio.to_thread(self._journal_stop, stop, time.monotonic() - started,
                                     dict(state.env.supplied), state.model)
@@ -385,45 +433,74 @@ class Workflow:
                                    supplied=dict(state.env.supplied), model=state.model)
 
     async def _launched(self, state: Fill) -> RunResult:
-        """Launch under the run's own domain and collectors; notes ride out on the run or on the failure.
-        A launch the user stopped is completed the same way and raised again as the stop, carrying the run."""
+        """The whole launch: the deck written, then solved."""
+        return await self._solved(await self.prepared(state))
+
+    async def prepared(self, state: Fill) -> Deck:
+        """A READY fill launched up to its written, checked deck, under the run's own domain and collectors -> the deck,
+        carrying what the run said on the way. A launch that refuses carries its notes on the error."""
         from .fill import production, restate
 
-        env = production(state)
-        token = bind_domain(state.domain)
-        notes, outputs = bind_notes(), journal.bind_outputs()
-        choices, coverage = journal.bind_choices(), bind_coverage()
-        reading, run_token = journal.bind_settings(), bind_run(state.settings)
-        restate(state)
+        production(state)
+        started = time.monotonic()
+
+        async def step() -> Deck:
+            restate(state)
+            return await self.prepare(state)
+
+        deck, heard = await self._within(state, Said(), step)
+        deck.said, deck.seconds = heard, time.monotonic() - started
+        return deck
+
+    async def _solved(self, deck: Deck) -> RunResult:
+        """Solve a written deck under the run's own domain and collectors, opened on what its writing said; notes ride out on the run or on the failure.
+        A launch the user stopped is completed the same way and raised again as the stop, carrying the run."""
         stopped: Stopped | None = None
-        # The drain lives only in the finally so a second reset never replaces the run's own error.
-        try:
+
+        async def step() -> RunResult:
+            nonlocal stopped
             try:
-                run = await self.launch(state)
+                return await self.solve(deck)
             except Stopped as stop:
-                stopped, run = stop, stop.run
-            finally:
-                reset_domain(token)
-                said_notes = drain_notes(notes)
-                published = journal.drain_outputs(outputs)
-                matched = journal.drain_choices(choices)
-                drain_coverage(coverage)
-                read = journal.drain_settings(reading)
-                reset_run(run_token)
-        except Exception as exc:
-            for note in said_notes:
-                exc.add_note(f"also missing from this run: {note}")
-            raise
+                stopped = stop
+                return stop.run
+
+        run, heard = await self._within(deck.state, deck.said, step)
+        env = deck.state.env
         # Read after the launch: a value a person edited on the review card and a row first read by a stage are stamped by then.
         run.entries = provenance_entries(env.inputs, self.inputs)
         run.inputs = dict(env.inputs)
-        run.notes += said_notes
-        run.settings = {**read, **run.settings}
-        run.outputs += published
-        run.choices += matched
+        run.notes += heard.notes
+        run.settings = {**heard.settings, **run.settings}
+        run.outputs += heard.outputs
+        run.choices += heard.choices
         if stopped is not None:
             raise stopped
         return run
+
+    async def _within(self, state: Fill, held: Said, step: Callable[[], Awaitable[Any]]) -> tuple[Any, Said]:
+        """``step`` under the run's own domain and collectors, each opened on what the run already said (``held``) ->
+        its value and all the run has said by its end. An error leaves carrying every note the run said."""
+        token = bind_domain(state.domain)
+        notes, outputs = bind_notes(held.notes), journal.bind_outputs(held.outputs)
+        choices, coverage = journal.bind_choices(held.choices), bind_coverage(held.coverage)
+        reading, run_token = journal.bind_settings(held.settings), bind_run(state.settings)
+        heard = held
+        # The drain lives only in the finally so a second reset never replaces the run's own error.
+        try:
+            try:
+                value = await step()
+            finally:
+                reset_domain(token)
+                heard = Said(notes=drain_notes(notes), outputs=journal.drain_outputs(outputs),
+                             choices=journal.drain_choices(choices), coverage=drain_coverage(coverage),
+                             settings=journal.drain_settings(reading))
+                reset_run(run_token)
+        except Exception as exc:
+            for note in heard.notes:
+                exc.add_note(f"also missing from this run: {note}")
+            raise
+        return value, heard
 
     async def stopped(self, stop: SolveStopped, run: dict[str, Any],
                       products: Callable[[dict[str, Any], str], Awaitable[Any]]) -> NoReturn:

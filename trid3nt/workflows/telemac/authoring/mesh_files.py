@@ -65,9 +65,11 @@ def _mesh_files(mesh: Mapping[str, Any]) -> dict[str, Any]:
                                 roles=roles)
     else:
         with tempfile.TemporaryDirectory() as rundir:
+            # The title names the mesh by its content key, so the same mesh built again writes the same geometry file;
+            # a supplied mesh, which no recipe keys, is named by its own id.
             written = write_telemac_pair(
                 Path(rundir), x=points[:, 0], y=points[:, 1], cells=cells,
-                bed=bed, roles=roles, title=f"TRID3NT {art.mesh_id}")
+                bed=bed, roles=roles, title=f"TRID3NT {(mesh or {}).get('key') or art.mesh_id}")
             walk = {"stats": written["stats"]}
             files[GEOMETRY_FILE] = _stage(art.mesh_id, written["geo_slf"])
             files[BOUNDARY_CONDITIONS_FILE] = _stage(art.mesh_id, written["cli"])

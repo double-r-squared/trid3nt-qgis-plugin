@@ -5,7 +5,10 @@ module's own keywords, the mesh ask, the placed reads, the outputs and their
 captions. Nothing in a template names a function to run. A FILL puts a value
 into each input, which ACCEPTS it or REJECTS it naming the remedy; a READY fill
 launches on an explicit act, and the engine's run is straight-line code in one order - full
-fill, mesh, settle, one review, solve. The skeleton is `workflows/runtime/workflow.py`; the TELEMAC
+fill, mesh, settle, one review, solve. The launch is split at its deck: the engine's `prepare` runs up to and
+including the written, checked deck and its review card and returns a `Deck` (the fill, the run's tag, the staged
+run, what the run said on the way); its `solve` hands that deck to the box and publishes. The daemon calls both in
+order in one task (`Workflow._launched`); the SDK's fill ends at `prepare` and its run solves the deck it holds. The skeleton is `workflows/runtime/workflow.py`; the TELEMAC
 facade is `workflows/telemac/workflow.py`, the MODFLOW one `workflows/modflow/workflow.py` and the GeoClaw one `workflows/geoclaw/workflow.py`. The
 publish is the runtime's (`publish_reads`, `workflows/runtime/primitives.py`): each engine hands it
 how a solved module is opened, its module table of what the run wrote, and the run's record.
@@ -295,7 +298,7 @@ same way. A row handed a case layer by its handle - bare or as `{"layer": id}` -
 is read at that layer's uri, and nothing judges a workflow's input before the
 fill does: a direct run reaches it with its args as typed.
 
-The fill produces every row a stage reads without the mesh (`named_rows(held)`: the domain, the named rows, the mesh ask's rows unless a mesh was supplied, the level, the inflow, a measurement's line, the rows a module fills from), and only a row asked near a placed point waits for the settle. `Workflow.judged` answers before any unstated row is fetched: `NO_SESSION` for an engine run with no session and, on TELEMAC, `TELEMAC_CONTINUATION_REFUSED` and `TELEMAC_SHEET_INCOMPLETE` judged from the deck's assertions and the stated keywords. The sheet stage writes the deck and runs the staged check before every card it draws, so a proceed is followed by the box alone. The run holds one tag from its first staging to dispatch: a card edit re-stages into the same local directory and the same prefix, each emptied first, and a run that does not reach the box (the review cancelled, the staged check or completeness refusing, a raise before dispatch) removes both.
+The fill produces every row a stage reads without the mesh (`named_rows(held)`: the domain, the named rows, the mesh ask's rows unless a mesh was supplied, the level, the inflow, a measurement's line, the rows a module fills from), and only a row asked near a placed point waits for the settle. `Workflow.judged` answers before any unstated row is fetched: `NO_SESSION` for an engine run with no session and, on TELEMAC, `TELEMAC_CONTINUATION_REFUSED` and `TELEMAC_SHEET_INCOMPLETE` judged from the deck's assertions and the stated keywords. The sheet stage writes the deck and runs the staged check before every card it draws, so a proceed is followed by the box alone: the card is the last stage of `prepare`, and `solve` begins at the box. Each half runs under the run's own domain and collectors (`Workflow._within`); the solve's are opened on what the deck's writing said, so the run's notes, outputs, choices, coverage and settings are one list across both halves. A launch that is not split (PEST++'s study) keeps its whole `launch`, which the skeleton's `solve` runs; its deck holds the fill alone. The run holds one tag from its first staging to dispatch: a card edit re-stages into the same local directory and the same prefix, each emptied first, and a run that does not reach the box (the review cancelled, the staged check or completeness refusing, a raise before dispatch) removes both.
 
 A row resolves in ONE order (pinned by `tests/runtime/test_resolution_order.py`):
 what the caller supplied, then the row's one source - its producer, or the
@@ -689,7 +692,7 @@ DURATION; MODFLOW `stress period p of P, step s of S` from TDIS (no S where an A
 GeoClaw `t = x s of T s` and `frame k of K` from CLAW_TFINAL and the fgout grid's frame count.
 
 A stop ends the wait as `SolveStopped` (a cancellation) once the supervisor has uploaded what the run wrote.
-The engine's `launch` hands it to `Workflow.stopped`, which publishes through the same `publish_outputs` with
+The engine's `solve` hands it to `Workflow.stopped`, which publishes through the same `publish_outputs` with
 `partial=` set, so every layer, chart and the engine's record carry `(partial: stopped by the user at <step>)`
 in their name, and the run's journal record carries `stopped`. A run whose output cannot be read honestly
 publishes nothing and says why on the record; either way the launch ends as the stop.
@@ -743,7 +746,7 @@ coupling, the publish transform and the worker - is `docs/design/modflow.md`;
 this section is the workflows-runtime view.
 
 A MODFLOW run is the GWF module's sheet solved on a mesh the shared front built
-or the caller supplied (`workflows/modflow/workflow.py`). `launch` runs one
+or the caller supplied (`workflows/modflow/workflow.py`). `prepare` and `solve` run one
 order: the mesh, the sheet filled under its one review - each fill writes the
 simulation, runs mf6's own validate over it and stages it with the staged check
 (`authoring/staged_check.py`) into the run's one tag - the solve on the box, and

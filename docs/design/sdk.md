@@ -10,7 +10,7 @@ runtime's own (`docs/design/workflows.md`).
     c = case("dye-l1")                 # the directory dye-l1 under the current one, opened or created
     m = c.telemac_dye_release(release=(lon, lat), spill_duration_s=1800, DURATION=1800.0)
     m.FRICTION_COEFFICIENT = 35        # checked on set
-    form = m.fill()                    # every input's verdict; nothing solved
+    form = m.fill()                    # every input's verdict and the written, checked deck; nothing solved
     result = m.run()                   # a Result, or a Failure
 
 - `case.<template>(**values)` makes a Model over any registered template; each value is set as an attribute is.
@@ -27,13 +27,26 @@ runtime's own (`docs/design/workflows.md`).
 
 ## fill and run
 
-- `m.fill()` is the template fill (`Workflow.filled`) over what the model states -> a `Form`: each input's
-  `Verdict` (state, value, origin, source, code, reason, remedies), `ready`, and the `(code, sentence)` that
-  keeps it from ready. It never raises for an input; a fault in the code still raises.
-- `m.run()` fills again and, when ready, runs `Workflow.execute` in this process with no emitter bound: the
-  products are written to the case directory and recorded as a daemon run's are, and reach no map. It returns a
-  `Result` (run id, the typed result, the run's journal record) or a `Failure` (code, sentence, and the form
-  where the fill refused).
+- `m.fill()` is the template fill (`Workflow.filled`) over what the model states and, where it is ready, the
+  engine's launch up to its deck (`Workflow.prepared`: the world, the mesh, the settle, the deck written and its
+  staged directory checked against itself) -> a `Form`: each input's `Verdict` (state, value, origin, source, code,
+  reason, remedies), `ready`, the `(code, sentence)` that keeps it from ready (an input's, or the typed refusal the
+  launch stopped on), `deck` (a `Staged`: the run id, the sha256 of every file the engine receives by its name in
+  the run directory, one sha256 over them all - the lock's deck hash - and the mesh's content key) and `checked`
+  (the staged deck passed the engine's own check; a deck is staged only once it has, and where the check refused
+  the refusal's code is `<ENGINE>_STAGED_*`). Nothing is solved. It never raises for an input; a fault in the code
+  still raises.
+- `m.run()` solves the deck the last fill wrote (`Workflow.execute(state, deck)`: the engine's `solve`, the
+  publish, the record) in this process with no emitter bound: the products are written to the case directory and
+  recorded as a daemon run's are, and reach no map. It returns a `Result` (run id, the typed result, the run's
+  journal record) or a `Failure` (code, sentence, and the form where the fill refused).
+- STALENESS. A written deck is solved only while it is current: the model's `version` is the one the fill was made
+  at, the model's row of the case's lock (what each input read, the template's version, the mesh key and the deck
+  hash) is the one the fill left, and every staged file still hashes to the deck's sha256. No clock is read. A set
+  that changes a value changes the version; another fill of the same template in the case rewrites the row. A deck
+  that is not current is dropped, its staged copy removed, and the run fills again - mesh, settle and deck - before
+  it solves. A deck is solved once: the next run fills again under a new run id. A launch that is not split
+  (PEST++'s study) writes its deck inside its solve, so its form carries none.
 - The run's record names `template`, `case`, `model` (the template a model was made over) and `version`; a call
   through the daemon records its template and the turn's case, and no model or version. Each recorded output is
   the layer whole as a reader loads it, so a run read back off its record loads as the map would load it.
@@ -81,13 +94,13 @@ runtime's own (`docs/design/workflows.md`).
   template, the model's row: `template` (name, the sha256 of its template module), `model` (the version), `inputs`
   (per input read off a pinned object: source, request, uri, sha256), and after a run `mesh` (the content key),
   `deck` (the sha256 of each staged file by its name in the run directory, and one over them all) and `images`
-  (each engine's image and the id docker held it under, off `completion.json`). The fill writes the pins and the
-  row; the run adds what it ran and keeps the lock under `versions/<version>.lock`. A lock read back and written
-  again is the same bytes.
+  (each engine's image and the id docker held it under, off `completion.json`). The fill writes the pins, the row,
+  its mesh and its deck; the run adds the images and keeps the lock under `versions/<version>.lock`. A lock read
+  back and written again is the same bytes.
 - A moment stated as `now` is the clock of each fill, so a deck that states it is not the same deck twice. A
-  TELEMAC mesh built again is the same mesh under a new id its SELAFIN title carries, so a replay that rebuilds
-  it stages another `domain.slf`; the case's `cache/` keeps the mesh a replay reuses. MODFLOW decks carry no
-  FloPy header, which stamps the clock of the write.
+  TELEMAC geometry file is titled by its mesh's content key (a supplied mesh, which no recipe keys, by its own
+  id), so a mesh built again stages the same `domain.slf`. MODFLOW decks carry no FloPy header, which stamps the
+  clock of the write.
 
 ## Packed and served
 
@@ -123,6 +136,6 @@ refuses where it is read (law 9): a river reach nobody states refuses `REACH_LEN
 
 ## Out of scope here
 
-The form ending at the written deck; coverage and strictness; copied templates; the generator; studies; remote
+Coverage and strictness; copied templates; the generator; studies; remote
 execution; a case's own document store (a finished run of an SDK case is not offered as a run input) - each a
 later leg of the SDK plan.

@@ -36,4 +36,4 @@ speak it and the one file that specializes the executor to it.
 | `runtime/journal.py` | The run journal's write side - one append-only JSONL line per completed run, its inputs in one map by name (value, origin, source), plus the outputs and choices channels a run writes into; the note and coverage channels are `inputs/run_notes.py`, and the read side is `store/journal.py`. |
 | `runtime/resolution.py` | Resolution sensitivity: which of a run's published reads a coarse mesh gets wrong, and which way. |
 | `runtime/run_output.py` | The run's persisted chart spec and metrics, written under its own prefix so the output outlives the turn that emitted them. |
-| `runtime/workflow.py` | The workflow SKELETON and the registration factory: fill, launch a READY fill, post, publish, and the synthesized tool signature. |
+| `runtime/workflow.py` | The workflow SKELETON and the registration factory: fill, launch a READY fill in two halves - `prepare` to the written, checked deck and its card, `solve` of that `Deck` - post, publish, and the synthesized tool signature. |

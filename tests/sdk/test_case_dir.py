@@ -41,7 +41,7 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt.tools.fetchers._router import router
 from trid3nt.workflows.telemac import engine
 from trid3nt.workflows.telemac.errors import TelemacError
-from trid3nt.sdk.model import _deck
+from trid3nt.sdk.model import _deck, _manifest_rows
 from trid3nt import case
 
 root, values, fetching = Path(sys.argv[1]), json.loads(sys.argv[2]), sys.argv[3] == "fetch"
@@ -69,8 +69,10 @@ c = case(root)
 m = c.telemac_dye_release(**values)
 form = m.fill()
 ran = m.run()
-decks = {p.parent.name: _deck(root, "telemac", p.parent.name) for p in sorted((root / "cache" / "telemac").glob("*/manifest.json"))}
+decks = {p.parent.name: _deck(root, _manifest_rows(root, "telemac", p.parent.name))
+         for p in sorted((root / "cache" / "telemac").glob("*/manifest.json"))}
 print(json.dumps({"ready": form.ready, "code": getattr(ran, "code", None), "fetched": fetched, "decks": decks,
+                  "form": form.deck and {"sha256": form.deck.sha256, "files": dict(form.deck.files)},
                   "lock": (root / "trid3nt.lock").read_text()}))
 """
 
@@ -105,6 +107,7 @@ def test_a_bare_name_is_that_directory_under_the_current_one_with_the_layout(tmp
 
 
 def test_a_replay_of_the_moved_case_in_a_fresh_process_fetches_nothing_and_stages_the_same_deck(first_run, tmp_path):
+    """The replay is moved without its cache, so it builds the mesh again: the deck is the same bytes, geometry included."""
     root, first, persistence = first_run
     assert first["fetched"] == ["fetch_etopo"] and first["ready"] and first["code"] == "STOPPED_AT_THE_DECK"
     lock = json.loads(first["lock"])
@@ -113,8 +116,7 @@ def test_a_replay_of_the_moved_case_in_a_fresh_process_fetches_nothing_and_stage
     bed = lock["models"]["telemac_dye_release"]["inputs"]["bed"]
     assert bed["source"] == "fetch_etopo" and bed["uri"].startswith("data/") and bed["sha256"] == sha256_of(root / bed["uri"])
     moved = tmp_path / "elsewhere" / "dye"
-    shutil.copytree(root, moved)
-    shutil.rmtree(moved / "cache" / "upstream")
+    shutil.copytree(root, moved, ignore=shutil.ignore_patterns("cache"))
     # The case stands only where it was moved to while the replay runs: nothing of it is read off the old place.
     away = root.rename(root.with_name("dye-away"))
     try:
@@ -122,8 +124,9 @@ def test_a_replay_of_the_moved_case_in_a_fresh_process_fetches_nothing_and_stage
     finally:
         away.rename(root)
     assert replay["fetched"] == [] and replay["ready"] and replay["code"] == "STOPPED_AT_THE_DECK"
-    (staged, deck), = first["decks"].items()
-    assert deck and replay["decks"].pop(staged) == deck and list(replay["decks"].values()) == [deck]
+    (deck,), (again,) = first["decks"].values(), replay["decks"].values()
+    assert deck and first["form"] == deck and "domain.slf" in deck["files"]
+    assert again == deck and replay["form"] == deck
     assert replay["lock"] == first["lock"]
 
 

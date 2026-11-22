@@ -14,7 +14,7 @@ from trid3nt import case
 from trid3nt.errors import DeclarativeError
 from trid3nt.store.journal import read_records
 from trid3nt.workflows.runtime import fill as fill_mod
-from trid3nt.workflows.runtime.workflow import RunResult
+from trid3nt.workflows.runtime.workflow import RunResult, Workflow
 from trid3nt.workflows.telemac.workflow import TelemacWorkflow
 
 REPO = Path(__file__).resolve().parents[2]
@@ -125,6 +125,8 @@ def _stub_launch(monkeypatch):
     async def launch(self, state):
         return RunResult(value=_Published(), results={})
 
+    monkeypatch.setattr(TelemacWorkflow, "prepare", Workflow.prepare)
+    monkeypatch.setattr(TelemacWorkflow, "solve", Workflow.solve)
     monkeypatch.setattr(TelemacWorkflow, "launch", launch)
 
 
@@ -154,7 +156,7 @@ async def _ask(**card):
     raise AssertionError("a gate was asked")
 
 review.register_gate(review=_ask, draw=_ask)
-from trid3nt.workflows.runtime.workflow import RunResult
+from trid3nt.workflows.runtime.workflow import RunResult, Workflow
 from trid3nt.workflows.telemac.workflow import TelemacWorkflow
 
 class Published:
@@ -167,7 +169,7 @@ async def launch(self, state):
     assert outcome.proceed
     return RunResult(value=Published(), results={})
 
-TelemacWorkflow.launch = launch
+TelemacWorkflow.prepare, TelemacWorkflow.solve, TelemacWorkflow.launch = Workflow.prepare, Workflow.solve, launch
 from trid3nt import case
 m = case(sys.argv[2]).telemac_dye_release(**json.loads(sys.argv[1]))
 form = m.fill()

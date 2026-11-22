@@ -172,7 +172,9 @@ package SteeringSurface {
         own names - the STEERING body, the data rows, the outputs and the
         answer - and builds the run off them. It decides nothing: the sequence
         it builds is the same for every question, and no object stands between
-        the declaration and the run.
+        the declaration and the run. The run is built in two halves, the first
+        ending at the written, checked deck and its review card, the second the
+        solve of that deck and its publish.
         */
     }
 

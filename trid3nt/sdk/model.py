@@ -1,9 +1,9 @@
-"""A Model: one simulation over one template, edited by attribute, checked on set, filled and run in-process.
+"""A Model: one simulation over one template, edited by attribute, checked on set, filled to its deck and run in-process.
 
 Every name resolves through the workflow's one lookup, and a value is held as the run states it, so the fill
 takes it as it takes a call's. The model is held unattended: nothing asks a person, the person's AUTO setting
 is never read, and no source is picked for an input the model leaves unstated. It fills and runs in its case
-directory, and what it read and ran is written to the case's lock.
+directory, and what it read, wrote and ran is written to the case's lock.
 """
 
 from __future__ import annotations
@@ -21,25 +21,40 @@ from trid3nt.workflows.runtime.data import refuse_wrong_shape
 from trid3nt.workflows.runtime.errors import said
 from trid3nt.workflows.runtime.fill import Fill, Verdict
 from trid3nt.workflows.runtime.sheet import Keyword
+from trid3nt.workflows.runtime.workflow import Deck
 
 if TYPE_CHECKING:
     from .case import Case
 
-__all__ = ["Failure", "Form", "Model", "Result"]
+__all__ = ["Failure", "Form", "Model", "Result", "Staged"]
 
 #: The origin a keyword nobody states carries: the module dictionary's own value.
 _ENGINE = "engine default"
 
 
 @dataclass(frozen=True)
+class Staged:
+    """The deck a fill wrote: the run it is tagged with, the sha256 of every file the engine receives by its name in
+    the run directory, one sha256 over them all (the lock's deck hash), and the content key of the mesh under it."""
+
+    run_id: str
+    files: Mapping[str, str]
+    sha256: str
+    mesh: str | None = None
+
+
+@dataclass(frozen=True)
 class Form:
-    """What the fill answered: every input's verdict by name, whether the run is ready, and the ``(code, sentence)``
-    that keeps it from ready."""
+    """What the fill answered: every input's verdict by name, whether the run is ready, the ``(code, sentence)``
+    that keeps it from ready, the deck it wrote, and whether that staged deck passed the engine's own check
+    (a deck is staged only once it has; where the check refused, the refusal's code is ``<ENGINE>_STAGED_*``)."""
 
     verdicts: Mapping[str, Verdict]
     ready: bool
     refusal: tuple[str, str] | None = None
     notes: tuple[str, ...] = ()
+    deck: Staged | None = None
+    checked: bool = False
 
     def __getitem__(self, name: str) -> Verdict:
         return self.verdicts[name]
@@ -52,6 +67,9 @@ class Form:
                          + (f" [{origin}{', ' + verdict.source if verdict.source else ''}]" if origin else "")
                          + (f" {verdict.code}: {verdict.reason}" if verdict.code else "")
                          + (f" candidates: {', '.join(verdict.remedies)}" if verdict.remedies else ""))
+        if self.deck is not None:
+            lines.append(f"  deck {self.deck.sha256[:12]} ({len(self.deck.files)} files, run {self.deck.run_id}"
+                         + (f", mesh {self.deck.mesh}" if self.deck.mesh else "") + "), checked")
         return "\n".join(lines)
 
 
@@ -108,6 +126,8 @@ class Model:
         object.__setattr__(self, "_keywords", {})
         #: Each input stated as outside data, by name: its lock entry, the copy in the case's data.
         object.__setattr__(self, "_taken", {})
+        #: The deck the last fill wrote, held for the run until a set or another fill supersedes it.
+        object.__setattr__(self, "_written", None)
         for name, value in values.items():
             self[name] = value
 
@@ -193,40 +213,95 @@ class Model:
     def _named(self) -> dict[str, str]:
         return {"name": self._workflow.name, "version": self.version}
 
-    async def _fill(self) -> Fill:
+    async def _filling(self) -> tuple[Fill, Staged | None, tuple[str, str] | None]:
+        """The fill, then the launch up to its written, checked deck where the fill is ready -> the fill, the deck,
+        and the typed refusal the launch stopped on; the deck is held for the run, and the lock names what was read
+        and written. Runs inside the case's binding."""
+        self._drop()
+        state = await self._workflow.filled(self._wire(), model=self._named())
+        deck, refusal = None, None
+        if state.ready:
+            try:
+                deck = await self._workflow.prepared(state)
+            except Exception as failed:  # noqa: BLE001 - a typed refusal is the form's, anything else is a fault
+                if getattr(failed, "error_code", None) is None:
+                    raise
+                refusal = (str(failed.error_code), said(failed))
+        staged = _staged(self._case.root, deck)
+        self._locked(state, staged)
+        if deck is not None:
+            object.__setattr__(self, "_written", _Written(self.version, self._row(), state, deck, staged))
+        return state, staged, refusal
+
+    async def _fill(self) -> Form:
         bind_turn_case(self._case.name)
         with self._case.bound(), unattended():
-            state = await self._workflow.filled(self._wire(), model=self._named())
-            self._locked(state)
-        return state
+            state, staged, refusal = await self._filling()
+        return _form(state, staged, refusal)
 
     def fill(self) -> Form:
-        """Every input answered, as the run would take it -> the form; nothing is solved. Each fetch is read
-        through the case's lock, and what the fill read is written to it."""
-        return _form(asyncio.run(self._fill()))
+        """Every input answered and, where they all are, the deck written and checked -> the form; nothing is solved.
+        Each fetch is read through the case's lock, and what the fill read and wrote is written to it."""
+        return asyncio.run(self._fill())
 
-    def _locked(self, state: Fill) -> None:
-        """The model's row of the case's lock after a fill: its template and version, and what each input read."""
+    def _locked(self, state: Fill, staged: Staged | None) -> None:
+        """The model's row of the case's lock after a fill: its template and version, what each input read, and
+        the mesh and deck it wrote."""
         lock = self._case.lock
         row = lock.data["models"].get(self._workflow.name) or {}
         if row.get("model") != self.version:
             row = {}
         row.update(template={"name": self._workflow.name, "version": _template_version(self._workflow)},
-                   model=self.version, inputs=_read(lock, state, self._taken))
+                   model=self.version, inputs=_read(lock, state, self._taken),
+                   mesh=None if staged is None else staged.mesh,
+                   deck=None if staged is None else {"sha256": staged.sha256, "files": dict(staged.files)})
         lock.data["models"][self._workflow.name] = row
         lock.save()
+
+    def _row(self) -> dict[str, Any]:
+        """The model's row of the case's lock as the file holds it, without the images a run adds."""
+        from .lock import Lock
+
+        row = dict(Lock(self._case.root).data["models"].get(self._workflow.name) or {})
+        row.pop("images", None)
+        return row
+
+    def _current(self) -> "_Written | None":
+        """The deck the last fill wrote, where it is still this model's: the version the model states and its row of
+        the case's lock are the ones the fill left, and every staged file still holds the bytes the deck hash names."""
+        written = self._written
+        if written is None or written.version != self.version or written.row != self._row():
+            return None
+        if written.staged is not None and _deck(self._case.root, written.deck.staged.get("inputs") or ()) != {
+                "sha256": written.staged.sha256, "files": dict(written.staged.files)}:
+            return None
+        return written
+
+    def _drop(self) -> None:
+        """The deck the last fill wrote, superseded: its staged copy removed, as a launch that does not reach the box
+        leaves none. Runs inside the case's binding."""
+        from trid3nt.workflows.solver.staging import discard_run
+
+        written = self._written
+        object.__setattr__(self, "_written", None)
+        if written is not None and written.deck.run_id:
+            discard_run(written.deck.run_id, written.deck.prefix, stem=self._workflow.engine)
 
     async def _run(self) -> Result | Failure:
         bind_turn_case(self._case.name)
         named = self._named()
         with self._case.bound(), unattended():
-            state = await self._workflow.filled(self._wire(), model=named)
-            self._locked(state)
-            if not state.ready:
-                code, sentence = state.refusal()
-                return Failure(code, sentence, _form(state))
+            written = self._current()
+            if written is None:
+                state, staged, refusal = await self._filling()
+                if not state.ready or refusal is not None:
+                    code, sentence = refusal or state.refusal()
+                    return Failure(code, sentence, _form(state, staged, refusal))
+                written = self._written
+            # A deck is solved once: the next run fills again, under a new run id.
+            object.__setattr__(self, "_written", None)
             try:
-                published = await self._workflow.execute(state)
+                published = await self._workflow.execute(written.state, written.deck)
             except Exception as failed:  # noqa: BLE001 - a typed failure is returned, anything else is a fault
                 if getattr(failed, "error_code", None) is None:
                     raise
@@ -238,20 +313,23 @@ class Model:
         return Result(run_id=record.get("run_id"), value=published, record=record)
 
     def _ran(self, record: Mapping[str, Any]) -> None:
-        """What the run ran, onto the model's row of the lock - its mesh, its deck, the images of its engine - and
-        the lock as it then stands kept under ``versions/`` by the model's version."""
+        """What the run ran, onto the model's row of the lock - the images of its engine, and the mesh and deck of a
+        launch that wrote its deck inside its solve - and the lock as it then stands kept under ``versions/`` by the
+        model's version."""
         lock = self._case.lock
         row = lock.data["models"][self._workflow.name]
         run_id, engine = str(record.get("run_id") or ""), str(record.get("engine") or "")
-        row["mesh"] = (record.get("mesh") or {}).get("key")
-        row["deck"] = _deck(self._case.root, engine, run_id)
+        if row.get("deck") is None:
+            row["mesh"] = (record.get("mesh") or {}).get("key")
+            row["deck"] = _deck(self._case.root, _manifest_rows(self._case.root, engine, run_id))
         row["images"] = _images(self._case.root, engine, run_id)
         lock.save()
         (self._case.root / "versions" / f"{self.version}.lock").write_text(
             lock.path.read_text(encoding="utf-8"), encoding="utf-8")
 
     def run(self) -> Result | Failure:
-        """Fill, then solve, publish and record in this process -> the result, or the failure it refused or failed on."""
+        """Solve, publish and record the deck the last fill wrote, where it is still this model's; otherwise fill
+        again first -> the result, or the failure it refused or failed on."""
         return asyncio.run(self._run())
 
     def __repr__(self) -> str:
@@ -270,10 +348,33 @@ class Model:
         return "\n".join(lines)
 
 
-def _form(state: Fill) -> Form:
-    return Form(verdicts=dict(state.inputs), ready=state.ready,
-                refusal=None if state.ready else state.refusal(),
-                notes=(*state.notes, *state.said[0], *state.moved))
+@dataclass(frozen=True)
+class _Written:
+    """A deck a fill wrote, with what it is current against: the model's version and its row of the case's lock."""
+
+    version: str
+    row: Mapping[str, Any]
+    state: Fill
+    deck: Deck
+    staged: Staged | None
+
+
+def _form(state: Fill, staged: Staged | None = None, refusal: tuple[str, str] | None = None) -> Form:
+    ready = state.ready and refusal is None
+    return Form(verdicts=dict(state.inputs), ready=ready,
+                refusal=None if ready else (refusal or state.refusal()),
+                notes=(*state.notes, *state.said[0], *state.moved),
+                deck=staged, checked=staged is not None)
+
+
+def _staged(root: Path, deck: Deck | None) -> Staged | None:
+    """The deck a launch wrote, by what the engine receives; ``None`` where it staged none."""
+    if deck is None or not deck.run_id or not deck.staged:
+        return None
+    hashed = _deck(root, deck.staged.get("inputs") or ())
+    mesh = (deck.state.env.run.get("mesh") or {}) if deck.state.env is not None else {}
+    return Staged(run_id=deck.run_id, files=hashed["files"], sha256=hashed["sha256"],
+                  mesh=mesh.get("key") if isinstance(mesh, Mapping) else None)
 
 
 def _record(case: str, named: Mapping[str, str]) -> dict[str, Any]:
@@ -323,17 +424,24 @@ def _primary(lock: Any, entry: Mapping[str, Any]) -> tuple[str, str]:
     return entry["uri"], entry["sha256"]
 
 
-def _deck(root: Path, engine: str, run_id: str) -> dict[str, Any] | None:
-    """The deck a run staged: the sha256 of every file the engine received, by its name in the run directory,
-    and one sha256 over them all; ``None`` where the run staged none."""
-    from trid3nt.store.objects import FileStore, sha256_of
-
+def _manifest_rows(root: Path, engine: str, run_id: str) -> list[Mapping[str, Any]]:
+    """Every file a run's staged manifest hands the engine; none where the run staged none."""
     manifest = root / "cache" / engine / run_id / "manifest.json"
     if not engine or not run_id or not manifest.is_file():
+        return []
+    return list(json.loads(manifest.read_text(encoding="utf-8")).get("inputs") or ())
+
+
+def _deck(root: Path, rows: Any) -> dict[str, Any] | None:
+    """A staged deck by what the engine receives: the sha256 of every file by its name in the run directory, and one
+    sha256 over them all; ``None`` where nothing is staged."""
+    from trid3nt.store.objects import FileStore, sha256_of
+
+    if not rows:
         return None
     store = FileStore(root)
     files = {}
-    for row in json.loads(manifest.read_text(encoding="utf-8")).get("inputs") or ():
+    for row in rows:
         bucket, _, key = str(row["gs_uri"])[len("s3://"):].partition("/")
         files[str(row["dest"])] = sha256_of(store.path(bucket, key))
     files = dict(sorted(files.items()))

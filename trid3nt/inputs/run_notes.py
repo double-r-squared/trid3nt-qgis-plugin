@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextvars
 import logging
+from typing import Sequence
 
 logger = logging.getLogger("trid3nt.inputs.run_notes")
 
@@ -30,9 +31,9 @@ def journal_note(text: str) -> None:
 
 
 
-def bind_notes() -> contextvars.Token:
-    """Open a note channel for one run -> the token that closes it."""
-    return _NOTES.set([])
+def bind_notes(held: Sequence[str] = ()) -> contextvars.Token:
+    """Open a note channel for one run, holding what it already said -> the token that closes it."""
+    return _NOTES.set(list(held))
 
 
 def drain_notes(token: contextvars.Token) -> list[str]:
@@ -61,9 +62,9 @@ def run_coverage() -> list[str]:
     return list(_COVERAGE.get() or ())
 
 
-def bind_coverage() -> contextvars.Token:
-    """Open a coverage channel for one run -> the token that closes it."""
-    return _COVERAGE.set([])
+def bind_coverage(held: Sequence[str] = ()) -> contextvars.Token:
+    """Open a coverage channel for one run, holding what it already said -> the token that closes it."""
+    return _COVERAGE.set(list(held))
 
 
 def drain_coverage(token: contextvars.Token) -> list[str]:

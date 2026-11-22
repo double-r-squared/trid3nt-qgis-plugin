@@ -13,6 +13,11 @@ from trid3nt.inputs import run_notes
 from seated import value_inputs
 
 
+async def _whole(workflow, state):
+    """The launch whole: its deck written, then solved."""
+    return await workflow.solve(await workflow.prepare(state))
+
+
 def _recipe(bed: str, *, resolution_m: float = 20.0):
     domain = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
     return {"mesher": "om2d", "kind": "unstructured_tri",
@@ -128,7 +133,7 @@ def _run_recipe(monkeypatch, bed: str, friction: float) -> dict:
     with monkeypatch.context() as patch:
         patch.setattr(mesh_step, "build_declared_mesh", _stop)
         with pytest.raises(Exception, match="the recipe is all this test reads"):
-            asyncio.run(workflow.launch(state))
+            asyncio.run(_whole(workflow, state))
     return seen[0]
 
 
