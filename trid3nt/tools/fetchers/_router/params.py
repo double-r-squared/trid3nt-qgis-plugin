@@ -318,6 +318,11 @@ def params_model(spec: SourceSpec) -> type[BaseModel]:
     return model
 
 
-def validated(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
-    asked = _presence(spec, raw)
+def validated(spec: SourceSpec, raw: dict[str, Any], *, partial: bool = False) -> dict[str, Any]:
+    if partial:
+        unknown = set(raw) - spec.params.keys()
+        if unknown:
+            raise router_input_error(spec.error_code_prefix, f"Undeclared parameters: {len(unknown)}.",
+                                     spec.input_error_suffix)
+    asked = raw if partial else _presence(spec, raw)
     return params_model(spec)(**asked).model_dump(exclude_none=True)

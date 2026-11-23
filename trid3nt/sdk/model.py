@@ -12,17 +12,19 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
 from trid3nt.errors import DeclarationError
-from trid3nt.inputs.coverage import Coverage, Shortfall, strictness
+from trid3nt.inputs.coverage import Coverage, Shortfall, Step, strictness
 from trid3nt.inputs.review import unattended
+from trid3nt.inputs.slots import BED
 from trid3nt.render.emission import bind_turn_case
 from trid3nt.workflows.runtime.data import refuse_wrong_shape
 from trid3nt.workflows.runtime.errors import said
-from trid3nt.workflows.runtime.fill import Fill, Verdict
+from trid3nt.workflows.runtime.fill import Fill, SourceRequest, Verdict
 from trid3nt.workflows.runtime.sheet import Keyword
 from trid3nt.workflows.runtime.workflow import Deck
 
@@ -63,6 +65,8 @@ class Form:
     checked: bool = False
     coverage: Mapping[str, Coverage] = field(default_factory=dict)
     warnings: tuple[Shortfall | TemplateDrift, ...] = ()
+    choices: Mapping[str, tuple[SourceRequest, ...]] = field(default_factory=dict)
+    steps: Mapping[str, tuple[Step, ...]] = field(default_factory=dict)
 
     def __getitem__(self, name: str) -> Verdict:
         return self.verdicts[name]
@@ -234,8 +238,8 @@ class Model:
             value, taken = self._case.take(value)
         if isinstance(held, Keyword) or not held.is_row:
             held.accept(value)
-        elif not (isinstance(value, Mapping) and "source" in value):
-            refuse_wrong_shape(held, value)
+        else:
+            value = _checked_row(held, value)
         held_in[key] = value
         if taken is not None:
             self._taken[key] = taken
@@ -444,7 +448,10 @@ def _form(state: Fill, staged: Staged | None = None, refusal: tuple[str, str] | 
                 refusal=None if ready else (refusal or state.refusal()),
                 notes=(*state.notes, *state.said[0], *state.moved),
                 deck=staged, checked=staged is not None, coverage=coverage,
-                warnings=warnings + ((warning,) if warning is not None else ()))
+                warnings=warnings + ((warning,) if warning is not None else ()),
+                choices={name: tuple(choices) for name, choices in
+                         (state.env.choices or {}).items()} if state.env is not None else {},
+                steps=dict(state.steps))
 
 
 def _staged(root: Path, deck: Deck | None) -> Staged | None:
@@ -464,6 +471,25 @@ def _record(case: str, named: Mapping[str, str]) -> dict[str, Any]:
     return next((record for record in reversed(read_records())
                  if record.get("case") == case and record.get("model") == named["name"]
                  and record.get("version") == named["version"]), {})
+
+
+def _checked_row(row: Any, value: Any) -> Any:
+    if isinstance(value, Mapping) and "source" in value:
+        from trid3nt.tools.fetchers._router.registration import get_spec
+        from trid3nt.tools.fetchers._router.router import validate_options
+
+        name = value["source"]
+        spec = get_spec(name) if isinstance(name, str) else None
+        if spec is None:
+            raise DeclarationError("The named source is unregistered.", error_code="DATA_NEED_UNMATCHED")
+        options = {key: item for key, item in value.items() if key not in {"source", "purpose", "visualize"}}
+        if options:
+            validate_options(spec, options)
+        return deepcopy(dict(value))
+    if row.slot is BED and isinstance(value, (list, tuple)):
+        return [_checked_row(row, item) for item in value]
+    refuse_wrong_shape(row, value)
+    return value
 
 
 def _outside(value: str) -> bool:

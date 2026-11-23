@@ -169,6 +169,37 @@ is fetched. A source the model names (`{"source": name}`) is called; one that he
 naming the rest. The harness registers the walk at import - an unstated input takes the top survivor, and the
 next where that held nothing - so a chat run picks as it always has.
 
+## Generating a case script
+
+The harness entry point is `trid3nt_harness.codegen.generate(template, values, form, case_dir=...)`,
+where `form` comes from a strict SDK fill with the harness loaded.
+`Script` carries `text`, `path`, `checked`, and a typed `refusal`.
+The generator supports called templates with a checked staged deck. Each
+recorded input needs an SDK declaration. A runtime companion that has no
+Model input returns the SDK's refusal before a script is published.
+
+A matched source is written as `m.<input> = {"source": name, **options}`.
+The SDK checks explicit options with the registered row's validator at
+assignment and applies them to the issued request. The slot supplies omitted
+request arguments. A bare `{"source": name}` still uses the slot's full request.
+`Form.choices` records the successful requests per input in order, including the
+source, its rank among the eligible rows the matcher exposed, candidate count,
+and the request options. An ordered bed walk becomes a list of source
+declarations. `Form.steps` carries the coverage overrides the run stated.
+The generator renders those overrides, including accepts, and uses the template's
+declared defaults for the remaining steps.
+
+The generator checks assignments through a fresh Model. It then runs the
+candidate file's fill in a fresh interpreter with the harness and server
+unavailable and compares its staged deck hash to the reviewed deck. A typed
+refusal or deck mismatch leaves no new script. An existing different script
+is preserved.
+
+The generated `case.py` uses jupytext percent cells, imports `trid3nt`, and
+runs with `python case.py` from its case directory. The main guard keeps
+the fill and solve out of the forkserver child. Each run reads the case's
+pinned data.
+
 ## The stance
 
 A model is held `unattended` (`trid3nt/inputs/review.py`): every gate proceeds with its inputs labeled, nothing
@@ -215,7 +246,7 @@ refuses where it is read (law 9): a river reach nobody states refuses `REACH_LEN
 
 ## Out of scope here
 
-Rendering a shortfall's remedies as script lines (the generator); a fit of the domain to measured water
-(`fit_reach`) and a channel-aligned interpolation, neither in the tree; the generator; studies;
+Chat dispatch through the generated script; generation for copies and extensions; a fit of the domain to measured water
+(`fit_reach`) and a channel-aligned interpolation, neither in the tree; studies;
 remote execution; a case's own document store (a finished run of an SDK case is not offered as a run input) - each
 a later leg of the SDK plan.

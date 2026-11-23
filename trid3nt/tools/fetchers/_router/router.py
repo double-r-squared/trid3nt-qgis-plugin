@@ -178,6 +178,11 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def validate_options(spec: SourceSpec, raw: dict[str, Any]) -> None:
+    """Check explicit options while the slot still owes the request's inferred arguments."""
+    _apply_gates(spec, validated(spec, raw, partial=True))
+
+
 def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
     g = spec.gates
     bbox = None

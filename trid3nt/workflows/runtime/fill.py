@@ -135,6 +135,8 @@ class _Env:
     picks: dict[str, str] = field(default_factory=dict)
     #: The source the match took for a row, by row name.
     sources: dict[str, str] = field(default_factory=dict)
+    source_options: dict[str, dict[str, Any]] = field(default_factory=dict)
+    choices: dict[str, list[SourceRequest]] | None = None
     #: THE RUN'S ONE MAPPING: stated values, fetched rows, what each stage produced
     #: and the keywords so far, by plain name.
     run: dict[str, Any] = field(default_factory=dict)
@@ -381,13 +383,14 @@ async def _bed_list(env: _Env, decl: Input, listed: list[Any]) -> list[Any]:
             _validate_supplied(env, decl, item)
             laid.append(item)
             continue
-        laid.append(await _named_surface(env, decl, rank, str(item["source"])))
+        laid.append(await _named_surface(env, decl, rank, item))
     return laid
 
 
-async def _named_surface(env: _Env, decl: Input, rank: int, named: str) -> Any:
+async def _named_surface(env: _Env, decl: Input, rank: int, item: Mapping[str, Any]) -> Any:
     """The surface the NAMED source holds for this bed, matched on the bed class it serves; one serving none
     of them, or holding nothing here, refuses rather than another source taking its place in the order."""
+    named = str(item["source"])
     served = next((c for c in (decl.data_class, *sorted(BED.classes))
                    if c and _fetcher_row(named, c) is not None), "")
     if not served:
@@ -396,8 +399,8 @@ async def _named_surface(env: _Env, decl: Input, rank: int, named: str) -> Any:
             f"({', '.join(sorted(BED.classes))}).", error_code="DATA_NEED_UNMATCHED",
             step=_data_step_label(decl.name))
     row = dataclasses.replace(decl, name=f"{decl.name}_{rank}", data_class=served)
-    env.picks[row.name] = named
-    choice, top = await _probe(env, row, served, f"{row.name} {served}")
+    _stated(env, row, item)
+    choice, top = await _probe(env, row, served, f"{row.name} {served}", input_name=decl.name)
     if top is None or choice.picked != named:
         raise StepFailedError(
             f"surface {rank} of the {decl.name!r} names {named!r}, and it holds nothing here: "
@@ -489,7 +492,8 @@ async def _ranked(env: _Env, decl: Input, data_class: str,
 
 
 async def _probe(env: _Env, decl: Input, data_class: str, label: str, *,
-                 read: Any = None, skip: Sequence[str] = ()) -> tuple[SourceChoice, Any]:
+                 read: Any = None, skip: Sequence[str] = (),
+                 input_name: str | None = None) -> tuple[SourceChoice, Any]:
     """Match a class, then CALL the survivors in rank order -> the first answer.
 
     A source holding nothing over this domain is dropped and the next takes its turn;
@@ -499,14 +503,18 @@ async def _probe(env: _Env, decl: Input, data_class: str, label: str, *,
     named = _pick(env, decl, data_class)
     choice = match(await _need(env, decl, data_class, label),
                    sources_with_coverage())
+    ranked = ()
+    if env.choices is not None:
+        ranked = tuple(dict.fromkeys(row.fetcher for row in choice.rows if not row.excluded))
     for laid in skip:
         choice = dropped_from(choice, laid, "already laid")
     if skip and not choice.picked:
         return choice, None
     while _takes(choice, named):
-        row = _runtime_row(env, f"{label.replace(' ', '_')}_{choice.picked}",
-                           choice.picked,
-                           await _ask_for(env, choice, decl))
+        ask = await _ask_for(env, choice, decl)
+        if choice.picked == named:
+            ask.update(env.source_options.get(decl.name, {}))
+        row = _runtime_row(env, f"{label.replace(' ', '_')}_{choice.picked}", choice.picked, ask)
         try:
             value = await _produce(env, row)
             if read is not None:
@@ -524,6 +532,9 @@ async def _probe(env: _Env, decl: Input, data_class: str, label: str, *,
         slot_choice(choice)
         journal_note(choice.sentence)
         env.sources[decl.name] = choice.picked
+        if env.choices is not None:
+            trace = env.choices.setdefault(input_name or decl.name, [])
+            trace.append(SourceRequest(choice.picked, ranked.index(choice.picked) + 1, len(ranked), dict(ask)))
         return choice, value
     if choice.picked:
         raise _unstated(decl.name, named if named and named != choice.picked else "")
@@ -1238,6 +1249,16 @@ _WAITS = "FILL_NOT_READY"
 
 
 @dataclass(frozen=True)
+class SourceRequest:
+    """A chosen fetcher, its place among eligible sources, and the options passed to it."""
+
+    source: str
+    rank: int
+    candidate_count: int
+    options: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
 class Verdict:
     """One input's answer on arrival: its state, the value taken and where it
     came from, or the reason it was refused and what would be taken instead."""
@@ -1560,7 +1581,8 @@ def production(state: Fill) -> _Env:
             workflow=wf.name,
             window_s=wf.run_window_s(state.keywords), moment=wf.moment,
             slot_units=wf.slot_units(), captions=wf.captions,
-            lays_own_bed=wf.lays_own_bed, steps=dict(state.steps))
+            lays_own_bed=wf.lays_own_bed, steps=dict(state.steps),
+            choices={} if state.model is not None else None)
     state.env.run.update({row.name: getattr(state.inputs.get(row.name), "value", None)
                           for row in wf.inputs if not row.is_row})
     # A unit the run states is published under it, so the table is read off the values just seated.
@@ -1575,6 +1597,8 @@ def _stated(env: _Env, decl: Input, value: Any) -> None:
                                    else _handed(item) for item in value]
     elif isinstance(value, Mapping) and "source" in value:
         env.picks[decl.name] = str(value["source"])
+        if env.choices is not None:
+            env.source_options[decl.name] = {k: v for k, v in value.items() if k != "source"}
     elif value is not None:
         env.supplied[decl.name] = _handed(value)
 
