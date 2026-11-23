@@ -20,4 +20,4 @@ through the send the daemon registers on the confirm engine.
 | `inputs/` | `gate/`: where a turn waits on a person - the input review, the draw and spatial input, the confirm, the pending registry and the cards. |
 | `model/` | The model connection: provider adapters and the guards over a model turn. |
 | `tools/` | Tool surfacing: retrieval, the search tools, the kwargs cleanup at the dispatch seam. |
-| `codegen/` | Render the choices from a filled SDK model into a checked standalone case script. |
+| `codegen/` | Render a reviewed Form as a standalone case script. SDK generation checks deck parity; chat uses the same assignment checks without filling again. |

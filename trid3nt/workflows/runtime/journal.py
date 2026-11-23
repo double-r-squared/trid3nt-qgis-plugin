@@ -150,7 +150,8 @@ def build_record(*, run_id: str | None, engine: str | None,
                  settings: Mapping[str, Mapping[str, Any]] = {},
                  stopped: str | None = None,
                  check_steps: int | None = None,
-                 study: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                 study: Mapping[str, Any] | None = None,
+                 case_script: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """One run record, from what the publish stage already holds.
     ``stopped`` is the sentence of a run the user stopped, whose outputs are partial; none on a run that ended.
     ``check_steps`` is the step count a check run stopped its solve at; none on a full-length run.
@@ -164,6 +165,7 @@ def build_record(*, run_id: str | None, engine: str | None,
         "engine": engine,
         "module": module,
         "template": template,
+        **({"case_script": dict(case_script)} if case_script is not None else {}),
         **({"template_path": template_path, "template_sha256": template_sha256,
             "template_upstream_sha256": template_upstream_sha256} if template_path is not None else {}),
         "case": case,

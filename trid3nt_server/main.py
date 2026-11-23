@@ -150,8 +150,11 @@ def run(argv: list[str] | None = None) -> int:
         logger.info("--startup-only: tool registry verified; exiting without serving")
         return 0
 
+    from trid3nt.workflows.runtime.script import register
+    from .server.dispatch.case_script import host
     from .server.protocol.loop import run_server
 
+    register(host)
     try:
         asyncio.run(run_server())
     except KeyboardInterrupt:

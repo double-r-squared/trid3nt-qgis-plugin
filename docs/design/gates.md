@@ -27,6 +27,10 @@ callbacks and nothing else:
 - `blocked` - what keeps a proceed from launching, in words; a proceed while it
   answers anything launches nothing and the card is drawn again.
 
+The workflow projects its current verdicts, source choices, and coverage into
+the SDK Form for the card render. The existing renderer orders and labels
+those rows. Accepted card edits also feed the run's script declarations.
+
 The mode is the person's alone: the boolean `AUTO` setting (off by default: the run pauses for a person; on: the system proceeds without one),
 changed at user level in Settings. No call carries it and no run states it: a call naming
 `input_mode` refuses as an unknown argument, and a `settings: AUTO` statement on a run

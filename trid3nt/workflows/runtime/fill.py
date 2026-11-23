@@ -135,7 +135,7 @@ class _Env:
     picks: dict[str, str] = field(default_factory=dict)
     #: The source the match took for a row, by row name.
     sources: dict[str, str] = field(default_factory=dict)
-    source_options: dict[str, dict[str, Any]] = field(default_factory=dict)
+    source_options: dict[str, dict[str, Any]] | None = None
     choices: dict[str, list[SourceRequest]] | None = None
     #: THE RUN'S ONE MAPPING: stated values, fetched rows, what each stage produced
     #: and the keywords so far, by plain name.
@@ -220,6 +220,10 @@ async def _produce(env: _Env, decl: Input) -> Any:
         drawn = await ask_on_canvas(decl.slot, geometry=decl.geometry or "",
                                     tool=env.workflow, param=decl.name)
         if drawn is not None:
+            from .script import current
+
+            if (capture := current()) is not None:
+                capture.params[decl.name] = drawn
             return drawn
     if producer is None:
         # A producer-less slot: nothing was handed in, and naming a default
@@ -293,6 +297,11 @@ async def _beside(env: _Env, decl: Input) -> dict[str, Any]:
                 error_code="DATA_NEED_UNMATCHED",
                 step=_data_step_label(aside.name))
         held[name] = value
+        if name == "banks":
+            from .script import current
+
+            if (capture := current()) is not None:
+                capture.banks = value
     return held
 
 
@@ -328,6 +337,10 @@ async def _kind_of_the_water_under(env: _Env, decl: Input) -> Input:
             break
     if not kind:
         return decl
+    from .script import current
+
+    if (capture := current()) is not None:
+        capture.seeds[str(decl.coercion["near"])] = kind
     journal_note(f"{decl.name}: the point it is found from stands in a river's own mapped water (NHD "
                  "StreamRiver), so the domain is the reach walked downstream from it." if kind == "flowline" else
                  f"{decl.name}: the point it is found from stands in a lake or reservoir NHD maps (LakePond or "
@@ -371,6 +384,10 @@ async def _reach_length_asked(env: _Env, decl: Input) -> None:
                               error_code="REACH_LENGTH_UNSTATED", step=_data_step_label(decl.name))
     env.run[REACH_LENGTH.name] = km
     env.inputs[REACH_LENGTH.name] = Verdict(ACCEPTED, km, origin=Origin.USER)
+    from .script import current
+
+    if (capture := current()) is not None:
+        capture.params[REACH_LENGTH.name] = km
     journal_note(f"{decl.name}: the river reach is {km:g} km, as answered on the review card.")
 
 
@@ -512,7 +529,7 @@ async def _probe(env: _Env, decl: Input, data_class: str, label: str, *,
         return choice, None
     while _takes(choice, named):
         ask = await _ask_for(env, choice, decl)
-        if choice.picked == named:
+        if choice.picked == named and env.source_options is not None:
             ask.update(env.source_options.get(decl.name, {}))
         row = _runtime_row(env, f"{label.replace(' ', '_')}_{choice.picked}", choice.picked, ask)
         try:
@@ -1573,6 +1590,8 @@ async def _answer(state: Fill, name: str, held: Any, value: Any) -> None:
 
 def production(state: Fill) -> _Env:
     """The state a sourced input is produced under, built once per fill; it reads every value the fill has seated."""
+    from .script import current
+
     wf = state.workflow
     if state.env is None:
         state.env = _Env(
@@ -1582,7 +1601,8 @@ def production(state: Fill) -> _Env:
             window_s=wf.run_window_s(state.keywords), moment=wf.moment,
             slot_units=wf.slot_units(), captions=wf.captions,
             lays_own_bed=wf.lays_own_bed, steps=dict(state.steps),
-            choices={} if state.model is not None else None)
+            source_options={} if state.model is not None else None,
+            choices={} if state.model is not None or current() is not None else None)
     state.env.run.update({row.name: getattr(state.inputs.get(row.name), "value", None)
                           for row in wf.inputs if not row.is_row})
     # A unit the run states is published under it, so the table is read off the values just seated.
@@ -1597,7 +1617,7 @@ def _stated(env: _Env, decl: Input, value: Any) -> None:
                                    else _handed(item) for item in value]
     elif isinstance(value, Mapping) and "source" in value:
         env.picks[decl.name] = str(value["source"])
-        if env.choices is not None:
+        if env.source_options is not None:
             env.source_options[decl.name] = {k: v for k, v in value.items() if k != "source"}
     elif value is not None:
         env.supplied[decl.name] = _handed(value)

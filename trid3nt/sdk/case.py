@@ -309,6 +309,7 @@ class Case:
                         f"{path} in this case is not the file pinned there: its sha256 differs from {digest}.")
             entry["uri"] = relative
         lock.data.pop("served", None)
+        lock.data.pop("remote_files", None)
         lock.save()
         self.lock = lock
         return self.root

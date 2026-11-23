@@ -200,6 +200,31 @@ runs with `python case.py` from its case directory. The main guard keeps
 the fill and solve out of the forkserver child. Each run reads the case's
 pinned data.
 
+## Scripts from chat
+
+When the final review proceeds, the daemon captures its accepted edits and
+source requests. Once the workflow stages its deck, and before it solves, the
+daemon passes those declarations through the generator's SDK assignment
+checks. It records `CODEGEN_LINE_CHECKED` with `checked=False`. The daemon solves
+the deck it already staged. A refusal is recorded in the run journal and the
+solve proceeds without a script.
+
+The first pair is kept at `$TRID3NT_HOME/cases/<case_id>/case.py` and
+`trid3nt.lock`, with a lock snapshot under `versions/`. Every generated pair
+is also kept under `runs/<run_id>/` in the case and at the same run prefix in
+the runs bucket. Later runs preserve the case's editable pair. The lock pins
+the bytes served to the original run. Running the script calls `c.pack()` to
+download and verify those pins before filling and solving locally.
+
+For a point-seeded domain the script keeps the original point and declares the
+resolved river or waterbody type with its existing `place_type` field. Handed
+banks are pinned through the existing `banks` input. A PEST++ calibration has
+no staged deck at this seam and records `CODEGEN_DECK_MISSING`.
+
+In QGIS, right-click an output layer and choose **Download run script** to
+copy the pair into a new directory named for the run. The action uses the
+existing signed object download.
+
 ## The stance
 
 A model is held `unattended` (`trid3nt/inputs/review.py`): every gate proceeds with its inputs labeled, nothing

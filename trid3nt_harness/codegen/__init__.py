@@ -18,7 +18,7 @@ from trid3nt.errors import DeclarationError
 from trid3nt.sdk import Form, Model
 from trid3nt.workflows.runtime.fill import SourceRequest
 
-__all__ = ["Script", "generate"]
+__all__ = ["Script", "check_lines", "generate"]
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,8 @@ class Script:
     path: Path | None = None
     checked: bool = False
     refusal: tuple[str, str] | None = None
+    check_code: str | None = None
+    model_version: str | None = None
 
 
 _VERIFY = """\
@@ -58,16 +60,15 @@ if __name__ == "__main__":
 """
 
 
-def generate(template: str, values: Mapping[str, Any], form: Form, *, case_dir: str | os.PathLike[str]) -> Script:
-    """Publish a strict called-template case after the generated file reproduces the reviewed deck.
-
-    The case directory supplies the locked inputs for both fills and is the working directory when running the script.
-    """
+def check_lines(template: str, values: Mapping[str, Any], form: Form, *,
+                case_dir: str | os.PathLike[str], served: bool = False) -> Script:
+    """Check the generated statements through a fresh SDK Model and return an unpublished draft."""
     c = case(case_dir, strict=True)
     if template not in c.templates():
         return _refused("CODEGEN_TEMPLATE_UNREGISTERED", "Select a registered template.")
     try:
-        text = _render(template, getattr(c, template)(), values, form)
+        model = getattr(c, template)()
+        text = _render(template, model, values, form, served=served)
     except Exception as error:
         if getattr(error, "error_code", None) is None:
             raise
@@ -75,8 +76,21 @@ def generate(template: str, values: Mapping[str, Any], form: Form, *, case_dir: 
     if not form.ready or not form.checked or form.deck is None:
         code = form.refusal[0] if form.refusal else "CODEGEN_DECK_MISSING"
         return _refused(code, "Generation requires a ready, checked deck.")
-    target = c.root / "case.py"
-    with TemporaryDirectory(dir=c.root, prefix=".codegen-") as tmp:
+    return Script(text=text, check_code="CODEGEN_LINE_CHECKED", model_version=model.version)
+
+
+def generate(template: str, values: Mapping[str, Any], form: Form, *, case_dir: str | os.PathLike[str]) -> Script:
+    """Publish a strict called-template case after the generated file reproduces the reviewed deck.
+
+    The case directory supplies the locked inputs for both fills and is the working directory when running the script.
+    """
+    draft = check_lines(template, values, form, case_dir=case_dir)
+    if draft.refusal is not None:
+        return draft
+    text = draft.text
+    root = Path(case_dir).expanduser().resolve()
+    target = root / "case.py"
+    with TemporaryDirectory(dir=root, prefix=".codegen-") as tmp:
         candidate = Path(tmp) / target.name
         candidate.write_text(text, encoding="utf-8")
         digest, code = _check(candidate)
@@ -108,8 +122,11 @@ def _check(path: Path) -> tuple[str | None, str | None]:
     return digest, refusal[0] if refusal else None
 
 
-def _render(template: str, model: Model, values: Mapping[str, Any], form: Form) -> str:
-    lines = ["# %% Case", "import trid3nt", "", 'c = trid3nt.case(".", strict=True)', f"m = c.{template}()"]
+def _render(template: str, model: Model, values: Mapping[str, Any], form: Form, *, served: bool = False) -> str:
+    lines = ["# %% Case", "import trid3nt", "", 'c = trid3nt.case(".", strict=True)']
+    if served:
+        lines.append("c.pack()")
+    lines.append(f"m = c.{template}()")
     inputs = dict(values)
     keywords = inputs.pop("keywords", {}) or {}
     picks = inputs.pop("picks", {}) or {}

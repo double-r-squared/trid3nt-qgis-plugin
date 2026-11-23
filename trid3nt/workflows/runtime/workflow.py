@@ -396,6 +396,12 @@ class Workflow:
 
     async def run(self, wire: Mapping[str, Any]) -> Any:
         """The absorbed tool body: fill every input, then launch when READY."""
+        from .script import capture
+
+        with capture(wire):
+            return await self._run(wire)
+
+    async def _run(self, wire: Mapping[str, Any]) -> Any:
         try:
             state = await self.filled(wire)
         except asyncio.CancelledError:
@@ -439,7 +445,11 @@ class Workflow:
 
     async def _launched(self, state: Fill) -> RunResult:
         """The whole launch: the deck written, then solved."""
-        return await self._solved(await self.prepared(state))
+        from .script import archive
+
+        deck = await self.prepared(state)
+        await archive(deck)
+        return await self._solved(deck)
 
     async def prepared(self, state: Fill) -> Deck:
         """A READY fill launched up to its written, checked deck, under the run's own domain and collectors -> the deck,
@@ -631,8 +641,12 @@ class Workflow:
         from trid3nt.inputs.coverage import is_strict
         from trid3nt.render.emission import current_emitter, current_turn_case
 
+        from .script import current
+
+        script = current()
         journal.append_record(journal.build_record(
             run_id=run_id, engine=self.recorded_engine(run), template=self.name,
+            case_script=script.receipt if script is not None else None,
             case=current_turn_case(), model=(model or {}).get("name"), version=(model or {}).get("version"),
             strict=is_strict(),
             template_path=(model or {}).get("template_path"), template_sha256=(model or {}).get("template_sha256"),

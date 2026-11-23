@@ -115,8 +115,17 @@ class Lock:
         return self._thawed(entry)
 
     def _pinned(self, source: str, request: Mapping[str, Any], value: Any) -> dict[str, Any]:
+        return self._store_value(source, request, value, self._took)
+
+    def hold_served(self, source: str, request: Mapping[str, Any], value: Any) -> None:
+        """Keep a fetch's envelope with content-addressed references to its original objects."""
+        self.data["fetched"][request_key(source, request)] = self._store_value(
+            source, request, value, self._pointed, all_s3=True)
+
+    def _store_value(self, source: str, request: Mapping[str, Any], value: Any,
+                     took: Callable[[str, dict[str, str]], str], *, all_s3: bool = False) -> dict[str, Any]:
         files: dict[str, str] = {}
-        frozen = _freeze(value, lambda uri: self._took(uri, files))
+        frozen = _freeze(value, lambda uri: took(uri, files), all_s3=all_s3)
         body = canonical(frozen)
         digest = hashlib.sha256(body).hexdigest()
         target = self.root / "data" / f"{digest}.json"
@@ -142,6 +151,21 @@ class Lock:
         files[f"data/{name}"] = digest
         return f"s3://data/{name}"
 
+    def reference(self, uri: str) -> tuple[str, str]:
+        """Return the case key and SHA-256 of an existing served object."""
+        for path, remote in self.data.get("remote_files", {}).items():
+            if remote == uri:
+                return path, Path(path).stem
+        digest = served_digest(uri)
+        path = f"data/{digest}{_suffix(uri)}"
+        self.data.setdefault("remote_files", {})[path] = uri
+        return path, digest
+
+    def _pointed(self, uri: str, files: dict[str, str]) -> str:
+        path, digest = self.reference(uri)
+        files[path] = digest
+        return f"s3://{path}"
+
     def _replayed(self, entry: Mapping[str, Any], fetch: Callable[[], Any]) -> Any:
         pinned = {self.relative(entry["uri"]): entry["sha256"], **dict(entry.get("files") or {})}
         gone = [path for path in pinned if not (self.root / path).is_file()]
@@ -161,14 +185,21 @@ class Lock:
 
     def _served(self, path: str, digest: str) -> None:
         """Bring one pinned file from the served store into this directory, checked against its sha256."""
-        bucket, _, prefix = str(self.data["served"])[len("s3://"):].partition("/")
-        key = f"{prefix.rstrip('/')}/{path}" if prefix else path
-        target = self.root / path
+        uri = self.data.get("remote_files", {}).get(path)
+        if uri is None:
+            prefix = self.data["served"].rstrip("/")
+            uri = f"{prefix}/{path}"
+        _, bucket, key = storage.split_object_uri(uri)
+        section, _, name = path.partition("/")
+        target = storage.FileStore(self.root).path(section, name)
         part = target.with_name(f".{target.name}.part")
         target.parent.mkdir(parents=True, exist_ok=True)
-        storage.served_client().download_file(bucket, key, str(part))
-        _check(part, digest)
-        part.replace(target)
+        try:
+            storage.served_client().download_file(bucket, key, str(part))
+            _check(part, digest)
+            part.replace(target)
+        finally:
+            part.unlink(missing_ok=True)
 
     def _thawed(self, entry: Mapping[str, Any]) -> Any:
         path = self.local(entry["uri"])
@@ -188,24 +219,34 @@ def _check(path: Path, digest: str) -> None:
             f"pinned {digest}. Restore the file, or delete its entry from the lock to fetch it again.")
 
 
+def served_digest(uri: str) -> str:
+    """Hash the served bytes without making a second retained copy."""
+    _, bucket, key = storage.split_object_uri(uri)
+    digest = hashlib.sha256()
+    with storage.client().get_object(Bucket=bucket, Key=key)["Body"] as body:
+        for chunk in iter(lambda: body.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _suffix(key: str) -> str:
     suffix = Path(key).suffix.lower()
     return suffix if suffix[1:].isalnum() else ""
 
 
-def _freeze(value: Any, took: Callable[[str], str]) -> Any:
+def _freeze(value: Any, took: Callable[[str], str], *, all_s3: bool = False) -> Any:
     if isinstance(value, str):
-        return took(value) if value.startswith(_CASE_URI) else value
+        return took(value) if value.startswith("s3://" if all_s3 else _CASE_URI) else value
     if value is None or isinstance(value, (bool, int, float)):
         return value
     dump = getattr(value, "model_dump", None)
     if callable(dump):
         kind = type(value)
-        return {"$model": f"{kind.__module__}:{kind.__qualname__}", "fields": _freeze(dump(mode="json"), took)}
+        return {"$model": f"{kind.__module__}:{kind.__qualname__}", "fields": _freeze(dump(mode="json"), took, all_s3=all_s3)}
     if isinstance(value, Mapping):
-        return {str(key): _freeze(item, took) for key, item in value.items()}
+        return {str(key): _freeze(item, took, all_s3=all_s3) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
-        return [_freeze(item, took) for item in value]
+        return [_freeze(item, took, all_s3=all_s3) for item in value]
     raise _Unpinnable(type(value).__name__)
 
 

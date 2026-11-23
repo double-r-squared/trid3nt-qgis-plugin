@@ -29,7 +29,7 @@ from qgis.PyQt.QtCore import QDateTime, Qt
 
 from . import formatting
 from ..plugin_settings import PluginSettings
-from ..net.trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_vsis3
+from ..net.trid3nt_client import LayerEvent, qgis_xyz_uri, run_script_objects, s3_to_vsis3
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -722,6 +722,34 @@ class LayerMaterializer:
         except Exception:  # noqa: BLE001 -- honest None, caller notes the skip
             return None
         return dest
+
+    def download_run_script(self, uri: str, directory: str) -> str | None:
+        """Copy a run's script and lock from the signed store into a new directory."""
+        from pathlib import Path
+        from shutil import copyfile
+
+        located = run_script_objects(uri)
+        if located is None:
+            return None
+        run_id, script, lock = located
+        staged = [self._stage_s3_to_session(source, f"{run_id}-{name}")
+                  for source, name in ((script, "case.py"), (lock, "trid3nt.lock"))]
+        if any(path is None for path in staged):
+            return None
+        target = Path(directory) / run_id
+        target.mkdir(exist_ok=False)
+        copied = []
+        try:
+            for path, name in zip(staged, ("case.py", "trid3nt.lock"), strict=True):
+                destination = target / name
+                copied.append(destination)
+                copyfile(path, destination)
+        except OSError:
+            for path in copied:
+                path.unlink(missing_ok=True)
+            target.rmdir()
+            raise
+        return str(target)
 
     def _add_mesh(self, event: LayerEvent) -> str:
         """Native MDAL mesh, the one STAGED format: the provider demands a local path."""

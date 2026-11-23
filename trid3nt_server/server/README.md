@@ -18,7 +18,7 @@ where its results go.
 
 | subfolder | what lives there |
 | --- | --- |
-| `dispatch/` | One tool call end to end: the AOI it runs over, the emitter it publishes through, how its results are summarized, persisted and reused. |
+| `dispatch/` | One tool call end to end: AOI, emission, result summaries and persistence. `case_script.py` keeps the reviewed case script and served input pins between deck staging and the solve. |
 | `protocol/` | The wire: authentication, the connection registry, the message handlers, the HTTP door (the library and the data routes) and the accept loop. |
 | `session/` | What one connection holds - the case it is on, its persistence handle, its mutable state. |
 | `turn/` | The turn engine: the model stream, its compaction card, the wire envelopes it produces, and the case bookkeeping around it. |

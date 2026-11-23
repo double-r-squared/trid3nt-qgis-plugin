@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts.common import Origin, SyntheticInput
 from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
@@ -22,17 +22,20 @@ from .sheet import fill as fill_slots
 
 __all__ = ["ask_unstated", "card_rows", "fill_sheet"]
 
+if TYPE_CHECKING:
+    from trid3nt.sdk.model import Form
+
 logger = logging.getLogger(__name__)
 
 
-def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
+def card_rows(sheet: Sheet, form: Form | None = None) -> list[ParamSheetRow]:
     """The sheet as the card renders it: what is SET, what the run WRITES, what
     is OPEN, then the rest.
 
     The rest is the whole module, folded under advanced with its engine default."""
-    rows = _source_rows() + _coverage_rows() + [_slot_row(name, row)
-                                               for name, row
-                                               in sheet.filled.items()]
+    form = form if form is not None else _card_form(sheet)
+    rows = _source_rows(form.review_choices) + _coverage_rows(form.review_coverage)
+    rows += [_slot_row(name, row, form.verdicts[name].value) for name, row in sheet.filled.items()]
     engine, generated = sheet.engine_rows()
     rows += engine
     rows += [_open_row(slot) for slot in sheet.required()]
@@ -45,12 +48,13 @@ def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
                    sorted(rest, key=lambda slot: _group(slot))]
 
 
-def _source_rows() -> list[ParamSheetRow]:
+def _source_rows(choices: Sequence[Any] | None = None) -> list[ParamSheetRow]:
     """One row per input the match filled: the ranked list, pick highlighted.
     The card renders the list the model was given. Not editable: a source is superseded by supplying the slot."""
-    from trid3nt.workflows.runtime.journal import run_choices
+    if choices is None:
+        from .journal import run_choices
 
-    choices = run_choices()
+        choices = run_choices()
     walked = {slot: sum(c.slot == slot for c in choices) for slot in {c.slot for c in choices}}
     seen: dict[str, int] = {}
     rows = []
@@ -72,17 +76,36 @@ def _source_rows() -> list[ParamSheetRow]:
     return rows
 
 
-def _coverage_rows() -> list[ParamSheetRow]:
+def _coverage_rows(lines: Sequence[str] | None = None) -> list[ParamSheetRow]:
     """WHAT THE CUT COVERS, over the water and over the land, one row each.
     On the card so the unmeasured share is weighed BEFORE the solve. Not editable: an op or supplying the slot changes it."""
-    from trid3nt.inputs.run_notes import run_coverage
+    if lines is None:
+        from trid3nt.inputs.run_notes import run_coverage
 
+        lines = run_coverage()
     return [ParamSheetRow(
         name=f"coverage {index}", value=line[:200], desc=line[:512],
         origin=Origin.DERIVED, editable=False,
         source_badge="measured on the grid the rows were merged at",
         group="Sources")
-        for index, line in enumerate(run_coverage(), start=1)]
+        for index, line in enumerate(lines, start=1)]
+
+
+def _card_form(sheet: Sheet, values: Mapping[str, Any] | None = None,
+               user: set[str] | None = None) -> Form:
+    from trid3nt.inputs.run_notes import run_coverage
+    from trid3nt.sdk.model import Form
+
+    from .fill import ACCEPTED, Verdict
+    from .journal import run_choices
+
+    verdicts = {name: Verdict(ACCEPTED, row.value, origin=row.provenance.origin)
+                for name, row in sheet.filled.items()}
+    if values is not None:
+        verdicts.update({name: Verdict(ACCEPTED, value, origin=(
+            Origin.USER if name in (user or ()) else None if value is None else Origin.TEMPLATE))
+                         for name, value in values.items()})
+    return Form(verdicts, ready=True, review_choices=tuple(run_choices()), review_coverage=tuple(run_coverage()))
 
 
 async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
@@ -101,14 +124,15 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
     )
 
     values, edits, user = dict(params), {}, set(user)
+    revised_params: set[str] = set()
     own = {name for name in _strings(steering.ASSERTED)
            if name in values} - set(spent)
     sheet = await fill(values, edits)
 
     def rows() -> list[ParamSheetRow]:
-        return [_param_row(name, values[name], name in user)
-                for name in sorted(own)] \
-            + card_rows(sheet)
+        entered = _card_form(sheet, {name: values[name] for name in sorted(own)}, user)
+        return [_param_row(name, entered.verdicts[name].value, entered.verdicts[name].origin is Origin.USER)
+                for name in sorted(own)] + card_rows(sheet)
 
     async def card() -> GateCard:
         drawn = rows()
@@ -135,7 +159,8 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
                         f"is named so, and {exc}") from exc
         for name, value in revised.items():
             (values if name in own else edits)[name] = value
-        user.update(own & set(revised))
+        revised_params.update(own & set(revised))
+        user.update(revised_params)
         sheet = await fill(values, edits)
 
     outcome = await gate_input_review(
@@ -149,6 +174,11 @@ async def _review(fill: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
             else "USER_INPUT_CANCELLED")
     if seat is not None:
         seat(values)
+    from .script import current
+
+    if (capture := current()) is not None:
+        capture.params.update({name: values[name] for name in revised_params})
+        capture.keywords.update(edits)
     return sheet
 
 
@@ -215,6 +245,10 @@ async def ask_unstated(*, steering: type, produced: Mapping[str, Any], stated: M
         if name in offers and value == offers[name]:
             continue
         taken[name] = value
+        from .script import current
+
+        if (capture := current()) is not None:
+            capture.keywords[name] = value
         journal_note(f"{slots[name].keyword} = {value:g}, as answered on the review card.")
     return taken
 
@@ -267,11 +301,10 @@ def _param_row(name: str, value: Any, user: bool) -> ParamSheetRow:
         source_badge="this run's template param", group="Template")
 
 
-def _slot_row(name: str, row: Any) -> ParamSheetRow:
+def _slot_row(name: str, row: Any, held: Any) -> ParamSheetRow:
     """One SET slot, as the card renders it: the value, the unit it is read in,
     the range it is taken inside, and where it came from."""
-    value = row.value if isinstance(row.value, (int, float, str, bool, list)) \
-        else str(row.value)
+    value = held if isinstance(held, (int, float, str, bool, list)) else str(held)
     return ParamSheetRow(
         name=name, value=value, desc=row.slot.desc[:512],
         units=row.slot.unit or None, bounds=row.slot.whole_bounds,

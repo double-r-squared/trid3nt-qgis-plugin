@@ -211,6 +211,7 @@ class Trid3ntDock(QDockWidget):
         self._configure_store_access()
         self._push_tree_actions: List = []
         self._register_layer_tree_push_action()
+        self._register_layer_tree_script_action()
 
     def showEvent(self, event) -> None:  # noqa: N802 -- Qt-mandated name
         super().showEvent(event)
@@ -1137,6 +1138,42 @@ class Trid3ntDock(QDockWidget):
             except Exception:  # noqa: BLE001 -- headless/stub iface in tests
                 continue
             self._push_tree_actions.append(action)
+
+    def _register_layer_tree_script_action(self) -> None:
+        for attr in ("VectorLayer", "RasterLayer", "MeshLayer"):
+            layer_type = getattr(QgsMapLayer, attr, None)
+            if layer_type is None:
+                continue
+            action = QAction("Download run script", self)
+            action.triggered.connect(self._download_active_run_script)
+            try:
+                self.iface.addCustomActionForLayerType(action, "", layer_type, True)
+            except Exception:  # noqa: BLE001 - headless interface may have no layer menu
+                continue
+            self._push_tree_actions.append(action)
+
+    def _download_active_run_script(self) -> None:
+        from qgis.PyQt.QtWidgets import QFileDialog
+
+        from ..net.trid3nt_client import run_script_objects
+
+        layer = self.iface.activeLayer()
+        uri = str(layer.customProperty("trid3nt/source_uri") or "") if layer is not None else ""
+        if run_script_objects(uri) is None:
+            QMessageBox.information(self, "Download run script", "Select an output layer from a run.")
+            return
+        directory = QFileDialog.getExistingDirectory(self, "Save run script and lock")
+        if not directory:
+            return
+        try:
+            saved = self.materializer.download_run_script(uri, directory)
+        except OSError:
+            QMessageBox.warning(self, "Download run script", "Could not create a new run folder.")
+            return
+        if saved is None:
+            QMessageBox.information(self, "Download run script", "This run has no available script and lock.")
+            return
+        QMessageBox.information(self, "Download run script", f"Saved script and lock in {saved}.")
 
     def _route_compute_step(self, step: PipelineStep) -> None:
         """A compute pipeline step renders as ONE persistent card keyed by step id, never a

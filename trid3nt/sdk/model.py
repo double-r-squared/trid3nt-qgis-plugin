@@ -67,6 +67,8 @@ class Form:
     warnings: tuple[Shortfall | TemplateDrift, ...] = ()
     choices: Mapping[str, tuple[SourceRequest, ...]] = field(default_factory=dict)
     steps: Mapping[str, tuple[Step, ...]] = field(default_factory=dict)
+    review_choices: tuple[Any, ...] = ()
+    review_coverage: tuple[str, ...] = ()
 
     def __getitem__(self, name: str) -> Verdict:
         return self.verdicts[name]

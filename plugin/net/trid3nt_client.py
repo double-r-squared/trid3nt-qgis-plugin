@@ -953,6 +953,18 @@ def next_backoff(
     return delay, min(base * 2, RECONNECT_MAX_MS)
 
 
+def run_script_objects(uri: str) -> Optional[tuple[str, str, str]]:
+    """Locate the script and lock beside a published run object."""
+    import re
+
+    match = re.fullmatch(r"s3://([^/]+)/([0-7][0-9A-HJKMNP-TV-Z]{25})/[^?#]+", uri)
+    if match is None:
+        return None
+    bucket, run_id = match.groups()
+    root = f"s3://{bucket}/{run_id}"
+    return run_id, f"{root}/case.py", f"{root}/trid3nt.lock"
+
+
 def s3_to_vsis3(uri: str) -> Optional[str]:
     """``s3://bucket/key`` -> the ``/vsis3/bucket/key`` path GDAL reads. The
     endpoint and credentials are GDAL CONFIGURATION, so no host appears here;
