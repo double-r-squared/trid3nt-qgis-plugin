@@ -8,7 +8,7 @@ import math
 import os
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Mapping
@@ -31,6 +31,7 @@ class Script:
     refusal: tuple[str, str] | None = None
     check_code: str | None = None
     model_version: str | None = None
+    configuration: dict[str, Any] | None = None
 
 
 _VERIFY = """\
@@ -76,7 +77,36 @@ def check_lines(template: str, values: Mapping[str, Any], form: Form, *,
     if not form.ready or not form.checked or form.deck is None:
         code = form.refusal[0] if form.refusal else "CODEGEN_DECK_MISSING"
         return _refused(code, "Generation requires a ready, checked deck.")
-    return Script(text=text, check_code="CODEGEN_LINE_CHECKED", model_version=model.version)
+    return Script(text=text, check_code="CODEGEN_LINE_CHECKED", model_version=model.version,
+                  configuration=model._configuration())
+
+
+def check_study_lines(version: str, name: str, values: Mapping[str, Any], form: Form, *,
+                      stages: tuple[str, ...], case_dir: Path) -> Script:
+    """Check the study's declarations using the registered calibration model."""
+    values = {key: value for key, value in values.items() if key != "run"}
+    form = replace(form, verdicts={key: value for key, value in form.verdicts.items() if key != "run"},
+                   choices={key: value for key, value in form.choices.items() if key != "run"})
+    draft = check_lines("calibrate", values, form, case_dir=case_dir, served=True)
+    if draft.refusal:
+        return draft
+    config = draft.configuration
+    values = dict(config["inputs"])
+    if config["keywords"]:
+        values["keywords"] = config["keywords"]
+    try:
+        text = "\n".join([
+            "# %% Study", "import trid3nt", "", 'c = trid3nt.case(".", strict=True)', "c.pack()",
+            f"base = c.version({version!r}).model",
+            f"s = c.study(base, name={name!r},",
+            *(f"    {key}={_literal(value)}," for key, value in sorted(values.items())),
+            ")", "",
+            'if __name__ == "__main__":',
+            *(f"    s.{stage}()" for stage in stages), "",
+        ])
+    except DeclarationError as refused:
+        return _refused(refused.error_code, "The SDK refused a study declaration.")
+    return replace(draft, text=text)
 
 
 def generate(template: str, values: Mapping[str, Any], form: Form, *, case_dir: str | os.PathLike[str]) -> Script:

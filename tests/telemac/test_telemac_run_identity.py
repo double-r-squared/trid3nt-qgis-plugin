@@ -43,25 +43,25 @@ def test_every_template_is_values_over_a_module_of_the_one_engine(tool_name, mod
     assert _steering(tool_name).MODULE == module
 
 
-def test_the_vocabulary_is_the_four_the_card_renders():
+def test_the_card_vocabulary_includes_study_application():
     assert sorted(origin.value for origin in Origin) == [
-        "derived", "producer", "template", "user"]
+        "derived", "producer", "study", "template", "user"]
 
 
 @pytest.mark.parametrize("tool_name,_module", TEMPLATE_MODULES)
 def test_every_slot_of_a_template_s_default_fill_carries_one_of_the_four(
         tool_name, _module):
     """The default fill is what the body states before a run measures anything:
-    the values that stand, and the assertions still waiting on a read. A writer
-    that invented a fifth word is caught here, not on a card nobody can read."""
+    the values that stand, and the assertions still waiting on a read."""
     from trid3nt.workflows.runtime.sheet import _standing
 
     _body, standing, pending = _standing(_steering(tool_name))
     assert standing or pending, tool_name
+    expected = {Origin.DERIVED, Origin.PRODUCER, Origin.TEMPLATE, Origin.USER}
     for name, row in standing.items():
-        assert isinstance(row.provenance.origin, Origin), f"{tool_name}.{name}"
+        assert row.provenance.origin in expected, f"{tool_name}.{name}"
     for name, (_value, provenance) in pending.items():
-        assert isinstance(provenance.origin, Origin), f"{tool_name}.{name}"
+        assert provenance.origin in expected, f"{tool_name}.{name}"
 
 
 @pytest.mark.parametrize("tool_name,_module", TEMPLATE_MODULES)

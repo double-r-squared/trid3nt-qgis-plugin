@@ -20,7 +20,7 @@ from trid3nt.errors import DeclarationError
 from trid3nt.render.emission import current_emitter, current_turn_case
 from trid3nt.render.layer_uri_emit import publish_input_layer
 from trid3nt.sdk.lock import Lock
-from trid3nt.sdk.script_run import save_deck
+from trid3nt.sdk.script_run import ReviewRequest, ReviewResponse, save_deck
 from trid3nt.settings import bind_run, clear_session_run, reset_run, run_stated, setting
 from trid3nt.tools.mesh.session import _THREAD_VARIABLES
 from trid3nt.workflows.runtime.script import Executed
@@ -48,6 +48,8 @@ class _Relay:
         self.sim = None
         self.cancelling = asyncio.Event()
         self.pending = None
+        self.run_id: str | None = None
+        self.review: asyncio.Task | None = None
         self.charts: list[dict] = []
 
     async def event(self, kind: str, *args: Any) -> Any:
@@ -64,6 +66,7 @@ class _Relay:
                 await self.end(*args)
         elif kind == "dispatch":
             solver, module, handle, cores = args
+            self.run_id = getattr(handle, "run_id", self.run_id)
             self.sim = await mint_dispatch_and_sim_cards(
                 emitter=self.emitter, solver=solver, module=module, handle=handle, cores=cores)
         elif kind == "progress":
@@ -106,8 +109,14 @@ class _Relay:
                                      SimpleNamespace(status="failed", error_code=code))
         await self.end("cancelled" if cancelled else "failed", code, str(_refusal(code)))
 
+    def cancel_review(self) -> None:
+        if self.review is not None:
+            self.review.cancel()
+
 
 async def _stop(process: Any, reader: Any, relay: _Relay, run_id: str) -> Stopped | None:
+    relay.cancel_review()
+    run_id = relay.run_id or run_id
     ended = await _end(process, reader, run_id, cancelling=relay.cancelling)
     if ended is not None and ended[0] == "stopped":
         _, value, reason, record = ended
@@ -115,7 +124,7 @@ async def _stop(process: Any, reader: Any, relay: _Relay, run_id: str) -> Stoppe
             await relay.publish(record)
         return Stopped(RunResult(value=value), value, reason, recorded=True)
     if ended is None:
-        await asyncio.to_thread(_docker_kill, run_id)
+        await asyncio.to_thread(_docker_kill, relay.run_id or run_id)
     await relay.abort("SCRIPT_CHILD_STOPPED", cancelled=True)
     return None
 
@@ -128,6 +137,22 @@ async def _messages(channel: Connection, process: Any, relay: _Relay, handoff: d
             kind, *args = await asyncio.to_thread(channel.recv)
         except EOFError:
             break
+        if kind == "review":
+            from trid3nt.inputs.review import gate_input_review
+
+            request = ReviewRequest.model_validate(args[0])
+            relay.review = asyncio.create_task(gate_input_review(tool_name=request.tool_name, entries=request.entries,
+                                                                params=request.params, mode=request.mode))
+            try:
+                outcome = await relay.review
+            except asyncio.CancelledError:
+                outcome = ReviewResponse(id=request.id, proceed=False, entries=request.entries,
+                                         params=request.params, cancelled=True).outcome()
+            finally:
+                relay.review = None
+            response = ReviewResponse.from_outcome(request.id, outcome)
+            await asyncio.to_thread(channel.send, response.model_dump(mode="json"))
+            continue
         found = await relay.event(kind, *args)
         if found is not None:
             result = found
@@ -175,7 +200,7 @@ async def _end(process: Any, reader: Any, run_id: str, *,
 def _handoff(path: Path, deck: Any, receipt: dict, case: str, cores: int) -> dict:
     lock = Lock(path.parent)
     return {"deck": save_deck(deck), "row": lock.data["models"][deck.state.workflow.name],
-            "receipt": receipt, "case": case, "cores": cores}
+            "receipt": receipt, "case": case, "cores": cores, "script": path.name}
 
 
 async def run(path: Path, deck: Any, receipt: dict) -> Executed:
@@ -212,15 +237,16 @@ async def run(path: Path, deck: Any, receipt: dict) -> Executed:
                 raise stopped from None
             raise
         except TimeoutError:
-            await finish(_end(process, reader, deck.run_id))
+            relay.cancel_review()
+            await finish(_end(process, reader, relay.run_id or deck.run_id))
             await relay.abort("SCRIPT_TIME_BUDGET", cancelled=False)
             raise _refusal("SCRIPT_TIME_BUDGET") from None
         except Exception as exc:  # noqa: BLE001 - reap the child even when the relay fails
-            await finish(_end(process, reader, deck.run_id))
+            await finish(_end(process, reader, relay.run_id or deck.run_id))
             await relay.abort("SCRIPT_CHILD_DIED", cancelled=False)
             raise _refusal("SCRIPT_CHILD_DIED") from exc
     if ended is None:
-        await asyncio.to_thread(_docker_kill, deck.run_id)
+        await asyncio.to_thread(_docker_kill, relay.run_id or deck.run_id)
         await relay.abort("SCRIPT_CHILD_DIED", cancelled=False)
         raise _refusal("SCRIPT_CHILD_DIED")
     if ended[0] == "refused":

@@ -57,6 +57,8 @@ def _named(value: Any, label: str) -> str:
     from trid3nt.store import objects as storage
 
     text = str(value or "").strip()
+    if storage.bound_store() is not None and _RUN_ID.fullmatch(text):
+        return text
     held = f"s3://{storage.runs_bucket()}/"
     uri = lookup_uri_for_handle(text) if text else None
     if uri and uri.startswith(held):
@@ -74,6 +76,14 @@ def _finished(record: Mapping[str, Any]) -> bool:
     return not (record.get("stopped") or record.get("check_steps") or record.get("correct_end") is False)
 
 
+def _require_finished(record: Mapping[str, Any], run_id: str) -> None:
+    if not _finished(record):
+        why = (f"it was stopped ({record['stopped']})" if record.get("stopped") else
+               f"it is a check run stopped after {record['check_steps']} engine steps"
+               if record.get("check_steps") else "its solver did not reach its own correct end")
+        raise FinishedRunError("RUN_NOT_FINISHED", f"run {run_id} did not finish: {why}.")
+
+
 def _case_runs(engines: Sequence[str]) -> list[Mapping[str, Any]]:
     """The record of every finished run of ``engines`` a layer of this case lies under, newest first."""
     from trid3nt.render.uri_registry import case_layers
@@ -86,7 +96,8 @@ def _case_runs(engines: Sequence[str]) -> list[Mapping[str, Any]]:
     found: dict[str, Mapping[str, Any]] = {}
     for record in reversed(read_records()):
         run_id = str(record.get("run_id") or "")
-        if run_id in ids and run_id not in found and _finished(record) \
+        if (run_id in ids or (storage.bound_store() is not None and _RUN_ID.fullmatch(run_id))) \
+                and run_id not in found and _finished(record) \
                 and (not engines or str(record.get("engine") or "") in engines):
             found[run_id] = record
     return list(found.values())
@@ -147,6 +158,9 @@ async def run(value: Any, *, label: str = "run", engines: Sequence[str] = ()) ->
     from trid3nt.store.journal import read_records
 
     if isinstance(value, FinishedRun):
+        _require_finished(value.record, value.run_id)
+        if engines and value.engine not in engines:
+            raise FinishedRunError("RUN_ENGINE_UNTAKEN", f"{label} takes a run of {' or '.join(engines)}.")
         return value
     run_id = _named(value, label)
     record = next((r for r in reversed(read_records()) if str(r.get("run_id") or "") == run_id), None)
@@ -154,11 +168,7 @@ async def run(value: Any, *, label: str = "run", engines: Sequence[str] = ()) ->
         raise FinishedRunError(
             "RUN_NOT_FINISHED",
             f"run {run_id} has no record: a run is recorded when it ends, so it has not finished.")
-    if not _finished(record):
-        why = (f"it was stopped ({record['stopped']})" if record.get("stopped") else
-               f"it is a check run stopped after {record['check_steps']} engine steps"
-               if record.get("check_steps") else "its solver did not reach its own correct end")
-        raise FinishedRunError("RUN_NOT_FINISHED", f"run {run_id} did not finish: {why}.")
+    _require_finished(record, run_id)
     engine = str(record.get("engine") or "")
     if engines and engine not in engines:
         raise FinishedRunError(

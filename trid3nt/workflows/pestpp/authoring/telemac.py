@@ -474,22 +474,11 @@ async def calibrated(*, finished: Any, study_dir: Path, the_deck: Deck, paramete
     from trid3nt_contracts import new_ulid
 
     from trid3nt.workflows.solver.staging import new_rundir, stage_run
-    from trid3nt.workflows.telemac import engine
-    from trid3nt.workflows.telemac.authoring.serializer import restate
     from trid3nt.workflows.telemac.authoring.staged_check import check_staged_run
 
     run_id = new_ulid()
     rundir = new_rundir(run_id, stem="telemac")
-    deck_dir = study_dir.parent / "deck"
-    await asyncio.to_thread(shutil.copytree, deck_dir, rundir, dirs_exist_ok=True)
-    values = {(parameter.original_name or parameter.name).upper().replace("_", " "):
-              best[parameter.name] * parameter.scale + parameter.offset
-              for parameter in parameters if (parameter.original_name or parameter.name).upper() in TUNABLE}
-    values.update(await asyncio.to_thread(_level_at, rundir, the_deck, values.get("FRICTION COEFFICIENT")))
-    offset = next((best[p.name] * p.scale + p.offset for p in parameters if (p.original_name or p.name) == _OUTFLOW), None)
-    if offset is not None:
-        values.update(await asyncio.to_thread(_offset_level, rundir, the_deck, offset))
-    await asyncio.to_thread(restate, rundir, the_deck.steering, the_deck.module, values)
+    _, values = await asyncio.to_thread(realize, rundir, study_dir, the_deck, parameters, templates, best)
     case = finished.case
     results = list(case.get("results") or [])
     facts = dict(case.get("server_facts") or {})
@@ -499,12 +488,46 @@ async def calibrated(*, finished: Any, study_dir: Path, the_deck: Deck, paramete
         result_basename=the_deck.result, check=check_staged_run,
         user_fortran=list(case.get("user_fortran") or ()), coupling=case.get("coupling"),
         continue_from=case.get("continue_from"), cores=int(case.get("cores") or 1))
-    handle = await engine.solve_case(run=staged, cores=int(case.get("cores") or 1))
-    return {**handle, **facts, "result_basename": the_deck.result, "module": the_deck.module,
-            "reference_time": (finished.record.get("outputs") or [{}])[0].get("reference_time")
-            or _moment(finished), "display_basename": None,
-            "module_output": _module_output(the_deck), "tracer_names": (the_deck.stated.get("NAMES OF TRACERS")
-                                                                       or None)}
+    solved = await solve_resolved(staged, finished, frame=frame, the_deck=the_deck)
+    return {**solved, "study_values": values}
+
+
+def realize(directory: Path, study_dir: Path, the_deck: Deck, parameters: list, templates: list,
+            best: Mapping[str, float]) -> tuple[None, dict[str, Any]]:
+    """Write the fitted steering and time-series values in the model's physical units."""
+    from trid3nt.workflows.telemac.authoring.serializer import restate
+
+    shutil.copytree(study_dir.parent / "deck", directory, dirs_exist_ok=True)
+    values = {(p.original_name or p.name).upper().replace("_", " "): best[p.name] * p.scale + p.offset
+              for p in parameters if (p.original_name or p.name).upper() in TUNABLE}
+    values.update(_level_at(directory, the_deck, values.get("FRICTION COEFFICIENT")))
+    offset = next((best[p.name] * p.scale + p.offset for p in parameters if (p.original_name or p.name) == _OUTFLOW), None)
+    if offset is not None:
+        values.update(_offset_level(directory, the_deck, offset))
+    restate(directory, the_deck.steering, the_deck.module, values)
+    return None, {key.replace(" ", "_"): value for key, value in values.items()}
+
+
+async def solve_resolved(staged: Mapping[str, Any], finished: Any, *, frame: str, the_deck: Deck | None = None) -> dict:
+    from trid3nt.workflows.solver.stop import SolveStopped
+    from trid3nt.workflows.telemac import engine
+
+    if the_deck is None:
+        the_deck = deck(Path(staged["rundir"]), finished)
+    case = staged["case"]
+    facts = dict(case.get("server_facts") or {})
+    def shaped(handle):
+        return {**handle, **facts, "result_basename": the_deck.result, "module": the_deck.module,
+                "reference_time": (finished.record.get("outputs") or [{}])[0].get("reference_time")
+                or _moment(finished), "display_basename": None, "staged": staged,
+                "module_output": _module_output(the_deck), "tracer_names": (the_deck.stated.get("NAMES OF TRACERS")
+                                                                           or None)}
+
+    try:
+        return shaped(await engine.solve_case(run=staged, cores=int(case.get("cores") or 1)))
+    except SolveStopped as stop:
+        stop.solved = shaped(stop.solved)
+        raise
 
 
 def _level_at(directory: Path, the_deck: Deck, coefficient: float | None) -> dict[str, Any]:
@@ -537,8 +560,8 @@ def _module_output(the_deck: Deck) -> list[dict[str, Any]]:
             for token, row in body.table({}).items() if token not in body.LISTING and token != body.TRACER]
 
 
-async def published(solved: Mapping[str, Any]) -> Any:
+async def published(solved: Mapping[str, Any], *, partial: str | None = None) -> Any:
     """The calibrated run published as TELEMAC publishes a run: every variable its result carries."""
     from trid3nt.workflows.telemac.workflow import publish_outputs
 
-    return await publish_outputs(run=solved, outputs=[], captions={}, params={})
+    return await publish_outputs(run=solved, outputs=[], captions={}, params={}, partial=partial)

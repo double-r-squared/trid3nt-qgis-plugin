@@ -1,7 +1,8 @@
 """A case: a directory that is the whole truth of its runs, with one factory per registered template.
 
 ``<case>/trid3nt.lock`` pins every byte a run read, held under ``data/<sha256>.<ext>``; ``runs/<run_id>/`` holds
-what each run wrote and the journal its records; ``versions/`` a lock snapshot per model version that ran; and
+what each run wrote and the journal its records; ``versions/`` a lock snapshot per model version that ran;
+``studies/`` immutable named study results; and
 ``cache/`` the fetch cache, staged decks and meshes, which any run rebuilds. No run needs an object store: a
 store is optional serving of the same tree, linked and packed by the paths relative to the case.
 """
@@ -9,8 +10,10 @@ store is optional serving of the same tree, linked and packed by the paths relat
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 import urllib.parse
@@ -24,7 +27,7 @@ from trid3nt.inputs.user_input import WireArgsError
 from trid3nt.store import objects as storage
 from trid3nt.store.objects import StorageError, sha256_of
 
-from .lock import Lock
+from .lock import Lock, _check
 from .model import Model
 from .template import Template, digest, load
 
@@ -257,14 +260,29 @@ class Case:
         part.replace(self.root / "data" / name)
         return f"s3://data/{name}", {"source": source, "request": value, "uri": f"data/{name}", "sha256": digest}
 
-    def version(self, version: str) -> dict[str, Any]:
+    def version(self, version: str):
         """The lock snapshot of a model version that ran in this case."""
-        import json
+        from .version import Version
 
+        if not re.fullmatch(r"[0-9a-f]{64}", version):
+            raise StorageError("A model version must be a SHA-256 hash.")
         path = self.root / "versions" / f"{version}.lock"
+        lock = Lock(self.root)
+        relative = f"versions/{version}.lock"
+        digest = lock.data.get("versions", {}).get(relative)
+        if not path.is_file() and digest and lock.data.get("served"):
+            lock._served(relative, digest)
         if not path.is_file():
             raise StorageError(f"no model version {version} ran in this case.")
-        return json.loads(path.read_text(encoding="utf-8"))
+        if digest and sha256_of(path) != digest:
+            raise storage.DigestMismatchError(f"{relative} differs from its pin.")
+        return Version(self, version, json.loads(path.read_text(encoding="utf-8")))
+
+    def study(self, base: str | Model, *, name: str | None = None, **choices: Any):
+        """Open an immutable study result by name, or configure one over a base model."""
+        from .study import NamedStudy
+
+        return NamedStudy(self, base, name=name, choices=choices)
 
     def link(self, store: str) -> str:
         """Serve this case at ``store`` (``s3://bucket/prefix``): every file but its cache uploaded at its path
@@ -297,9 +315,16 @@ class Case:
         if current() is not None:
             return self.root
         lock = Lock(self.root)
-        for sha256 in _template_hashes(lock.data):
+        pinned = dict(lock.data.get("versions", {}))
+        snapshots = [lock.data]
+        for relative, digest in pinned.items():
+            if not lock.local(relative).is_file() and lock.data.get("served"):
+                lock._served(relative, digest)
+            _check(lock.local(relative), digest)
+            snapshots.append(json.loads(lock.local(relative).read_text(encoding="utf-8")))
+        for sha256 in set().union(*map(_template_hashes, snapshots)):
             lock.template_source(sha256)
-        for entry in _pinned_rows(lock.data):
+        for entry in (entry for snapshot in snapshots for entry in _pinned_rows(snapshot)):
             relative = lock.relative(entry["uri"])
             for path, digest in {relative: entry["sha256"], **dict(entry.get("files") or {})}.items():
                 target = self.root / path
@@ -312,6 +337,17 @@ class Case:
                     raise storage.DigestMismatchError(
                         f"{path} in this case is not the file pinned there: its sha256 differs from {digest}.")
             entry["uri"] = relative
+        for snapshot in snapshots:
+            for row in snapshot["models"].values():
+                pinned.update((row.get("finished") or {}).get("files", {}))
+        for files in lock.data.get("studies", {}).values():
+            pinned.update(files)
+        for path, digest in pinned.items():
+            target = self.root / path
+            if not target.is_file() and lock.data.get("served"):
+                lock._served(path, digest)
+            if not target.is_file() or sha256_of(target) != digest:
+                raise storage.DigestMismatchError(f"{path} differs from its pin.")
         lock.data.pop("served", None)
         lock.data.pop("remote_files", None)
         lock.save()
@@ -341,7 +377,7 @@ def _template_hashes(lock: dict[str, Any]) -> set[str]:
     for row in lock["models"].values():
         template = row.get("template", {})
         if template.get("path"):
-            hashes.update((template["version"], template["upstream_version"]))
+            hashes.update((template["version"], template.get("upstream_version", template["version"])))
     return hashes
 
 

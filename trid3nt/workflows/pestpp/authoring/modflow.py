@@ -178,7 +178,8 @@ def multiplier(directory: Path, identifier: str, *, lower: float, upper: float, 
                       scale=scale), (template, file))
 
 
-def _list_column(lines: list[str], identifier: str, columns: Sequence[str], variable: str, field: str) -> float:
+def _list_column(lines: list[str], identifier: str, columns: Sequence[str], variable: str, field: str,
+                 *, require_uniform: bool = True) -> float:
     """The PACKAGEDATA column ``variable`` written as ``field`` in every row of ``lines`` -> the one value they
     state; a column the package has not, or rows stating different values, refuse."""
     if variable not in columns:
@@ -200,11 +201,22 @@ def _list_column(lines: list[str], identifier: str, columns: Sequence[str], vari
             tokens[column] = field
             lines[at] = "  " + "  ".join(tokens)
         at += 1
-    if len(scales) != 1:
+    if not scales or (require_uniform and len(scales) != 1):
         raise PestppError(f"{identifier} states {len(scales)} different values across the package's rows; one "
                           "multiplier writes one scale", error_code="PESTPP_PARAMETER_UNPLACED")
     return scales.pop()
 
+
+
+def patch_columns(directory: Path, values: Mapping[str, float]) -> None:
+    """Restate the native SFR fields on a newly built deck in model units."""
+    parsed = deck(directory)
+    for name, scalar in values.items():
+        prefix, _, variable = name.partition("_")
+        path = directory / parsed.packages[prefix]
+        lines = path.read_text(encoding="utf-8").splitlines()
+        _list_column(lines, name, _LIST_COLUMNS[prefix], variable.lower(), repr(float(scalar)), require_uniform=False)
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 def _array(lines: list[str], identifier: str, variable: str, field: str) -> tuple[float, bool]:
     """The array ``variable``'s control records written with ``field`` -> its one scale, and whether it is read INTERNAL."""
@@ -598,18 +610,11 @@ async def calibrated(*, finished: Any, study_dir: Path, the_deck: Deck, paramete
     from trid3nt_contracts import new_ulid
 
     from trid3nt.workflows.modflow.authoring.staged_check import check_staged_run
-    from trid3nt.workflows.modflow.workflow import run_sheet
     from trid3nt.workflows.solver.staging import new_rundir, stage_run
-
-    from .control import TABLES
 
     run_id = new_ulid()
     rundir = new_rundir(run_id, stem="modflow")
-    await asyncio.to_thread(substitute, study_dir, templates, parameters, best)
-    laid = await asyncio.to_thread(lay, study_dir)
-    own = [template for template, _file in templates] + [f"{OBS_OUTPUT}.ins", *TABLES.values(), *laid]
-    await asyncio.to_thread(copy_deck, study_dir, rundir, own)
-    sheet = await asyncio.to_thread(deck_sheet, rundir, the_deck)
+    sheet, values = await asyncio.to_thread(realize, rundir, study_dir, the_deck, parameters, templates, best)
     case = finished.case
     results = list(case.get("results") or [])
     staged = await stage_run(
@@ -617,14 +622,62 @@ async def calibrated(*, finished: Any, study_dir: Path, the_deck: Deck, paramete
         outputs=list(dict.fromkeys([*finished.outputs, OBS_OUTPUT])), mesh_inputs=[],
         prefix="modflow", sheet={}, server_facts=dict(case.get("server_facts") or {}),
         result_basename=(results or list(finished.outputs))[0], check=check_staged_run)
-    handle = await run_sheet(sheet=sheet, staged=staged, mesh=finished.mesh,
-                             name=str((case.get("server_facts") or {}).get("name") or "domain"),
-                             moment=None, frame=frame or None)
-    return {**handle, "deck_sheet": sheet}
+    solved = await solve_resolved(staged, finished, frame=frame, sheet=sheet)
+    return {**solved, "study_values": values}
 
 
-async def published(solved: Mapping[str, Any]) -> Any:
+def realize(directory: Path, study_dir: Path, the_deck: Deck, parameters: list, templates: list,
+            best: Mapping[str, float]) -> tuple[Any, dict[str, Any]]:
+    """Write the fitted deck and read its physical model values."""
+    from .control import TABLES
+
+    substitute(study_dir, templates, parameters, best)
+    laid = lay(study_dir)
+    own = [template for template, _file in templates] + [f"{OBS_OUTPUT}.ins", *TABLES.values(), *laid]
+    copy_deck(study_dir, directory, own)
+    sheet = deck_sheet(directory, the_deck)
+    values = {}
+    for p in parameters:
+        name = (p.spatial_group or p.original_name or p.name).upper()
+        if name not in values:
+            values[name] = physical_value(directory, the_deck, sheet, name, best[p.name] * p.scale + p.offset)
+    return sheet, values
+
+
+def physical_value(directory: Path, the_deck: Deck, sheet: Any, name: str, scalar: float) -> Any:
+    """The resolved array values in model units, or the native list-column value."""
+    if name in sheet.filled:
+        return sheet.filled[name].value
+    prefix, _, variable = name.partition("_")
+    if prefix in _LIST_COLUMNS:
+        return scalar
+    import flopy
+
+    sim = flopy.mf6.MFSimulation.load(sim_ws=str(directory), verbosity_level=0, load_only=[prefix.lower()])
+    array = getattr(sim.get_model(the_deck.model).get_package(prefix.lower()), variable.lower()).array
+    return array.reshape(the_deck.nlay, the_deck.ncpl).tolist()
+
+
+async def solve_resolved(staged: Mapping[str, Any], finished: Any, *, frame: str, sheet: Any = None) -> dict:
+    from trid3nt.workflows.modflow.workflow import run_sheet
+    from trid3nt.workflows.solver.stop import SolveStopped
+
+    if sheet is None:
+        directory = Path(staged["rundir"])
+        sheet = deck_sheet(directory, deck(directory, finished))
+    try:
+        handle = await run_sheet(sheet=sheet, staged=staged, mesh=finished.mesh,
+                                 name=str((staged["case"].get("server_facts") or {}).get("name") or "domain"),
+                                 moment=None, frame=frame or None)
+    except SolveStopped as stop:
+        stop.solved["deck_sheet"] = sheet
+        raise
+    return {**handle, "deck_sheet": sheet, "staged": staged}
+
+
+async def published(solved: Mapping[str, Any], *, partial: str | None = None) -> Any:
     """The calibrated run published as MODFLOW publishes a run: every output its output control saved."""
     from trid3nt.workflows.modflow.workflow import publish_outputs
 
-    return await publish_outputs(run=solved, sheet=solved["deck_sheet"], outputs=[], captions={}, params={})
+    return await publish_outputs(run=solved, sheet=solved["deck_sheet"], outputs=[], captions={}, params={},
+                                 partial=partial)

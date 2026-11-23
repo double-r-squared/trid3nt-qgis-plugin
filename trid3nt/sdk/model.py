@@ -32,6 +32,7 @@ from .template import Template, TemplateDrift
 
 if TYPE_CHECKING:
     from .case import Case
+    from .study import StudyStale
 
 __all__ = ["Failure", "Form", "Model", "Result", "Staged"]
 
@@ -64,7 +65,7 @@ class Form:
     deck: Staged | None = None
     checked: bool = False
     coverage: Mapping[str, Coverage] = field(default_factory=dict)
-    warnings: tuple[Shortfall | TemplateDrift, ...] = ()
+    warnings: tuple[Shortfall | TemplateDrift | StudyStale, ...] = ()
     choices: Mapping[str, tuple[SourceRequest, ...]] = field(default_factory=dict)
     steps: Mapping[str, tuple[Step, ...]] = field(default_factory=dict)
     review_choices: tuple[Any, ...] = ()
@@ -88,6 +89,8 @@ class Form:
             if isinstance(warning, TemplateDrift):
                 lines.append(f"  warning {warning.code} {warning.template}: "
                              f"{warning.pinned_sha256} -> {warning.current_sha256}")
+            elif getattr(warning, "code", "") == "STUDY_STALE":
+                lines.append(f"  warning {warning}")
             else:
                 lines.append(f"  warning {warning.code} {warning.input}: {warning.cells} cells, share {warning.share:.4g}; "
                              f"remedies: {', '.join(map(repr, warning.remedies))}")
@@ -151,6 +154,11 @@ class Model:
         object.__setattr__(self, "_keywords", {})
         #: Each input stated as outside data, by name: its lock entry, the copy in the case's data.
         object.__setattr__(self, "_taken", {})
+        object.__setattr__(self, "_base_run", None)
+        object.__setattr__(self, "_applied", [])
+        object.__setattr__(self, "_study_origins", {})
+        object.__setattr__(self, "_study_deck", None)
+        object.__setattr__(self, "_native_study", {})
         #: The deck the last fill wrote, held for the run until a set or another fill supersedes it.
         object.__setattr__(self, "_written", None)
         #: Whether an unresolved shortfall refuses, where the model states it (else the case's), and the coverage
@@ -224,15 +232,29 @@ class Model:
         return held
 
     def __getitem__(self, name: str) -> Any:
+        if name.upper() in self._native_study:
+            return self._native_study[name.upper()]
         key, held = self._held(name)
         return self._value(key, held)[0]
 
     def __setitem__(self, name: str, value: Any) -> None:
+        if name.upper() in self._native_study:
+            from math import isfinite
+
+            if value is not None and (type(value) not in (int, float) or not isfinite(value)):
+                raise DeclarationError("A native study field takes a finite number.", error_code="STUDY_VALUE_INVALID")
+            if value is None:
+                self._native_study.pop(name.upper())
+            else:
+                self._native_study[name.upper()] = value
+            self._study_origins.pop(name.upper(), None)
+            return
         key, held = self._held(name)
         held_in = self._keywords if isinstance(held, Keyword) else self._stated
         if value is None:
             held_in.pop(key, None)
             self._taken.pop(key, None)
+            self._study_origins.pop(key, None)
             return
         taken = None
         if not isinstance(held, Keyword) and held.is_row and isinstance(value, str) and _outside(value):
@@ -243,6 +265,7 @@ class Model:
         else:
             value = _checked_row(held, value)
         held_in[key] = value
+        self._study_origins.pop(key, None)
         if taken is not None:
             self._taken[key] = taken
         else:
@@ -252,16 +275,72 @@ class Model:
         """The value in force for one name and its origin: the model's, else the template's, else the engine's."""
         if isinstance(held, Keyword):
             if key in self._keywords:
-                return self._keywords[key], "user"
+                return self._keywords[key], "study" if key in self._study_origins else "user"
             asserted = getattr(held.body, "ASSERTED", {})
             if held.name in asserted:
                 return asserted[held.name], "template"
             slot = held.body.MODULE_INPUT.get(held.name)
             return (None, "") if slot is None else (slot.engine_default, _ENGINE)
         if key in self._stated:
-            return self._stated[key], "user"
+            return self._stated[key], "study" if key in self._study_origins else "user"
         default = getattr(held, "default", None)
         return (default, "template") if default is not None else (None, "")
+
+    def apply(self, study: Any) -> Model:
+        """Apply a study's physical values in assignment order."""
+        from .study import AppliedStudy, NamedStudy, StudyStale
+
+        applied = study.applied if isinstance(study, NamedStudy) else study
+        if not isinstance(applied, AppliedStudy):
+            raise DeclarationError("Apply requires a completed study.", error_code="STUDY_MISSING")
+        if applied.case != self._case.root or applied.template != self._template.key:
+            raise DeclarationError("The study belongs to another model.", error_code="STUDY_MODEL_MISMATCH")
+        current = self.version
+        warnings = list(self._applied)
+        if current != applied.base_version:
+            warnings.append(StudyStale(applied.name, applied.base_version, current))
+        stated, keywords, taken, origins, native = (dict(self._stated), dict(self._keywords), dict(self._taken),
+                                                     dict(self._study_origins), dict(self._native_study))
+        try:
+            for name, value in applied.values.items():
+                if self._workflow.engine == "modflow" and name in {"SFR_RLEN", "SFR_RGRD", "SFR_RTP"}:
+                    key = name
+                    self._native_study.setdefault(key, None)
+                else:
+                    key, _ = self._held(self._study_name(name))
+                self[key] = value
+                self._study_origins[key] = applied.name
+        except Exception:
+            for name, old in (("_stated", stated), ("_keywords", keywords), ("_taken", taken),
+                              ("_study_origins", origins), ("_native_study", native)):
+                object.__setattr__(self, name, old)
+            raise
+        object.__setattr__(self, "_applied", warnings)
+        object.__setattr__(self, "_study_deck", (applied, self.version))
+        return self
+
+    def _study_name(self, name: str) -> str:
+        """Translate physical SFR fields already exposed by the engine template."""
+        if self._workflow.engine == "modflow":
+            return {"SFR_RHK": "stream_bed_k", "SFR_RWID": "stream_width",
+                    "SFR_RBTH": "stream_bed_thickness", "SFR_MAN": "stream_manning"}.get(name, name)
+        return name
+
+    def _study_warnings(self) -> tuple[StudyStale, ...]:
+        return tuple(self._applied)
+
+    def _study_verdicts(self, values: Mapping[str, Verdict]) -> Mapping[str, Verdict]:
+        from trid3nt_contracts.common import Origin
+        from trid3nt.workflows.runtime.fill import ACCEPTED
+
+        return {**values, **{name: Verdict(ACCEPTED, value, origin=Origin.STUDY if name in self._study_origins
+                                            else Origin.USER) for name, value in self._native_study.items()}}
+
+    def _configuration(self) -> dict[str, Any]:
+        return json.loads(json.dumps({"inputs": self._stated, "keywords": self._keywords, "strict": self.strict,
+                                      "native_study": self._native_study,
+                                      "steps": {name: [(step.name, dict(step.args)) for step in steps]
+                                                for name, steps in self._steps.items()}}, default=str))
 
     def _wire(self) -> dict[str, Any]:
         return {**self._stated, **({"keywords": dict(self._keywords)} if self._keywords else {})}
@@ -272,6 +351,7 @@ class Model:
         strictness where it states them."""
         stated = {"template": self._template.key, "template_sha256": self._template.sha256,
                   "upstream_sha256": self._template.upstream_sha256, "inputs": self._stated, "keywords": self._keywords,
+                  **({"native_study": self._native_study} if self._native_study else {}),
                   **({"steps": {k: [[s.name, list(s.args)] for s in v] for k, v in self._steps.items()}}
                      if self._steps else {}),
                   **({"strict": True} if self.strict else {})}
@@ -290,13 +370,32 @@ class Model:
         and the typed refusal the launch stopped on; the deck is held for the run, and the lock names what was read
         and written. Runs inside the case's binding."""
         self._drop()
+        stale = self._study_warnings()
+        if self.strict and stale:
+            return Fill(self._workflow), None, (stale[-1].code, str(stale[-1]))
         if warning is not None and self.strict:
             return Fill(self._workflow), None, (warning.code, "The upstream template differs from its pin.")
         state = await self._workflow.filled(self._wire(), model=self._named(), steps=self._steps)
+        from dataclasses import replace
+        from trid3nt_contracts.common import Origin
+
+        for key in self._study_origins:
+            if key in state.inputs:
+                state.inputs[key] = replace(state.inputs[key], origin=Origin.STUDY)
         deck, refusal = None, None
         if state.ready:
             try:
-                deck = await self._workflow.prepared(state)
+                overlay = self._study_deck
+                if overlay and not stale and overlay[1] == self.version and overlay[0].resolved:
+                    from .study import stage_applied
+
+                    deck = await stage_applied(self, state, overlay[0])
+                else:
+                    deck = await self._workflow.prepared(state)
+                    if self._native_study:
+                        from .study import restage_native
+
+                        deck = await restage_native(deck, self._native_study)
             except Exception as failed:  # noqa: BLE001 - a typed refusal is the form's, anything else is a fault
                 if getattr(failed, "error_code", None) is None:
                     raise
@@ -304,7 +403,8 @@ class Model:
         staged = _staged(self._case.root, deck)
         self._locked(state, staged)
         if deck is not None:
-            object.__setattr__(self, "_written", _Written(self.version, self._row(), state, deck, staged))
+            object.__setattr__(self, "_written", _Written(self.version, self._row(), state, deck, staged,
+                                                         self._study_deck))
         return state, staged, refusal
 
     async def _fill(self) -> Form:
@@ -326,7 +426,11 @@ class Model:
         warning = self._template_warning()
         with self._case.bound(), unattended(), strictness(self.strict):
             state, staged, refusal = await self._filling(warning)
-        return _form(state, staged, refusal, strict=self.strict, warning=warning)
+        from dataclasses import replace
+
+        form = _form(state, staged, refusal, strict=self.strict, warning=warning)
+        return replace(form, warnings=(*form.warnings, *self._study_warnings()),
+                       verdicts=self._study_verdicts(form.verdicts))
 
     @staticmethod
     def _refuse_reviewed() -> None:
@@ -347,7 +451,7 @@ class Model:
         row.update(template={"name": self._workflow.name, "version": self._template.sha256,
                              "path": self._template.path, "upstream": self._template.upstream,
                              "upstream_version": self._template.upstream_sha256},
-                   model=self.version, inputs=_read(lock, state, self._taken),
+                   model=self.version, configuration=self._configuration(), inputs=_read(lock, state, self._taken),
                    mesh=None if staged is None else staged.mesh,
                    deck=None if staged is None else {"sha256": staged.sha256, "files": dict(staged.files)})
         lock.data["models"][self._template.key] = row
@@ -365,7 +469,8 @@ class Model:
         """The deck the last fill wrote, where it is still this model's: the version the model states and its row of
         the case's lock are the ones the fill left, and every staged file still holds the bytes the deck hash names."""
         written = self._written
-        if written is None or written.version != self.version or written.row != self._row():
+        if written is None or written.version != self.version or written.study is not self._study_deck \
+                or written.row != self._row():
             return None
         from .script_run import current
 
@@ -404,12 +509,16 @@ class Model:
         named = self._named()
         warning = self._template_warning()
         with self._case.bound(), unattended(), strictness(self.strict):
-            written = None if warning is not None and self.strict else self._current()
+            refused = self.strict and (warning is not None or self._study_warnings())
+            written = None if refused else self._current()
             if written is None:
                 state, staged, refusal = await self._filling(warning)
                 if not state.ready or refusal is not None:
                     code, sentence = refusal or state.refusal()
-                    return Failure(code, sentence, _form(state, staged, refusal, strict=self.strict, warning=warning))
+                    from dataclasses import replace
+
+                    form = _form(state, staged, refusal, strict=self.strict, warning=warning)
+                    return Failure(code, sentence, replace(form, warnings=(*form.warnings, *self._study_warnings())))
                 written = self._written
             # A deck is solved once: the next run fills again, under a new run id.
             object.__setattr__(self, "_written", None)
@@ -422,10 +531,10 @@ class Model:
             if isinstance(published, Mapping) and published.get("status") == "error":
                 return Failure(str(published.get("error_code")), str(published.get("error_message")))
             record = await asyncio.to_thread(_record, self._case.name, named)
-            await asyncio.to_thread(self._ran, record)
+            await asyncio.to_thread(self._ran, record, written.deck)
         return Result(run_id=record.get("run_id"), value=published, record=record)
 
-    def _ran(self, record: Mapping[str, Any]) -> None:
+    def _ran(self, record: Mapping[str, Any], deck: Deck) -> None:
         """What the run ran, onto the model's row of the lock - the images of its engine, and the mesh and deck of a
         launch that wrote its deck inside its solve - and the lock as it then stands kept under ``versions/`` by the
         model's version."""
@@ -436,9 +545,28 @@ class Model:
             row["mesh"] = (record.get("mesh") or {}).get("key")
             row["deck"] = _deck(self._case.root, _manifest_rows(self._case.root, engine, run_id))
         row["images"] = _images(self._case.root, engine, run_id)
+        mesh = (deck.state.env.run.get("mesh") or {}) if deck.state.env else {}
+        artifact = mesh.get("artifact") if isinstance(mesh, Mapping) else None
+        if deck.staged.get("inputs") and hasattr(artifact, "to_json") and engine in {"modflow", "telemac"}:
+            from trid3nt.inputs.run import FinishedRun
+            from trid3nt.tools.mesh.step import mesh_record
+            from .version import hold_finished
+
+            held = FinishedRun(run_id, engine, record.get("module"), record, deck.staged.get("case") or {},
+                               tuple(deck.staged["inputs"]), tuple(deck.staged.get("outputs") or ()),
+                               mesh_record(artifact), artifact.bbox, tuple(record.get("outputs") or ()))
+            row["finished"] = hold_finished(lock, held)
+            object.__setattr__(self, "_base_run", row["finished"])
+        relative = f"versions/{self.version}.lock"
+        versions = lock.data.setdefault("versions", {})
+        if relative not in versions:
+            from .lock import canonical
+            from trid3nt.store.objects import sha256_of
+
+            snapshot = self._case.root / relative
+            snapshot.write_bytes(canonical({key: value for key, value in lock.data.items() if key != "versions"}))
+            versions[relative] = sha256_of(snapshot)
         lock.save()
-        (self._case.root / "versions" / f"{self.version}.lock").write_text(
-            lock.path.read_text(encoding="utf-8"), encoding="utf-8")
 
     def run(self) -> Result | Failure:
         """Solve, publish and record the deck the last fill wrote, where it is still this model's; otherwise fill
@@ -456,7 +584,11 @@ class Model:
         for name in [*asserted, *(k for k in self._keywords if k not in asserted)]:
             stated = name in self._keywords
             value = self._keywords[name] if stated else asserted[name]
-            lines.append(f"  {name} = {_short(value)}  [{'user' if stated else 'template'}]")
+            origin = "study" if name in self._study_origins else ("user" if stated else "template")
+            lines.append(f"  {name} = {_short(value)}  [{origin}]")
+        for name, value in self._native_study.items():
+            origin = "study" if name in self._study_origins else "user"
+            lines.append(f"  {name} = {_short(value)}  [{origin}]")
         lines.append(f"  every other keyword = the module dictionary's own value  [{_ENGINE}]")
         for name, declared in self.steps.items():
             lines.append(f"  {name} steps = {list(declared)}  [{'user' if name in self._steps else 'template'}]")
@@ -473,6 +605,7 @@ class _Written:
     state: Fill
     deck: Deck
     staged: Staged | None
+    study: object | None = None
 
 
 def _form(state: Fill, staged: Staged | None = None, refusal: tuple[str, str] | None = None, *,

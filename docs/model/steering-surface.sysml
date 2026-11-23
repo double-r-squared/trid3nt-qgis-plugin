@@ -37,7 +37,7 @@ package SteeringSurface {
     it PLACES, captions - and nothing below it knows the question exists. What a
     run WRITES is the module's own output table, and the reads over it are
     primitives named from that table; the run record carries the engine and the
-    module, every filled slot carries one of four origins, and the adapters build
+    module, every filled slot carries an origin, and the adapters build
     their turns from an IR of this repo's own. A point anywhere in the system is
     one typed Point.
     */
@@ -475,6 +475,16 @@ package SteeringSurface {
         port stageOut : StageOut;
     }
 
+    part appliedStudyStage : Sheet {
+        doc /*
+        The SDK stages the study's pinned resolve deck as an ordinary run with
+        the engine's staged check through the one stager.
+
+        code: trid3nt/sdk/study.py
+        */
+        port stageOut : StageOut;
+    }
+
     part pestppStage : Sheet {
         doc /*
         PEST++'s study directory: the control file, its template and instruction
@@ -605,6 +615,9 @@ package SteeringSurface {
 
     interface pestppTelemacCalibratedStaged : StageRequest
         connect pestppTelemacCalibratedStage.stageOut to stager.stageIn;
+
+    interface appliedStudyStaged : StageRequest
+        connect appliedStudyStage.stageOut to stager.stageIn;
 
     interface canvasAnswered : DrawnValue
         connect canvasGate.drawOut to fill.drawIn;
@@ -983,11 +996,10 @@ package SteeringSurface {
         tracer is two on the fill. A wrapper's reads are primitives named from
         the module's own output table and never from a question. A run is recorded
         under its engine and its module, with no template field; every filled
-        slot carries the value it was solved at beside one of the four origins
-        the card renders, and the record carries the solver's own correct-end
-        flag. The four - user, derived, producer, template - are ONE set: a
-        template value's card row, its provenance entry and its journal entry
-        write the same word, and nothing declares where a value may come from.
+        slot carries the value it was solved at beside its origin, and the
+        record carries the solver's own correct-end flag. The card, provenance
+        and journal use one vocabulary: user, derived, producer, template and
+        study. Applying a study stamps its calibrated values as study values.
         A value that declares no default and is not optional is REQUIRED, and
         left unstated the fill refuses it in every mode. The adapters
         build a turn from the contracts IR and import no provider SDK for it.
@@ -1578,7 +1590,7 @@ package SteeringSurface {
     verify requirement ModuleIsTheUnit by
         "tests/runtime/test_run_journal.py::test_the_run_s_own_line_carries_every_input_and_the_correct_end_its_solve_step_said";
     verify requirement ModuleIsTheUnit by
-        "tests/telemac/test_telemac_run_identity.py::test_the_vocabulary_is_the_four_the_card_renders";
+        "tests/telemac/test_telemac_run_identity.py::test_the_card_vocabulary_includes_study_application";
     verify requirement ModuleIsTheUnit by
         "tests/telemac/test_telemac_module_surface.py::test_the_card_the_provenance_and_the_journal_say_one_origin";
     verify requirement ModuleIsTheUnit by

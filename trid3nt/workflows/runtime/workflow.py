@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass, field, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Collection, Iterator, Mapping, NoReturn, Sequence
 
-from trid3nt_contracts.common import SyntheticInput
+from trid3nt_contracts.common import Origin, SyntheticInput
 from trid3nt_contracts.coverage import SourceChoice
 
 from trid3nt.inputs.bound_domain import bind_domain, reset_domain
@@ -455,7 +455,7 @@ class Workflow:
         deck = await self.prepared(state)
         await archive(deck)
         solved = await execute(deck)
-        # A launch whose script was refused, or an unsplit study, keeps the in-process solve.
+        # A launch whose script was refused solves its prepared deck here.
         return await self._solved(deck) if solved is None else solved
 
     async def prepared(self, state: Fill) -> Deck:
@@ -482,6 +482,10 @@ class Workflow:
         async def step() -> RunResult:
             nonlocal stopped
             try:
+                if "applied_study" in deck.held:
+                    from trid3nt.sdk.study import solve_applied
+
+                    return await solve_applied(deck)
                 return await self.solve(deck)
             except Stopped as stop:
                 stopped = stop
@@ -618,7 +622,7 @@ class Workflow:
                 continue
             held = self.input(name)
             # A keyword of the carrier's deck is that deck's own row; one stated on a coupled body keeps the name it was stated under.
-            if getattr(held, "carried", False) and held.name in inputs:
+            if verdict.origin is not Origin.STUDY and getattr(held, "carried", False) and held.name in inputs:
                 continue
             inputs[name] = {
                 "value": (supplied.get(name) if getattr(held, "is_row", False)

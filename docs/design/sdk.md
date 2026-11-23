@@ -45,8 +45,8 @@ runtime's own (`docs/design/workflows.md`).
   hash) is the one the fill left, and every staged file still hashes to the deck's sha256. No clock is read. A set
   that changes a value changes the version; another fill of the same template in the case rewrites the row. A deck
   that is not current is dropped, its staged copy removed, and the run fills again - mesh, settle and deck - before
-  it solves. A deck is solved once: the next run fills again under a new run id. A launch that is not split
-  (PEST++'s study) writes its deck inside its solve, so its form carries none.
+  it solves. A deck is solved once: the next run fills again under a new run id. PEST++ stages the first selected
+  tool at fill. Later stages write their own decks when their inputs are known.
 - The run's record names `template`, `case`, `model` (the template a model was made over) and `version`; a call
   through the daemon records its template and the turn's case, and no model or version. Each recorded output is
   the layer whole as a reader loads it, so a run read back off its record loads as the map would load it.
@@ -236,6 +236,46 @@ copy the pair into a new directory named for the run. The action uses the
 existing signed object download.
 
 ## Calibration stages
+
+Put a named study in `calibrate.py`. Its base is a finished model version from
+the case. A packed case holds the base deck, mesh, and declared inputs for
+replay from Python without a daemon or object store.
+
+```python
+from trid3nt import case
+
+c = case("groundwater")
+base = c.version(version).model
+s = c.study(base, name="cal-1", observations=targets, parameters=bounds,
+            stages=["screen", "calibrate", "resolve"], keywords={"noptmax": iterations})
+s.screen()
+s.calibrate()
+s.resolve()
+```
+
+Use the same choice names and defaults as `calibrate`. `observations` names
+the targets for the base engine and accepts the same declarations as `observe`
+or `gauges`. Run the stated stages in order. Standalone screening uses `tune`
+when stated and otherwise keeps the declared parameter set.
+
+The last stage writes `studies/cal-1/`. The case lock pins every file with
+SHA-256. `study.json` records the base version, stated choices, completed stages,
+and available results, including tuned values, priors, posterior, phi and
+residuals. The directory holds PEST++ output files and, when requested, the
+resolved deck. The name is immutable. `STUDY_EXISTS` names the next free name.
+
+Apply a completed study in `case.py` with `m.apply(c.study("cal-1"))`. It sets
+the calibrated model values with origin `study`, and later assignments override
+them. Applying to a different version adds a `STUDY_STALE` Form warning with
+the study name and both version hashes. Strict fill refuses with that code.
+Applying to the original version without further edits uses the exact pinned
+resolve deck and solves it through the same engine.
+
+Chat also keeps a separately downloadable `calibrate.py` with a lock and the
+base version pin. The reviewed child runs its stages. When a review needs
+results from an earlier stage, the child sends a JSON request and the daemon
+renders the existing card and returns the decision. This uses the same review
+mode as the rest of the chat run.
 
 Configure `c.calibrate(...)` with its normal inputs and PEST++ dictionary keywords. Set
 `m.stages = ["calibrate"]` to fit without re-solving the physical model. `m.run()` returns a

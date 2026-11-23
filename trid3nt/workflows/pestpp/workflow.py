@@ -17,7 +17,7 @@ from trid3nt.inputs.instant import event_time
 from trid3nt.workflows.runtime import DeclarationError, RunResult, Workflow
 from trid3nt.workflows.runtime.module import identify_on, keyword_floor
 from trid3nt.workflows.runtime.sheet import Keyword
-from trid3nt.workflows.runtime.workflow import EVENT_TIME
+from trid3nt.workflows.runtime.workflow import EVENT_TIME, Deck
 
 from .errors import PestppError
 from .modules import PESTPP
@@ -267,15 +267,43 @@ class PestppWorkflow(Workflow):
         with tempfile.TemporaryDirectory(prefix="pestpp-study-") as directory:
             yield await Study.prepare(self, state, Path(directory))
 
-    async def launch(self, state: Fill) -> RunResult:
-        """Execute the requested stages over the same study exposed by the SDK."""
+    async def prepare(self, state: Fill) -> Deck:
+        """Stage the first selected PEST++ tool and collect the reviews possible before solving."""
+        import shutil
+
+        from .study import Study, review_fit, review_screen, screen_options
+
+        work = Path(tempfile.mkdtemp(prefix="pestpp-study-"))
+        try:
+            study = await Study.prepare(self, state, work)
+            if study.plan[0] == "screen":
+                await review_screen(study)
+                tool, options = "sen", screen_options(study.options)
+            else:
+                options, _ = await review_fit(study)
+                tool = study.method
+            authored = await study.author(tool, study.chosen, options)
+            study.staged[tool] = authored
+            staged, _, _ = authored
+            return Deck(state, run_id=staged["run_id"], prefix=self.engine, staged=staged, held={"study": study})
+        except BaseException:
+            shutil.rmtree(work, ignore_errors=True)
+            raise
+
+    async def solve(self, deck: Deck) -> RunResult:
+        """Execute the selected stages from the prepared study."""
+        import shutil
+
         from .study import calibrate, resolve, screen
 
+        study = deck.held["study"]
         operation = {"screen": screen, "calibrate": calibrate, "resolve": resolve}
-        async with self.study(state) as study:
+        try:
             for name in study.plan:
                 await operation[name](study)
             return await study.result()
+        finally:
+            shutil.rmtree(study.work, ignore_errors=True)
 
     async def _ranked(self, studied: Any, chosen: Sequence[tuple[str, float, float, bool]],
                       options: Mapping[str, Any], tune: int, *, stages: Sequence[str] = (),
@@ -283,12 +311,13 @@ class PestppWorkflow(Workflow):
                       ) -> tuple[dict[str, Any], list[str], list[str]]:
         """A Morris pass over every named parameter, ranked; the top ``tune`` confirmed on a card where a
         person reviews, taken as ranked otherwise and said."""
-        from trid3nt.inputs.review import gate_input_review
+        from trid3nt.sdk.script_run import study_review
         from trid3nt.inputs.run_notes import journal_note
 
         from . import outputs
+        from .study import screen_options
 
-        sen_options = {k: v for k, v in options.items() if not k.startswith("IES_") and k != "NOPTMAX"}
+        sen_options = screen_options(options)
         handle, files, _parameters, _templates = await studied("sen", chosen, sen_options)
         sensitivity = outputs.read_sensitivity(files)
         order = ranked(sensitivity)
@@ -300,7 +329,7 @@ class PestppWorkflow(Workflow):
             entries.append(SyntheticInput(param="stages", value=", ".join(stages), basis=Origin.USER))
             entries.extend(SyntheticInput(param=f"{name} {column.upper()}", value=value, basis=Origin.USER)
                            for name, row in parameter_data.items() for column, value in row.items())
-        outcome = await gate_input_review(tool_name=self.name, entries=entries,
+        outcome = await study_review(tool_name=self.name, entries=entries,
                                           params={"tuned": order[:tune]} if filtering else {})
         if not outcome.proceed:
             raise PestppError(f"the ranking was not confirmed: {outcome.cancel_reason or 'declined'}",
@@ -316,7 +345,7 @@ class PestppWorkflow(Workflow):
                         offsets: Sequence[tuple[str, float, str]] = (), stages: Sequence[str] = (),
                         parameter_data: Mapping[str, Mapping[str, Any]] = {}) -> None:
         """The study before it runs, on the one review card where a person reviews; a decline ends the run."""
-        from trid3nt.inputs.review import gate_input_review
+        from trid3nt.sdk.script_run import study_review
 
         from .authoring.control import sigma_range
         from .weights import USER
@@ -357,7 +386,7 @@ class PestppWorkflow(Workflow):
         bounds += [SyntheticInput(param="stages", value=", ".join(stages), basis=Origin.USER)] if stages else []
         bounds += [SyntheticInput(param=f"{name} {column.upper()}", value=value, basis=Origin.USER)
                    for name, row in parameter_data.items() for column, value in row.items()]
-        outcome = await gate_input_review(
+        outcome = await study_review(
             tool_name=self.name,
             entries=[*bounds, SyntheticInput(param="observations", value=len(observed), basis=Origin.PRODUCER),
                      *sigmas, SyntheticInput(param="method", value=f"pestpp-{method}",

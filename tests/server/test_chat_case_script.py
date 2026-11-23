@@ -71,12 +71,33 @@ def test_reviewed_script_and_served_lock_replay_in_plain_python(tmp_path, monkey
     assert replay["sha256"] == receipt["deck_sha256"]
 
 
-def test_unsplit_study_receives_the_existing_refusal(tmp_path):
+def test_archive_refuses_a_deck_that_has_not_been_prepared(tmp_path):
     c = case(tmp_path / "scratch")
-    study = c.calibrate()._workflow
+    workflow = c.telemac_dye_release()._workflow
     capture = script.Capture({}, lambda *args: {})
-    assert archive(tmp_path / "chat", capture, Deck(Fill(study))) == {"code": "CODEGEN_DECK_MISSING"}
+    assert archive(tmp_path / "chat", capture, Deck(Fill(workflow))) == {"code": "CODEGEN_DECK_MISSING"}
     assert not (tmp_path / "chat").exists()
+
+
+def test_archived_layer_inputs_keep_the_producers_units(tmp_path, monkeypatch):
+    from trid3nt.sdk.lock import Lock
+    from trid3nt_server.server.dispatch import case_script
+
+    c = case(tmp_path / "case")
+    state = Fill(c.modflow_water_table()._workflow)
+    env = production(state)
+    uri = "s3://cache/thickness.tif"
+    env.supplied["saturated_thickness"] = uri
+    capture = script.Capture({"saturated_thickness": "L4"}, lambda *args: {})
+    store = objects.FileStore(tmp_path / "store")
+    store.put_object(Bucket="cache", Key="thickness.tif", Body=b"measured thickness")
+    monkeypatch.setattr(objects, "served_client", lambda: store)
+    monkeypatch.setattr(case_script, "lookup_layer_for_handle",
+                        lambda value: {"uri": value, "units": "m", "quantity": "aquifer_saturated_thickness"})
+    values, _, pins = case_script._declarations(Lock(c.root), capture, Deck(state), {})
+    assert values["saturated_thickness"] == {"layer": {
+        "uri": "s3://" + pins["saturated_thickness"]["uri"], "units": "m", "quantity": "aquifer_saturated_thickness",
+    }}
 
 
 def test_point_probe_replays_as_the_existing_point_kind_and_served_banks(tmp_path, monkeypatch):

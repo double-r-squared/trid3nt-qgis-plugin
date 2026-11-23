@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
-from types import ModuleType
 from typing import Any, Mapping, Sequence
 
 from pydantic import BaseModel, Field
@@ -49,7 +48,6 @@ class Study:
     run: dict[str, Any]
     work: Path
     finished: Any
-    piece: ModuleType
     deck: Any
     targets: list
     observed: list
@@ -73,6 +71,12 @@ class Study:
     read_off: dict = field(default_factory=dict, init=False)
     value: Any = field(default=None, init=False)
     authored_names: set[str] = field(default_factory=set, init=False)
+    staged: dict[str, tuple] = field(default_factory=dict, init=False)
+    reviewed: set[str] = field(default_factory=set, init=False)
+
+    @property
+    def piece(self):
+        return piece(self.finished.engine)
 
     @classmethod
     async def prepare(cls, workflow: PestppWorkflow, state: Fill, work: Path) -> Study:
@@ -137,7 +141,7 @@ class Study:
             f"{group} {len(held)} at sigma {min(held):.3g} to {max(held):.3g} in the run's unit"
             for group, held in _sigmas(observed).items()))
 
-        return cls(workflow, run, work, finished, study, the_deck, targets, observed, chosen,
+        return cls(workflow, run, work, finished, the_deck, targets, observed, chosen,
                    sources, fields, options, method, frame, tune, balanced, offsets,
                    env.supplied.get("method") is not None, rows, plan, stages is not None)
 
@@ -146,8 +150,8 @@ class Study:
             self.run[label] = await call(fn, kwargs, label)
         return self.run[label]
 
-    async def studied(self, tool: str, chosen: Sequence[tuple[str, float, float, bool]], stated: Mapping[str, Any]
-                      ) -> tuple[dict, Path, list[Parameter], list[tuple[str, str]]]:
+    async def author(self, tool: str, chosen: Sequence[tuple[str, float, float, bool]], stated: Mapping[str, Any]
+                     ) -> tuple[dict, list[Parameter], list[tuple[str, str]]]:
         where = self.work / tool
         selected = {name for name, *_bounds in chosen}
         parameters, templates, instructions = await asyncio.to_thread(
@@ -170,6 +174,12 @@ class Study:
         staged = await staging.stage_study(where, tool=tool, control=staging.CONTROL_FILENAME,
                                            name=f"{self.workflow.name} of {self.finished.run_id}",
                                            model=self.finished.engine)
+        return staged, parameters, templates
+
+    async def studied(self, tool: str, chosen: Sequence[tuple[str, float, float, bool]], stated: Mapping[str, Any]
+                      ) -> tuple[dict, Path, list[Parameter], list[tuple[str, str]]]:
+        authored = self.staged.pop(tool, None)
+        staged, parameters, templates = authored if authored is not None else await self.author(tool, chosen, stated)
         handle = await self.stage(METHODS.get(tool, "ranking"), engine.solve_case,
                                   run=staged, cores=int(staged["case"]["cores"]))
         files = await asyncio.to_thread(outputs.fetch_study, handle["run_id"], self.work / f"{tool}-out")
@@ -196,6 +206,32 @@ class Study:
                          results=dict(self.run))
 
 
+async def review_screen(study: Study) -> None:
+    if "screen" not in study.reviewed and (study.explicit_plan or study.rows):
+        options = {k: v for k, v in study.options.items() if k.startswith("GSA_") or k.startswith("MORRIS_")}
+        await study.workflow._reviewed(study.chosen, study.sources, study.observed, options, "sen", stated=False,
+                                       fields=study.fields, offsets=study.offsets,
+                                       stages=study.plan if study.explicit_plan else (), parameter_data=study.rows)
+        study.reviewed.add("screen")
+
+
+async def review_fit(study: Study) -> tuple[dict[str, Any], bool]:
+    chosen = study.chosen
+    options, localizing = localized(study.options, study.method, {k: v for k, v in study.fields.items()
+                                                                  if k in {row[0] for row in chosen}})
+    if "calibrate" not in study.reviewed:
+        await study.workflow._reviewed(chosen, study.sources, study.observed, options, study.method,
+                                       stated=study.stated_method, fields=study.fields, localizing=localizing,
+                                       offsets=study.offsets, stages=study.plan if study.explicit_plan else (),
+                                       parameter_data=study.rows)
+        study.reviewed.add("calibrate")
+    return options, localizing
+
+
+def screen_options(options: Mapping[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in options.items() if not k.startswith("IES_") and k != "NOPTMAX"}
+
+
 async def screen(study: Study) -> str:
     """Run a Morris pass. An explicit tune may limit the parameters of a subsequent calibration."""
     study.require_new("screen")
@@ -206,11 +242,7 @@ async def screen(study: Study) -> str:
     filtering = study.tune is not None and study.tune < len(chosen) and "calibrate" not in study.stages
     tune = int(study.tune) if filtering else len(chosen)
     groups = {}
-    if study.explicit_plan or study.rows:
-        options = {k: v for k, v in study.options.items() if k.startswith("GSA_") or k.startswith("MORRIS_")}
-        await study.workflow._reviewed(chosen, study.sources, study.observed, options, "sen", stated=False,
-                                       fields=study.fields, offsets=study.offsets,
-                                       stages=study.plan if study.explicit_plan else (), parameter_data=study.rows)
+    await review_screen(study)
 
     async def studied(tool, candidates, stated):
         result = await study.studied(tool, candidates, stated)
@@ -240,11 +272,7 @@ async def calibrate(study: Study) -> str:
         raise PestppError("State noptmax to run the calibrate stage.", error_code="PESTPP_ITERATIONS_UNSTATED")
     chosen, method, observed = study.chosen, study.method, study.observed
     fields, finished, sources, balanced = study.fields, study.finished, study.sources, study.balanced
-    options, localizing = localized(study.options, method, {k: v for k, v in fields.items()
-                                                            if k in {row[0] for row in chosen}})
-    await study.workflow._reviewed(chosen, sources, observed, options, method, stated=study.stated_method,
-                                   fields=fields, localizing=localizing, offsets=study.offsets,
-                                   stages=study.plan if study.explicit_plan else (), parameter_data=study.rows)
+    options, localizing = await review_fit(study)
     handle, files, parameters, templates = await study.studied(method, chosen, options)
     read_off = await asyncio.to_thread(_calibration, method, files)
     read_off["spread"] = {name: complete_values(parameters, values) for name, values in read_off["spread"].items()}

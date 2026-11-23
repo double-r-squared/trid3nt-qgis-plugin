@@ -102,6 +102,15 @@ smaller than the declared parameter count, then calibrates and resolves. A prior
 publishes a `StudyResult` with its study ID, stage run IDs and any ranking. Calibration charts use the normal
 chart publication channel. The SDK's `open_study`, `screen`, `calibrate` and `resolve` expose the same stages.
 
+The template prepares the first selected tool's checked deck before execution.
+It reviews inputs available at that point. A ranking card and any fit review
+that needs its selection still follow screening. The reviewed `calibrate.py`
+child requests those cards from the daemon and uses its decisions to stage and
+run the next tool. Standalone runs use the unattended inputs and skip the wait.
+The generated script pins the finished case model. A named study records its
+choices and outputs under `studies/<name>/`, including the native resolve deck
+when requested. See [Calibration stages](sdk.md#calibration-stages).
+
 `parameter_data` sets the native PEST++ table columns for individual parameters, indexed by authored `PARNME`.
 For example, `{"npf_k": {"PARTRANS": "none", "PARVAL1": 0.8}}` keeps the declared MODFLOW array and uses 0.8
 as its initial PEST-coordinate multiplier. Rows take `PARNME`, `PARTRANS`, `PARCHGLIM`, `PARVAL1`,

@@ -137,7 +137,7 @@ async def test_sdk_and_template_stages_share_control_and_skip_resolve(monkeypatc
 
     async def stage(source, *, tool, control, **_kwargs):
         recorded.append((tool, (source / control).read_bytes(), (source / "study_parameters.csv").read_bytes()))
-        return {"case": {"cores": 1}}
+        return {"run_id": "fit", "case": {"cores": 1}}
 
     monkeypatch.setattr(staging, "stage_study", stage)
     monkeypatch.setattr(engine, "solve_case", AsyncMock(return_value={"run_id": "fit"}))
@@ -149,7 +149,7 @@ async def test_sdk_and_template_stages_share_control_and_skip_resolve(monkeypatc
     monkeypatch.setattr(workflow, "_reviewed", AsyncMock())
     monkeypatch.setattr(workflow, "publish_charts", AsyncMock())
     monkeypatch.setattr(modflow, "calibrated", AsyncMock())
-    result = await workflow.launch(state)
+    result = await workflow.solve(await workflow.prepare(state))
     assert isinstance(result.value, StudyResult)
     assert result.value.stages == {"calibrate": "fit"}
     assert "solve" not in result.results

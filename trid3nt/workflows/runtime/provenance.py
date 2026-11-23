@@ -16,7 +16,7 @@ __all__ = ["merge_provenance", "provenance_entries"]
 
 #: How a value's origin reads beside its description.
 _STATED = {Origin.USER: "supplied on this invocation",
-           Origin.TEMPLATE: "declared default"}
+           Origin.TEMPLATE: "declared default", Origin.STUDY: "calibrated by a study"}
 
 
 def provenance_entries(answered: Mapping[str, Any],

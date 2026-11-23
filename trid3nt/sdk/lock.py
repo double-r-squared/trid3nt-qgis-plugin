@@ -13,6 +13,7 @@ import json
 import logging
 import re
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -57,7 +58,13 @@ class Lock:
         """Write the lock where its bytes changed; a lock read back and written again is the same file."""
         text = json.dumps(self.data, sort_keys=True, indent=2) + "\n"
         if not self.path.is_file() or self.path.read_text(encoding="utf-8") != text:
-            self.path.write_text(text, encoding="utf-8")
+            with tempfile.NamedTemporaryFile(dir=self.root, prefix=".trid3nt-lock-", delete=False) as part:
+                path = Path(part.name)
+            try:
+                path.write_text(text, encoding="utf-8")
+                path.replace(self.path)
+            finally:
+                path.unlink(missing_ok=True)
 
     def hold_template(self, source: bytes) -> str:
         """Keep the exact declaration bytes by hash and verify an existing object of that hash."""
@@ -191,7 +198,12 @@ class Lock:
             uri = f"{prefix}/{path}"
         _, bucket, key = storage.split_object_uri(uri)
         section, _, name = path.partition("/")
-        target = storage.FileStore(self.root).path(section, name)
+        if section in {"versions", "studies"}:
+            target = (self.root / section / name).resolve()
+            if not target.is_relative_to(self.root / section):
+                raise DeclarationError("The object pin names an invalid path.", error_code="DIGEST_MISMATCH")
+        else:
+            target = storage.FileStore(self.root).path(section, name)
         part = target.with_name(f".{target.name}.part")
         target.parent.mkdir(parents=True, exist_ok=True)
         try:
