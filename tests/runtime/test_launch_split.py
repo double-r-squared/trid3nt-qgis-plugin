@@ -11,6 +11,7 @@ import pytest
 
 from trid3nt.inputs.point import Point
 from trid3nt.inputs.review import ReviewOutcome
+from trid3nt.sdk.script_run import load_deck, save_deck
 from trid3nt.tools import TOOL_REGISTRY
 from trid3nt.tools.mesh import step as mesh_step
 from trid3nt.workflows.geoclaw import workflow as gw
@@ -88,11 +89,15 @@ def test_the_first_half_writes_the_deck_and_solves_nothing_and_the_second_solves
     assert deck.staged["run_id"] == deck.run_id and deck.state is state
     written = list(calls)
     calls.clear()
-    # The second half runs in another loop, as a model's run after its fill does.
-    run = asyncio.run(workflow._solved(deck))
+    reviewed = load_deck(save_deck(deck), workflow)
+    assert reviewed.state.workflow is workflow
+    assert reviewed.state.env.inputs is reviewed.state.inputs
+    assert reviewed.staged == deck.staged and reviewed.held == deck.held
+    # The solve only reads the prepared deck after the handoff.
+    run = asyncio.run(workflow._solved(reviewed))
     assert "solve" in calls and "outputs" in calls
     assert not {"mesh", "sheet", "write"} & set(calls), (written, calls)
-    assert run.results["solve"]["staged"] is deck.staged
+    assert run.results["solve"]["staged"] is reviewed.staged
 
 
 def test_the_daemon_shows_the_card_between_the_written_deck_and_the_solve(monkeypatch):

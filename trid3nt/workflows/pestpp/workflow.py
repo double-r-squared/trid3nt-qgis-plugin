@@ -1,20 +1,12 @@
-"""The PEST++ workflow: a study over a finished run, and the run its best parameter set makes.
-
-``launch`` runs one order - the finished run's deck fetched, its engine's piece writing a template over each
-named parameter and observing each target, the study reviewed, a sensitivity pass where it ranks more
-parameters than are tuned, the calibration by the study's method (an ensemble, pestpp-ies, or one parameter
-set over its Jacobian, pestpp-glm), then the deck solved once more with the calibrated parameters through the
-run's own engine and published as that engine publishes a run.
-"""
+"""The PEST++ calibration template, its review cards and result publication."""
 
 from __future__ import annotations
 
-import asyncio
 import importlib
 import logging
 import math
-import shutil
 import tempfile
+from contextlib import asynccontextmanager
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
@@ -22,11 +14,10 @@ from typing import TYPE_CHECKING, Any, Mapping, Sequence
 from trid3nt_contracts.common import Origin, SyntheticInput
 
 from trid3nt.inputs.instant import event_time
-from trid3nt.inputs.slots import BED
 from trid3nt.workflows.runtime import DeclarationError, RunResult, Workflow
-from trid3nt.workflows.runtime.workflow import EVENT_TIME
 from trid3nt.workflows.runtime.module import identify_on, keyword_floor
 from trid3nt.workflows.runtime.sheet import Keyword
+from trid3nt.workflows.runtime.workflow import EVENT_TIME
 
 from .errors import PestppError
 from .modules import PESTPP
@@ -144,22 +135,23 @@ def _priors(parameters: Sequence[Any], options: Mapping[str, Any], fields: Mappi
     import statistics
 
     from . import outputs
-    from .authoring.control import at_bounds, prior
+    from .authoring.control import at_bounds, complete_values, prior
 
-    held = prior(parameters, options)
+    held = prior(parameters, {k: v for k, v in options.items() if k != "PARTRANS"})
     for identifier, field in fields.items():
         if identifier.lower() in held:
             held[identifier.lower()]["pilot_points"] = {"count": held[identifier.lower()]["parameters"], **field}
     if method != "ies":
         return held
     for label, iteration in (("prior_ensemble", 0), ("posterior_ensemble", None)):
-        ensemble = outputs.read_parameter_ensemble(files, iteration)
+        ensemble = {name: complete_values(parameters, values) for name, values in
+                    outputs.read_parameter_ensemble(files, iteration).items()}
         for group, stated in held.items():
             members = [p for p in parameters if p.group == group]
-            rows = [[math.log10(real[p.name]) if stated["transform"] == "log" else real[p.name] + p.offset / p.scale
+            rows = [[math.log10(real[p.name]) if p.transform == "log" else real[p.name] + p.offset / p.scale
                      for real in ensemble.values()] for p in members]
             stuck = sum(c["lower"] + c["upper"] for real in ensemble.values()
-                        for c in at_bounds(members, real, stated["transform"]).values())
+                        for c in at_bounds(members, real).values())
             stated[label] = {"mean": statistics.fmean(v for row in rows for v in row),
                              "sd": statistics.fmean(statistics.pstdev(row) for row in rows), "of": stated["sd_of"],
                              "at_bounds": stuck, "values": len(members) * len(ensemble)}
@@ -172,6 +164,24 @@ def _sigmas(observed: Sequence[Any]) -> dict[str, list[float]]:
     for target in observed:
         held.setdefault(target.group, []).append(target.sigma)
     return held
+
+
+_STAGES = ("screen", "calibrate", "resolve")
+
+
+def stage_order(stated: Any, *, screen: bool) -> tuple[str, ...]:
+    """A stated sequence is exact. An unstated sequence applies the legacy tune condition."""
+    if stated is None:
+        return _STAGES if screen else _STAGES[1:]
+    if (not isinstance(stated, (list, tuple)) or not stated
+            or any(not isinstance(name, str) or name not in _STAGES for name in stated)
+            or len(set(stated)) != len(stated)):
+        raise PestppError("stages takes a nonempty sequence of distinct screen, calibrate and resolve names.",
+                          error_code="PESTPP_STAGES_INVALID")
+    plan = tuple(stated)
+    if "resolve" in plan and ("calibrate" not in plan or plan.index("resolve") < plan.index("calibrate")):
+        raise PestppError("resolve requires calibrate earlier in stages.", error_code="PESTPP_STAGES_ORDER")
+    return plan
 
 
 class PestppWorkflow(Workflow):
@@ -226,8 +236,14 @@ class PestppWorkflow(Workflow):
         except PestppError as unknown:
             refused["method"] = Verdict(REJECTED, stated.value, code=unknown.error_code, reason=str(unknown))
             method = "ies"
+        declared = getattr(state, "inputs", {}).get("stages")
+        try:
+            stages = stage_order(getattr(declared, "value", None), screen=False)
+        except PestppError as invalid:
+            refused["stages"] = Verdict(REJECTED, declared.value, code=invalid.error_code, reason=str(invalid))
+            return refused
         own, _ = keyword_floor([PESTPP], dict(state.keywords))
-        if own.get("NOPTMAX") in (None, 0):
+        if "calibrate" in stages and own.get("NOPTMAX") in (None, 0):
             evaluated = "ensemble is" if method == "ies" else "starting parameters are"
             refused["noptmax"] = Verdict(
                 REJECTED, own.get("NOPTMAX"), code="PESTPP_ITERATIONS_UNSTATED",
@@ -237,153 +253,34 @@ class PestppWorkflow(Workflow):
 
     def recorded_engine(self, run: RunResult) -> str | None:
         """The record is the calibrated run's: an ordinary run of the engine the study ran its model on."""
+        from .study import StudyResult
+
+        if isinstance(run.value, StudyResult):
+            return self.engine
         return str((run.results.get("study") or {}).get("model_engine") or self.engine)
 
+    @asynccontextmanager
+    async def study(self, state: Fill):
+        """Hold the reviewed study's working files for the selected stages."""
+        from .study import Study
+
+        with tempfile.TemporaryDirectory(prefix="pestpp-study-") as directory:
+            yield await Study.prepare(self, state, Path(directory))
+
     async def launch(self, state: Fill) -> RunResult:
-        """The run, in order: the deck, the study's files, its review, the ranking where one is asked for, the
-        calibration by the study's method, then the calibrated deck solved and published."""
-        from trid3nt.inputs.run_notes import journal_note
-        from trid3nt.render.emission import begin_substeps, current_emitter, substep
-        from trid3nt.workflows.runtime.fill import call, production, read
+        """Execute the requested stages over the same study exposed by the SDK."""
+        from .study import calibrate, resolve, screen
 
-        from trid3nt.errors import accuracy_not_cited_warning, parameters_at_bounds_warning, unit_start_warning
-
-        from . import engine, outputs, staging, weights
-        from .authoring.control import at_bounds, write_control
-
-        env = production(state)
-        run = env.run
-        emitter = current_emitter()
-        method = _method(await read(env, "method"))
-        finished = await read(env, "run")
-        study = piece(finished.engine)
-        unread = sorted(name for name in _ROWS if name != study.ROW and env.supplied.get(name) is not None)
-        if unread:
-            raise PestppError(f"{', '.join(unread)} is stated, and a {finished.engine} run is held to {study.ROW}",
-                              error_code="PESTPP_OBSERVATIONS_UNREAD")
-        frame = str(((finished.record.get("inputs") or {}).get("vertical_frame") or {}).get("value") or "")
-        if frame:
-            # An elevation the study reads is read on the frame the finished run counted its bed from.
-            env.run.setdefault(BED.states[0].name, frame)
-        observations = await read(env, study.ROW)
-        observations = observations if isinstance(observations, tuple) else (observations,)
-        named = dict(await read(env, "parameters") or {})
-        tune = await read(env, "tune")
-        balanced = bool(await read(env, "balance"))
-        if balanced and method != "ies":
-            raise PestppError("balancing the groups' shares of phi is PEST++'s ies_phi_factor_file, which pestpp-ies "
-                              "reads and pestpp-glm does not; balance an ies study, or weigh the groups by sigma",
-                              error_code="PESTPP_BALANCE_UNSUPPORTED")
-        options, _ = keyword_floor([PESTPP], dict(state.keywords))
-        chosen, sources, spatial = [], {}, {}
-        for identifier, stated in named.items():
-            lower, upper, sources[identifier.lower()], absolute = _bounds(identifier, stated)
-            chosen.append((identifier, lower, upper, absolute))
-            if isinstance(stated, Mapping) and "pilot_points" in stated:
-                spatial[identifier] = stated["pilot_points"] or {}
-        ranking = tune is not None and int(tune) < len(chosen)
-        begin_substeps(emitter, 3 + ranking)
-        work = Path(tempfile.mkdtemp(prefix="pestpp-study-"))
-
-        async def stage(label: str, fn: Any, /, **kwargs: Any) -> Any:
-            async with substep(emitter, label):
-                run[label] = await call(fn, kwargs, label)
-            return run[label]
-
-        try:
-            deck_dir = work / "deck"
-            await asyncio.to_thread(staging.fetch_deck, finished.staged, deck_dir)
-            the_deck = await asyncio.to_thread(study.deck, deck_dir, finished)
-            fields = study.fields(spatial, the_deck)
-            targets, left = study.targets(observations, the_deck=the_deck, finished=finished, frame=frame)
-            for line in left:
-                journal_note(f"a {study.SITE} is not held to the run: {line}")
-            if not targets:
-                raise PestppError(f"no {study.SITE}'s reading is a {study.OBSERVED} at a {study.PLACE} of the run, so "
-                                  "the study has nothing to be held to", error_code="PESTPP_OBSERVATIONS_NONE")
-            targets = weights.restated(targets, await read(env, "sigma"))
-            observed = [target for target, _where in targets]
-            uncited = sum(target.group == weights.NOT_CITED for target in observed)
-            if uncited:
-                journal_note(accuracy_not_cited_warning(count=uncited))
-            if started := weights.unit_started(observed):
-                journal_note(unit_start_warning(count=started))
-            offsets, said = study.supplied(the_deck)
-            for line in said:
-                journal_note(line)
-            if held := sum(target.datum is not None for target in observed):
-                journal_note(f"{held} {study.SITE} zeros cite their accuracy, so each is a datum parameter of its own "
-                             "whose prior sd that accuracy is, and leaves the target's sigma")
-            journal_note(f"each {study.SITE} weighs one over its sigma in phi: " + "; ".join(
-                f"{group} {len(held)} at sigma {min(held):.3g} to {max(held):.3g} in the run's unit"
-                for group, held in _sigmas(observed).items()))
-
-            async def studied(tool: str, chosen: Sequence[tuple[str, float, float, bool]], stated: Mapping[str, Any]
-                              ) -> tuple[dict[str, Any], Path, list, list]:
-                where = work / tool
-                parameters, templates, instructions = await asyncio.to_thread(
-                    study.interface, deck_dir, where, chosen, the_deck=the_deck, targets=targets,
-                    spatial={k: v for k, v in fields.items() if k in {row[0] for row in chosen}})
-                write_control(where, name=staging.CONTROL_FILENAME, parameters=parameters, observations=observed,
-                              templates=templates, instructions=instructions, command=study.command(the_deck),
-                              stated=stated, own=study.OWN, balanced=balanced and tool == "ies")
-                staged = await staging.stage_study(where, tool=tool, control=staging.CONTROL_FILENAME,
-                                                   name=f"{self.name} of {finished.run_id}",
-                                                   model=finished.engine)
-                handle = await stage(METHODS.get(tool, "ranking"), engine.solve_case,
-                                     run=staged, cores=int(staged["case"]["cores"]))
-                files = await asyncio.to_thread(outputs.fetch_study, handle["run_id"], work / f"{tool}-out")
-                return handle, files, parameters, templates
-
-            if ranking:
-                kept = await self._ranked(studied, chosen, options, int(tune))
-                chosen = [row for row in chosen if row[0].lower() in kept]
-            options, localizing = localized(options, method, {k: v for k, v in fields.items()
-                                                               if k in {row[0] for row in chosen}})
-            await self._reviewed(chosen, sources, observed, options, method,
-                                 stated=env.supplied.get("method") is not None, fields=fields, localizing=localizing,
-                                 offsets=offsets)
-            handle, files, parameters, templates = await studied(method, chosen, options)
-            read_off = await asyncio.to_thread(_calibration, method, files)
-            best = read_off["best"]
-            stuck = at_bounds(parameters, best, str(options.get("PARTRANS") or ""))
-            if stuck:
-                journal_note(parameters_at_bounds_warning(groups=stuck))
-            widening = weights.widened(observed, read_off["residuals"])
-            journal_note(f"the widening after the fit (the discrepancy rule) scales each group's sigma so its phi is "
-                         f"its count, the calibrated parameters unchanged: phi {widening['phi']:.4g} over "
-                         f"{widening['observations']} observations before, {widening['widened_phi']:.4g} after; "
-                         + "; ".join(f"{group} x{held['factor']:.3g}" for group, held in widening["groups"].items()))
-            solved = await stage("solve", study.calibrated, finished=finished, study_dir=work / method,
-                                 the_deck=the_deck, parameters=parameters, templates=templates, best=best,
-                                 frame=frame)
-            run["study"] = {"run_id": handle["run_id"], "tool": method, "model_engine": finished.engine,
-                            "finished_run": finished.run_id, "parameters": {
-                                p.name: {"lower": p.lower, "upper": p.upper,
-                                         "source": sources.get(p.group) or sources.get(p.name) or None,
-                                         "calibrated": best[p.name], "written": best[p.name] * p.scale + p.offset,
-                                         **({"site": list(p.site)} if p.site else {})}
-                                for p in parameters},
-                            "prior": _priors(parameters, options, fields, files, method),
-                            "phi": read_off["phi"], **read_off["kept"], "balanced": balanced, "at_bounds": stuck,
-                            **({"localization": {"ies_autoadaloc": options[LOCALIZED[0]],
-                                                 "source": LOCALIZED[2] if localizing else "stated by the user"}}
-                               if LOCALIZED[0] in options else {}),
-                            "widening": {k: v for k, v in widening.items() if k != "sigma"},
-                            "observations": [{"name": o.name, "target": o.value, "group": o.group, "sigma": o.sigma,
-                                              "weight": o.weight, "basis": o.basis,
-                                              "parts": [{"member": m, "sigma": s, "cite": c} for m, s, c in o.parts],
-                                              **({"datum": {"sd": o.datum[0], "cite": o.datum[1]}} if o.datum else {}),
-                                              "widened_sigma": widening["sigma"].get(o.name)} for o in observed]}
-            value = await self._publish_calibrated(study, solved, phi=read_off["phi"],
-                                                   residuals=read_off["residuals"], ensemble=read_off["spread"],
-                                                   parameters=parameters, finished=finished)
-            return RunResult(value=value, results=dict(run))
-        finally:
-            shutil.rmtree(work, ignore_errors=True)
+        operation = {"screen": screen, "calibrate": calibrate, "resolve": resolve}
+        async with self.study(state) as study:
+            for name in study.plan:
+                await operation[name](study)
+            return await study.result()
 
     async def _ranked(self, studied: Any, chosen: Sequence[tuple[str, float, float, bool]],
-                      options: Mapping[str, Any], tune: int) -> list[str]:
+                      options: Mapping[str, Any], tune: int, *, stages: Sequence[str] = (),
+                      parameter_data: Mapping[str, Mapping[str, Any]] = {}, filtering: bool = True
+                      ) -> tuple[dict[str, Any], list[str], list[str]]:
         """A Morris pass over every named parameter, ranked; the top ``tune`` confirmed on a card where a
         person reviews, taken as ranked otherwise and said."""
         from trid3nt.inputs.review import gate_input_review
@@ -395,24 +292,29 @@ class PestppWorkflow(Workflow):
         handle, files, _parameters, _templates = await studied("sen", chosen, sen_options)
         sensitivity = outputs.read_sensitivity(files)
         order = ranked(sensitivity)
-        outcome = await gate_input_review(
-            tool_name=self.name,
-            entries=[SyntheticInput(param=row["parameter"], value=round(float(row["sen_mean_abs"]), 6),
-                                    basis=Origin.DERIVED, real_source_if_any=f"pestpp-sen {handle['run_id']}",
-                                    note=f"rank {order.index(row['parameter']) + 1} by mean absolute elementary effect")
-                     for row in sensitivity],
-            params={"tuned": order[:tune]})
+        entries = [SyntheticInput(param=row["parameter"], value=round(float(row["sen_mean_abs"]), 6),
+                                  basis=Origin.DERIVED, real_source_if_any=f"pestpp-sen {handle['run_id']}",
+                                  note=f"rank {order.index(row['parameter']) + 1} by mean absolute elementary effect")
+                   for row in sensitivity]
+        if stages:
+            entries.append(SyntheticInput(param="stages", value=", ".join(stages), basis=Origin.USER))
+            entries.extend(SyntheticInput(param=f"{name} {column.upper()}", value=value, basis=Origin.USER)
+                           for name, row in parameter_data.items() for column, value in row.items())
+        outcome = await gate_input_review(tool_name=self.name, entries=entries,
+                                          params={"tuned": order[:tune]} if filtering else {})
         if not outcome.proceed:
             raise PestppError(f"the ranking was not confirmed: {outcome.cancel_reason or 'declined'}",
                               error_code="PESTPP_RANKING_DECLINED")
         kept = [str(name).lower() for name in outcome.params.get("tuned") or order[:tune]]
-        journal_note(f"the sensitivity pass ranks {', '.join(order)}; the study tunes {', '.join(kept)}")
-        return kept
+        selection = f"; the study tunes {', '.join(kept)}" if filtering else ""
+        journal_note(f"the sensitivity pass ranks {', '.join(order)}{selection}")
+        return handle, order, kept
 
     async def _reviewed(self, chosen: Sequence[tuple[str, float, float, bool]], sources: Mapping[str, str],
                         observed: list, options: Mapping[str, Any], method: str, *, stated: bool,
                         fields: Mapping[str, Mapping[str, Any]] = {}, localizing: bool = False,
-                        offsets: Sequence[tuple[str, float, str]] = ()) -> None:
+                        offsets: Sequence[tuple[str, float, str]] = (), stages: Sequence[str] = (),
+                        parameter_data: Mapping[str, Mapping[str, Any]] = {}) -> None:
         """The study before it runs, on the one review card where a person reviews; a decline ends the run."""
         from trid3nt.inputs.review import gate_input_review
 
@@ -431,7 +333,11 @@ class PestppWorkflow(Workflow):
                        basis=Origin.USER if "PAR_SIGMA_RANGE" in options else Origin.PRODUCER)
                    for name, lower, upper, absolute in chosen]
         bounds += [SyntheticInput(param=f"{name} pilot points", value=(
-                       f"every {field['spacing']:g} m; exponential variogram, range {field['a']:g} m, contribution 1"),
+                       f"every {field['spacing']:g} m; {field['variogram']} variogram, range {field['a']:g} m, "
+                       f"contribution {field['contribution']:g}"
+                       + "".join(f", {key} {field[key]:g}" for key in field["structure_stated"] if key != "contribution")
+                       + (f"; maxpts_interp {field['maxpts_interp']}, remove_negative_factors {field['remove_negative_factors']}"
+                          if field.get("kriging_stated") else "")),
                        basis=Origin.USER if field["stated"] else Origin.TEMPLATE,
                        real_source_if_any=f"spacing: {field['spacing_source']}; range: {field['a_source']}")
                    for name, field in fields.items() if name in {row[0] for row in chosen}]
@@ -448,6 +354,9 @@ class PestppWorkflow(Workflow):
         sigmas = [SyntheticInput(param=f"sigma {group}", value=f"{min(held):.3g} to {max(held):.3g} in the run's unit",
                                  basis=Origin.USER if any(o.basis == USER for o in observed if o.group == group)
                                  else Origin.PRODUCER) for group, held in _sigmas(observed).items()]
+        bounds += [SyntheticInput(param="stages", value=", ".join(stages), basis=Origin.USER)] if stages else []
+        bounds += [SyntheticInput(param=f"{name} {column.upper()}", value=value, basis=Origin.USER)
+                   for name, row in parameter_data.items() for column, value in row.items()]
         outcome = await gate_input_review(
             tool_name=self.name,
             entries=[*bounds, SyntheticInput(param="observations", value=len(observed), basis=Origin.PRODUCER),
@@ -462,11 +371,17 @@ class PestppWorkflow(Workflow):
                                   residuals: list, ensemble: Mapping[str, Mapping[str, float]], parameters: list,
                                   finished: Any) -> Any:
         """The calibrated run published as its engine publishes a run, the study's four charts beside it."""
+        record = await study.published(solved)
+        await self.publish_charts(study, str(solved["run_id"]), finished, phi=phi, residuals=residuals,
+                                  ensemble=ensemble, parameters=parameters)
+        return record
+
+    async def publish_charts(self, study: ModuleType, run_id: str, finished: Any, *, phi: list,
+                             residuals: list, ensemble: Mapping[str, Mapping[str, float]], parameters: list) -> None:
         from trid3nt.render.formats import Chart, Deliverable, publish
 
         from .charts import fit_chart, parameter_chart, phi_chart, residual_chart
 
-        record = await study.published(solved)
         captions = dict(self._states("CAPTIONS", {}))
         captions = {**captions, **{key: f"{captions[key]} {study.OBSERVED}" for key in ("fit", "residuals")
                                    if key in captions}}
@@ -479,6 +394,4 @@ class PestppWorkflow(Workflow):
                                                                               if p.transform == "log"],
                                                                    caption=captions["parameters"])),
                              caption=captions["parameters"])]
-        await publish(run_id=str(solved["run_id"]), engine=self.engine, name=f"{finished.run_id} calibrated",
-                      items=items)
-        return record
+        await publish(run_id=run_id, engine=self.engine, name=f"{finished.run_id} calibrated", items=items)

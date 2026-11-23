@@ -247,18 +247,36 @@ def fields(spatial: Mapping[str, Any], the_deck: Deck) -> dict[str, dict[str, An
     ``spatial`` is ``{identifier: {"spacing": S, "source": "...", "variogram": {"a": A, "source": "..."}}}``, any part
     left out. Unstated, the spacing is 10 of the grid's median edges and the range that spacing (pyEMU's rule); a range left
     out of a stated spacing is that spacing. A variogram of another type, or a member not read, refuses."""
+    from math import isfinite
+
+    from ..helpers.geostat import NEAREST, VARIOGRAMS
+
+    structure_defaults = {"contribution": 1.0, "nugget": 0.0, "anisotropy": 1.0, "bearing": 0.0}
     out: dict[str, dict[str, Any]] = {}
     for identifier, stated in spatial.items():
         stated = dict(stated or {})
         variogram = dict(stated.get("variogram") or {})
-        unread = sorted(set(stated) - {"spacing", "source", "variogram"}) + sorted(set(variogram) - {"a", "source", "type"})
+        unread = ((stated.keys() - {"spacing", "source", "variogram", "maxpts_interp", "remove_negative_factors"})
+                  | (variogram.keys() - {"a", "source", "type", *structure_defaults}))
         if unread:
             raise PestppError(f"{identifier}'s pilot points state {len(unread)} members a study does not read; it "
-                              "reads a spacing and its source, and a variogram's type, range a and source",
+                              "reads spacing, source, variogram, maxpts_interp and remove_negative_factors",
                               error_code="PESTPP_PILOT_POINTS_UNREAD")
-        if str(variogram.get("type") or "exponential").lower() != "exponential":
-            raise PestppError(f"{identifier}'s variogram is stated of another type, and a study lays an exponential "
-                              "one", error_code="PESTPP_VARIOGRAM_UNKNOWN")
+        kind = str(variogram.get("type") or "exponential").lower()
+        if kind not in VARIOGRAMS:
+            raise PestppError(f"{identifier}'s variogram {kind!r} is unsupported. State one of {', '.join(VARIOGRAMS)}.",
+                              error_code="PESTPP_VARIOGRAM_UNKNOWN")
+        # pyEMU 1.7.0 PstFrom, GeoStruct and Vario2d constructor defaults.
+        structure = {name: variogram.get(name, default) for name, default in structure_defaults.items()}
+        if (any(type(v) not in (int, float) or not isfinite(v) for v in structure.values())
+                or structure["contribution"] <= 0 or structure["nugget"] < 0 or structure["anisotropy"] <= 0):
+            raise PestppError("Variogram contribution and anisotropy must be positive, nugget nonnegative and "
+                              "bearing finite.", error_code="PESTPP_PILOT_POINTS_INVALID")
+        nearest = stated.get("maxpts_interp", NEAREST)
+        remove_negative = stated.get("remove_negative_factors", True)
+        if type(nearest) is not int or nearest < 1 or type(remove_negative) is not bool:
+            raise PestppError("maxpts_interp takes a positive integer and remove_negative_factors takes a boolean.",
+                              error_code="PESTPP_PILOT_POINTS_INVALID")
         if stated.get("spacing") is not None:
             spacing, spacing_source = float(stated["spacing"]), str(stated.get("source") or "stated by the user")
         else:
@@ -267,12 +285,15 @@ def fields(spatial: Mapping[str, Any], the_deck: Deck) -> dict[str, dict[str, An
             a, a_source = float(variogram["a"]), str(variogram.get("source") or "stated by the user")
         else:
             a, a_source = spacing, _PYEMU if spacing_source == _PYEMU else "pyEMU 1.7.0 PstFrom default: the range is the spacing"
-        if not (spacing > 0.0 and a > 0.0):
+        if not (isfinite(spacing) and isfinite(a) and spacing > 0.0 and a > 0.0):
             raise PestppError(f"{identifier}'s pilot points are spaced {spacing:g} with a range of {a:g}; both above 0",
                               error_code="PESTPP_PILOT_POINTS_UNSTATED")
-        out[identifier] = {"spacing": spacing, "spacing_source": spacing_source, "variogram": "exponential",
-                           "a": a, "a_source": a_source, "contribution": 1.0, "nugget": 0.0,
-                           "stated": stated.get("spacing") is not None or variogram.get("a") is not None}
+        out[identifier] = {"spacing": spacing, "spacing_source": spacing_source, "variogram": kind,
+                           "a": a, "a_source": a_source, **structure,
+                           "structure_stated": sorted(variogram.keys() & structure_defaults.keys()),
+                           "maxpts_interp": nearest, "remove_negative_factors": remove_negative,
+                           "kriging_stated": bool({"maxpts_interp", "remove_negative_factors"} & stated.keys()),
+                           "stated": bool(stated)}
     return out
 
 
@@ -360,7 +381,15 @@ def pilot_points(directory: Path, identifier: str, field: Mapping[str, Any], *, 
     centres, cells = _grid(directory, the_deck)
     sites = _placed(centres, cells, float(field["spacing"]))
     names = [f"{name}_pp{k:04d}" for k in range(len(sites))]
-    index, weight = kriging_factors(centres, sites, float(field["a"]))
+    try:
+        index, weight = kriging_factors(centres, sites, float(field["a"]), variogram=field["variogram"],
+                                        maxpts_interp=field["maxpts_interp"],
+                                        remove_negative_factors=field["remove_negative_factors"],
+                                        contribution=field["contribution"], nugget=field["nugget"],
+                                        anisotropy=field["anisotropy"], bearing=field["bearing"])
+    except np.linalg.LinAlgError as exc:
+        raise PestppError(f"{identifier}'s variogram cannot interpolate the pilot points.",
+                          error_code="PESTPP_KRIGING_SINGULAR") from exc
     stem = f"{name}.pp"
     np.savez(directory / f"{stem}.npz", names=np.array(names), index=index, weight=weight, base=np.array(base))
     (directory / f"{stem}.dat").write_text("".join(f"{n} 1.0\n" for n in names))
@@ -371,7 +400,10 @@ def pilot_points(directory: Path, identifier: str, field: Mapping[str, Any], *, 
     held["arrays"].append({"array": array, "values": f"{stem}.dat", "factors": f"{stem}.npz"})
     spec.write_text(json.dumps(held, indent=1))
     return ([Parameter(name=n, value=1.0, lower=float(lower), upper=float(upper), group=name,
-                       site=(float(x), float(y)), correlation=float(field["a"])) for n, (x, y) in zip(names, sites)],
+                       site=(float(x), float(y)), correlation=float(field["a"]), variogram=field["variogram"],
+                       contribution=field["contribution"], nugget=field["nugget"],
+                       anisotropy=field["anisotropy"], bearing=field["bearing"],
+                       spatial_group=name) for n, (x, y) in zip(names, sites)],
             (f"{stem}.dat.tpl", f"{stem}.dat"))
 
 

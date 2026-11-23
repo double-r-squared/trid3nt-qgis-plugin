@@ -21,6 +21,12 @@ class INPUTS:
         "and frame are the study's model."), coercion=MappingProxyType({"engines": ENGINES}))
     parameters = Input()
     tune = Input().stated()
+    stages = Input(type=list[str], desc=(
+        "Stages in order: screen, calibrate, resolve. Omit a stage to skip it. Resolve requires prior calibration. "
+        "Unstated, screen only when tune is smaller than the number named, then calibrate and resolve.")).stated()
+    parameter_data = Input(type=dict, desc=(
+        "PEST++ parameter table values by authored PARNME. Columns: PARNME, PARTRANS, PARCHGLIM, PARVAL1, "
+        "PARLBND, PARUBND, PARGP, SCALE, OFFSET, DERCOM, PARTIED. Native values in PEST coordinates.")).stated()
     method = Input()
     sigma = Input().stated()
     balance = Input().stated()

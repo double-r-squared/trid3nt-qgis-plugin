@@ -9,6 +9,7 @@ import runpy
 import pytest
 
 from trid3nt import case
+from trid3nt.inputs.temporal import Series
 from trid3nt.store import objects
 from trid3nt.workflows.runtime import script
 from trid3nt.workflows.runtime.fill import Fill, production
@@ -30,6 +31,7 @@ from types import SimpleNamespace
 sys.modules['trid3nt_harness'] = None
 sys.modules['trid3nt_server'] = None
 from trid3nt.errors import DeclarationError
+from trid3nt.inputs.temporal import Series
 from trid3nt.render.emission import current_emitter
 from trid3nt.render.formats import record_run_outputs
 from trid3nt.sdk.script_run import current, main
@@ -49,6 +51,7 @@ async def no_prepare(*args):
 async def solve(self, deck):
     assert current_emitter() is None
     assert deck.run_id == os.environ['SCRIPT_TEST_RUN']
+    assert deck.state.env.run["discharge"] == Series((0, 60), (1, 2), units="m3/s")
     cores = current().handoff['cores']
     assert int(os.environ['OPENBLAS_NUM_THREADS']) == cores
     assert len(os.sched_getaffinity(0)) <= cores
@@ -125,7 +128,7 @@ def prepared(tmp_path, monkeypatch):
     monkeypatch.setattr(script_child, "setting", lambda name: {"LOCAL_CORES": 1, "SOLVE_BUDGET_S": 0}[name])
     store.put_object(Bucket="cache", Key="deck.cas", Body=b"reviewed deck")
     state = Fill(case(tmp_path / "declaration").telemac_dye_release()._workflow)
-    production(state)
+    production(state).run["discharge"] = Series((0, 60), (1, 2), units="m3/s")
     deck = Deck(state, run_id=_RUN, staged={"inputs": [{"dest": "deck.cas", "gs_uri": "s3://cache/deck.cas"}]})
     capture = script.Capture(dict(runpy.run_path(str(_INPUTS))["_ZERO_FETCH"]), lambda *args: {})
     receipt = archive(tmp_path / "chat", capture, deck)

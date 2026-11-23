@@ -92,8 +92,26 @@ bounds; or `glm`, regression of one parameter set from the run's own values over
 other refuses `PESTPP_METHOD_UNKNOWN` at fill), the parameters to tune (`parameters`, each an identifier of the run's engine with its lower and
 upper factor - or, as `lower_value` and `upper_value`, its bounds in the run's own unit - and the source they are
 read from; unstated bounds refuse), how many of them to tune (`tune`), the moment the observations are asked at
-(`event_time`) and the observations (`observe`). `workflow.py` runs one order; over a MODFLOW run
-(`authoring/modflow.py`):
+(`event_time`) and the observations (`observe`).
+
+`stages` accepts an ordered list of distinct names. `screen` runs Morris sensitivity, `calibrate` fits with IES or
+GLM, and `resolve` solves the original model with the calibrated parameters. Omit a stage to skip it. `resolve`
+requires an earlier `calibrate` (`PESTPP_STAGES_ORDER`). With `stages` unstated, the template screens if `tune` is
+smaller than the declared parameter count, then calibrates and resolves. A prior screen can limit the selection via
+`tune`. A screen after calibration reports the ranking without changing that fit. A study ending without `resolve`
+publishes a `StudyResult` with its study ID, stage run IDs and any ranking. Calibration charts use the normal
+chart publication channel. The SDK's `open_study`, `screen`, `calibrate` and `resolve` expose the same stages.
+
+`parameter_data` sets the native PEST++ table columns for individual parameters, indexed by authored `PARNME`.
+For example, `{"npf_k": {"PARTRANS": "none", "PARVAL1": 0.8}}` keeps the declared MODFLOW array and uses 0.8
+as its initial PEST-coordinate multiplier. Rows take `PARNME`, `PARTRANS`, `PARCHGLIM`, `PARVAL1`,
+`PARLBND`, `PARUBND`, `PARGP`, `SCALE`, `OFFSET`, `DERCOM`, and `PARTIED`. Use the final name of an
+adjustable parameter for `PARTIED` on a tied row. The study declares one model command, so `DERCOM` takes 1.
+Pilot points can be addressed by their authored names, such as `npf_k_pp0000`. Existing dictionary keywords
+remain the setting path for controls and group variables, including `dermthd` and `gsa_morris_r`. Stated
+per-parameter columns take precedence over their corresponding global columns.
+
+`authoring/modflow.py` implements the default MODFLOW sequence.
 
 1. The run's staged deck is fetched from where it was staged (`authoring/modflow.py`). Each parameter is a
    multiplier written into its array's own control record through a PEST template - into the FACTOR of an
@@ -168,8 +186,12 @@ factors as `OrdinaryKrige.calc_factors` (the 20 nearest points, one within 1e-7 
 and the rest renormalised), the variogram exponential (pyEMU's `ExpVario`, contribution 1, nugget 0: exp(-h / a)).
 Unstated, the spacing is pyEMU PstFrom's default of every 10th cell, a cell counted as the median edge of the deck's own
 DISV grid (each edge once: pyEMU counts its cells in a structured cell's side; 122.9 m on the Des Moines deck, so 1229 m
-and 63 points), and the range a is that spacing (PstFrom's a = pp_space x the cell size). `spacing` and `variogram` `{"a": A, "source": "..."}` are stated in metres of the
-run's grid; another variogram type refuses `PESTPP_VARIOGRAM_UNKNOWN`, a member not read `PESTPP_PILOT_POINTS_UNREAD`.
+and 63 points), and the range `a` is that spacing. Set `spacing` and `variogram.a` in metres of the run's grid.
+Set `maxpts_interp` and `remove_negative_factors` under `pilot_points`. The `variogram` mapping accepts
+`type` (`exponential`, `spherical`, `gaussian`), `contribution`, `nugget`, `anisotropy`, and `bearing`
+(degrees clockwise from north). pyEMU's `GeoStruct` and `Vario2d` supply the default nugget of 0, anisotropy of 1
+and bearing of 0. The selected structure applies to the kriging factors and the prior covariance.
+Unsupported types refuse with `PESTPP_VARIOGRAM_UNKNOWN` and unrecognized members with `PESTPP_PILOT_POINTS_UNREAD`.
 
 The prior: every parameter's mean is its starting value and its standard deviation the one its bounds imply, as PEST++
 reads them (par_sigma_range standard deviations between the bounds, 4 unstated; of log10 where log-transformed). Where a

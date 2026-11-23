@@ -235,6 +235,29 @@ In QGIS, right-click an output layer and choose **Download run script** to
 copy the pair into a new directory named for the run. The action uses the
 existing signed object download.
 
+## Calibration stages
+
+Configure `c.calibrate(...)` with its normal inputs and PEST++ dictionary keywords. Set
+`m.stages = ["calibrate"]` to fit without re-solving the physical model. `m.run()` returns a
+`StudyResult` in `Result.value`, with the study ID and completed stage IDs. A run with
+`resolve` still returns the calibrated model's layer.
+
+For explicit control from async Python, open the same configured model and call individual stages.
+
+```python
+from trid3nt.sdk.study import calibrate, open_study, screen
+
+async with open_study(m) as study:
+    ranking_run = await screen(study)
+    fitted_run = await calibrate(study)
+    result = (await study.result()).value
+```
+
+Call `resolve(study)` after `calibrate(study)` to publish the calibrated model. Stage functions return
+their run IDs, and the open study holds its working files until the context closes. Use
+`m.parameter_data` for native per-parameter columns and `m.parameters[...]["pilot_points"]` when building
+the parameter mapping for pyEMU options. See [PEST++](pestpp.md#calibrate).
+
 ## The stance
 
 A model is held `unattended` (`trid3nt/inputs/review.py`): every gate proceeds with its inputs labeled, nothing

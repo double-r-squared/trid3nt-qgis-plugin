@@ -7,8 +7,9 @@ and the run stated. Each table is one CSV with the header PEST++ reads it by.
 from __future__ import annotations
 
 import csv
+import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -51,6 +52,15 @@ class Parameter:
     correlation: float | None = None
     sd: float | None = None
     sd_source: str | None = None
+    variogram: str = "exponential"
+    change_limit: str = "factor"
+    tied_to: str = ""
+    original_name: str = ""
+    contribution: float = 1.0
+    nugget: float = 0.0
+    anisotropy: float = 1.0
+    bearing: float = 0.0
+    spatial_group: str = ""
 
 
 @dataclass(frozen=True)
@@ -115,6 +125,19 @@ def _at(value: float, bound: float, log: bool) -> bool:
     return value == bound or (log and value == 10.0 ** math.log10(bound))
 
 
+def complete_values(parameters: Sequence[Parameter], values: Mapping[str, float]) -> dict[str, float]:
+    """Supply any fixed or tied values omitted from a PEST++ parameter ensemble."""
+    completed = dict(values)
+    by_name = {p.name: p for p in parameters}
+    for p in parameters:
+        if p.name not in completed and p.transform == "fixed":
+            completed[p.name] = p.value
+        elif p.name not in completed and p.transform == "tied":
+            parent = by_name[p.tied_to]
+            completed[p.name] = p.value / parent.value * completed[parent.name]
+    return completed
+
+
 def at_bounds(parameters: Sequence[Parameter], values: Mapping[str, float], transform: str = ""
               ) -> dict[str, dict[str, int]]:
     """Each parameter group holding a parameter at or past a bound -> ``{group: {"lower", "upper", "of"}}``: PEST++'s
@@ -148,7 +171,10 @@ def prior(parameters: Sequence[Parameter], stated: Mapping[str, Any] = {}) -> di
             "sd_source": p.sd_source or f"the bounds read as {span:g} standard deviations (PEST++ par_sigma_range)"})
         group["parameters"] += 1
         if p.site is not None:
-            group["correlated"] = {"variogram": "exponential", "a": p.correlation, "contribution": 1.0, "nugget": 0.0}
+            group["correlated"] = {"variogram": p.variogram, "a": p.correlation, "contribution": p.contribution,
+                                   "nugget": p.nugget}
+            if p.anisotropy != 1.0 or p.bearing != 0.0:
+                group["correlated"].update(anisotropy=p.anisotropy, bearing=p.bearing)
     return held
 
 
@@ -165,11 +191,16 @@ def _covariance(directory: Path, parameters: Sequence[Parameter], transform: str
         return None
     matrix = np.zeros((len(sited), len(sited)))
     at = 0
-    for group in dict.fromkeys(p.group for p in sited):
-        members = [p for p in sited if p.group == group]
+    grouped = {}
+    for p in sited:
+        grouped.setdefault(p.spatial_group or p.group, []).append(p)
+    sited = [p for members in grouped.values() for p in members]
+    for members in grouped.values():
         variance = np.array([_sd(p, transform or p.transform, span) ** 2 for p in members])
         matrix[at:at + len(members), at:at + len(members)] = covariance(
-            np.array([p.site for p in members]), float(members[0].correlation), variance)
+            np.array([p.site for p in members]), float(members[0].correlation), variance,
+            variogram=members[0].variogram, contribution=members[0].contribution, nugget=members[0].nugget,
+            anisotropy=members[0].anisotropy, bearing=members[0].bearing)
         at += len(members)
     if sited:
         (directory / TABLES["prior covariance"]).write_text(
@@ -184,10 +215,108 @@ def _covariance(directory: Path, parameters: Sequence[Parameter], transform: str
     return TABLES["prior"]
 
 
+# PEST++ 5.2.27 manual section 4.9.2 and Pest.cpp's external parameter table.
+_COLUMNS = {"parnme": "name", "partrans": "transform", "parchglim": "change_limit",
+            "parval1": "value", "parlbnd": "lower", "parubnd": "upper", "pargp": "group",
+            "scale": "scale", "offset": "offset", "partied": "tied_to"}
+_NUMERIC = {"parval1", "parlbnd", "parubnd", "scale", "offset"}
+_WORD = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
+
+
+def _parameter_error(sentence: str) -> PestppError:
+    return PestppError(sentence, error_code="PESTPP_PARAMETER_DATA_INVALID")
+
+
+def parameter_rows(stated: Any) -> dict[str, dict[str, Any]]:
+    """Normalize native table columns without changing the dictionary's global keyword syntax."""
+    if stated is None:
+        return {}
+    if not isinstance(stated, Mapping):
+        raise _parameter_error("parameter_data requires rows keyed by PARNME.")
+    rows = {}
+    for name, raw in stated.items():
+        if not isinstance(name, str) or not isinstance(raw, Mapping) or name.lower() in rows:
+            raise _parameter_error("parameter_data requires a unique name and a mapping for every row.")
+        row = {}
+        for column, value in raw.items():
+            column = str(column).lower()
+            if column in row or column not in {*_COLUMNS, "dercom"}:
+                raise _parameter_error(f"{name} states unsupported or repeated column {column.upper()}.")
+            if column in _NUMERIC:
+                if type(value) not in (int, float) or not math.isfinite(value):
+                    raise _parameter_error(f"{name} {column.upper()} must be a finite number.")
+                value = float(value)
+            elif column == "dercom":
+                if type(value) is not int or value != 1:
+                    raise _parameter_error(f"{name} DERCOM must be 1 for the study's single model command.")
+            elif not isinstance(value, str) or not _WORD.fullmatch(value):
+                raise _parameter_error(f"{name} {column.upper()} requires one PEST++ name or option.")
+            else:
+                value = value.lower()
+            row[column] = value
+        rows[name.lower()] = row
+    return rows
+
+
+def apply_parameter_data(directory: Path, parameters: Sequence[Parameter],
+                         templates: Sequence[tuple[str, str]], stated: Mapping[str, Any],
+                         rows: Mapping[str, Mapping[str, Any]]) -> list[Parameter]:
+    """Use the same effective parameter row for control, covariance, and calibrated writes."""
+    unknown = rows.keys() - {p.name for p in parameters}
+    if unknown:
+        raise _parameter_error(f"Unknown PARNME in parameter_data: {', '.join(sorted(unknown))}.")
+    adjusted = []
+    renames = {}
+    for p in parameters:
+        row = rows.get(p.name, {})
+        effective = replace(p, **{"transform": stated.get("PARTRANS", p.transform),
+                                  "change_limit": stated.get("PARCHGLIM", p.change_limit),
+                                  **{_COLUMNS[k]: v for k, v in row.items() if k in _COLUMNS}})
+        if effective.transform not in {"log", "none", "fixed", "tied"}:
+            raise _parameter_error(f"{p.name} PARTRANS takes log, none, fixed or tied.")
+        if effective.change_limit not in {"factor", "relative"}:
+            raise _parameter_error(f"{p.name} PARCHGLIM takes factor or relative.")
+        if effective.transform == "log" and effective.change_limit == "relative":
+            raise PestppError(f"{p.name} is log-transformed and takes a factor change limit only.",
+                              error_code="PESTPP_OPTION_CONFLICT")
+        if row and (not effective.lower <= effective.value <= effective.upper
+                    or effective.lower == effective.upper or effective.scale == 0
+                    or (effective.transform == "log" and effective.lower <= 0)):
+            raise _parameter_error(f"{p.name} has incompatible PARVAL1, bounds, SCALE or PARTRANS.")
+        if effective.site is not None and min(
+                effective.lower * effective.scale + effective.offset,
+                effective.upper * effective.scale + effective.offset) <= 0:
+            raise _parameter_error(f"{p.name} requires positive written pilot-point values.")
+        if effective.name != p.name:
+            renames[p.name] = effective.name
+            effective = replace(effective, original_name=p.name)
+        adjusted.append(effective)
+    by_name = {p.name: p for p in adjusted}
+    if len(by_name) != len(adjusted):
+        raise _parameter_error("PARNME values must be unique.")
+    for p in adjusted:
+        parent = by_name.get(p.tied_to)
+        if p.transform == "tied" and (parent is None or parent.transform in {"fixed", "tied"} or not parent.value):
+            raise _parameter_error(f"{p.name} PARTIED must name an adjustable parameter with a nonzero PARVAL1.")
+        if p.transform != "tied" and p.tied_to:
+            raise _parameter_error(f"{p.name} PARTIED requires PARTRANS tied.")
+    if renames:
+        def renamed(match: re.Match) -> str:
+            source = match[1].strip().lower()
+            return "~" + renames.get(source, source).ljust(len(match[1])) + "~" if source in renames else match[0]
+
+        for template, _ in templates:
+            path = directory / template
+            header, body = path.read_text().split("\n", 1)
+            path.write_text(header + "\n" + re.sub(r"~([^~]+)~", renamed, body))
+    return adjusted
+
+
 def write_control(directory: Path, *, name: str, parameters: Sequence[Parameter],
                   observations: Sequence[Observed], templates: Sequence[tuple[str, str]],
                   instructions: Sequence[tuple[str, str]], command: str,
-                  stated: Mapping[str, Any] = {}, own: Mapping[str, Any] = {}, balanced: bool = False) -> Path:
+                  stated: Mapping[str, Any] = {}, own: Mapping[str, Any] = {}, balanced: bool = False,
+                  parameter_data: Mapping[str, Any] | None = None) -> Path:
     """The control file ``name`` and its tables, written into ``directory`` -> its path.
 
     ``stated`` are the options the run states, by identifier; ``own`` the options the study's own files
@@ -216,16 +345,15 @@ def write_control(directory: Path, *, name: str, parameters: Sequence[Parameter]
         raise PestppError("a study adjusts at least one parameter against at least one observation",
                           error_code="PESTPP_STUDY_EMPTY")
     changes = sectioned["parameter data"]
-    drawn = _covariance(directory, parameters, str(changes.get("partrans") or ""), sigma_range(stated))
+    parameters = apply_parameter_data(
+        directory, parameters, templates, {k.upper(): v for k, v in changes.items()},
+        parameter_rows(parameter_data))
+    drawn = _covariance(directory, parameters, "", sigma_range(stated))
     if drawn is not None:
         if "parcov" in options:
             raise PestppError("the study's pilot points state the prior PEST++ draws from (parcov), and the run "
                               "states another", error_code="PESTPP_OPTION_CONFLICT")
         options["parcov"] = drawn
-    for p in parameters:
-        if changes.get("partrans", p.transform) == "log" and changes.get("parchglim") == "relative":
-            raise PestppError(f"{p.name} is log-transformed and a log-transformed parameter takes a factor change "
-                              "limit only", error_code="PESTPP_OPTION_CONFLICT")
     groups = sectioned["parameter groups"]
     if groups:
         held = [PESTPP.MODULE_INPUT[column.upper()].engine_default for column in _GROUP_COLUMNS]
@@ -233,11 +361,12 @@ def write_control(directory: Path, *, name: str, parameters: Sequence[Parameter]
                [(group, *(groups.get(column, default if default is not UNSET else _DERMTHD)
                           for column, default in zip(_GROUP_COLUMNS, held)))
                 for group in dict.fromkeys(p.group for p in parameters)])
+    tied = any(p.tied_to for p in parameters)
     _table(directory / TABLES["parameter data"],
            ("parnme", "partrans", "parchglim", "parval1", "parlbnd", "parubnd", "pargp", "scale", "offset",
-            "dercom"),
-           [(p.name, changes.get("partrans", p.transform), changes.get("parchglim", "factor"), repr(p.value),
-             repr(p.lower), repr(p.upper), p.group, repr(p.scale), repr(p.offset), 1) for p in parameters])
+            "dercom", *(("partied",) if tied else ())),
+           [(p.name, p.transform, p.change_limit, repr(p.value), repr(p.lower), repr(p.upper), p.group,
+             repr(p.scale), repr(p.offset), 1, *((p.tied_to,) if tied else ())) for p in parameters])
     _table(directory / TABLES["observation data"], ("obsnme", "obsval", "weight", "obgnme"),
            [(o.name, repr(o.value), repr(o.weight), o.group) for o in observations])
     _table(directory / TABLES["model input"], ("pest_file", "model_file"), templates)

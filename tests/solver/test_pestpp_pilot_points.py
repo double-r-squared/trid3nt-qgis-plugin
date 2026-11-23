@@ -136,7 +136,7 @@ def test_the_calibrated_points_at_their_bounds_are_counted_per_group_as_pest_hol
 
 def test_pilot_points_refuse_what_they_cannot_lay(the_deck):
     with pytest.raises(PestppError) as typed:
-        _field(the_deck, variogram={"type": "gaussian"})
+        _field(the_deck, variogram={"type": "unsupported"})
     assert typed.value.error_code == "PESTPP_VARIOGRAM_UNKNOWN"
     with pytest.raises(PestppError) as unread:
         _field(the_deck, nugget=0.1)

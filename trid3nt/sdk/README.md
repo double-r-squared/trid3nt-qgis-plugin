@@ -14,4 +14,5 @@ picks a source; the method is `docs/design/sdk.md`.
 | `lock.py` | `Lock`: `trid3nt.lock`, every fetch read through it and pinned under `data/` by sha256, each pinned file and template source checked on read. |
 | `model.py` | `Model`: the one lookup by attribute, set checked by each input's own accept, `strict` and `steps` (the coverage steps it states over its template's), `fill()` -> `Form` (the verdicts, per-input ranked fetch requests and stated steps, each input's coverage and the warnings an unresolved shortfall leaves, and the written, checked deck), `run()` -> `Result` or `Failure` (the solve of that deck while it is current), unattended, in its case directory, each writing its row of the lock. |
 | `script_run.py` | The private daemon-to-script handoff. Rebinds the reviewed deck to the script's pinned template and reports its execution. |
+| `study.py` | Open a calibration model and call the shared PEST++ screen, calibrate and resolve stages. |
 | `template.py` | Load pinned declarations without tool registration and describe upstream drift and its fix. |

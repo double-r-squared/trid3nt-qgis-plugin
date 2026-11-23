@@ -408,12 +408,13 @@ def outflow_levels(directory: Path, *, the_deck: Deck, parameters: Sequence[Para
 
     from trid3nt.workflows.telemac.helpers.uniform_flow import normal_depth_stage
 
-    friction = next((p for p in parameters if p.name == "friction_coefficient"), None)
+    friction = next((p for p in parameters if (p.original_name or p.name) == "friction_coefficient"), None)
     found = _derived(directory, the_deck) if friction is not None else None
     if found is None:
         return None
     channel, law, discharge, which, elevations = found
-    low, high = friction.lower * friction.scale, friction.upper * friction.scale
+    low, high = sorted((friction.lower * friction.scale + friction.offset,
+                        friction.upper * friction.scale + friction.offset))
     coefficients = [low + (high - low) * k / (_LEVEL_POINTS - 1) for k in range(_LEVEL_POINTS)]
     stages = [round(normal_depth_stage(channel, law=law, coefficient=c, discharge_q=discharge)["stage_m"], 4)
               for c in coefficients]
@@ -481,10 +482,11 @@ async def calibrated(*, finished: Any, study_dir: Path, the_deck: Deck, paramete
     rundir = new_rundir(run_id, stem="telemac")
     deck_dir = study_dir.parent / "deck"
     await asyncio.to_thread(shutil.copytree, deck_dir, rundir, dirs_exist_ok=True)
-    values = {parameter.name.upper().replace("_", " "): best[parameter.name] * parameter.scale + parameter.offset
-              for parameter in parameters if parameter.name.upper() in TUNABLE}
+    values = {(parameter.original_name or parameter.name).upper().replace("_", " "):
+              best[parameter.name] * parameter.scale + parameter.offset
+              for parameter in parameters if (parameter.original_name or parameter.name).upper() in TUNABLE}
     values.update(await asyncio.to_thread(_level_at, rundir, the_deck, values.get("FRICTION COEFFICIENT")))
-    offset = next((best[p.name] * p.scale + p.offset for p in parameters if p.name == _OUTFLOW), None)
+    offset = next((best[p.name] * p.scale + p.offset for p in parameters if (p.original_name or p.name) == _OUTFLOW), None)
     if offset is not None:
         values.update(await asyncio.to_thread(_offset_level, rundir, the_deck, offset))
     await asyncio.to_thread(restate, rundir, the_deck.steering, the_deck.module, values)

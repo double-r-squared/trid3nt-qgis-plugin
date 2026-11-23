@@ -18,6 +18,7 @@ from typing import Any
 
 from trid3nt.errors import DeclarationError
 from trid3nt.inputs import slots
+from trid3nt.inputs.temporal import Series
 from trid3nt.workflows.runtime import module
 from trid3nt.workflows.solver.stop import Stopped
 
@@ -51,11 +52,18 @@ class _DeckWriter(pickle.Pickler):
     def reducer_override(self, obj: Any) -> Any:
         if isinstance(obj, MappingProxyType):
             return (_readonly, (dict(obj),))
+        if type(obj) is Series:
+            return (_series, (obj.times_s, obj.values, obj.units))
         return NotImplemented
 
 
 def _readonly(values: dict) -> MappingProxyType:
     return MappingProxyType(values)
+
+
+def _series(times_s: tuple[float, ...], values: tuple[float, ...], units: str) -> Series:
+    # Run the constructor's checks instead of assigning frozen slots during unpickling.
+    return Series(times_s, values, units=units)
 
 
 class _DeckReader(pickle.Unpickler):
