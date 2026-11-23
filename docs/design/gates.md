@@ -30,6 +30,8 @@ callbacks and nothing else:
 The workflow projects its current verdicts, source choices, and coverage into
 the SDK Form for the card render. The existing renderer orders and labels
 those rows. Accepted card edits also feed the run's script declarations.
+The daemon stages the accepted deck before starting the saved script. The
+script verifies the reviewed deck before the solve starts.
 
 The mode is the person's alone: the boolean `AUTO` setting (off by default: the run pauses for a person; on: the system proceeds without one),
 changed at user level in Settings. No call carries it and no run states it: a call naming

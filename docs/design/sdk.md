@@ -204,17 +204,27 @@ pinned data.
 
 When the final review proceeds, the daemon captures its accepted edits and
 source requests. Once the workflow stages its deck, and before it solves, the
-daemon passes those declarations through the generator's SDK assignment
-checks. It records `CODEGEN_LINE_CHECKED` with `checked=False`. The daemon solves
-the deck it already staged. A refusal is recorded in the run journal and the
-solve proceeds without a script.
+daemon checks the generated declarations through the SDK, then starts the saved
+script in a fresh interpreter and process group. The child loads the pinned
+template and receives the reviewed launch state over a private inherited
+channel. Its fill checks the model version, lock row, and staged file hashes
+against the reviewed deck. The child solves that deck and records
+`CODEGEN_CHECKED` with `checked=True`. A changed handoff refuses by name.
+
+`LOCAL_CORES` bounds the script process's affinity and numeric library
+threads. A positive `SOLVE_BUDGET_S` caps its wall time. The daemon forwards
+the existing substeps and solve-progress messages and publishes the child's
+recorded outputs through the existing layer registry. Stop cancels the
+child's solver wait, which stops the container and records the same partial
+products. A generator refusal is recorded and the run solves in-process.
 
 The first pair is kept at `$TRID3NT_HOME/cases/<case_id>/case.py` and
 `trid3nt.lock`, with a lock snapshot under `versions/`. Every generated pair
 is also kept under `runs/<run_id>/` in the case and at the same run prefix in
 the runs bucket. Later runs preserve the case's editable pair. The lock pins
 the bytes served to the original run. Running the script calls `c.pack()` to
-download and verify those pins before filling and solving locally.
+download and verify those pins before filling and solving locally. The
+daemon's child uses its verified, staged handoff and the deployment store.
 
 For a point-seeded domain the script keeps the original point and declares the
 resolved river or waterbody type with its existing `place_type` field. Handed

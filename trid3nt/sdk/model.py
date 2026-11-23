@@ -308,11 +308,29 @@ class Model:
         return state, staged, refusal
 
     async def _fill(self) -> Form:
+        from .script_run import current, load_deck
+
+        child = current()
+        if child is not None:
+            handoff = child.handoff
+            deck = load_deck(handoff["deck"], self._workflow)
+            deck.state.settings = handoff.get("settings", deck.state.settings)
+            row = handoff["row"]
+            staged = Staged(deck.run_id, row["deck"]["files"], row["deck"]["sha256"], row.get("mesh"))
+            object.__setattr__(self, "_written", _Written(row["model"], row, deck.state, deck, staged))
+            if await asyncio.to_thread(self._current) is None:
+                self._refuse_reviewed()
+            child.verify()
+            return _form(deck.state, staged, strict=self.strict)
         bind_turn_case(self._case.name)
         warning = self._template_warning()
         with self._case.bound(), unattended(), strictness(self.strict):
             state, staged, refusal = await self._filling(warning)
         return _form(state, staged, refusal, strict=self.strict, warning=warning)
+
+    @staticmethod
+    def _refuse_reviewed() -> None:
+        raise DeclarationError("The reviewed deck changed before launch.", error_code="SCRIPT_DECK_STALE")
 
     def fill(self) -> Form:
         """Every input answered and, where they all are, the deck written and checked -> the form; nothing is solved.
@@ -349,7 +367,10 @@ class Model:
         written = self._written
         if written is None or written.version != self.version or written.row != self._row():
             return None
-        if written.staged is not None and _deck(self._case.root, written.deck.staged.get("inputs") or ()) != {
+        from .script_run import current
+
+        if written.staged is not None and _deck(
+                self._case.root, written.deck.staged.get("inputs") or (), served=current() is not None) != {
                 "sha256": written.staged.sha256, "files": dict(written.staged.files)}:
             return None
         return written
@@ -365,6 +386,20 @@ class Model:
             discard_run(written.deck.run_id, written.deck.prefix, stem=self._workflow.engine)
 
     async def _run(self) -> Result | Failure:
+        from .script_run import current, interruptible
+
+        if (child := current()) is not None:
+            bind_turn_case(child.handoff["case"])
+            with interruptible(), unattended(), strictness(self.strict):
+                written = await asyncio.to_thread(self._current)
+                if written is None:
+                    self._refuse_reviewed()
+                object.__setattr__(self, "_written", None)
+                published = await self._workflow.execute(written.state, written.deck)
+            if isinstance(published, Mapping) and published.get("status") == "error":
+                child.failure = (str(published["error_code"]), str(published["error_message"]))
+                return Failure(*child.failure)
+            return Result(written.deck.run_id, published, child.record or {})
         bind_turn_case(self._case.name)
         named = self._named()
         warning = self._template_warning()
@@ -535,18 +570,23 @@ def _manifest_rows(root: Path, engine: str, run_id: str) -> list[Mapping[str, An
     return list(json.loads(manifest.read_text(encoding="utf-8")).get("inputs") or ())
 
 
-def _deck(root: Path, rows: Any) -> dict[str, Any] | None:
+def _deck(root: Path, rows: Any, *, served: bool = False) -> dict[str, Any] | None:
     """A staged deck by what the engine receives: the sha256 of every file by its name in the run directory, and one
     sha256 over them all; ``None`` where nothing is staged."""
     from trid3nt.store.objects import FileStore, sha256_of
 
     if not rows:
         return None
-    store = FileStore(root)
-    files = {}
-    for row in rows:
-        bucket, _, key = str(row["gs_uri"])[len("s3://"):].partition("/")
-        files[str(row["dest"])] = sha256_of(store.path(bucket, key))
+    from .lock import served_digest
+
+    if served:
+        files = {str(row["dest"]): served_digest(row["gs_uri"]) for row in rows}
+    else:
+        store = FileStore(root)
+        files = {}
+        for row in rows:
+            bucket, _, key = str(row["gs_uri"])[len("s3://"):].partition("/")
+            files[str(row["dest"])] = sha256_of(store.path(bucket, key))
     files = dict(sorted(files.items()))
     return {"sha256": hashlib.sha256(json.dumps(files, sort_keys=True).encode("utf-8")).hexdigest(),
             "files": files}

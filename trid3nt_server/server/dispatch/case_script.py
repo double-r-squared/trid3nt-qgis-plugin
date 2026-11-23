@@ -80,6 +80,7 @@ def archive(root: Path, capture: Capture, deck: Deck) -> dict[str, Any]:
         destination = root / "runs" / run_id
         _publish(draft, destination, bucket, run_id)
         _keep_first(root, draft, script.model_version)
+        capture.path = destination / "case.py"
     return {"code": script.check_code, "checked": script.checked, "deck_sha256": digest,
             "uri": f"s3://{bucket}/{run_id}/case.py", "lock_uri": f"s3://{bucket}/{run_id}/trid3nt.lock"}
 

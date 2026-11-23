@@ -32,11 +32,12 @@ class Stopped(asyncio.CancelledError):
     """A launch ended by the user's stop, after publishing what the run wrote: ``run`` carries the launch's collected record,
     ``value`` what the partial publish returned (``None`` when it published nothing), ``why`` the stop's sentence."""
 
-    def __init__(self, run: Any, value: Any, why: str) -> None:
+    def __init__(self, run: Any, value: Any, why: str, *, recorded: bool = False) -> None:
         super().__init__()
         self.run = run
         self.value = value
         self.why = why
+        self.recorded = recorded
 
 
 async def finish(work: Awaitable[Any]) -> Any:

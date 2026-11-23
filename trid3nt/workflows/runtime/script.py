@@ -7,12 +7,14 @@ import logging
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterator, Mapping
+from pathlib import Path
+from typing import Any, Awaitable, Callable, Iterator, Mapping
 
 from trid3nt.tools.fetchers._router.router import bind_pin, reset_pin
 
 logger = logging.getLogger(__name__)
 _HOST: Callable[[], Callable[..., dict[str, Any]] | None] | None = None
+_RUN: Callable[..., Awaitable[Executed]] | None = None
 _CURRENT: ContextVar[Capture | None] = ContextVar("workflow_script_capture", default=None)
 
 
@@ -26,6 +28,7 @@ class Capture:
     seeds: dict[str, str] = field(default_factory=dict)
     banks: Any = None
     receipt: dict[str, Any] | None = None
+    path: Path | None = None
 
     def fetch(self, name: str, request: dict[str, Any], fetch: Callable[[], Any]) -> Any:
         value = fetch()
@@ -33,10 +36,18 @@ class Capture:
         return value
 
 
-def register(host: Callable[[], Callable[..., dict[str, Any]] | None]) -> None:
-    """The server supplies an archive writer for a live case turn."""
-    global _HOST
-    _HOST = host
+@dataclass(frozen=True)
+class Executed:
+    """A reviewed script returned a value and already wrote its run record."""
+
+    value: Any
+
+
+def register(host: Callable[[], Callable[..., dict[str, Any]] | None],
+             run: Callable[..., Awaitable[Executed]] | None = None) -> None:
+    """The server supplies the archive writer and runner for a live case turn."""
+    global _HOST, _RUN
+    _HOST, _RUN = host, run
 
 
 def current() -> Capture | None:
@@ -68,3 +79,10 @@ async def archive(deck: Any) -> None:
     except Exception as error:  # noqa: BLE001 - script publication cannot void a run
         logger.warning("Case script publication refused: %s", type(error).__name__)
         active.receipt = {"code": "CODEGEN_WRITE_ERROR"}
+
+
+async def execute(deck: Any) -> Executed | None:
+    active = current()
+    if _RUN is None or active is None or active.path is None or not active.receipt:
+        return None
+    return await _RUN(active.path, deck, active.receipt)

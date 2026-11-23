@@ -939,27 +939,42 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, cores: int,
         route_sim_terminal,
     )
 
+    from trid3nt.sdk.script_run import current
+
     emitter = current_emitter()
+    child = current()
     handle = submit_solver(solver, manifest_uri, cores, run_id)
     run_id = handle.run_id
     logger.info("%s dispatching %s -> %s", solver, label, manifest_uri)
+    if child is not None:
+        child.event("dispatch", solver, module, handle, cores)
     sim_step_id = await mint_dispatch_and_sim_cards(
         emitter=emitter, solver=solver, module=module, handle=handle,
         cores=cores)
+
+    async def report(payload: dict[str, Any]) -> None:
+        child.event("progress", payload)
+
+    async def terminal(result: Any) -> None:
+        if child is not None:
+            child.event("terminal", result)
+        else:
+            await route_sim_terminal(emitter, sim_step_id, run_result=result)
+
     local = _LOCAL_RUNS.get(run_id)
     steps = (StdoutSteps(local.stdout_path, partial(local.spec.progress, sheet=sheet or {}))
              if local is not None and local.spec.progress is not None else None)
     progress = asyncio.ensure_future(drive_live_solve_progress(
         emitter=emitter, run_id=run_id, solver=solver,
         grid_resolution_m=grid_resolution_m, active_cell_count=active_cell_count,
-        vcpus=None, steps=steps))
+        vcpus=None, steps=steps, report=report if child is not None else None))
 
     run_result = None
     try:
         run_result = await wait_for_completion(handle)
     except asyncio.CancelledError:
         logger.info("%s %s solve cancelled awaiting solver", solver, label)
-        await route_sim_terminal(emitter, sim_step_id, run_result=None)
+        await terminal(None)
         at, started_at = await finish(_stopped_at(handle, local, steps))
         raise SolveStopped(run_id, at, started_at) from None
     finally:
@@ -968,7 +983,7 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, cores: int,
             await progress
         except (asyncio.CancelledError, Exception):  # noqa: BLE001
             pass
-    await route_sim_terminal(emitter, sim_step_id, run_result=run_result)
+    await terminal(run_result)
     return run_result, (getattr(run_result, "run_id", None) or run_id)
 
 

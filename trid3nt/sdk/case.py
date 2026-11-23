@@ -292,6 +292,10 @@ class Case:
     def pack(self) -> Path:
         """Every pinned object local under ``data/``, each read from the served store where it is not, checked
         against its sha256, and every uri the path relative to the case -> the case directory."""
+        from .script_run import current
+
+        if current() is not None:
+            return self.root
         lock = Lock(self.root)
         for sha256 in _template_hashes(lock.data):
             lock.template_source(sha256)

@@ -65,12 +65,15 @@ async def drive_live_solve_progress(
     active_cell_count: int | None,
     vcpus: int | None,
     steps: StdoutSteps | None = None,
+    report: Callable[[dict[str, Any]], Any] | None = None,
 ) -> None:
     """Background loop: emit the LIVE solve-progress envelope every N seconds.
     ``elapsed_seconds`` and ``step_seconds`` are wall-clock; ``step`` is the engine's own text for its latest step.
     Best-effort and cancellation-safe, and ``emitter=None`` is a no-op."""
-    if emitter is None:
-        return
+    if report is None:
+        if emitter is None:
+            return
+        report = emitter.emit_solve_progress
     loop = asyncio.get_running_loop()
     started = loop.time()
     changed_at: float | None = None
@@ -93,7 +96,7 @@ async def drive_live_solve_progress(
                                  if changed_at is not None else None),
             }
             try:
-                await emitter.emit_solve_progress(payload)
+                await report(payload)
             except Exception as exc:  # noqa: BLE001 -- UX hint, never fatal
                 logger.debug(
                     "solve_progress: live solve-progress emit failed "

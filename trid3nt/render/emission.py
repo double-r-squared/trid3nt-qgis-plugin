@@ -80,11 +80,29 @@ async def substep(emitter: Any, raw_name: str):
     Yields ``None`` and mints nothing when no emitter is bound, so a body reads
     the same whether or not the timeline is being surfaced.
     """
-    if emitter is None:
+    if emitter is not None:
+        async with emitter.substep(raw_name) as child_id:
+            yield child_id
+        return
+    from trid3nt.sdk.script_run import current
+
+    child = current()
+    if child is None:
         yield None
         return
-    async with emitter.substep(raw_name) as child_id:
-        yield child_id
+    import asyncio
+
+    child.event("stage-start", raw_name)
+    try:
+        yield None
+    except asyncio.CancelledError:
+        child.event("stage-end", "cancelled")
+        raise
+    except Exception as exc:
+        child.event("stage-end", "failed", getattr(exc, "error_code", None), str(exc))
+        raise
+    else:
+        child.event("stage-end", "complete")
 
 
 def begin_substeps(emitter: Any, total: int | None) -> None:
@@ -103,7 +121,10 @@ async def emit_chart_payloads(payloads: Any) -> None:
     because a builder returns one when the series it needs is absent.
     """
     emitter = current_emitter()
-    if emitter is None:
+    from trid3nt.sdk.script_run import current
+
+    child = current()
+    if emitter is None and child is None:
         return
     if isinstance(payloads, (list, tuple)):
         items = list(payloads)
@@ -111,4 +132,7 @@ async def emit_chart_payloads(payloads: Any) -> None:
         items = [payloads]
     for payload in items:
         if isinstance(payload, dict) and payload:
-            await emitter.emit_chart(payload)
+            if child is not None:
+                child.event("chart", payload)
+            else:
+                await emitter.emit_chart(payload)

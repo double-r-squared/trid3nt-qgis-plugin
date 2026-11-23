@@ -152,9 +152,10 @@ def run(argv: list[str] | None = None) -> int:
 
     from trid3nt.workflows.runtime.script import register
     from .server.dispatch.case_script import host
+    from .server.dispatch.script_child import run as run_case_script
     from .server.protocol.loop import run_server
 
-    register(host)
+    register(host, run_case_script)
     try:
         asyncio.run(run_server())
     except KeyboardInterrupt:

@@ -420,12 +420,15 @@ class Workflow:
 
     async def execute(self, state: Fill, deck: Deck | None = None) -> Any:
         """Launch a READY fill - or solve the ``deck`` already written from it - then post and publish what it produced."""
+        from .script import Executed
+
         started = time.monotonic() - (deck.seconds if deck is not None else 0.0)
         try:
             run = await (self._solved(deck) if deck is not None else self._launched(state))
         except Stopped as stop:
-            await asyncio.to_thread(self._journal_stop, stop, time.monotonic() - started,
-                                    dict(state.env.supplied), state.model)
+            if not stop.recorded:
+                await asyncio.to_thread(self._journal_stop, stop, time.monotonic() - started,
+                                        dict(state.env.supplied), state.model)
             raise
         except asyncio.CancelledError:
             raise
@@ -438,18 +441,22 @@ class Workflow:
                 raise
             logger.exception("%s unexpected failure", self.name)
             return self._error(f"{self.error_prefix}_INTERNAL_ERROR", exc)
+        if isinstance(run, Executed):
+            return run.value
         run.notes[:0] = [*state.notes, *state.moved]
         run.settings = {**state.settings_read, **run.settings}
         return await self._publish(run, time.monotonic() - started,
                                    supplied=dict(state.env.supplied), model=state.model)
 
-    async def _launched(self, state: Fill) -> RunResult:
+    async def _launched(self, state: Fill) -> Any:
         """The whole launch: the deck written, then solved."""
-        from .script import archive
+        from .script import archive, execute
 
         deck = await self.prepared(state)
         await archive(deck)
-        return await self._solved(deck)
+        solved = await execute(deck)
+        # A launch whose script was refused, or an unsplit study, keeps the in-process solve.
+        return await self._solved(deck) if solved is None else solved
 
     async def prepared(self, state: Fill) -> Deck:
         """A READY fill launched up to its written, checked deck, under the run's own domain and collectors -> the deck,
@@ -643,10 +650,13 @@ class Workflow:
 
         from .script import current
 
+        from trid3nt.sdk.script_run import current as executing_script
+
         script = current()
-        journal.append_record(journal.build_record(
+        child = executing_script()
+        record = journal.build_record(
             run_id=run_id, engine=self.recorded_engine(run), template=self.name,
-            case_script=script.receipt if script is not None else None,
+            case_script=child.receipt() if child is not None else script.receipt if script is not None else None,
             case=current_turn_case(), model=(model or {}).get("name"), version=(model or {}).get("version"),
             strict=is_strict(),
             template_path=(model or {}).get("template_path"), template_sha256=(model or {}).get("template_sha256"),
@@ -654,11 +664,15 @@ class Workflow:
             module=self._module(run), inputs=inputs,
             correct_end=self._correct_end(run),
             result=result, wall_seconds=round(wall_seconds, 3),
-            origin=journal.run_origin(live_session=current_emitter() is not None),
+            origin=journal.run_origin(live_session=child is not None or current_emitter() is not None),
             notes=list(notes), outputs=run.outputs,
             mesh=run.results.get("mesh"), settings=run.settings, stopped=stopped,
             check_steps=run.results.get("check_steps"), study=run.results.get("study"),
-        ))
+        )
+        journal.append_record(record)
+        if child is not None:
+            child.record = record
+            child.value = result
         clear_session_run()
 
 
