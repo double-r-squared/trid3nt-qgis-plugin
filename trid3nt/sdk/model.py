@@ -26,6 +26,8 @@ from trid3nt.workflows.runtime.fill import Fill, Verdict
 from trid3nt.workflows.runtime.sheet import Keyword
 from trid3nt.workflows.runtime.workflow import Deck
 
+from .template import Template, TemplateDrift
+
 if TYPE_CHECKING:
     from .case import Case
 
@@ -51,7 +53,7 @@ class Form:
     """What the fill answered: every input's verdict by name, whether the run is ready, the ``(code, sentence)``
     that keeps it from ready, the deck it wrote, and whether that staged deck passed the engine's own check
     (a deck is staged only once it has; where the check refused, the refusal's code is ``<ENGINE>_STAGED_*``).
-    ``coverage`` is what each input's data covers, by name; ``warnings`` each shortfall left unresolved and let run."""
+    The form carries each input's coverage, unresolved shortfalls allowed under non-strict mode, and template drift."""
 
     verdicts: Mapping[str, Verdict]
     ready: bool
@@ -60,7 +62,7 @@ class Form:
     deck: Staged | None = None
     checked: bool = False
     coverage: Mapping[str, Coverage] = field(default_factory=dict)
-    warnings: tuple[Shortfall, ...] = ()
+    warnings: tuple[Shortfall | TemplateDrift, ...] = ()
 
     def __getitem__(self, name: str) -> Verdict:
         return self.verdicts[name]
@@ -76,9 +78,13 @@ class Form:
         for name, covered in self.coverage.items():
             lines.append(f"  {name} coverage: " + ", ".join(f"{source} {share:.4g}" for source, share in covered.shares)
                          + f", unmeasured {covered.unmeasured:.4g}")
-        for short in self.warnings:
-            lines.append(f"  warning {short.code} {short.input}: {short.cells} cells, share {short.share:.4g}; "
-                         f"remedies: {', '.join(map(repr, short.remedies))}")
+        for warning in self.warnings:
+            if isinstance(warning, TemplateDrift):
+                lines.append(f"  warning {warning.code} {warning.template}: "
+                             f"{warning.pinned_sha256} -> {warning.current_sha256}")
+            else:
+                lines.append(f"  warning {warning.code} {warning.input}: {warning.cells} cells, share {warning.share:.4g}; "
+                             f"remedies: {', '.join(map(repr, warning.remedies))}")
         if self.deck is not None:
             lines.append(f"  deck {self.deck.sha256[:12]} ({len(self.deck.files)} files, run {self.deck.run_id}"
                          + (f", mesh {self.deck.mesh}" if self.deck.mesh else "") + "), checked")
@@ -131,9 +137,10 @@ class Model:
     A set is checked by the input's own accept and raises its typed refusal; ``None`` unstates a value.
     ``fill()`` returns the form and never raises for an input; ``run()`` returns a ``Result`` or a ``Failure``."""
 
-    def __init__(self, case: "Case", workflow: Any, values: Mapping[str, Any]) -> None:
+    def __init__(self, case: "Case", workflow: Any, values: Mapping[str, Any], *, template: Template) -> None:
         object.__setattr__(self, "_case", case)
         object.__setattr__(self, "_workflow", workflow)
+        object.__setattr__(self, "_template", template)
         object.__setattr__(self, "_stated", {})
         object.__setattr__(self, "_keywords", {})
         #: Each input stated as outside data, by name: its lock entry, the copy in the case's data.
@@ -187,7 +194,7 @@ class Model:
 
     @property
     def strict(self) -> bool:
-        """Whether an unresolved coverage shortfall refuses: the model's own, else its case's."""
+        """Whether template drift or an unresolved shortfall refuses, inherited from the case unless set here."""
         return self._case.strict if self._strict is None else self._strict
 
     @property
@@ -257,20 +264,28 @@ class Model:
     def version(self) -> str:
         """The content hash of what this model states: its template, its inputs, its keywords, and its steps and
         strictness where it states them."""
-        stated = {"template": self._workflow.name, "inputs": self._stated, "keywords": self._keywords,
+        stated = {"template": self._template.key, "template_sha256": self._template.sha256,
+                  "upstream_sha256": self._template.upstream_sha256, "inputs": self._stated, "keywords": self._keywords,
                   **({"steps": {k: [[s.name, list(s.args)] for s in v] for k, v in self._steps.items()}}
                      if self._steps else {}),
                   **({"strict": True} if self.strict else {})}
         return hashlib.sha256(json.dumps(stated, sort_keys=True, default=str).encode("utf-8")).hexdigest()
 
     def _named(self) -> dict[str, str]:
-        return {"name": self._workflow.name, "version": self.version}
+        return {"name": self._template.key, "version": self.version, "template_path": self._template.path,
+                "template_sha256": self._template.sha256,
+                "template_upstream_sha256": self._template.upstream_sha256}
 
-    async def _filling(self) -> tuple[Fill, Staged | None, tuple[str, str] | None]:
+    def _template_warning(self) -> TemplateDrift | None:
+        return self._template.warning(self._case._upstream_source(self._template.upstream))
+
+    async def _filling(self, warning: TemplateDrift | None) -> tuple[Fill, Staged | None, tuple[str, str] | None]:
         """The fill, then the launch up to its written, checked deck where the fill is ready -> the fill, the deck,
         and the typed refusal the launch stopped on; the deck is held for the run, and the lock names what was read
         and written. Runs inside the case's binding."""
         self._drop()
+        if warning is not None and self.strict:
+            return Fill(self._workflow), None, (warning.code, "The upstream template differs from its pin.")
         state = await self._workflow.filled(self._wire(), model=self._named(), steps=self._steps)
         deck, refusal = None, None
         if state.ready:
@@ -288,9 +303,10 @@ class Model:
 
     async def _fill(self) -> Form:
         bind_turn_case(self._case.name)
+        warning = self._template_warning()
         with self._case.bound(), unattended(), strictness(self.strict):
-            state, staged, refusal = await self._filling()
-        return _form(state, staged, refusal, strict=self.strict)
+            state, staged, refusal = await self._filling(warning)
+        return _form(state, staged, refusal, strict=self.strict, warning=warning)
 
     def fill(self) -> Form:
         """Every input answered and, where they all are, the deck written and checked -> the form; nothing is solved.
@@ -301,21 +317,23 @@ class Model:
         """The model's row of the case's lock after a fill: its template and version, what each input read, and
         the mesh and deck it wrote."""
         lock = self._case.lock
-        row = lock.data["models"].get(self._workflow.name) or {}
+        row = lock.data["models"].get(self._template.key) or {}
         if row.get("model") != self.version:
             row = {}
-        row.update(template={"name": self._workflow.name, "version": _template_version(self._workflow)},
+        row.update(template={"name": self._workflow.name, "version": self._template.sha256,
+                             "path": self._template.path, "upstream": self._template.upstream,
+                             "upstream_version": self._template.upstream_sha256},
                    model=self.version, inputs=_read(lock, state, self._taken),
                    mesh=None if staged is None else staged.mesh,
                    deck=None if staged is None else {"sha256": staged.sha256, "files": dict(staged.files)})
-        lock.data["models"][self._workflow.name] = row
+        lock.data["models"][self._template.key] = row
         lock.save()
 
     def _row(self) -> dict[str, Any]:
         """The model's row of the case's lock as the file holds it, without the images a run adds."""
         from .lock import Lock
 
-        row = dict(Lock(self._case.root).data["models"].get(self._workflow.name) or {})
+        row = dict(Lock(self._case.root).data["models"].get(self._template.key) or {})
         row.pop("images", None)
         return row
 
@@ -343,13 +361,14 @@ class Model:
     async def _run(self) -> Result | Failure:
         bind_turn_case(self._case.name)
         named = self._named()
+        warning = self._template_warning()
         with self._case.bound(), unattended(), strictness(self.strict):
-            written = self._current()
+            written = None if warning is not None and self.strict else self._current()
             if written is None:
-                state, staged, refusal = await self._filling()
+                state, staged, refusal = await self._filling(warning)
                 if not state.ready or refusal is not None:
                     code, sentence = refusal or state.refusal()
-                    return Failure(code, sentence, _form(state, staged, refusal, strict=self.strict))
+                    return Failure(code, sentence, _form(state, staged, refusal, strict=self.strict, warning=warning))
                 written = self._written
             # A deck is solved once: the next run fills again, under a new run id.
             object.__setattr__(self, "_written", None)
@@ -370,7 +389,7 @@ class Model:
         launch that wrote its deck inside its solve - and the lock as it then stands kept under ``versions/`` by the
         model's version."""
         lock = self._case.lock
-        row = lock.data["models"][self._workflow.name]
+        row = lock.data["models"][self._template.key]
         run_id, engine = str(record.get("run_id") or ""), str(record.get("engine") or "")
         if row.get("deck") is None:
             row["mesh"] = (record.get("mesh") or {}).get("key")
@@ -416,15 +435,16 @@ class _Written:
 
 
 def _form(state: Fill, staged: Staged | None = None, refusal: tuple[str, str] | None = None, *,
-          strict: bool = False) -> Form:
+          strict: bool = False, warning: TemplateDrift | None = None) -> Form:
     ready = state.ready and refusal is None
     coverage = dict(state.coverage)
+    warnings = () if strict else tuple(c.shortfall for c in coverage.values()
+                                       if c.shortfall is not None and not c.shortfall.accepted)
     return Form(verdicts=dict(state.inputs), ready=ready,
                 refusal=None if ready else (refusal or state.refusal()),
                 notes=(*state.notes, *state.said[0], *state.moved),
                 deck=staged, checked=staged is not None, coverage=coverage,
-                warnings=() if strict else tuple(c.shortfall for c in coverage.values()
-                                                 if c.shortfall is not None and not c.shortfall.accepted))
+                warnings=warnings + ((warning,) if warning is not None else ()))
 
 
 def _staged(root: Path, deck: Deck | None) -> Staged | None:
@@ -442,7 +462,7 @@ def _record(case: str, named: Mapping[str, str]) -> dict[str, Any]:
     from trid3nt.store.journal import read_records
 
     return next((record for record in reversed(read_records())
-                 if record.get("case") == case and record.get("template") == named["name"]
+                 if record.get("case") == case and record.get("model") == named["name"]
                  and record.get("version") == named["version"]), {})
 
 
@@ -454,11 +474,6 @@ def _outside(value: str) -> bool:
         return Path(value).expanduser().is_file()
     except (OSError, ValueError):
         return False
-
-
-def _template_version(workflow: Any) -> str:
-    """The content hash of the template module a workflow is declared by."""
-    return hashlib.sha256(Path(workflow.template.__file__).read_bytes()).hexdigest()
 
 
 def _read(lock: Any, state: Fill, taken: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:

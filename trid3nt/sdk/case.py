@@ -12,18 +12,21 @@ import hashlib
 import logging
 import os
 import shutil
+import tempfile
 import urllib.parse
 import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
+from trid3nt.errors import DeclarationError
 from trid3nt.inputs.user_input import WireArgsError
 from trid3nt.store import objects as storage
 from trid3nt.store.objects import StorageError, sha256_of
 
 from .lock import Lock
 from .model import Model
+from .template import Template, digest, load
 
 logger = logging.getLogger("trid3nt.sdk.case")
 
@@ -64,17 +67,133 @@ class Case:
     def __getattr__(self, template: str) -> Callable[..., Model]:
         if template.startswith("_"):
             raise AttributeError(template)
-        workflow = _workflow(template)
-        if workflow is None:
+        registered = _workflow(template)
+        if registered is None and template not in Lock(self.root).data.get("called_templates", {}):
             raise AttributeError("no registered template is called so; the templates are "
                                  + ", ".join(self.templates()) + ".")
 
         def model(**values: Any) -> Model:
-            return Model(self, workflow, values)
+            lock = Lock(self.root)
+            pin = self._called(lock, template)
+            workflow = load(*_load_args(lock, pin["sha256"]))
+            held = Template(template, "called", pin["sha256"], template, pin["sha256"])
+            result = Model(self, workflow, values, template=held)
+            lock.save()
+            self.lock = lock
+            return result
 
         model.__name__ = model.__qualname__ = template
-        model.__doc__ = getattr(_registered_fn(template), "__doc__", None)
+        if registered is not None:
+            model.__doc__ = _registered_fn(template).__doc__
         return model
+
+    def copy_template(self, name: str, *, overwrite: bool = False) -> Path:
+        """Write the registered module's source to the case. An edited destination requires overwrite."""
+        registered = _workflow(name)
+        source = self._upstream_source(name)
+        if registered is None or source is None:
+            raise DeclarationError("The registered template source is absent.", error_code="TEMPLATE_SOURCE_MISSING")
+        lock = Lock(self.root)
+        relative = f"templates/{registered.template.__name__.rsplit('.', 1)[-1]}.py"
+        path = self._template_path(relative)
+        copies = lock.data.setdefault("copied_templates", {})
+        previous = copies.get(relative)
+        if previous is not None and previous["name"] != name:
+            raise DeclarationError("Another template owns the copy path.", error_code="TEMPLATE_COPY_CONFLICT")
+        current = digest(source)
+        if path.exists():
+            baseline = previous["sha256"] if previous is not None else current
+            if digest(path.read_bytes()) != baseline and not overwrite:
+                raise DeclarationError("The template copy has edits.", error_code="TEMPLATE_COPY_EDITED")
+        lock.hold_template(source)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as part:
+            staged = Path(part.name)
+        try:
+            staged.write_bytes(source)
+            staged.replace(path)
+        finally:
+            staged.unlink(missing_ok=True)
+        copies[relative] = {"name": name, "sha256": current, "source_sha256": current}
+        lock.save()
+        self.lock = lock
+        return path
+
+    def repin_template(self, name: str) -> None:
+        """Take the current registered declaration for subsequent calls and extensions in this case."""
+        lock = Lock(self.root)
+        self._called(lock, name, take=True)
+        lock.save()
+        self.lock = lock
+
+    def model(self, path: str | os.PathLike[str], *, upstream: str | None = None, **values: Any) -> Model:
+        """Load a case-owned declaration. An extension names the registered template it imports."""
+        path = self._template_path(path)
+        relative = path.relative_to(self.root).as_posix()
+        lock = Lock(self.root)
+        copied = lock.data.get("copied_templates", {}).get(relative)
+        if copied is not None:
+            _workflow(copied["name"])  # Initialize the product registry before loading an isolated copy.
+        source = path.read_bytes() if path.is_file() else None
+        if source is None and copied is not None:
+            _, source = lock.template_source(copied["source_sha256"])
+        if source is None and upstream is not None:
+            previous = lock.data["models"].get(relative, {}).get("template", {})
+            if previous.get("upstream") == upstream:
+                _, source = lock.template_source(previous["version"])
+        if source is None:
+            raise DeclarationError("The case template source is absent.", error_code="TEMPLATE_SOURCE_MISSING")
+        if copied is not None and upstream is None:
+            workflow = load(source, path)
+            held = Template(relative, "copied", digest(source), copied["name"], copied["sha256"], relative)
+        elif copied is None and upstream is not None:
+            pin = self._called(lock, upstream)
+            base = load(*_load_args(lock, pin["sha256"]))
+            workflow = load(source, path, upstream=(pin["module"], base.template))
+            held = Template(relative, "called", digest(source), upstream, pin["sha256"])
+        else:
+            raise DeclarationError("Select a copy or name the template extended.", error_code="TEMPLATE_INVALID")
+        result = Model(self, workflow, values, template=held)
+        lock.hold_template(source)
+        if copied is not None:
+            copied["source_sha256"] = held.sha256
+        lock.save()
+        self.lock = lock
+        return result
+
+    def _template_path(self, path: str | os.PathLike[str]) -> Path:
+        target = (self.root / path).resolve()
+        if self.root / "templates" not in target.parents or target.suffix != ".py":
+            raise DeclarationError("The case template must be a Python file under templates.", error_code="TEMPLATE_INVALID")
+        return target
+
+    @staticmethod
+    def _upstream_source(name: str) -> bytes | None:
+        workflow = _workflow(name)
+        if workflow is None:
+            return None
+        path = Path(workflow.template.__file__)
+        return path.read_bytes() if path.is_file() else None
+
+    def _called(self, lock: Lock, name: str, *, take: bool = False) -> dict[str, str]:
+        registered = _workflow(name)
+        pins = lock.data.setdefault("called_templates", {})
+        if name in pins and not take:
+            return pins[name]
+        source = self._upstream_source(name)
+        if registered is None or source is None:
+            raise DeclarationError("The registered template source is absent.", error_code="TEMPLATE_SOURCE_MISSING")
+        legacy = lock.data["models"].get(name, {}).get("template", {}).get("version")
+        sha256 = digest(source)
+        if not take and legacy is not None and legacy != sha256:
+            lock.template_source(legacy)
+            sha256 = legacy
+        else:
+            if take:
+                load(source, Path(registered.template.__file__))
+            lock.hold_template(source)
+        pins[name] = {"sha256": sha256, "module": registered.template.__name__}
+        return pins[name]
 
     @staticmethod
     def templates() -> list[str]:
@@ -174,6 +293,8 @@ class Case:
         """Every pinned object local under ``data/``, each read from the served store where it is not, checked
         against its sha256, and every uri the path relative to the case -> the case directory."""
         lock = Lock(self.root)
+        for sha256 in _template_hashes(lock.data):
+            lock.template_source(sha256)
         for entry in _pinned_rows(lock.data):
             relative = lock.relative(entry["uri"])
             for path, digest in {relative: entry["sha256"], **dict(entry.get("files") or {})}.items():
@@ -196,11 +317,27 @@ class Case:
         return f"Case({str(self.root)!r})"
 
 
+def _load_args(lock: Lock, sha256: str) -> tuple[bytes, Path]:
+    path, source = lock.template_source(sha256)
+    return source, path
+
+
 def _served(store: str) -> tuple[str, str]:
     if not store.startswith("s3://") or not store[len("s3://"):].split("/", 1)[0]:
         raise StorageError(f"a case is served at an s3://bucket/prefix; got {store!r}.")
     bucket, _, prefix = store[len("s3://"):].partition("/")
     return bucket, prefix.strip("/")
+
+
+def _template_hashes(lock: dict[str, Any]) -> set[str]:
+    hashes = {pin["sha256"] for section in ("called_templates", "copied_templates")
+              for pin in lock.get(section, {}).values()}
+    hashes.update(pin["source_sha256"] for pin in lock.get("copied_templates", {}).values())
+    for row in lock["models"].values():
+        template = row.get("template", {})
+        if template.get("path"):
+            hashes.update((template["version"], template["upstream_version"]))
+    return hashes
 
 
 def _pinned_rows(lock: dict[str, Any]) -> list[dict[str, Any]]:

@@ -11,10 +11,12 @@ import hashlib
 import importlib
 import json
 import logging
+import re
 import shutil
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from trid3nt.errors import DeclarationError
 from trid3nt.store import objects as storage
 from trid3nt.store.objects import CASE_BUCKETS, DigestMismatchError, sha256_of
 
@@ -56,6 +58,33 @@ class Lock:
         text = json.dumps(self.data, sort_keys=True, indent=2) + "\n"
         if not self.path.is_file() or self.path.read_text(encoding="utf-8") != text:
             self.path.write_text(text, encoding="utf-8")
+
+    def hold_template(self, source: bytes) -> str:
+        """Keep the exact declaration bytes by hash and verify an existing object of that hash."""
+        digest = hashlib.sha256(source).hexdigest()
+        key = f"{digest}.py"
+        store = storage.FileStore(self.root)
+        path = store.path("data", key)
+        if path.is_file():
+            _check(path, digest)
+        else:
+            store.put_object(Bucket="data", Key=key, Body=source)
+        return digest
+
+    def template_source(self, digest: str) -> tuple[Path, bytes]:
+        """Read the held Python source after checking its content hash."""
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise DeclarationError("The template pin has an invalid hash.", error_code="TEMPLATE_INVALID")
+        relative = f"data/{digest}.py"
+        path = storage.FileStore(self.root).path("data", f"{digest}.py")
+        if not path.is_file() and self.data.get("served"):
+            self._served(relative, digest)
+        if not path.is_file():
+            raise DeclarationError("The case lacks the pinned template source.", error_code="TEMPLATE_SOURCE_MISSING")
+        source = path.read_bytes()
+        if hashlib.sha256(source).hexdigest() != digest:
+            raise DigestMismatchError(f"The pinned template source differs from {digest}.")
+        return path, source
 
     def local(self, uri: str) -> Path:
         """Where a pinned uri's bytes stand in this directory: a case-relative path, or a served one's same path."""

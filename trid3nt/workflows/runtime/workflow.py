@@ -7,12 +7,14 @@ fill-then-launch spine, post and publish, and the registration factory.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import inspect
 import logging
 import time
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, replace
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Collection, Mapping, NoReturn, Sequence
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Collection, Iterator, Mapping, NoReturn, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.coverage import SourceChoice
@@ -37,7 +39,8 @@ if TYPE_CHECKING:
     from .fill import Fill
     from .primitives import Primitive
 
-__all__ = ["BANKS", "Deck", "EVENT_TIME", "REACH_LENGTH", "RunResult", "Said", "Workflow", "register_workflow"]
+__all__ = ["BANKS", "Deck", "EVENT_TIME", "REACH_LENGTH", "RunResult", "Said", "Workflow",
+           "register_workflow", "unregistered"]
 
 logger = logging.getLogger("trid3nt.workflows.runtime.workflow")
 
@@ -632,6 +635,8 @@ class Workflow:
             run_id=run_id, engine=self.recorded_engine(run), template=self.name,
             case=current_turn_case(), model=(model or {}).get("name"), version=(model or {}).get("version"),
             strict=is_strict(),
+            template_path=(model or {}).get("template_path"), template_sha256=(model or {}).get("template_sha256"),
+            template_upstream_sha256=(model or {}).get("template_upstream_sha256"),
             module=self._module(run), inputs=inputs,
             correct_end=self._correct_end(run),
             result=result, wall_seconds=round(wall_seconds, 3),
@@ -707,6 +712,23 @@ def _routing_doc(template: Any) -> dict[str, str]:
     return doc
 
 
+#: Bound while a template module is loaded for a case: each workflow its declaration builds, none registered.
+_UNREGISTERED: contextvars.ContextVar[list[Workflow] | None] = contextvars.ContextVar(
+    "unregistered", default=None)
+
+
+@contextmanager
+def unregistered() -> Iterator[list[Workflow]]:
+    """Inside, ``register_workflow`` builds each declared workflow and registers no tool, reading no routing prose;
+    the list holds every workflow built, in order."""
+    built: list[Workflow] = []
+    token = _UNREGISTERED.set(built)
+    try:
+        yield built
+    finally:
+        _UNREGISTERED.reset(token)
+
+
 # A template answers one question on one engine from its own declarations; a question spanning templates or fetchers
 # is composed by the model, never a wrapper tool (a wrapper fixes the chain and hides its judgment from the model).
 def register_workflow(
@@ -722,14 +744,18 @@ def register_workflow(
     The template module is the declaration (INPUTS); its prose is the package's routing.yaml,
     and the signature is synthesized from the declared inputs, so the model-facing schema
     comes from the declaration the run resolves."""
-    from trid3nt.tools import register_tool
-
-    doc = _routing_doc(template)
+    held = _UNREGISTERED.get()
+    doc = _routing_doc(template) if held is None else {}
     workflow = facade(metadata=metadata, inputs=getattr(template, "INPUTS"),
                       template=template, sensitivity=sensitivity, coerce=coerce)
 
     async def _run(**wire: Any) -> Any:
         return await workflow.run(wire)
+
+    _run.workflow = workflow  # type: ignore[attr-defined]
+    if held is not None:
+        held.append(workflow)
+        return _run
 
     _run.__name__ = workflow.name
     _run.__qualname__ = workflow.name
@@ -737,7 +763,6 @@ def register_workflow(
     sig, annotations = _wire_signature(workflow.inputs)
     _run.__signature__ = sig  # type: ignore[attr-defined]
     _run.__annotations__ = dict(annotations)
-    _run.workflow = workflow  # type: ignore[attr-defined]
     _run.param_descriptions = {  # type: ignore[attr-defined]
         **{row.name: row.schema_description for row in workflow.inputs if row.fills_from_user},
         **_CONTROL_SCHEMA}
@@ -756,6 +781,8 @@ def register_workflow(
     register_kwargs.setdefault("open_world_hint", False)
     register_kwargs.setdefault("destructive_hint", False)
     register_kwargs.setdefault("idempotent_hint", False)
+    from trid3nt.tools import register_tool
+
     return register_tool(metadata, **register_kwargs)(_run)
 
 

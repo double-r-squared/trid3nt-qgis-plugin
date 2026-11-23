@@ -1,6 +1,6 @@
 # The SDK front - a case and its models
 
-`trid3nt.case(path)` and a `Model` over one registered template, used from plain Python with no daemon, no
+`trid3nt.case(path)` and a `Model` over one template declaration, used from plain Python with no daemon, no
 harness, no server and no object store. The code is `trid3nt/sdk/`; the fill and the run under it are the template
 runtime's own (`docs/design/workflows.md`).
 
@@ -23,7 +23,7 @@ runtime's own (`docs/design/workflows.md`).
   the line; the value held before stays. `None` unstates a value.
 - Reading a name gives the value in force: the model's, else the template's, else the module dictionary's
   own. `repr(m)` lists each with its origin.
-- `m.version` is the sha256 of what the model states: its template, inputs and keywords.
+- The model version hashes its template pin, stated inputs, keywords, steps and strictness.
 
 ## fill and run
 
@@ -55,7 +55,8 @@ runtime's own (`docs/design/workflows.md`).
 
     <case>/
       trid3nt.lock          what every run read, pinned; what each model ran
-      data/<sha256>.<ext>   every byte a run read: each fetched object, each supplied file, each fetched value
+      data/<sha256>.<ext>   fetched objects and values, supplied files, held Python declarations
+      templates/<name>.py   case-owned Python template declarations
       runs/<run_id>/        what a run wrote, in today's formats; runs/run_journal.jsonl the records
       versions/<v>.lock     the lock as it stood when model version <v> ran
       cache/                the fetch cache, the staged decks (cache/<engine>/<run_id>/) and the meshes
@@ -91,7 +92,7 @@ runtime's own (`docs/design/workflows.md`).
 - OUTSIDE DATA. A row stated as a local file, an http(s) URL or an s3 URI is copied into `data/` at the set,
   and the slot gets its case uri (`s3://data/<sha256>.<ext>`). A shapefile, several files, refuses.
 - `trid3nt.lock` holds `fetched` (each pin by request key: source, request, uri, sha256, files) and, per
-  template, the model's row: `template` (name, the sha256 of its template module), `model` (the version), `inputs`
+  model identity, the model's row: `template` (name, the sha256 of its template module), `model` (the version), `inputs`
   (per input read off a pinned object: source, request, uri, sha256), and after a run `mesh` (the content key),
   `deck` (the sha256 of each staged file by its name in the run directory, and one over them all) and `images`
   (each engine's image and the id docker held it under, off `completion.json`). The fill writes the pins, the row,
@@ -119,6 +120,46 @@ runtime's own (`docs/design/workflows.md`).
 - `RUN_UNSTATED` - unattended, an input that takes a finished run of this case, left unstated where the case
   holds several, refuses with the run ids as its remedies; the review card offers them to a person as before. A
   value the fill derives deterministically and a gate offers is still taken, labeled.
+
+## Templates
+
+    c.copy_template("telemac_dye_release")
+    copied = c.model("templates/dye_release.py", **values)
+    called = c.telemac_dye_release(**values)
+
+Copying writes the registered declaration byte for byte. Edit the copy's
+constants, inputs, coverage steps or engine keywords in Python, then load it
+with `c.model`. The model holds the source it loaded. A declaration that fails
+to load or build its workflow raises `TEMPLATE_INVALID`. Load Python from cases
+you trust, as you would any Python module.
+
+To extend a registered declaration, write a module under the case's templates
+directory and use `c.model("templates/extension.py", upstream="telemac_dye_release", **values)`.
+A `from` import names the upstream declaration module and takes its members
+from the case's pin. For example, an extension can import `INPUTS`,
+`STEERING`, `OUTPUTS`, placement declarations and the upstream callable,
+replace `CAPTIONS`, then call `register_workflow` with its own module and
+chosen coercions. A new `STEERING` body extends the engine wrapper directly.
+Loading a case workflow leaves the registered tools and search corpus intact.
+
+The case holds each selected Python source under `data/<sha256>.py` and checks
+its bytes on replay. A called template and its extensions share an upstream
+pin. A copy has its own upstream baseline from the last copy operation and its
+own source hash. The lock's model row records both hashes and the called or
+copied path. The run record carries `template_path`, `template_sha256` and
+`template_upstream_sha256`. A moved case can load its held source after upstream
+changes. For a legacy lock whose recorded hash differs from the installed
+source, the SDK refuses `TEMPLATE_SOURCE_MISSING` until that source is available
+or the caller explicitly takes the installed version.
+
+When upstream changes, fill reports `TEMPLATE_DRIFT` with the name, pinned and
+current SHA-256 hashes in pinned_sha256 and current_sha256,
+and a structured fix with call, args and diff. A called or extended model's fix
+is `c.repin_template(name)`. A copied model's fix gives the case-relative path
+to diff and the call `c.copy_template(name)`. A copy with local edits raises `TEMPLATE_COPY_EDITED` unless the call supplies
+`overwrite=True`. Make a new model after either operation to use the new
+source. With strict off, the fill uses its pinned declaration. With strict on,
+the same code refuses before the deck is staged.
 
 ## No pick
 
@@ -175,6 +216,6 @@ refuses where it is read (law 9): a river reach nobody states refuses `REACH_LEN
 ## Out of scope here
 
 Rendering a shortfall's remedies as script lines (the generator); a fit of the domain to measured water
-(`fit_reach`) and a channel-aligned interpolation, neither in the tree; copied templates; the generator; studies;
+(`fit_reach`) and a channel-aligned interpolation, neither in the tree; the generator; studies;
 remote execution; a case's own document store (a finished run of an SDK case is not offered as a run input) - each
 a later leg of the SDK plan.
