@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
-from trid3nt.errors import DeclarationError
+from trid3nt.errors import DeclarationError, DeclarativeError
 from trid3nt.inputs.coverage import Coverage, Shortfall, Step, strictness
 from trid3nt.inputs.review import unattended
 from trid3nt.inputs.slots import BED
@@ -600,6 +600,53 @@ class Model:
         again first -> the result, or the failure it refused or failed on."""
         return asyncio.run(self._run())
 
+    def help(self, name: str | None = None) -> str:
+        """Every input and stated keyword with its value in force, origin and one-line description; a name returns
+        that input's or engine keyword's full description. An unknown name refuses with the nearest names."""
+        return self._help_listing() if name is None else self._help_named(str(name))
+
+    def _help_listing(self) -> str:
+        workflow = self._workflow
+        lines = [f"Model {workflow.name} in case {self._case.name} (version {self.version[:12]})"]
+        for row in workflow.inputs:
+            value, origin = self._value(row.name, row)
+            lines.append(f"  {row.name} = {_short(value)}  [{origin or 'unstated'}]  {row.schema_description}")
+        for key in self._keywords:
+            _, held = self._held(key)
+            value, origin = self._value(key, held)
+            lines.append(f"  {key} = {_short(value)}  [{origin}]  {_keyword_line(held)}")
+        return "\n".join(lines)
+
+    def _help_named(self, name: str) -> str:
+        from trid3nt.inputs.user_input import WireArgsError
+        from trid3nt.tools.search.describe_keywords.describe_keywords import (
+            DescribeKeywordsError, describe_keywords)
+
+        try:
+            _, held = self._held(name)
+        except DeclarativeError:
+            raise WireArgsError(
+                f"{self._workflow.name} has no input or keyword {name!r} ({self._nearest(name)}).") from None
+        if isinstance(held, Keyword):
+            return describe_keywords(module=held.body.MODULE, keyword=held.name)["entry"]["help"]
+        try:
+            return describe_keywords(template=self._workflow.name, keyword=held.name)["entry"]["help"]
+        except DescribeKeywordsError:
+            return held.doc_line
+
+    def _nearest(self, name: str) -> str:
+        from trid3nt.inputs.user_input import nearest
+
+        known = {row.name for row in self._workflow.inputs} | set(self._keywords)
+        steering = (getattr(self._workflow, "steering", None)
+                    or getattr(getattr(self._workflow, "template", None), "STEERING", None))
+        if steering is not None:
+            known.update(getattr(steering, "ASSERTED", {}) or {})
+            for identifier, slot in (getattr(steering, "MODULE_INPUT", {}) or {}).items():
+                known.add(identifier)
+                known.add(getattr(slot, "keyword", identifier))
+        return nearest(name.upper(), sorted({item.upper() for item in known if item}))
+
     def __repr__(self) -> str:
         workflow = self._workflow
         lines = [f"Model {workflow.name} in case {self._case.name} (version {self.version[:12]})"]
@@ -764,3 +811,15 @@ def _images(root: Path, engine: str, run_id: str) -> dict[str, Any]:
 def _short(value: Any) -> str:
     text = repr(value)
     return text if len(text) <= 80 else f"{text[:77]}..."
+
+
+def _keyword_line(held: Keyword) -> str:
+    """One keyword's dictionary help as one line; empty where the dictionary carries no entry for it."""
+    from trid3nt.tools.search.describe_keywords.describe_keywords import (
+        DescribeKeywordsError, describe_keywords)
+
+    try:
+        help_text = describe_keywords(module=held.body.MODULE, keyword=held.name)["entry"]["help"]
+    except DescribeKeywordsError:
+        return ""
+    return " ".join(str(help_text).split())

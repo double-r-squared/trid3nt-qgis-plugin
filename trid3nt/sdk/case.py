@@ -50,6 +50,14 @@ def _workflow(template: str) -> Any:
     return getattr(getattr(registered, "fn", None), "workflow", None)
 
 
+def _summary(template: str) -> str:
+    """The routing summary the tool docstring opens with, as one line."""
+    from trid3nt.tools import TOOL_REGISTRY
+
+    doc = (TOOL_REGISTRY[template].fn.__doc__ or "").strip()
+    return doc.splitlines()[0] if doc else ""
+
+
 class Case:
     """One case directory: ``case.<template>(**values)`` makes a Model over that template, each value set as an
     attribute is; ``pack()`` and ``link(store)`` move it between packed and served."""
@@ -213,6 +221,23 @@ class Case:
         from trid3nt.tools import TOOL_REGISTRY
 
         return sorted(name for name in TOOL_REGISTRY if _workflow(name) is not None)
+
+    def help(self, name: str | None = None) -> str:
+        """Every template and bare entry this case can open, by name and its routing summary; a name returns that
+        entry's routing prose. An unknown name refuses with the nearest template names."""
+        from trid3nt.inputs.user_input import WireArgsError, nearest
+
+        names = self.templates()
+        if name is None:
+            return "\n".join([f"Templates and bare entries in case {self.name}:",
+                              *(f"  {template}: {_summary(template)}" for template in names)])
+        asked = str(name).strip()
+        if asked not in names:
+            raise WireArgsError(
+                f"{self.name} has no template or bare entry {asked!r} ({nearest(asked.lower(), names)}).")
+        from trid3nt.tools import TOOL_REGISTRY
+
+        return TOOL_REGISTRY[asked].fn.routing_doc
 
     @contextmanager
     def bound(self) -> Iterator["Case"]:

@@ -77,6 +77,15 @@ style and legend. Pass `mesh=True` for triangle edges or `frame=` to choose a
 mesh dataset frame. `result.charts` reads the run's persisted chart payloads by
 name for reuse in proof packets or other renderers. Use matplotlib's Agg backend to save figures without a display.
 
+## Help
+
+`m.help()` lists every input and every keyword the model states, each with its value in force,
+its origin and a one-line description. `m.help(name)` returns the full description from the
+source the model itself reads: an input's own text, or the engine dictionary's entry for a
+keyword, through `describe_keywords`. `c.help()` lists the registered templates and bare
+entries the case can open, each with its routing summary; `c.help(name)` returns that entry's
+routing prose. An unknown name refuses by name with the nearest names as hints.
+
 ## The case is a directory
 
     <case>/

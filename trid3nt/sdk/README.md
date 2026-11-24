@@ -10,10 +10,10 @@ picks a source; the method is `docs/design/sdk.md`.
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The door: `case`, `Case`, `Model`, `Form`, `Result`, `Failure`. |
-| `case.py` | `case(path, strict=False)` -> a `Case`, the directory opened or created. Registered-template attributes and `model(name_or_path)` make models. It also copies and re-pins templates, copies outside data and supports `link(store)` and `pack()`. |
+| `case.py` | `case(path, strict=False)` -> a `Case`, the directory opened or created. Registered-template attributes and `model(name_or_path)` make models. It also copies and re-pins templates, copies outside data and supports `link(store)` and `pack()`; `help()` lists the templates and bare entries it can open. |
 | `deck_state.py` | Encode reviewed state as a JSON graph and rebind it to pinned declarations and local files. |
 | `lock.py` | `Lock`: `trid3nt.lock`, every fetch read through it and pinned under `data/` by sha256, each pinned file and template source checked on read. |
-| `model.py` | `Model`: the one lookup by attribute, set checked by each input's own accept, `strict` and `steps` (the coverage steps it states over its template's), `fill()` -> `Form` (the verdicts, per-input ranked fetch requests and stated steps, each input's coverage and the warnings an unresolved shortfall leaves, and the written, checked deck), `run()` -> `Result` or `Failure` (the solve of that deck while it is current), unattended, in its case directory, each writing its row of the lock. |
+| `model.py` | `Model`: the one lookup by attribute, set checked by each input's own accept, `strict` and `steps` (the coverage steps it states over its template's), `fill()` -> `Form` (the verdicts, per-input ranked fetch requests and stated steps, each input's coverage and the warnings an unresolved shortfall leaves, and the written, checked deck), `run()` -> `Result` or `Failure` (the solve of that deck while it is current), unattended, in its case directory, each writing its row of the lock; `help()` lists its inputs and stated keywords, and `help(name)` returns one name's full description. |
 | `run_messages.py` | The shared reviewed-run instruction, event and Stop messages. |
 | `run_store.py` | Verify pinned served reads for the remote child and track its writes. |
 | `script_run.py` | Rebind a reviewed deck to the script's pinned template, request stage-dependent reviews from its host, and report execution. |
