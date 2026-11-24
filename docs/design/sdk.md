@@ -74,7 +74,8 @@ which is `waqtel.cas` for WAQTEL. The module and any required process come from 
 payloads. `trid3nt.view(layer_or_record, root=case.root)` opens a specific layer
 or record. Spatial axes carry the layer CRS and scalar fields use the published
 style and legend. Pass `mesh=True` for triangle edges or `frame=` to choose a
-mesh dataset frame. Use matplotlib's Agg backend to save figures without a display.
+mesh dataset frame. `result.charts` reads the run's persisted chart payloads by
+name for reuse in proof packets or other renderers. Use matplotlib's Agg backend to save figures without a display.
 
 ## The case is a directory
 

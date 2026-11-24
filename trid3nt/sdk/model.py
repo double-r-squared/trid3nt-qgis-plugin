@@ -121,6 +121,19 @@ class Result:
         """The layers the run published, off its own record."""
         return list(self.record.get("outputs") or [])
 
+    @property
+    def charts(self) -> Mapping[str, Any]:
+        """The named chart payloads persisted with this run."""
+        from trid3nt.workflows.runtime.run_output import CHART_SPEC_KEY
+
+        if not self.run_id:
+            return {}
+        path = (self.root or Path(".")) / "runs" / self.run_id / CHART_SPEC_KEY
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+
 
 @dataclass(frozen=True)
 class Failure:

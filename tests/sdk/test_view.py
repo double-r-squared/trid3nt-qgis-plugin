@@ -37,7 +37,10 @@ def test_views_draw_raster_vector_mesh_and_recorded_chart(tmp_path):
         {"layer_type": "vector", "uri": "point.geojson"},
         {"layer_type": "mesh", "uri": "mesh.2dm", "dataset_uris": ["mesh.dat"],
          "style": {"kind": "mesh", "dataset_group": "Depth"}}]}
-    raster, vector, mesh, chart = Result("sample", None, record, tmp_path).show(mesh=True)
+    result = Result("sample", None, record, tmp_path)
+    assert result.charts == json.loads((spec_dir / "chart_spec.json").read_text())
+    assert Result("absent", None, root=tmp_path).charts == {}
+    raster, vector, mesh, chart = result.show(mesh=True)
     assert raster.axes[0].images and "EPSG:4326" in raster.axes[0].get_xlabel()
     assert len(raster.axes) == 2
     assert vector.axes[0].collections

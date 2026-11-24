@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from contextlib import ExitStack
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -17,23 +16,19 @@ def view(source: Any, *, root: str | Path | None = None, mesh: bool = False,
     """Return figures for a layer, a chart payload, or a run's recorded products."""
     from .model import Result
 
-    if isinstance(source, Result):
-        root = source.root if root is None else root
-        source = source.record
-    if hasattr(source, "model_dump"):
-        source = source.model_dump()
-    directory = Path(root or ".")
-    if "outputs" not in source:
-        return [_figure(source, directory, mesh, frame)]
-    figures = [_figure(row, directory, mesh, frame) for row in source["outputs"]]
-    if source.get("run_id"):
-        from trid3nt.workflows.runtime.run_output import CHART_SPEC_KEY
+    if not isinstance(source, Result):
+        if hasattr(source, "model_dump"):
+            source = source.model_dump()
+        if "outputs" not in source:
+            return [_figure(source, Path(root or "."), mesh, frame)]
+        source = Result(source.get("run_id"), None, source, Path(root or "."))
+    elif root is not None:
+        from dataclasses import replace
 
-        spec = directory / "runs" / source["run_id"] / CHART_SPEC_KEY
-        if spec.is_file():
-            figures.extend(_figure(chart, directory, mesh, frame)
-                           for chart in json.loads(spec.read_text()).values())
-    return figures
+        source = replace(source, root=Path(root))
+    directory = Path(source.root or ".")
+    rows = [*source.outputs, *source.charts.values()]
+    return [_figure(row, directory, mesh, frame) for row in rows]
 
 
 def _path(uri: str, root: Path, stack: ExitStack) -> Path:
@@ -239,6 +234,13 @@ def _chart(axes, row):
         data = layer.get("data", spec.get("data", {})).get("values", [])
         x, y = enc.get("x", {}).get("field"), enc.get("y", {}).get("field")
         if x and y:
-            series = [point for point in data if point.get(x) is not None and point.get(y) is not None]
-            axes.plot([point[x] for point in series], [point[y] for point in series])
+            color = enc.get("color", {}).get("field")
+            groups = {}
+            for point in data:
+                if point.get(x) is not None:
+                    groups.setdefault(point.get(color), []).append(point)
+            for label, series in groups.items():
+                axes.plot([point[x] for point in series], [point.get(y) for point in series], label=label)
+            if color and any(groups):
+                axes.legend()
             axes.set(xlabel=enc["x"].get("title", x), ylabel=enc["y"].get("title", y))
