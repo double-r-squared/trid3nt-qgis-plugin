@@ -46,6 +46,7 @@ def archive(root: Path, capture: Capture, deck: Deck) -> dict[str, Any]:
     """Publish the run's own script and lock. The editable case script is retained."""
     if deck.state.workflow.engine == "pestpp" and "study" in deck.held:
         return _archive_study(root, capture, deck)
+    filename = "optimize.py" if deck.state.workflow.name == "optimize" else "case.py"
     if not deck.run_id or not deck.staged.get("inputs"):
         return {"code": "CODEGEN_DECK_MISSING"}
     run_id = _ID.validate_python(deck.run_id)
@@ -81,13 +82,14 @@ def archive(root: Path, capture: Capture, deck: Deck) -> dict[str, Any]:
             "inputs": inputs,
         }
         lock.save()
-        (draft / "case.py").write_text(script.text, encoding="utf-8")
+        (draft / filename).write_text(script.text, encoding="utf-8")
         destination = root / "runs" / run_id
-        _publish(draft, destination, bucket, run_id)
-        _keep_first(root, draft, script.model_version)
-        capture.path = destination / "case.py"
+        _publish(draft, destination, bucket, run_id, script_name=filename)
+        if filename == "case.py":
+            _keep_first(root, draft, script.model_version)
+        capture.path = destination / filename
     return {"code": script.check_code, "checked": script.checked, "deck_sha256": digest,
-            "uri": f"s3://{bucket}/{run_id}/case.py", "lock_uri": f"s3://{bucket}/{run_id}/trid3nt.lock"}
+            "uri": f"s3://{bucket}/{run_id}/{filename}", "lock_uri": f"s3://{bucket}/{run_id}/trid3nt.lock"}
 
 
 def _archive_study(root: Path, capture: Capture, deck: Deck) -> dict[str, Any]:

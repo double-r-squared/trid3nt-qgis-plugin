@@ -296,10 +296,16 @@ def test_the_recorded_failure_never_completed():
 
 
 _SHIM = """#!{python}
-import os, sys
+import os, sys, time
 from pathlib import Path
-Path(os.environ["SHIM_LOG"]).open("a").write(f"{{os.getcwd()}} {{' '.join(sys.argv[1:])}}\\n")
+log = Path(os.environ["SHIM_LOG"])
+log.open("a").write(f"{{os.getcwd()}} {{' '.join(sys.argv[1:])}}\\n")
 if sys.argv[-1].startswith(":"):
+    deadline = time.monotonic() + 10
+    while log.read_text().count("localhost:4004") < 3:
+        if time.monotonic() >= deadline:
+            raise SystemExit("The test agents did not start")
+        time.sleep(.01)
     Path("pestpp.rec").write_text("pestpp-ies analysis complete...\\n")
     Path("pestpp.phi.actual.csv").write_text("iteration\\n")
 """

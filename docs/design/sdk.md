@@ -404,3 +404,17 @@ refuses where it is read (law 9): a river reach nobody states refuses `REACH_LEN
 
 Generation for copies and extensions, fitting a domain to measured water, channel-aligned
 interpolation, and sending a packed case in a runner request remain outside this surface.
+
+
+## Management optimization
+
+Call `c.optimize(files=..., model=..., decisions=..., objective=..., constraints=..., iterations=...)`
+to fill and run a deterministic MODFLOW 6 management study. The files map native deck names to case
+inputs. The [PEST++ design page](pestpp.md#optimize) describes the decision and forecast declarations.
+`fill()` stages the deck for review. `run().value` returns an `OptimizeResult` with the objective trace,
+decisions, and signed constraint margins. The reviewed chat run archives `optimize.py` and its lock.
+The script can fill and run from its case directory on a machine with the solver images installed.
+
+Use `from trid3nt.workflows.pestpp.optimization import resolve_optimum` and
+`resolve_optimum(c, result)` to apply a feasible result. This creates a separate native MODFLOW run
+and returns its run ID, objective value, and measured constraint margins.

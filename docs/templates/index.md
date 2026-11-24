@@ -2,7 +2,7 @@
 
 # Templates
 
-27 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+28 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
 
 ## [`artemis`](artemis.md)
 
@@ -51,6 +51,12 @@ Module `gwf`.
 The STEADY WATER TABLE of an unconfined aquifer under recharge, drained by its streams, with an optional pumping well.
 
 Module `gwf`.
+
+## [`optimize`](optimize.md)
+
+Optimize MODFLOW 6 pumping under stated model-output constraints using PESTPP-OPT.
+
+Module `pestpp`.
 
 ## [`pestpp`](pestpp.md)
 

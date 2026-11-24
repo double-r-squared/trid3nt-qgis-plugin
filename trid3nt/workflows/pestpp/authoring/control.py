@@ -17,7 +17,7 @@ from ..errors import PestppError
 from ..modules import LOCKED, PESTPP
 from ...runtime.module import UNSET
 
-__all__ = ["Observed", "Parameter", "TABLES", "at_bounds", "prior", "sigma_range", "substitute", "unheld_note", "write_control"]
+__all__ = ["Observed", "Parameter", "TABLES", "at_bounds", "prior", "sigma_range", "substitute", "unheld_note", "write_control", "write_opt_control"]
 
 #: The tables the control file names, each written beside it.
 TABLES = {"parameter groups": "study_groups.csv", "parameter data": "study_parameters.csv",
@@ -381,6 +381,69 @@ def write_control(directory: Path, *, name: str, parameters: Sequence[Parameter]
     path = directory / name
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
+
+
+_OPT_GROUPS = {"<=": "less_than", ">=": "greater_than"}
+
+
+def _opt_name(row: Mapping[str, Any]) -> str:
+    name = row.get("name")
+    if not isinstance(name, str) or not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*", name):
+        raise PestppError(f"State a native observation name for {name!r}.", error_code="PESTPP_OPT_NAME")
+    if not isinstance(row.get("source"), str) or not row["source"].strip():
+        raise PestppError(f"State the source for {name}.", error_code="PESTPP_OPT_SOURCE_UNSTATED")
+    return name.lower()
+
+
+def _finite_number(value: Any) -> bool:
+    return type(value) in (int, float) and math.isfinite(value)
+
+
+def write_opt_control(directory: Path, *, parameters: Sequence[Parameter],
+                      objective: Mapping[str, Any], constraints: Sequence[Mapping[str, Any]],
+                      templates: Sequence[tuple[str, str]], instructions: Sequence[tuple[str, str]],
+                      command: str, iterations: int) -> Path:
+    """Author OPT's deterministic scalar objective, decision groups and hard constraints."""
+    if type(iterations) is not int or iterations <= 0:
+        raise PestppError("State positive noptmax for optimization.", error_code="PESTPP_OPT_ITERATIONS")
+    groups: list[str] = []
+    for parameter in parameters:
+        lo, hi, start = parameter.lower, parameter.upper, parameter.value
+        if not all(_finite_number(number) for number in (lo, hi, start)) or not lo < hi or not lo <= start <= hi:
+            raise PestppError(f"State ordered finite bounds containing the starting value of {parameter.name}.",
+                              error_code="PESTPP_OPT_BOUNDS_UNSTATED")
+        if parameter.transform != "none":
+            raise PestppError(f"Decision {parameter.name} requires an untransformed rate.",
+                              error_code="PESTPP_OPT_TRANSFORM")
+        if parameter.group not in groups:
+            groups.append(parameter.group)
+
+    objective_name = _opt_name(objective)
+    direction = objective.get("sense")
+    if direction not in ("min", "max"):
+        raise PestppError(f"State min or max for {objective_name}.", error_code="PESTPP_OPT_SENSE")
+    if not constraints:
+        raise PestppError("State at least one simulated-output constraint.",
+                          error_code="PESTPP_OPT_CONSTRAINT_UNSTATED")
+    # The objective row names a forecast, so its target and weight are unused by the solver.
+    observations = [Observed(objective_name, 0.0, "objective", math.inf, objective["source"])]
+    seen = {objective_name}
+    for row in constraints:
+        name = _opt_name(row)
+        if name in seen:
+            raise PestppError(f"Observation name {name} is repeated.", error_code="PESTPP_OPT_NAME")
+        seen.add(name)
+        sense, limit = row.get("sense"), row.get("limit")
+        if sense not in ("<=", ">="):
+            raise PestppError(f"State <= or >= for {name}.", error_code="PESTPP_OPT_SENSE")
+        if not _finite_number(limit):
+            raise PestppError(f"State a finite limit for {name}.", error_code="PESTPP_OPT_LIMIT_UNSTATED")
+        observations.append(Observed(name, float(limit), _OPT_GROUPS[sense], 1.0, row["source"]))
+    return write_control(
+        directory, name="pestpp.pst", parameters=parameters, observations=observations,
+        templates=templates, instructions=instructions, command=command,
+        stated={"NOPTMAX": iterations, "OPT_DEC_VAR_GROUPS": groups, "OPT_OBJ_FUNC": objective_name,
+                "OPT_DIRECTION": direction, "OPT_RISK": 0.5})
 
 
 def substitute(directory: Path, templates: Sequence[tuple[str, str]],

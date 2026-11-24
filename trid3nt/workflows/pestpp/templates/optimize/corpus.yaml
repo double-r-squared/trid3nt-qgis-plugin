@@ -1,0 +1,6 @@
+optimize:
+- optimize groundwater pumping subject to constraints on stream exchange
+- maximize extraction from MODFLOW wells with a minimum head at a compliance point
+- optimize WEL rates in this stress period using PESTPP-OPT
+- minimize pumping under groundwater head constraints
+- calculate the feasible pumping decision for stated streamflow limits

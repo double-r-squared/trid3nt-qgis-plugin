@@ -502,6 +502,38 @@ def targets(wells: Sequence[Any], *, the_deck: Deck, finished: Any, frame: str
                         utm_epsg=int(finished.case["server_facts"]["utm_epsg"]), frame=frame)
 
 
+def observe_csv(directory: Path, output: str, columns: Sequence[str],
+                readings: Mapping[str, tuple[str, int]]) -> tuple[str, str]:
+    """Write one instruction file for native OBS columns and one-based data rows."""
+    from ...modflow.errors import ModflowError
+
+    indices = {name.casefold(): column for column, name in enumerate(columns, 1)}
+    by_row: dict[int, list[tuple[int, str]]] = {}
+    for name, (column, step) in readings.items():
+        if (column.casefold() not in indices or type(step) is not int or step < 1
+                or not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_-]{0,39}", name)):
+            raise ModflowError(f"Cannot place observation {name!r} at {column!r}, data row {step}.",
+                               error_code="MODFLOW_OBSERVATION_UNPLACED")
+        by_row.setdefault(step, []).append((indices[column.casefold()], name))
+    lines = ["pif ~"]
+    previous = -1  # The first physical line is the OBS CSV header.
+    for step, reads in sorted(by_row.items()):
+        tokens = [f"l{step - previous}"]
+        index = 0
+        for column, name in sorted(reads):
+            if column == index:
+                raise ModflowError(f"Observation {name!r} repeats a CSV cell already read.",
+                                   error_code="MODFLOW_OBSERVATION_UNPLACED")
+            tokens.extend(["~,~"] * (column - index))
+            tokens.append(f"!{name}!")
+            index = column
+        lines.append(" ".join(tokens))
+        previous = step
+    instruction = f"{output}.ins"
+    (directory / instruction).write_text("\n".join(lines) + "\n")
+    return instruction, output
+
+
 def observe_heads(directory: Path, targets: Sequence[tuple[Observed, int]], *, the_deck: Deck) -> tuple[str, str]:
     """The OBS file reading each target's head, named in the model's name file, and the instruction file that
     reads its one saved row -> ``(instruction file, output)``. A deck already holding a model OBS file refuses."""
@@ -519,10 +551,8 @@ def observe_heads(directory: Path, targets: Sequence[tuple[Observed, int]], *, t
     text = re.sub(r"(^\s*END\s+packages\b)", f"  OBS6  {OBS_FILE}  study_heads\n\\1", text, count=1,
                   flags=re.I | re.M)
     name_file.write_text(text)
-    instruction = f"{OBS_OUTPUT}.ins"
-    reads = " ".join(f"~,~ !{target.name}!" for target, _cell in targets)
-    (directory / instruction).write_text(f"pif ~\nl2 {reads}\n")
-    return instruction, OBS_OUTPUT
+    columns = [target.name for target, _cell in targets]
+    return observe_csv(directory, OBS_OUTPUT, columns, {name: (name, 1) for name in columns})
 
 
 def deck_sheet(directory: Path, the_deck: Deck) -> Any:

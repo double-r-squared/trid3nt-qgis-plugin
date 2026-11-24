@@ -16,7 +16,7 @@ class RunInstruction(BaseModel):
     kind: Literal["run"] = "run"
     case: ULIDStr | None
     run_id: ULIDStr
-    script: Literal["case.py", "calibrate.py"]
+    script: Literal["case.py", "calibrate.py", "optimize.py"]
     served: str
     files: dict[str, str] = Field(default_factory=dict)
     inputs: dict[str, str] = Field(default_factory=dict)
@@ -42,7 +42,11 @@ class RunEvent(BaseModel):
         if self.kind == "terminal" and args[0] is not None:
             args[0] = SimpleNamespace(**args[0])
         if self.kind in {"complete", "stopped"} and args[0] is not None:
-            if "study_id" in args[0]:
+            if "bindings" in args[0] and "outcome" in args[0]:
+                from trid3nt.workflows.pestpp.optimization import OptimizeResult
+
+                args[0] = OptimizeResult.model_validate(args[0])
+            elif "study_id" in args[0]:
                 from trid3nt.workflows.pestpp.study import StudyResult
 
                 args[0] = StudyResult.model_validate(args[0])

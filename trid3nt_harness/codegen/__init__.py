@@ -119,7 +119,7 @@ def generate(template: str, values: Mapping[str, Any], form: Form, *, case_dir: 
         return draft
     text = draft.text
     root = Path(case_dir).expanduser().resolve()
-    target = root / "case.py"
+    target = root / ("optimize.py" if template == "optimize" else "case.py")
     with TemporaryDirectory(dir=root, prefix=".codegen-") as tmp:
         candidate = Path(tmp) / target.name
         candidate.write_text(text, encoding="utf-8")

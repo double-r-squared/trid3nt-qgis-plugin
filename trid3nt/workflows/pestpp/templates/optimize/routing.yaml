@@ -1,0 +1,5 @@
+summary: Optimize MODFLOW 6 pumping under stated model-output constraints using PESTPP-OPT.
+routing: 'Use for management optimization on a pinned native GWF deck. State WEL rates with bounds, a
+  named native OBS objective, signed constraints, units, stress periods, time steps and sources.'
+not_for: estimating model parameters from measured observations or a multi-objective Pareto search
+returns: 'An OptimizeResult with feasibility, decisions, objective history and simulated constraints.'

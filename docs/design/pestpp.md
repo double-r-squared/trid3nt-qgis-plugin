@@ -3,7 +3,7 @@
 PEST++ (5.2.27, github.com/pestpp/pestpp) runs studies over a model: sensitivity (`pestpp-sen`), ensemble
 calibration (`pestpp-ies`), Gauss-Levenberg-Marquardt calibration (`pestpp-glm`) and the release's other tools. It is an engine like the others - one image, one
 `LocalSolverSpec`, one dictionary, one output table - whose trials run a model the study directory carries.
-One template speaks it, `calibrate`, over a finished run of any engine with a piece.
+`calibrate` studies a finished run. `optimize` studies a pinned native MODFLOW 6 deck.
 
 ## What it consumes
 
@@ -21,9 +21,9 @@ is the tool; its `cores` are the agents, unstated the `CONTAINER_CORES` setting.
 pyEMU 1.7.0 with numpy and pandas, every one pinned. The entrypoint copies the staged directory once per agent
 into the container's own `/work`, starts one manager in `/data` (`pestpp-<tool> pestpp.pst /h :4004`) and
 the agents against it on the loopback (`/h localhost:4004`), all under `--network none`. Status is the
-manager's exit code AND PEST++'s own closing sentence (`analysis complete`) in its record AND the tool's
-declared results on disk; a failure's refusal carries the record's tail through the solver's listing-tail
-path. Everything the manager writes, `pestpp.*`, is uploaded under the run prefix.
+manager's exit code, the tool's own completion marker and the declared artifacts on disk. OPT writes its
+marker to the manager's stdout. The other tools write their marker to the record. A failure carries
+the record's tail through the solver's listing-tail path. Everything the manager writes, `pestpp.*`, is uploaded under the run prefix.
 
 ## What it produces
 
@@ -293,3 +293,26 @@ Multipliers on stress-period lists (recharge or drain rows) and on per-row value
 a TELEMAC friction field; a bed survey offset as a parameter (no bed source states its accuracy as a value); a run of
 several layers or time steps; progress on the
 Sim card (PEST++'s run-manager lines are not parsed); a diagnostics parser.
+
+
+## `optimize`
+
+Provide a pinned MODFLOW 6 simulation, its GWF model name, bounded WEL rate decisions, one objective,
+an explicit list of constraints, and the iteration limit. Each decision states the WEL package, the
+one-based stress period and cell ID, bounds in native signed rate units, and their source. The initial
+value comes from the named inline WEL row. Extraction has a negative rate. The template keeps native
+rates in periods outside the stated decisions.
+
+Each forecast states the native OBS type and IDs, units, the source, and a one-based stress period and
+time step. Use the GWF model as the observation owner by leaving `package` out, or name a package or
+exchange with its filename, package name, or unambiguous type. A forecast can state `model` for another model in the same simulation. `id` and optional `id2` take native tokens,
+including cell IDs and boundnames. MODFLOW validates the types and selectors supported by each owner.
+The author adds a continuous CSV block to the native OBS package and writes PEST++ instructions for the
+stated rows. A fixed TDIS clock supplies those row positions. The objective states `min` or `max`.
+Each constraint states `<=` or `>=` and a signed limit. Risk is 0.5.
+
+PESTPP-OPT uses the installed MODFLOW trial command. The result records feasibility, the selected rates,
+the objective history, and each constraint's simulated value and signed slack. Nonnegative slack
+satisfies either constraint sense. An infeasible SLP result has its own outcome. Call
+`resolve_optimum(case, result)` for a separate MODFLOW solve that applies the selected rates and measures
+the constraints again on the pinned native deck.

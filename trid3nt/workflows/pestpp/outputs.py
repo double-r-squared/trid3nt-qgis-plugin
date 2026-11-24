@@ -143,6 +143,11 @@ def read_residuals(directory: Path, iteration: int | None = None, tool: str = "i
     else:
         at = last_iteration(directory, "base.rei") if iteration is None else int(iteration)
         path = directory / f"pestpp.{at}.base.rei"
+    return read_residual_table(path)
+
+
+def read_residual_table(path: Path) -> list[dict[str, Any]]:
+    """Read a native PEST++ model-output table with the six residual columns."""
     if not path.is_file():
         raise _missing(path, "residuals")
     out, header = [], False
