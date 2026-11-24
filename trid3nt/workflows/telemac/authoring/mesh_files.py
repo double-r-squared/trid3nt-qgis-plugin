@@ -79,6 +79,7 @@ def _mesh_files(mesh: Mapping[str, Any]) -> dict[str, Any]:
     stats = walk["stats"]
     return {
         "engine_files": files,
+        "mesh_size": {"nodes": stats["npoin"], "elements": stats["nelem"]},
         "topology": boundary_topology(
             roles=roles,
             liquid_boundary_order=stats.get("liquid_boundary_roles") or [],

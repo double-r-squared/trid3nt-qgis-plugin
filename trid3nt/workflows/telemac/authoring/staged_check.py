@@ -159,6 +159,22 @@ def _boundary_matches_the_walk(mesh: Mapping[str, Any], geometry: str,
     return [quad[0] for quad in quads], len(runs)
 
 
+def require_liquid_boundary(*, nodes: int, elements: int, liquid: int) -> None:
+    if liquid == 0:
+        _refuse("NO_LIQUID_BOUNDARY",
+                f"The mesh has {nodes} nodes, {elements} elements and 0 liquid boundaries. "
+                "This run needs a liquid boundary to impose its stated conditions.")
+
+
+def check_partition(*, nodes: int, elements: int, cores: int) -> None:
+    # PARTEL partitions the horizontal elements. Each belongs to one rank, while
+    # interface nodes are copied to every rank that uses them.
+    if cores > 1 and cores > elements:
+        _refuse("PARTITION_TOO_SMALL",
+                f"PARTEL cannot put an element on each of {cores} ranks with "
+                f"{elements} horizontal elements and {nodes} horizontal nodes.")
+
+
 def _bed_is_whole(mesh: Mapping[str, Any], geometry: str) -> None:
     import numpy as np
 
@@ -305,6 +321,9 @@ def _check_staged_run(rundir: Path | str, *, steering: str,
     mesh = read_selafin(_read(staged[geometry]))
     codes, liquid = _boundary_matches_the_walk(mesh, geometry,
                                                _read(staged[boundary]))
+    check_partition(nodes=mesh["npoin2"], elements=mesh["nelem2"], cores=cores)
+    if any(any(top.get(keyword, ())) for keyword in (*_PRESCRIBED, _LIQUID)):
+        require_liquid_boundary(nodes=mesh["npoin2"], elements=mesh["nelem2"], liquid=liquid)
     _bed_is_whole(mesh, geometry)
     _boundaries_carry_a_value(top, codes, liquid, staged, duration_s)
     read = {"decks": sorted(decks), "staged": len(staged),

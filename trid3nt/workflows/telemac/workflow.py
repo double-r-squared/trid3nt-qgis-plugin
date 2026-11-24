@@ -372,7 +372,7 @@ fill_sheet = partial(fill_sheet, engine="telemac", floor=_floor)
 
 async def stage_sheet(*, sheet: TelemacSheet, run_id: str, settled: Mapping[str, Any],
                       results: Sequence[str], steering: str,
-                      prefix: str) -> dict[str, Any]:
+                      prefix: str, mesh_size: Mapping[str, int] | None = None) -> dict[str, Any]:
     """A complete sheet, serialized and staged with the directory checked -> the staged run.
     The handle names every variable the deck asked for; what the run wrote is decided here, where the coupled bodies and declared tracers are in hand."""
     coupled = dict(sheet.resolved()).get("COUPLING WITH")
@@ -383,7 +383,7 @@ async def stage_sheet(*, sheet: TelemacSheet, run_id: str, settled: Mapping[str,
         outputs=outputs, results=list(results), prefix=prefix,
         server_facts=settled["server_facts"], steering=steering,
         coupling=None if not coupled else str(coupled).split(";")[0].lower(),
-        continue_from=settled.get("continue_from"))
+        continue_from=settled.get("continue_from"), mesh_size=mesh_size)
 
 
 async def run_sheet(*, sheet: TelemacSheet, staged: Mapping[str, Any],
@@ -524,6 +524,7 @@ class TelemacWorkflow(Workflow):
         from .authoring.mesh_files import telemac_mesh_files
         from .authoring.opening import open_channel, open_water
         from .authoring.release_point import settle_release
+        from .authoring.staged_check import require_liquid_boundary
 
         env = production(state)
         run = env.run
@@ -575,8 +576,13 @@ class TelemacWorkflow(Workflow):
         await keep_mesh(run["mesh"])
         if inflow:
             # THE OPEN-CHANNEL ADDITION: whether a run CARRIES a discharge is a run-time fact, decided off the carrier handed in; an absent one authors no channel.
+            carrier = await read(env, inflow)
+            mesh_size = run["mesh_files"].get("mesh_size")
+            if carrier is not None and mesh_size is not None:
+                liquid = len(run["mesh_files"]["topology"]["liquid_boundary_order"])
+                require_liquid_boundary(**mesh_size, liquid=liquid)
             await stage("channel", open_channel, mesh=run["mesh"],
-                        files=run["mesh_files"], carrier=await read(env, inflow),
+                        files=run["mesh_files"], carrier=carrier,
                         stage=await read(env, level) if level else None,
                         domain=await read(env, domain),
                         friction_law=self._asserted(run, "LAW_OF_BOTTOM_FRICTION"),
@@ -632,7 +638,7 @@ class TelemacWorkflow(Workflow):
                 sheet=sheet, run_id=run_id, settled=run[_SETTLED],
                 results=list(listed or (self._result(),)),
                 steering=(self._states("STEERING_FILE", "") or f"{self.steering.MODULE}_{self.name}.cas"),
-                prefix=prefix))
+                prefix=prefix, mesh_size=run["mesh_files"].get("mesh_size")))
 
         produced = {**run, **{slot.name: run[name] for slot, name in slots.items() if name in run}}
         keywords = await ask_unstated(steering=self.steering, produced=produced, workflow=self.name,

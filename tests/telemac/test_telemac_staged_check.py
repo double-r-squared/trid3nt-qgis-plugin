@@ -97,6 +97,8 @@ def test_each_telemac_bare_tool_writes_and_checks_its_own_deck(tmp_path, entry, 
         pytest.skip("the engine's steering reader is unavailable")
     IO.write_telemac_pair(tmp_path, x=_X, y=_Y, cells=_CELLS,
                           bed=np.full(4, -1.), roles={}, title="SQUARE")
+    if entry != "artemis":
+        keywords = {**keywords, "PARALLEL_PROCESSORS": 0}
     model = case(tmp_path / "case").model(
         entry, GEOMETRY_FILE="mesh.slf", BOUNDARY_CONDITIONS_FILE="mesh.cli",
         files={name: str(tmp_path / name) for name in ("mesh.slf", "mesh.cli")}, **keywords)
@@ -325,3 +327,22 @@ def test_an_object_store_object_is_read_into_a_scratch_directory_the_check_remov
                        duration_s=None, cores=1)
     assert seen["during"] == b"bytes"
     assert not Path(seen["path"]).exists() and not Path(seen["path"]).parent.exists()
+
+
+def test_dry_boundary_only_refuses_when_the_deck_needs_a_liquid_boundary(tmp_path):
+    IO.write_telemac_pair(tmp_path, x=_X, y=_Y, cells=_CELLS, bed=np.ones(4), title="CLOSED")
+    steering = tmp_path / _DECK
+    steering.write_text(_deck())
+    with pytest.raises(TelemacError, match="4 nodes, 2 elements and 0 liquid boundaries") as refused:
+        _check(tmp_path)
+    assert refused.value.error_code == "TELEMAC_STAGED_NO_LIQUID_BOUNDARY"
+    steering.write_text(_deck(**{"PRESCRIBED FLOWRATES": None}))
+    assert _check(tmp_path)["liquid_boundaries"] == 0
+
+
+def test_more_ranks_than_horizontal_elements_refuses(tmp_path, monkeypatch):
+    monkeypatch.setattr(C, "docker_cores", lambda: 8)
+    rundir = _staged(tmp_path, **{"PARALLEL PROCESSORS": "3"})
+    with pytest.raises(TelemacError, match="3 ranks with 2 horizontal elements and 4 horizontal nodes") as refused:
+        _check(rundir, cores=3)
+    assert refused.value.error_code == "TELEMAC_STAGED_PARTITION_TOO_SMALL"
