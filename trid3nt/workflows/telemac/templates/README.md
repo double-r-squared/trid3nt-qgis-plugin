@@ -50,6 +50,10 @@ a hyetograph against a constant rate.
 | folder | what it is |
 | --- | --- |
 | `__init__.py` | The package door. A template is imported for its registration, so nothing is re-exported here. |
+| `telemac2d/` | Bare TELEMAC-2D steering inputs and native deck import. |
+| `telemac3d/` | Bare TELEMAC-3D steering inputs and native deck import. |
+| `artemis/` | Bare ARTEMIS steering inputs and native deck import. |
+| `tomawac/` | Bare TOMAWAC steering inputs and native deck import. |
 | `dye_release/` | `telemac_dye_release` - a conservative plume down a reach, decaying when a decaying substance is named (its die-off presets are the template's values); its release is a Point slot whose name the tracer takes. |
 | `oil_spill/` | `telemac_oil_spill` - an oil slick on a reach: the floats' track beside the dissolved fraction; the oil presets are the template's values. |
 | `bed_scour/` | `telemac_bed_scour` - a mobile bed under a reach: the bed evolution off GAIA's own result, the bed over time and a marker beside them; the gradation presets are the template's values. |

@@ -25,7 +25,13 @@ REPO = Path(__file__).resolve().parents[2]
 _DYE = dict(
     release=[-122.669784, 45.518485], spill_duration_s=300.0, event_time="2024-03-01T12:00:00Z",
     mesh_resolution_m=40.0, DURATION=1800.0, discharge=56.6, level=0.0,
-    domain=[[-122.6769, 45.5153], [-122.6615, 45.5153], [-122.6615, 45.5198], [-122.6769, 45.5198]],
+    domain={"type": "Polygon",
+            "coordinates": [[[-122.6769, 45.5153], [-122.6615, 45.5153],
+                             [-122.6615, 45.5198], [-122.6769, 45.5198],
+                             [-122.6769, 45.5153]]],
+            "runs": [
+                {"type": "inflow", "start": [-122.6769, 45.5153], "end": [-122.6769, 45.5198]},
+                {"type": "outflow", "start": [-122.6615, 45.5153], "end": [-122.6615, 45.5198]}]},
     bed={"source": "fetch_etopo"})
 
 #: One process of the case: the bed's fetch answered by a raster the script writes (or refused, to show none is

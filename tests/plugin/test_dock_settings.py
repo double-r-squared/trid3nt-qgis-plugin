@@ -53,11 +53,11 @@ class TestShowThinkingSettings(unittest.TestCase):
         self.assertTrue(s.show_thinking, "show_thinking must default to True")
 
     def test_explicit_false_stored(self):
-        s = self._make_settings({"trid3nt/show_thinking": "false"})
+        s = self._make_settings({"trid3nt_qgis/show_thinking": "false"})
         self.assertFalse(s.show_thinking)
 
     def test_explicit_true_stored(self):
-        s = self._make_settings({"trid3nt/show_thinking": "true"})
+        s = self._make_settings({"trid3nt_qgis/show_thinking": "true"})
         self.assertTrue(s.show_thinking)
 
     def test_setter_persists(self):
@@ -90,9 +90,9 @@ class TestShowThinkingSettings(unittest.TestCase):
             ps = importlib.import_module("plugin.plugin_settings")
             s = ps.PluginSettings()
             s.show_thinking = False
-            self.assertEqual(FakeQSettings.store.get("trid3nt/show_thinking"), "false")
+            self.assertEqual(FakeQSettings.store.get("trid3nt_qgis/show_thinking"), "false")
             s.show_thinking = True
-            self.assertEqual(FakeQSettings.store.get("trid3nt/show_thinking"), "true")
+            self.assertEqual(FakeQSettings.store.get("trid3nt_qgis/show_thinking"), "true")
         finally:
             for k, v in saved.items():
                 if v is None:
@@ -145,11 +145,11 @@ class TestAutoBasemapSettings(unittest.TestCase):
         self.assertTrue(s.auto_basemap, "auto_basemap must default to True")
 
     def test_explicit_false_stored(self):
-        s = self._make_settings({"trid3nt/auto_basemap": "false"})
+        s = self._make_settings({"trid3nt_qgis/auto_basemap": "false"})
         self.assertFalse(s.auto_basemap)
 
     def test_explicit_true_stored(self):
-        s = self._make_settings({"trid3nt/auto_basemap": "true"})
+        s = self._make_settings({"trid3nt_qgis/auto_basemap": "true"})
         self.assertTrue(s.auto_basemap)
 
     def test_setter_persists(self):
@@ -182,9 +182,9 @@ class TestAutoBasemapSettings(unittest.TestCase):
             ps = importlib.import_module("plugin.plugin_settings")
             s = ps.PluginSettings()
             s.auto_basemap = False
-            self.assertEqual(FakeQSettings.store.get("trid3nt/auto_basemap"), "false")
+            self.assertEqual(FakeQSettings.store.get("trid3nt_qgis/auto_basemap"), "false")
             s.auto_basemap = True
-            self.assertEqual(FakeQSettings.store.get("trid3nt/auto_basemap"), "true")
+            self.assertEqual(FakeQSettings.store.get("trid3nt_qgis/auto_basemap"), "true")
         finally:
             for k, v in saved.items():
                 if v is None:
@@ -238,36 +238,36 @@ class TestProviderModelSettings(unittest.TestCase):
         self.assertEqual(s.provider, "local-ollama")
 
     def test_provider_stored_value(self):
-        s, _ = self._make_settings({"trid3nt/provider": "openrouter-paid"})
+        s, _ = self._make_settings({"trid3nt_qgis/provider": "openrouter-paid"})
         self.assertEqual(s.provider, "openrouter-paid")
 
     def test_provider_setter_persists(self):
         s, store = self._make_settings()
         s.provider = "groq"
-        self.assertEqual(store.store.get("trid3nt/provider"), "groq")
+        self.assertEqual(store.store.get("trid3nt_qgis/provider"), "groq")
 
     def test_provider_blank_falls_back_to_default(self):
         s, store = self._make_settings()
         s.provider = "   "
-        self.assertEqual(store.store.get("trid3nt/provider"), "local-ollama")
+        self.assertEqual(store.store.get("trid3nt_qgis/provider"), "local-ollama")
 
     def test_model_id_default_is_empty(self):
         s, _ = self._make_settings()
         self.assertEqual(s.model_id, "")
 
     def test_model_id_stored_value(self):
-        s, _ = self._make_settings({"trid3nt/model_id": "deepseek/deepseek-chat"})
+        s, _ = self._make_settings({"trid3nt_qgis/model_id": "deepseek/deepseek-chat"})
         self.assertEqual(s.model_id, "deepseek/deepseek-chat")
 
     def test_model_id_setter_persists_stripped(self):
         s, store = self._make_settings()
         s.model_id = "  meta-llama/llama-3.3-70b-instruct  "
         self.assertEqual(
-            store.store.get("trid3nt/model_id"),
+            store.store.get("trid3nt_qgis/model_id"),
             "meta-llama/llama-3.3-70b-instruct",
         )
 
     def test_no_key_lives_in_qsettings(self):
-        s, store = self._make_settings({"trid3nt/openrouter_api_key": "sk-or-v1-SECRET"})
-        self.assertNotIn("trid3nt/openrouter_api_key", store.store)
+        s, store = self._make_settings({"trid3nt_qgis/openrouter_api_key": "sk-or-v1-SECRET"})
+        self.assertNotIn("trid3nt_qgis/openrouter_api_key", store.store)
         self.assertFalse(hasattr(s, "openrouter_api_key"))

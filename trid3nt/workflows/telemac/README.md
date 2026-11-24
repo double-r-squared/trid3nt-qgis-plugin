@@ -1,8 +1,7 @@
 # `workflows/telemac/` - the TELEMAC engine
 
-One door, one engine file and four trees. Nothing lives at this root but the
-door, the engine file, its diagnostics parser and the engine's typed failures: the trees are named for
-what they hold - `modules/` the wrappers, the module inputs their keywords are
+The template and bare-module entry points share the solver launcher, diagnostics
+and typed failures. The four subtrees hold `modules/` the wrappers, the module inputs their keywords are
 read out of, the tables of what each writes and the primitive set that reads it,
 `templates/` one package per question, `authoring/` the run directory the box receives, `helpers/` the
 pure physics more than one template's run derives a number from. A template
@@ -20,16 +19,22 @@ the worker authors nothing. Its prose - how the question is found and what it is
 not for - is the package's `routing.yaml`, rendered into the tool's docstring at
 registration; the file carries none of it.
 
-TOMAWAC has NO wrapper, and the reason is measurable rather than an oversight:
-`modules/module_input/tomawac.json` holds its 223 keywords and
-`entrypoint._MODULES` can solve it, but the spectral tier has no template over
-it. The wrapper is built when a question needs it, not before.
+## Mesh checks
+
+A template that supplies discharge needs a liquid boundary. A mesh with none
+refuses as `TELEMAC_STAGED_NO_LIQUID_BOUNDARY` before TELEMAC starts. The staged
+deck also checks explicitly prescribed flow, elevation and liquid-boundary files.
+PARTEL assigns each horizontal element to one rank and shares interface nodes.
+A run requesting more ranks than horizontal elements refuses as
+`TELEMAC_STAGED_PARTITION_TOO_SMALL`, with its element, node and rank counts.
+[TELEMAC v9.0.0 PARTEL source](https://gitlab.pam-retd.fr/otm/telemac-mascaret/-/blob/v9.0.0/sources/utils/partel/partel.F)
 
 ## Files
 
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The package door. |
+| `bare.py` | Author and solve native decks for the exposed modules from stated keywords or supplied steering files. |
 | `engine.py` | Everything the shared executor cannot know: the launch line and the declared network, the verdict on an exit, the metrics file, and the one run path every template dispatches through. |
 | `progress.py` | The pure parser of one listing line into the step the engine states, against the totals the run's own deck states. |
 | `diagnostics.py` | The parser `read_run_diagnostics` dispatches a TELEMAC run to: completion extras, and the volume closure read off the listing through `modules/listing.py`. |

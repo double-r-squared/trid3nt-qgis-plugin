@@ -23,11 +23,3 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `epsg` | - | optional | EPSG code of the native grid where its coordinate system is known. |
 | `coupling` | - | optional | Coupled bodies. State module and any required process. The steering filename is optional. |
 
-
-A template that supplies discharge needs a liquid boundary. A mesh with none
-refuses as `TELEMAC_STAGED_NO_LIQUID_BOUNDARY` before TELEMAC starts. The staged
-deck also checks explicitly prescribed flow, elevation and liquid-boundary files.
-PARTEL assigns each horizontal element to one rank and shares interface nodes.
-A run requesting more ranks than horizontal elements refuses as
-`TELEMAC_STAGED_PARTITION_TOO_SMALL`, with its element, node and rank counts.
-[TELEMAC v9.0.0 PARTEL source](https://gitlab.pam-retd.fr/otm/telemac-mascaret/-/blob/v9.0.0/sources/utils/partel/partel.F)
