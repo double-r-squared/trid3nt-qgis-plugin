@@ -27,7 +27,7 @@ from typing import Callable, Optional, Tuple
 # Numeric-finiteness helpers shared with the render path.
 from ..render import formatting
 
-_LOG = logging.getLogger("trid3nt.trid3nt_client")
+_LOG = logging.getLogger("trid3nt_qgis.trid3nt_client")
 
 __all__ = [
     "AgentClient",

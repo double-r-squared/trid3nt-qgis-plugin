@@ -226,11 +226,11 @@ class TestMacWheelRecipe(unittest.TestCase):
         self.assertEqual(inst.mac_platform_tag("x86_64"), "macosx_11_0_x86_64")
 
     def test_profile_python_dir_two_dirnames_up_from_package(self):
-        """The plugin ships at <profile>/python/plugins/trid3nt/; this
+        """The plugin ships at <profile>/python/plugins/trid3nt_qgis/; this
         module lives directly inside trid3nt/, so its own path resolves to
         <profile>/python."""
         fake_file = "/Users/nate/Library/Application Support/QGIS/QGIS3/" \
-            "profiles/default/python/plugins/trid3nt/install_dependencies.py"
+            "profiles/default/python/plugins/trid3nt_qgis/install_dependencies.py"
         expected = "/Users/nate/Library/Application Support/QGIS/QGIS3/" \
             "profiles/default/python"
         self.assertEqual(inst.profile_python_dir(fake_file), expected)

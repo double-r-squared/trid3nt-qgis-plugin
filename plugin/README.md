@@ -110,7 +110,7 @@ make plugin
 
 This runs `scripts/install_plugin.sh`, which `rsync -a --delete`s
 `plugin/` into
-`~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/trid3nt/`. **QGIS
+`~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/trid3nt_qgis/`. **QGIS
 loads that installed profile copy, never this repo checkout directly** -- a
 plugin-code edit needs `make plugin` run again before QGIS sees it, and even
 then QGIS keeps running the OLD code in memory until you reload:

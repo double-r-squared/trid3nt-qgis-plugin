@@ -10,7 +10,7 @@ import json
 
 from qgis.PyQt.QtCore import QSettings
 
-GROUP = "trid3nt"
+GROUP = "trid3nt_qgis"
 
 DEFAULT_LOCAL_URL = "ws://127.0.0.1:8765/ws"
 DEFAULT_MINIO_ENDPOINT = "http://127.0.0.1:9000"

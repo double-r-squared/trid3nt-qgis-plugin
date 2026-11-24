@@ -84,7 +84,7 @@ there for it to install into (see why below).
 
 ```bash
 python3 -m pip install matplotlib
-# or: python3 trid3nt/install_dependencies.py
+# or: python3 trid3nt_qgis/install_dependencies.py
 ```
 
 **Windows** -- the OSGeo4W python.exe QGIS ships with also has pip
@@ -118,7 +118,10 @@ downloaded numpy wheel into the profile shadows it and breaks shapely
 
 `<3.NN>` is this QGIS's own `sys.version_info`, `<arm64|x86_64>` is
 `platform.machine()`, and `<profile>/python` is two directories up from
-where the plugin itself lives (`<profile>/python/plugins/trid3nt/`). The
+where the plugin itself lives (`<profile>/python/plugins/trid3nt_qgis/`). For
+an existing default Linux profile, run `scripts/install_plugin.sh` once to copy
+the saved settings and enabled state and remove the old package. Restart QGIS
+to load the installed copy. The
 Charts dock's "Missing matplotlib" panel shows this exact two-line block
 with every value already filled in for the QGIS you're running (Copy
 button) -- it never runs either recipe for you, on any OS: run the command
@@ -278,7 +281,7 @@ make plugin
 ```
 
 This runs `scripts/install_plugin.sh`, which `rsync -a --delete`s
-`plugin/` into `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/trid3nt/`
+`plugin/` into `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/trid3nt_qgis/`
 -- QGIS loads that installed profile COPY, never the repo checkout directly, so
 a plugin-side code change needs `make plugin` again to reach QGIS. After
 syncing, reload in QGIS: **Plugins > Plugin Reloader** (or restart QGIS), then

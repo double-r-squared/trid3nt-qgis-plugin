@@ -177,7 +177,7 @@ def mac_platform_tag(machine: Optional[str] = None) -> str:
 def profile_python_dir(file: Optional[str] = None) -> str:
     """``<profile>/python``, the QGIS profile directory already on QGIS's own
     ``sys.path``."""
-    # The plugin lives at ``<profile>/python/plugins/trid3nt/``: the profile's python dir is three ``dirname()`` calls up.
+    # The plugin lives at ``<profile>/python/plugins/trid3nt_qgis/``: the profile's python dir is three ``dirname()`` calls up.
     file = __file__ if file is None else file
     package_dir = os.path.dirname(os.path.abspath(file))  # .../trid3nt
     return os.path.dirname(os.path.dirname(package_dir))  # .../python
