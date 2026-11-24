@@ -237,6 +237,11 @@ class Case:
                 raise StorageError(f"{value} names no file of this case.")
             digest = sha256_of(target)
             return f"s3://data/{target.name}", {"source": "case", "uri": f"data/{target.name}", "sha256": digest}
+        from .script_run import current
+
+        child = current()
+        if child is not None and child.handoff.get("runner"):
+            raise DeclarationError("The run requested an unpinned input.", error_code="REMOTE_INPUT_UNPINNED")
         part = self.root / "data" / ".taking.part"
         if parsed.scheme in ("http", "https"):
             with urllib.request.urlopen(value) as answer, part.open("wb") as handle:  # noqa: S310 - the person's URL

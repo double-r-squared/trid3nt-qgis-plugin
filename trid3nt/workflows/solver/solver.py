@@ -25,6 +25,7 @@ from trid3nt_contracts.execution import ExecutionHandle, RunResult
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt.settings import setting
+from trid3nt.errors import DeclarationError, DeclarativeError
 from trid3nt.store import objects as storage
 from trid3nt.store.objects import StorageError
 from trid3nt.tools import register_tool
@@ -453,7 +454,7 @@ def launch_local_solver(
 
     try:
         manifest = json.loads(_read_object_bytes(model_setup_uri))
-    except SolverDispatchError:
+    except (SolverDispatchError, DeclarativeError):
         raise
     except Exception as exc:  # noqa: BLE001
         raise SolverDispatchError(
@@ -512,7 +513,7 @@ def launch_local_solver(
             )
         try:
             _download_object(input_uri, dest)
-        except SolverDispatchError:
+        except (SolverDispatchError, DeclarativeError):
             raise
         except Exception as exc:  # noqa: BLE001
             raise SolverDispatchError(
@@ -943,7 +944,14 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, cores: int,
 
     emitter = current_emitter()
     child = current()
-    handle = submit_solver(solver, manifest_uri, cores, run_id)
+    if child is not None and child.handoff.get("runner"):
+        cores = min(cores, child.handoff["cores"]) if cores is not None else child.handoff["cores"]
+    try:
+        handle = submit_solver(solver, manifest_uri, cores, run_id)
+    except EngineImageMissing as error:
+        if child is None or not child.handoff.get("runner"):
+            raise
+        raise DeclarationError(str(error), error_code=error.error_code) from error
     run_id = handle.run_id
     logger.info("%s dispatching %s -> %s", solver, label, manifest_uri)
     if child is not None:

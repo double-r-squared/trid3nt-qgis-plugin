@@ -216,7 +216,7 @@ threads. A positive `SOLVE_BUDGET_S` caps its wall time. The daemon forwards
 the existing substeps and solve-progress messages and publishes the child's
 recorded outputs through the existing layer registry. Stop cancels the
 child's solver wait, which stops the container and records the same partial
-products. A generator refusal is recorded and the run solves in-process.
+products. With local execution, a generator refusal is recorded and the run solves in-process.
 
 The first pair is kept at `$TRID3NT_HOME/cases/<case_id>/case.py` and
 `trid3nt.lock`, with a lock snapshot under `versions/`. Every generated pair
@@ -228,12 +228,35 @@ daemon's child uses its verified, staged handoff and the deployment store.
 
 For a point-seeded domain the script keeps the original point and declares the
 resolved river or waterbody type with its existing `place_type` field. Handed
-banks are pinned through the existing `banks` input. A PEST++ calibration has
-no staged deck at this seam and records `CODEGEN_DECK_MISSING`.
+banks are pinned through the existing `banks` input.
 
 In QGIS, right-click an output layer and choose **Download run script** to
 copy the pair into a new directory named for the run. The action uses the
 existing signed object download.
+
+## Remote execution
+
+A daemon with `TRID3NT_REMOTE_RUNNER_URL` submits reviewed chat runs to that
+runner. With the URL unset the daemon uses its local child. An explicit remote
+submission that cannot run returns a typed refusal. Standalone Python
+continues to execute in the caller's process.
+
+The submitting daemon links a copy of the reviewed case into the shared store
+at relative case paths. The run instruction carries its served URI and
+SHA-256 pins. The paired daemon verifies marked files and input objects before
+using them. Unpinned reads refuse and a changed file returns
+`DIGEST_MISMATCH`. The runner starts the same reviewed child and uses its own
+core and solve time budgets.
+
+The daemon WebSocket carries the run instruction, progress, correlated review
+requests and replies, Stop, and the final record using the reviewed run's JSON
+messages. The private child channel keeps its typed local handoff. The
+submitting daemon renders cards and publishes outputs from the returned record.
+The record's `runner` field holds the runner hostname. Completed calibration
+files travel through the same shared store and remain available to the case.
+
+See [Remote runner deployment](settings.md#remote-runner-deployment) for
+endpoint and credential configuration.
 
 ## Calibration stages
 
@@ -344,7 +367,5 @@ refuses where it is read (law 9): a river reach nobody states refuses `REACH_LEN
 
 ## Out of scope here
 
-Chat dispatch through the generated script; generation for copies and extensions; a fit of the domain to measured water
-(`fit_reach`) and a channel-aligned interpolation, neither in the tree; studies;
-remote execution; a case's own document store (a finished run of an SDK case is not offered as a run input) - each
-a later leg of the SDK plan.
+Generation for copies and extensions, fitting a domain to measured water, channel-aligned
+interpolation, and sending a packed case in a runner request remain outside this surface.

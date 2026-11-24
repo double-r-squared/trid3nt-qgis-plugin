@@ -15,6 +15,7 @@ from trid3nt.tools.fetchers._router.router import bind_pin, reset_pin
 logger = logging.getLogger(__name__)
 _HOST: Callable[[], Callable[..., dict[str, Any]] | None] | None = None
 _RUN: Callable[..., Awaitable[Executed]] | None = None
+_REMOTE_REQUIRED: Callable[[], bool] | None = None
 _CURRENT: ContextVar[Capture | None] = ContextVar("workflow_script_capture", default=None)
 
 
@@ -41,13 +42,15 @@ class Executed:
     """A reviewed script returned a value and already wrote its run record."""
 
     value: Any
+    record: dict[str, Any] | None = None
 
 
 def register(host: Callable[[], Callable[..., dict[str, Any]] | None],
-             run: Callable[..., Awaitable[Executed]] | None = None) -> None:
+             run: Callable[..., Awaitable[Executed]] | None = None,
+             *, remote_required: Callable[[], bool] | None = None) -> None:
     """The server supplies the archive writer and runner for a live case turn."""
-    global _HOST, _RUN
-    _HOST, _RUN = host, run
+    global _HOST, _RUN, _REMOTE_REQUIRED
+    _HOST, _RUN, _REMOTE_REQUIRED = host, run, remote_required
 
 
 def current() -> Capture | None:
@@ -83,6 +86,14 @@ async def archive(deck: Any) -> None:
 
 async def execute(deck: Any) -> Executed | None:
     active = current()
-    if _RUN is None or active is None or active.path is None or not active.receipt:
+    if _RUN is None:
         return None
-    return await _RUN(active.path, deck, active.receipt)
+    if active is not None and active.path is not None and active.receipt:
+        return await _RUN(active.path, deck, active.receipt)
+    if _REMOTE_REQUIRED is not None and _REMOTE_REQUIRED():
+        from trid3nt.errors import DeclarationError
+        from trid3nt.render.emission import current_emitter
+
+        if active is not None or current_emitter() is not None:
+            raise DeclarationError("The remote run has no reviewed script.", error_code="REMOTE_SCRIPT_REQUIRED")
+    return None

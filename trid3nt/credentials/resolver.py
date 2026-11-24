@@ -152,3 +152,12 @@ def resolve_credential(session_id: str, tool_name: str) -> str | None:
         return cached
     env_value = os.environ.get(credential.env_var)
     return env_value.strip() if env_value and env_value.strip() else None
+
+
+REMOTE_RUNNER_TOKEN_ENV = "TRID3NT_REMOTE_RUNNER_TOKEN"
+
+
+def remote_runner_credential() -> str | None:
+    """Resolve the paired-daemon credential independently of plugin sessions."""
+    value = os.environ.get(REMOTE_RUNNER_TOKEN_ENV, "").strip()
+    return value or None

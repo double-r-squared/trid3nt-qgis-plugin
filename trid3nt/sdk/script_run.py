@@ -24,6 +24,7 @@ from trid3nt.errors import DeclarationError, DeclarativeError
 from trid3nt.inputs import slots
 from trid3nt.inputs.review import InputGateMode, ReviewOutcome
 from trid3nt.inputs.temporal import Series
+from trid3nt.sdk.run_messages import RunEvent, RunInstruction
 from trid3nt.workflows.runtime import module
 from trid3nt.workflows.solver.stop import Stopped
 
@@ -166,7 +167,7 @@ class ReviewedRun:
     checked: bool = False
 
     def event(self, kind: str, *values: Any) -> None:
-        self.channel.send((kind, *values))
+        self.channel.send(RunEvent.event(kind, *values).model_dump(mode="json"))
 
     def verify(self) -> None:
         self.checked = True
@@ -197,17 +198,28 @@ def main() -> None:
     descriptor = int(sys.argv[1])
     os.set_inheritable(descriptor, False)
     with Connection(descriptor) as channel:
-        active = ReviewedRun(channel, channel.recv())
+        handoff = channel.recv()
+        instruction = RunInstruction.model_validate(handoff["instruction"])
+        active = ReviewedRun(channel, handoff)
+        if active.handoff.get("remote_inputs") is not None:
+            from trid3nt.sdk.run_store import bind_verified_store
+
+            bind_verified_store(active.handoff["remote_inputs"])
         _ACTIVE.set(active)
         from trid3nt.tools.mesh.session import _limit_to_cores
 
         _limit_to_cores(active.handoff["cores"])
         try:
-            runpy.run_path(active.handoff.get("script", "case.py"), run_name="__main__")
+            runpy.run_path(instruction.script, run_name="__main__")
         except Stopped as stop:
             active.event("stopped", stop.value, stop.why, active.record)
         except DeclarativeError as exc:
-            active.event("refused", exc.error_code)
+            args = (str(exc),) if exc.error_code == "ENGINE_IMAGE_MISSING" else ()
+            active.event("refused", exc.error_code, *args)
+        except Exception as exc:
+            if not getattr(exc, "error_code", None):
+                raise
+            active.event("refused", exc.error_code, str(exc))
         except SystemExit as exc:
             if active.failure is not None:
                 active.event("refused", *active.failure)

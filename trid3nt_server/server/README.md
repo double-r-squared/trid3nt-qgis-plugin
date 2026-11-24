@@ -18,7 +18,7 @@ where its results go.
 
 | subfolder | what lives there |
 | --- | --- |
-| `dispatch/` | One tool call end to end: AOI, emission, result summaries and persistence. `case_script.py` keeps the reviewed case or calibration script and served pins. `script_child.py` runs the script, routes deferred study reviews through the daemon, and forwards progress and recorded outputs. |
+| `dispatch/` | One tool call end to end: AOI, emission, result summaries and persistence. `case_script.py` keeps the reviewed case or calibration script and served pins. `script_child.py` runs the script, routes deferred study reviews through the daemon, and forwards progress and recorded outputs. `trid3nt_server/server/dispatch/remote_run.py` links portable runs and relays the same messages on the authenticated runner WebSocket. |
 | `protocol/` | The wire: authentication, the connection registry, the message handlers, the HTTP door (the library and the data routes) and the accept loop. |
 | `session/` | What one connection holds - the case it is on, its persistence handle, its mutable state. |
 | `turn/` | The turn engine: the model stream, its compaction card, the wire envelopes it produces, and the case bookkeeping around it. |

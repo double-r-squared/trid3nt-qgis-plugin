@@ -673,6 +673,8 @@ class Workflow:
             mesh=run.results.get("mesh"), settings=run.settings, stopped=stopped,
             check_steps=run.results.get("check_steps"), study=run.results.get("study"),
         )
+        if child is not None and child.handoff.get("runner"):
+            record["runner"] = child.handoff["runner"]
         journal.append_record(record)
         if child is not None:
             child.record = record

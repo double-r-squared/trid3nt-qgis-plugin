@@ -328,7 +328,7 @@ class NamedStudy:
                 staged.rename(target)
                 try:
                     if root != self.case.root:
-                        self._pin_base(lock)
+                        pin_archived_base(Lock(self.case.root), lock, self.base_version)
                     lock.data.setdefault("studies", {})[self.name] = files
                     lock.save()
                 except BaseException:
@@ -336,26 +336,25 @@ class NamedStudy:
                     raise
         self.document = document
 
-    def _pin_base(self, lock: Lock) -> None:
-        """Carry the archived finished base into the editable chat case."""
-        relative = f"versions/{self.base_version}.lock"
-        versions = lock.data.setdefault("versions", {})
-        if relative in versions:
-            return
-        archive = Lock(self.case.root)
-        source = archive.local(relative)
-        digest = archive.data["versions"][relative]
-        _check(source, digest)
-        target = lock.local(relative)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
-        versions[relative] = digest
-        lock.data.setdefault("remote_files", {}).update(archive.data.get("remote_files", {}))
-        lock.data.setdefault("served", archive.data["served"])
-        for field in ("called_templates", "copied_templates"):
-            pinned_templates = lock.data.setdefault(field, {})
-            for key, value in archive.data.get(field, {}).items():
-                pinned_templates.setdefault(key, value)
+def pin_archived_base(archive: Lock, lock: Lock, version: str) -> None:
+    """Carry the archived finished base into the editable chat case."""
+    relative = f"versions/{version}.lock"
+    versions = lock.data.setdefault("versions", {})
+    if relative in versions:
+        return
+    source = archive.local(relative)
+    digest = archive.data["versions"][relative]
+    _check(source, digest)
+    target = lock.local(relative)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, target)
+    versions[relative] = digest
+    lock.data.setdefault("remote_files", {}).update(archive.data.get("remote_files", {}))
+    lock.data.setdefault("served", archive.data["served"])
+    for field in ("called_templates", "copied_templates"):
+        pinned_templates = lock.data.setdefault(field, {})
+        for key, value in archive.data.get(field, {}).items():
+            pinned_templates.setdefault(key, value)
 
 
 async def stage_applied(model: Model, state: Any, applied: AppliedStudy) -> Deck:

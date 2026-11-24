@@ -20,6 +20,7 @@ from trid3nt.errors import DeclarationError
 from trid3nt.render.emission import current_emitter, current_turn_case
 from trid3nt.render.layer_uri_emit import publish_input_layer
 from trid3nt.sdk.lock import Lock
+from trid3nt.sdk.run_messages import RunEvent, RunInstruction
 from trid3nt.sdk.script_run import ReviewRequest, ReviewResponse, save_deck
 from trid3nt.settings import bind_run, clear_session_run, reset_run, run_stated, setting
 from trid3nt.tools.mesh.session import _THREAD_VARIABLES
@@ -109,6 +110,12 @@ class _Relay:
                                      SimpleNamespace(status="failed", error_code=code))
         await self.end("cancelled" if cancelled else "failed", code, str(_refusal(code)))
 
+    async def answer(self, request: ReviewRequest) -> Any:
+        from trid3nt.inputs.review import gate_input_review
+
+        return await gate_input_review(tool_name=request.tool_name, entries=request.entries,
+                                       params=request.params, mode=request.mode)
+
     def cancel_review(self) -> None:
         if self.review is not None:
             self.review.cancel()
@@ -134,15 +141,12 @@ async def _messages(channel: Connection, process: Any, relay: _Relay, handoff: d
     result = None
     while True:
         try:
-            kind, *args = await asyncio.to_thread(channel.recv)
+            kind, *args = RunEvent.model_validate(await asyncio.to_thread(channel.recv)).unpack()
         except EOFError:
             break
         if kind == "review":
-            from trid3nt.inputs.review import gate_input_review
-
             request = ReviewRequest.model_validate(args[0])
-            relay.review = asyncio.create_task(gate_input_review(tool_name=request.tool_name, entries=request.entries,
-                                                                params=request.params, mode=request.mode))
+            relay.review = asyncio.create_task(relay.answer(request))
             try:
                 outcome = await relay.review
             except asyncio.CancelledError:
@@ -199,12 +203,18 @@ async def _end(process: Any, reader: Any, run_id: str, *,
 
 def _handoff(path: Path, deck: Any, receipt: dict, case: str, cores: int) -> dict:
     lock = Lock(path.parent)
+    instruction = RunInstruction(case=case, run_id=deck.run_id, script=path.name, served=lock.data.get("served", ""))
     return {"deck": save_deck(deck), "row": lock.data["models"][deck.state.workflow.name],
-            "receipt": receipt, "case": case, "cores": cores, "script": path.name}
+            "receipt": receipt, "case": case, "cores": cores, "script": path.name,
+            "instruction": instruction.model_dump(mode="json")}
 
 
 async def run(path: Path, deck: Any, receipt: dict) -> Executed:
     """Start a new interpreter and its process group for the saved case script."""
+    from .remote_run import runner_url, submit
+
+    if url := runner_url():
+        return await submit(url, path, deck, receipt, _Relay(current_emitter(), len(deck.said.outputs)))
     token = bind_run(deck.state.settings)
     try:
         cores = int(setting("LOCAL_CORES"))
@@ -217,8 +227,17 @@ async def run(path: Path, deck: Any, receipt: dict) -> Executed:
         handoff["settings"] = settings
     except (AttributeError, KeyError, OSError, pickle.PickleError, TypeError, ValueError) as exc:
         raise _refusal("SCRIPT_HANDOFF_FAILED") from exc
+    return await run_child(path, handoff, _Relay(current_emitter(), len(deck.said.outputs)),
+                           deck.run_id, budget)
+
+
+async def run_child(path: Path, handoff: dict, relay: _Relay, run_id: str, budget: float | None) -> Executed:
     ours, theirs = socket.socketpair()
-    env = {**os.environ, **dict.fromkeys(_THREAD_VARIABLES, str(cores))}
+    env = {**os.environ, **dict.fromkeys(_THREAD_VARIABLES, str(handoff["cores"]))}
+    if handoff.get("remote_inputs") is not None:
+        from trid3nt.credentials.resolver import REMOTE_RUNNER_TOKEN_ENV
+
+        env.pop(REMOTE_RUNNER_TOKEN_ENV, None)
     with ours, theirs, Connection(ours.detach()) as channel:
         try:
             process = await asyncio.create_subprocess_exec(
@@ -227,26 +246,25 @@ async def run(path: Path, deck: Any, receipt: dict) -> Executed:
         except OSError as exc:
             raise _refusal("SCRIPT_CHILD_START_FAILED") from exc
         theirs.close()
-        relay = _Relay(current_emitter(), len(deck.said.outputs))
         reader = asyncio.create_task(_messages(channel, process, relay, handoff))
         try:
             ended = await asyncio.wait_for(asyncio.shield(reader), budget)
         except asyncio.CancelledError:
-            stopped = await finish(_stop(process, reader, relay, deck.run_id))
+            stopped = await finish(_stop(process, reader, relay, run_id))
             if stopped is not None:
                 raise stopped from None
             raise
         except TimeoutError:
             relay.cancel_review()
-            await finish(_end(process, reader, relay.run_id or deck.run_id))
+            await finish(_end(process, reader, relay.run_id or run_id))
             await relay.abort("SCRIPT_TIME_BUDGET", cancelled=False)
             raise _refusal("SCRIPT_TIME_BUDGET") from None
         except Exception as exc:  # noqa: BLE001 - reap the child even when the relay fails
-            await finish(_end(process, reader, relay.run_id or deck.run_id))
+            await finish(_end(process, reader, relay.run_id or run_id))
             await relay.abort("SCRIPT_CHILD_DIED", cancelled=False)
             raise _refusal("SCRIPT_CHILD_DIED") from exc
     if ended is None:
-        await asyncio.to_thread(_docker_kill, relay.run_id or deck.run_id)
+        await asyncio.to_thread(_docker_kill, relay.run_id or run_id)
         await relay.abort("SCRIPT_CHILD_DIED", cancelled=False)
         raise _refusal("SCRIPT_CHILD_DIED")
     if ended[0] == "refused":
@@ -256,4 +274,4 @@ async def run(path: Path, deck: Any, receipt: dict) -> Executed:
     if not record or not relay.checked:
         raise _refusal("SCRIPT_RECORD_MISSING")
     await relay.publish(record)
-    return Executed(value)
+    return Executed(value, record)

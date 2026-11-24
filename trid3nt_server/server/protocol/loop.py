@@ -627,7 +627,19 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     _BG_TASKS.add(_warm_task)
     _warm_task.add_done_callback(_BG_TASKS.discard)
 
-    handler = _make_handler(settings)
+    from trid3nt_server.server.dispatch import remote_run
+
+    plugin_handler = _make_handler(settings)
+    runner = remote_run.enabled()
+
+    def process_request(connection, request):
+        return remote_run.gate(connection, request, accepting=runner)
+
+    async def handler(connection):
+        if runner and connection.request.path == remote_run.PATH:
+            await remote_run.serve(connection)
+        else:
+            await plugin_handler(connection)
 
     # Best-effort mount of the HTTP doors.
     http_server = None
@@ -649,6 +661,8 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
             handler,
             host,
             port,
+            process_request=process_request,
+            logger=remote_run.TRANSPORT_LOG,
             ping_interval=20,
             ping_timeout=20,
             close_timeout=10,

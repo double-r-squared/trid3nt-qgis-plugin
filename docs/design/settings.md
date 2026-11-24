@@ -64,3 +64,21 @@ registry cap, a poll interval, a drain timeout, a heartbeat), which is one
 constant in one module. Environment variables stay for deployment and secrets:
 a variable that steers a setting is removed when the setting lands, and one that
 steers an internal limit becomes the constant.
+
+
+## Remote runner deployment
+
+Set `TRID3NT_REMOTE_RUNNER_URL` on the submitting daemon to the runner's
+WebSocket base URL. An empty value selects the local reviewed child. Use
+`wss://` through a TLS endpoint between machines. A same-machine test can use
+`ws://` on loopback.
+
+Set `TRID3NT_REMOTE_RUNNER=1` on the receiving daemon to enable its
+`/runner` endpoint. The endpoint is disabled by default. Provision the same
+dedicated `TRID3NT_REMOTE_RUNNER_TOKEN` in the two daemon environments through
+the credentials resolver. The runner credential authorizes execution from its
+paired peer. Keep it separate from the plugin's daemon token.
+
+The two daemons use the same served object store settings. The receiving
+daemon sets its own `LOCAL_CORES`, `CONTAINER_CORES` and
+`SOLVE_BUDGET_S` and holds the engine images it runs.

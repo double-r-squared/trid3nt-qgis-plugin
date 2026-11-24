@@ -118,13 +118,14 @@ def _same_state(before, after, original, pinned, seen):
         assert before == after
 
 
+@pytest.mark.parametrize("portable", [False, True])
 @pytest.mark.parametrize(("template", "sibling"), [
     *((name, False) for name in Case.templates()),
     ("geoclaw_tsunami_inundation", True),
     ("geoclaw_storm_surge", True),
 ])
 @pytest.mark.asyncio
-async def test_the_registered_template_deck_state_survives_the_reviewed_handoff(tmp_path, row_values, template, sibling):
+async def test_the_registered_template_deck_state_survives_the_reviewed_handoff(tmp_path, row_values, template, sibling, portable):
     original = _workflow(template)
     pinned = getattr(case(tmp_path / "child"), template)()._workflow
     rows, mesh, layer = row_values
@@ -162,7 +163,12 @@ async def test_the_registered_template_deck_state_survives_the_reviewed_handoff(
     choice = SourceChoice(slot="bed", need="terrain", rows=[SourceOption(fetcher="fixture")])
     deck = Deck(state, run_id="FIXTURE", staged={"case": {"module": original.engine}}, held=held,
                 said=Said(choices=[choice]))
-    received = load_deck(save_deck(deck), pinned)
+    if portable:
+        from trid3nt.sdk.deck_state import decode, encode
+
+        received = decode(json.loads(json.dumps(encode(deck, original, str))), pinned, Path)
+    else:
+        received = load_deck(save_deck(deck), pinned)
     _same_state(deck, received, original, pinned, set())
     assert received.state.env.inputs is received.state.inputs
     for name in received.state.env.data:

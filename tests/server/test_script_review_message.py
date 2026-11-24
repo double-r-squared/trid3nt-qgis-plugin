@@ -7,6 +7,7 @@ import pytest
 
 from trid3nt_contracts.common import Origin, SyntheticInput
 
+from trid3nt.sdk.run_messages import RunEvent
 from trid3nt.sdk.script_run import ReviewRequest, ReviewResponse
 from trid3nt.inputs.review import ReviewOutcome
 
@@ -29,7 +30,8 @@ async def test_parent_answers_the_existing_study_card(monkeypatch):
     from trid3nt_server.server.dispatch.script_child import _Relay, _messages
 
     request = ReviewRequest(id="ranking", tool_name="calibrate", entries=[], params={"tuned": ["npf_k"]})
-    messages = iter([("review", request.model_dump(mode="json")), ("complete", None, {"ok": True})])
+    messages = iter([RunEvent.event("review", request.model_dump(mode="json")).model_dump(),
+                     RunEvent.event("complete", None, {"ok": True}).model_dump()])
     sent = []
 
     def recv():
