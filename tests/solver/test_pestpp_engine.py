@@ -327,3 +327,34 @@ def test_main_runs_one_manager_and_its_agents_in_their_own_copies(tmp_path, monk
         assert (work / f"agent_{index}" / "pestpp.pst").is_file()
         assert not (work / f"agent_{index}" / "manifest.json").exists()
         assert not (work / f"agent_{index}" / "pestpp.rec").exists()
+
+
+@pytest.mark.parametrize(("tool", "stdout", "record", "final", "parameter", "code", "outcome"), [
+    ("opt", True, False, True, "2", 0, "feasible"),
+    ("opt", False, True, True, "2", 0, "PESTPP_INCOMPLETE"),
+    ("opt", True, False, False, "2", 0, "PESTPP_RESULTS_MISSING"),
+    ("opt", True, False, False, "-1.79769313e+308", 0, "infeasible"),
+    ("opt", True, False, True, "2", 1, "PESTPP_FAILED"),
+    ("ies", True, False, True, "2", 0, "PESTPP_INCOMPLETE"),
+    ("ies", False, True, True, "2", 0, "complete"),
+])
+def test_worker_completion_uses_the_tools_own_stream_and_artifacts(
+    tmp_path, monkeypatch, tool, stdout, record, final, parameter, code, outcome,
+):
+    import io
+
+    entry = _entrypoint()
+    (tmp_path / "pestpp.pst").touch()
+    (tmp_path / "pestpp.rec").write_text(f"pestpp-{tool} analysis complete\n" if record else "record\n")
+    (tmp_path / "pestpp.par").write_text(f"single point\nwell {parameter} 1 0\n")
+    (tmp_path / "pestpp.slp.iobj.csv").write_text("iteration,objective_function\n")
+    if final:
+        (tmp_path / "pestpp.res").write_text("model outputs")
+    manager = io.StringIO(f"pestpp-{tool} analysis complete...\n" if stdout else "worker output\n")
+    monkeypatch.setattr(entry, "_agent_homes", lambda *_: [])
+    monkeypatch.setattr(entry.subprocess, "Popen", lambda *_, **__: type(
+        "Manager", (), {"stdout": manager, "wait": lambda self: code})())
+    required = ["pestpp.rec", "pestpp.par", "pestpp.slp.iobj.csv", "pestpp.res"]
+    value = entry._solve_case(tmp_path, tmp_path / "agents", {"module": tool, "results": required})
+    assert value.get("error_code", value.get("opt_status", "complete")) == outcome
+    assert value["correct_end"] is (outcome in {"feasible", "infeasible", "complete"})

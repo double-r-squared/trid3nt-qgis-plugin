@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import os
 import shutil
 import subprocess
@@ -125,12 +126,32 @@ def _completed(data_dir: Path) -> bool:
     return _COMPLETE in text.lower()
 
 
-def _stream(child: subprocess.Popen) -> int:
+def _stream(child: subprocess.Popen, marker: str = "") -> tuple[int, bool]:
+    seen = False
     for line in child.stdout:
+        seen |= bool(marker and line.strip().lower().rstrip(".") == marker)
         sys.stdout.write(line)
         sys.stdout.flush()
     child.stdout.close()
-    return child.wait()
+    return child.wait(), seen
+
+
+def _opt_outcome(data_dir: Path) -> str | None:
+    """Recognize the SLP parameter-file sentinel even when printed at reduced precision."""
+    path = data_dir / "pestpp.par"
+    if not path.is_file():
+        return None
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines()[1:]:
+        fields = line.split()
+        if len(fields) < 2:
+            continue
+        try:
+            value = float(fields[1])
+        except ValueError:
+            continue
+        if math.isclose(value, -sys.float_info.max, rel_tol=1e-6):
+            return "infeasible"
+    return "feasible"
 
 
 def _agent_homes(data_dir: Path, work_dir: Path, count: int) -> list[Path]:
@@ -174,8 +195,8 @@ def _stop_agents(agents: list[subprocess.Popen]) -> None:
 
 def _solve_case(data_dir: Path, work_dir: Path, body: Any) -> dict[str, Any]:
     """Run the staged study, and check it produced what it promised: success is
-    a clean manager exit AND PEST++'s own completion sentence in its record AND
-    every declared result on disk."""
+    a clean manager exit, the tool's completion marker on its own stream, and
+    every artifact required for the outcome."""
     case = _strict_section("case", body, _CASE_FIELDS)
     module = str(case.get("module") or "")
     if module not in _TOOLS:
@@ -203,12 +224,16 @@ def _solve_case(data_dir: Path, work_dir: Path, body: Any) -> dict[str, Any]:
         [exe, STEERING_FILENAME, "/h", f":{_PORT}"], cwd=str(data_dir),
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
     agents = _start_agents(homes, exe)
+    marker = f"{exe} {_COMPLETE}" if module == "opt" else ""
     try:
-        code = _stream(manager)
+        code, seen = _stream(manager, marker)
     finally:
         _stop_agents(agents)
+    completed = seen if marker else _completed(data_dir)
+    outcome = _opt_outcome(data_dir) if marker and code == 0 and completed else None
+    if outcome == "infeasible":
+        results = [name for name in results if name != "pestpp.res"]
     missing = [r for r in results if not (data_dir / r).exists()]
-    completed = _completed(data_dir)
     # server_facts is copied into the metrics VERBATIM - a fact re-derived in
     # the container is a second answer that can disagree with the first.
     metrics: dict[str, Any] = {
@@ -217,14 +242,15 @@ def _solve_case(data_dir: Path, work_dir: Path, body: Any) -> dict[str, Any]:
         "agents": agents_n,
         "completed": completed,
         "correct_end": code == 0 and completed and not missing,
+        **({"opt_status": outcome} if outcome and not missing else {}),
     }
     if code != 0:
         metrics["error_code"] = "PESTPP_FAILED"
         metrics["error"] = f"{exe} exited with code {code}"
     elif not completed:
         metrics["error_code"] = "PESTPP_INCOMPLETE"
-        metrics["error"] = (f"{exe} exited cleanly but its {RECORD_FILENAME} never "
-                            f"printed {_COMPLETE!r}")
+        stream = "stdout" if marker else RECORD_FILENAME
+        metrics["error"] = f"{exe} exited cleanly but its {stream} never printed {_COMPLETE!r}"
     elif missing:
         metrics["error_code"] = "PESTPP_RESULTS_MISSING"
         metrics["error"] = f"{exe} exited cleanly but did not write {missing}"
@@ -299,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ok = bool(metrics.get("correct_end"))
     payload = {**metrics,
-               "status": "ok" if ok else "error",
+               "status": metrics.get("opt_status", "ok") if ok else "error",
                "correct_end": ok,
                "run_id": run_id,
                "wall_s": round(time.time() - started, 2)}
