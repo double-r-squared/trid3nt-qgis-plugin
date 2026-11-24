@@ -175,7 +175,7 @@ async def solve_case(*, run: dict[str, Any], cores: int) -> dict[str, Any]:
             active_cell_count=facts.get("nelem"))
     except SolveStopped as stop:
         # The worker never reached its metrics: the handle states what a stop leaves, the result file as far as it was written.
-        stop.solved = {"run_id": stop.run_id, "uri": _result_uri(stop.run_id, run), "utm_epsg": int(facts["utm_epsg"]),
+        stop.solved = {"run_id": stop.run_id, "uri": _result_uri(stop.run_id, run), "utm_epsg": _epsg(facts),
                        "metrics": {}, "started_at": stop.started_at, "stopped": True}
         raise
     if run_result is None or run_result.status != "complete":
@@ -190,10 +190,14 @@ async def solve_case(*, run: dict[str, Any], cores: int) -> dict[str, Any]:
     return {
         "run_id": batch_run_id,
         "uri": _result_uri(batch_run_id, run),
-        "utm_epsg": int(facts["utm_epsg"]),
+        "utm_epsg": _epsg(facts),
         "metrics": metrics,
         "started_at": _run_start_iso(run_result),
     }
+
+
+def _epsg(facts: dict[str, Any]) -> int | None:
+    return int(facts["utm_epsg"]) if facts.get("utm_epsg") is not None else None
 
 
 register_telemac_solver()

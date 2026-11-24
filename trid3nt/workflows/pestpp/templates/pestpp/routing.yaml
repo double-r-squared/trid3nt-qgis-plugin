@@ -1,0 +1,3 @@
+summary: Build a PEST++ control file from scratch.
+routing: Use for a manually stated PEST++ problem with a MODFLOW or TELEMAC trial adapter. State the executable, native parameter and observation rows, and the file pairs. The calibrate template supplies a study prefill.
+returns: The checked native control file and its solver outputs.

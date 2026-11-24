@@ -1,0 +1,6 @@
+telemac3d:
+  - build a TELEMAC-3D model from scratch
+  - set up a bare TELEMAC water-column run with a native mesh
+  - enter the vertical mesh and TELEMAC-3D settings manually
+  - open my own TELEMAC-3D steering file
+  - create a new TELEMAC-3D case from native engine parameters

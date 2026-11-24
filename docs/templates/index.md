@@ -2,13 +2,25 @@
 
 # Templates
 
-20 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+27 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+
+## [`artemis`](artemis.md)
+
+Build an ARTEMIS phase-resolving wave model from scratch.
+
+Module `artemis`.
 
 ## [`artemis_harbor_agitation`](artemis_harbor_agitation.md)
 
 The WAVE AGITATION (Kd = Hs/H0) inside a harbour, marina or basin, behind a declared structure or free-field.
 
 Module `artemis`.
+
+## [`geoclaw`](geoclaw.md)
+
+Build a GeoClaw model from scratch.
+
+Module `geoclaw`.
 
 ## [`geoclaw_storm_surge`](geoclaw_storm_surge.md)
 
@@ -22,6 +34,12 @@ A TSUNAMI from a sea-floor rupture across the open sea to a coast, and how far i
 
 Module `geoclaw`.
 
+## [`mf6_gwf`](mf6_gwf.md)
+
+Build a MODFLOW 6 groundwater flow model from scratch.
+
+Module `gwf`.
+
 ## [`modflow_plume`](modflow_plume.md)
 
 Where a DISSOLVED RELEASE goes in an unconfined aquifer - a conservative solute plume over time, checked against measured wells.
@@ -33,6 +51,24 @@ Module `gwf`.
 The STEADY WATER TABLE of an unconfined aquifer under recharge, drained by its streams, with an optional pumping well.
 
 Module `gwf`.
+
+## [`pestpp`](pestpp.md)
+
+Build a PEST++ control file from scratch.
+
+Module `pestpp`.
+
+## [`telemac2d`](telemac2d.md)
+
+Build a two-dimensional TELEMAC flow or tracer model from scratch.
+
+Module `telemac2d`.
+
+## [`telemac3d`](telemac3d.md)
+
+Build a three-dimensional TELEMAC flow and water-column model from scratch.
+
+Module `telemac3d`.
 
 ## [`telemac3d_stratified_flow`](telemac3d_stratified_flow.md)
 
@@ -111,6 +147,12 @@ Module `telemac2d`.
 WATER TEMPERATURE over a body of water under a week of real weather.
 
 Module `telemac2d`.
+
+## [`tomawac`](tomawac.md)
+
+Build a TOMAWAC spectral-wave model from scratch.
+
+Module `tomawac`.
 
 ## [`tomawac_nearshore_waves`](tomawac_nearshore_waves.md)
 

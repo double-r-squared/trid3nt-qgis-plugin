@@ -80,7 +80,12 @@ class Case:
             pin = self._called(lock, template)
             workflow = load(*_load_args(lock, pin["sha256"]))
             held = Template(template, "called", pin["sha256"], template, pin["sha256"])
-            result = Model(self, workflow, values, template=held)
+            if getattr(workflow, "bare", False):
+                values, taken, file_values = workflow.open_inputs(self, values)
+            else:
+                taken, file_values = {}, {}
+            result = Model(self, workflow, values, template=held,
+                           taken=taken, file_values=file_values)
             lock.save()
             self.lock = lock
             return result
@@ -130,7 +135,11 @@ class Case:
         self.lock = lock
 
     def model(self, path: str | os.PathLike[str], *, upstream: str | None = None, **values: Any) -> Model:
-        """Load a case-owned declaration. An extension names the registered template it imports."""
+        """Open a registered bare model or load a case-owned declaration."""
+        if isinstance(path, str) and upstream is None:
+            registered = _workflow(path)
+            if getattr(registered, "bare", False):
+                return getattr(self, path)(**values)
         path = self._template_path(path)
         relative = path.relative_to(self.root).as_posix()
         lock = Lock(self.root)

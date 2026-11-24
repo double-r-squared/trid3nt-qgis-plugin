@@ -123,7 +123,8 @@ def _row(slot: Any) -> dict[str, Any]:
     idempotent_hint=True,
 )
 def describe_keywords(module: str = "", keyword: str | list[str] = "",
-                      query: str | list[str] = "", limit: int = 12) -> dict[str, Any]:
+                      query: str | list[str] = "", limit: int = 12,
+                      template: str = "") -> dict[str, Any]:
     """Read a simulation module's own keyword DICTIONARY: keywords' entries, or the keywords questions reach - several in ONE call.
 
     For what a template's inputs do not name - a friction law, a turbulence
@@ -142,11 +143,15 @@ def describe_keywords(module: str = "", keyword: str | list[str] = "",
             help, or a LIST of such questions answered each apart; with no keyword or query,
             the section index.
         limit: How many matches per question, at most 50.
+        template: A registered template or bare entry. Lists its inputs with their full
+            descriptions, or returns the inputs named by keyword.
 
     Returns ``{module, entry}`` for one keyword, ``{module, entries, unknown}`` for a list,
     ``{module, matches}`` for one question and ``{module, answers}`` for a list, the matches
     grouped by rubrique, best first.
     """
+    if template:
+        return _template_inputs(template, keyword)
     carried = _carried()
     name = str(module or "").strip().lower()
     if not name:
@@ -192,6 +197,28 @@ def describe_keywords(module: str = "", keyword: str | list[str] = "",
                 "modules": sorted(carried)}
     return {"module": name, "query": str(query), "keyword_count": len(dictionary),
             **_matches(dictionary, str(query), limit)}
+
+
+def _template_inputs(template: str, keyword: str | list[str]) -> dict[str, Any]:
+    from trid3nt.tools import TOOL_REGISTRY
+
+    entry = TOOL_REGISTRY.get(template.strip().lower())
+    workflow = getattr(getattr(entry, "fn", None), "workflow", None)
+    if workflow is None:
+        raise DescribeKeywordsError("UNKNOWN_TEMPLATE", "No registered entry has that name.")
+    rows = {row.name: {"name": row.name, "help": row.doc_line}
+            for row in workflow.inputs if row.fills_from_user}
+    if not keyword:
+        return {"template": workflow.name, "inputs": list(rows.values())}
+    names = [keyword] if isinstance(keyword, str) else keyword
+    entries = [rows[name.strip().lower()] for name in names if name.strip().lower() in rows]
+    unknown = [name for name in names if name.strip().lower() not in rows]
+    if not entries:
+        raise DescribeKeywordsError("UNKNOWN_INPUT", f"No named input matches on {workflow.name}.")
+    if isinstance(keyword, str):
+        return {"template": workflow.name, "entry": entries[0]}
+    return {"template": workflow.name, "entries": entries,
+            **({"unknown": unknown} if unknown else {})}
 
 
 def _entry(name: str, dictionary: Mapping[str, Any], asked: str) -> dict[str, Any]:

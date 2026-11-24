@@ -179,6 +179,7 @@ class Origin(str, Enum):
     """Where a run input's value came from. A closed set; the name that makes it checkable rides beside it."""
 
     USER = "user"
+    FILE = "file"
     STUDY = "study"
     DERIVED = "derived"
     PRODUCER = "producer"
@@ -188,6 +189,7 @@ class Origin(str, Enum):
 #: How each origin reads in a narration line and on a review card.
 ORIGIN_LABELS: dict[Origin, str] = {
     Origin.USER: "user",
+    Origin.FILE: "input file",
     Origin.STUDY: "study",
     Origin.PRODUCER: "produced",
     Origin.DERIVED: "derived",

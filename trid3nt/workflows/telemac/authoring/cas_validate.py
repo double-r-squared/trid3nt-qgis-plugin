@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -17,7 +18,7 @@ from typing import Any, Mapping
 
 logger = logging.getLogger("trid3nt.workflows.telemac.authoring.cas_validate")
 
-__all__ = ["CasParseError", "EngineHomeMissing", "engine_home", "run_cas_driver",
+__all__ = ["CasParseError", "EngineHomeMissing", "engine_home", "import_steering", "run_cas_driver",
            "run_engine_script", "validate_authored_steering"]
 
 _SCRIPTS = Path(__file__).resolve().parent / "engine_scripts"
@@ -81,8 +82,29 @@ def validate_authored_steering(rundir: Path | str,
                if (rundir / name).is_file()}
     if not present:
         return {}
-    run_cas_driver(rundir, {"steering": present},
-                   what=f"read the authored steering files {sorted(present)}")
+    return _read_steering(rundir, present)
+
+
+def import_steering(path: Path, module: str, work: Path) -> tuple[dict[str, Any], tuple[str, ...]]:
+    """Read the stated values under the engine dictionary and identify its input file keywords."""
+    from ..modules import wrapper_for
+
+    name = "import.cas"
+    shutil.copyfile(path, work / name)
+    row = _read_steering(work, {name: module}, include_values=True)[name]
+    slots = {slot.keyword: slot for slot in wrapper_for(module).MODULE_INPUT.values()}
+    return {
+        key: [value] if key in slots and slots[key].is_list and not isinstance(value, list) else value
+        for key, value in row["values"].items()
+    }, tuple(row["input_files"])
+
+
+def _read_steering(rundir: Path, present: Mapping[str, str], *,
+                   include_values: bool = False) -> dict[str, dict]:
+    config: dict[str, Any] = {"steering": present}
+    if include_values:
+        config["include_values"] = True
+    run_cas_driver(rundir, config, what=f"read the steering files {sorted(present)}")
     rows = json.loads((rundir / "telemac_cas_stats.json").read_text())
     failed = {name: row for name, row in rows.items() if not row.get("ok")}
     if failed:

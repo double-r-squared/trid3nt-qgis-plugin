@@ -14,16 +14,33 @@ runtime's own (`docs/design/workflows.md`).
     result = m.run()                   # a Result, or a Failure
 
 - `case.<template>(**values)` makes a Model over any registered template; each value is set as an attribute is.
+- `c.model("telemac2d", **values)` opens a bare TELEMAC model. The same form works for `telemac3d`,
+  `artemis`, `tomawac`, `mf6_gwf`, `geoclaw`, and `pestpp`. The case-owned Python declaration form
+  takes a path under `templates/`.
 - An attribute is a name through the workflow's ONE lookup (`Workflow.input`): a template input by its own
   name, an engine keyword by its identifier or its lowercase alias (`m.friction_coefficient`), the dictionary's
   spaced name by item (`m["FRICTION COEFFICIENT"]`), and a coupled body by its module word
   (`m.waqtel.WATER_DENSITY` is `m["waqtel: WATER_DENSITY"]`; the module words are `Workflow.bodies()`).
+
 - A set runs the input's own accept - `Keyword.accept` (type, choices, arity, bounds, the box, a module's
   lock), `Input.accept` (a value's range), the shape check of a row - and raises that input's typed refusal at
   the line; the value held before stays. `None` unstates a value.
 - Reading a name gives the value in force: the model's, else the template's, else the module dictionary's
   own. `repr(m)` lists each with its origin.
 - The model version hashes its template pin, stated inputs, keywords, steps and strictness.
+
+## From zero and existing engine files
+
+For a bare model, state the native keywords and use `files={deck_name: source}` for native assets.
+`c.model("telemac2d", steering="river.cas")` reads the steering through the engine dictionary and copies
+its local input files into the case. `c.model("mf6_gwf", simulation="mfsim.nam")` loads the native
+package graph through FloPy, retaining its grid and external files. The fill labels imported values
+with origin `file`. In chat the same entries take staged object URIs. MODFLOW takes a ZIP with
+`mfsim.nam` at its root, so package paths resolve together.
+
+To attach a TELEMAC body, supply `coupling=[{"module": "waqtel", "process": process}]` and state its
+keywords on `m.waqtel`. Use `steering` on the body declaration to change its generated steering name,
+which is `waqtel.cas` for WAQTEL. The module and any required process come from the caller.
 
 ## fill and run
 

@@ -19,6 +19,7 @@ enforced opinion becomes a law in AGENTS.md. Laws and conventions already writte
 9. An engine may use an operation, but the operation lives a level up, generic and reusable. The engine offers the choice of algorithm rather than owning one.
 10. Direction, not yet built: operations live in a domain-specific SDK, so a modeller reaches for them there instead of hunting through libraries or adding one-off tools.
 11. Each engine is built whole around its own library and inputs first. Coupling to another engine comes only after both are finished, and never shapes either one.
+    A bare entry leaves values to the caller and the module's own defaults. Template prefills carry the model judgments.
 
 ## Inputs and data
 12. Precedence for any value: stated by the user, then fetched from a cited source, then derived from fetched data, then a refusal. A derived value is offered, not applied: a reviewing user is asked with it shown; AUTO takes it and says so on the run.

@@ -271,6 +271,7 @@ def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any
 
 T3D = TelemacModule("telemac3d")
 T3D.MODULE_OUTPUT = MODULE_OUTPUT
+T3D.RESULT_KEYWORD = "RD_RESULT_FILE"
 # The hydrodynamic clock is one keyword: the window itself.
 T3D.CLOCK = ("DURATION",)
 T3D.PRINTOUTS = "VARIABLES_FOR_3D_GRAPHIC_PRINTOUTS"

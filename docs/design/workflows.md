@@ -13,6 +13,13 @@ facade is `workflows/telemac/workflow.py`, the MODFLOW one `workflows/modflow/wo
 publish is the runtime's (`publish_reads`, `workflows/runtime/primitives.py`): each engine hands it
 how a solved module is opened, its module table of what the run wrote, and the run's record.
 
+## From-zero entry points
+
+Each primary engine module registers a bare workflow alongside its template prefills. The bare callable
+uses the module dictionary, checked deck, solve and journal. Its input lookup and the SDK use the same
+keywords. Use `describe_keywords(template="mf6_gwf")` for complete input descriptions, or name the native
+module to read its keyword dictionary.
+
 ## No declared data operations
 
 The system performs no resample, reproject, clip, aggregate or unit conversion

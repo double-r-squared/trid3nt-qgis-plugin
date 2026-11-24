@@ -622,7 +622,7 @@ class Workflow:
                 continue
             held = self.input(name)
             # A keyword of the carrier's deck is that deck's own row; one stated on a coupled body keeps the name it was stated under.
-            if verdict.origin is not Origin.STUDY and getattr(held, "carried", False) and held.name in inputs:
+            if verdict.origin not in (Origin.STUDY, Origin.FILE) and getattr(held, "carried", False) and held.name in inputs:
                 continue
             inputs[name] = {
                 "value": (supplied.get(name) if getattr(held, "is_row", False)
@@ -807,6 +807,7 @@ def register_workflow(
     # stated once beside the signature they ride on.
     sheet = workflow.sheet_doc()
     doc = {**doc, "inputs": workflow.inputs, "controls": _CONTROL_DOCS,
+           "gathers": not getattr(workflow, "bare", False),
            **({} if sheet is None else {"sheet": sheet})}
     _run.__doc__ = render_docstring(**doc)
     _run.routing_doc = render_docstring(**doc, view="routing")  # type: ignore[attr-defined]

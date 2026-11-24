@@ -313,7 +313,8 @@ async def stage(sheet: TelemacSheet, *, run_id: str,
                 outputs: Sequence[str], results: Sequence[str], prefix: str,
                 server_facts: Mapping[str, Any], steering: str | None = None,
                 coupling: str | None = None,
-                continue_from: str | None = None) -> dict[str, Any]:
+                continue_from: str | None = None,
+                preserve_printouts: bool = False) -> dict[str, Any]:
     """A complete sheet: serialize it and stage the directory, checked against itself -> the staged run.
 
     ``run_id`` names the run's one directory and prefix; a second staging replaces the first.
@@ -328,7 +329,8 @@ async def stage(sheet: TelemacSheet, *, run_id: str,
     rundir = new_rundir(run_id, stem="telemac")
     partition = solve_cores(sheet.body, sheet.filled)
     # The serialization is a container round trip, so it runs off the loop.
-    written = await asyncio.to_thread(serialize, sheet, rundir, steering=steering)
+    options = {"preserve_printouts": True} if preserve_printouts else {}
+    written = await asyncio.to_thread(serialize, sheet, rundir, steering=steering, **options)
     return await stage_run(
         rundir, run_id, module=sheet.module, steering=written["steering"],
         results=[*results, *kept], outputs=[*outputs, *kept],

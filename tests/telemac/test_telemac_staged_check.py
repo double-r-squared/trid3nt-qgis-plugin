@@ -79,6 +79,32 @@ def _check(rundir, *, duration_s=600.0, cores=1, inputs=()):
         duration_s=duration_s, cores=cores)
 
 
+@pytest.mark.parametrize(("entry", "keywords"), [
+    ("telemac2d", {"RESULTS_FILE": "result.slf", "GRAPHIC_PRINTOUT_PERIOD": 2, "DURATION": 600.0}),
+    ("telemac3d", {"RD_RESULT_FILE": "result.slf", "ED_RESULT_FILE": "flat.slf",
+                   "GRAPHIC_PRINTOUT_PERIOD": 2, "DURATION": 600.0, "NUMBER_OF_HORIZONTAL_LEVELS": 5}),
+    ("artemis", {"RESULTS_FILE": "result.slf"}),
+    ("tomawac", {"ED_RESULTS_FILE": "result.slf", "PERIOD_FOR_GRAPHIC_PRINTOUTS": 2,
+                 "TIME_STEP": 1.0, "NUMBER_OF_TIME_STEP": 8}),
+])
+def test_each_telemac_bare_tool_writes_and_checks_its_own_deck(tmp_path, entry, keywords):
+    from trid3nt import case
+    from trid3nt.workflows.telemac.authoring.cas_validate import EngineHomeMissing, engine_home
+
+    try:
+        engine_home()
+    except EngineHomeMissing:
+        pytest.skip("the engine's steering reader is unavailable")
+    IO.write_telemac_pair(tmp_path, x=_X, y=_Y, cells=_CELLS,
+                          bed=np.full(4, -1.), roles={}, title="SQUARE")
+    model = case(tmp_path / "case").model(
+        entry, GEOMETRY_FILE="mesh.slf", BOUNDARY_CONDITIONS_FILE="mesh.cli",
+        files={name: str(tmp_path / name) for name in ("mesh.slf", "mesh.cli")}, **keywords)
+    form = model.fill()
+    assert form.ready and form.checked, form
+    assert {f"{entry}.cas", "mesh.slf", "mesh.cli"} <= form.deck.files.keys()
+
+
 def _refusal(rundir, **kwargs):
     with pytest.raises(TelemacError) as caught:
         _check(rundir, **kwargs)

@@ -19,7 +19,7 @@ __all__ = ["restate", "serialize"]
 
 
 def serialize(sheet: Any, rundir: Path | str, *,
-              steering: str | None = None) -> dict[str, Any]:
+              steering: str | None = None, preserve_printouts: bool = False) -> dict[str, Any]:
     """Write ``sheet`` into ``rundir`` as its module's steering file.
 
     Engine defaults are not written; a coupled deck goes in the same driver call.
@@ -27,7 +27,8 @@ def serialize(sheet: Any, rundir: Path | str, *,
     rundir = Path(rundir)
     rundir.mkdir(parents=True, exist_ok=True)
     decks: dict[str, dict[str, Any]] = {}
-    _spread(sheet, rundir, steering or f"{sheet.module}.cas", decks)
+    _spread(sheet, rundir, steering or f"{sheet.module}.cas", decks,
+            preserve_printouts=preserve_printouts)
     run_cas_driver(rundir, {"write": decks},
                    what=f"write {', '.join(sorted(decks))}")
     written = json.loads((rundir / "telemac_cas_written.json").read_text())
@@ -50,21 +51,24 @@ def restate(rundir: Path | str, steering: str, module: str, values: Mapping[str,
 
 
 def _spread(sheet: Any, rundir: Path, steering: str,
-            decks: dict[str, dict[str, Any]], *, host: Any = None) -> None:
+            decks: dict[str, dict[str, Any]], *, host: Any = None,
+            preserve_printouts: bool = False) -> None:
     """``sheet`` and everything it names, onto the disk and into ``decks``.
 
     A coupled body is filled against its own module's dictionary.
     """
     from ..modules import fill, wrapper_for
 
-    stated = {**dict(sheet.resolved()), **sheet.printouts()}
+    stated = dict(sheet.resolved())
+    generated = sheet.printouts()
+    stated = {**generated, **stated} if preserve_printouts else {**stated, **generated}
     decks[steering] = {"module": sheet.module,
                        "values": {**_partitioned(sheet, host), **stated}}
     for basename, content in sheet.files.items():
         if isinstance(content, Mapping) and "slots" in content:
             _spread(fill(wrapper_for(content["module"]), produced=sheet.run,
                          inputs_fill=False, **dict(content["slots"])),
-                    rundir, basename, decks, host=sheet)
+                    rundir, basename, decks, host=sheet, preserve_printouts=preserve_printouts)
             continue
         path = rundir / basename
         path.parent.mkdir(parents=True, exist_ok=True)

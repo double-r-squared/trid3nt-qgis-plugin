@@ -1,0 +1,3 @@
+summary: Build an ARTEMIS phase-resolving wave model from scratch.
+routing: Use for a from-zero engine deck, or when the caller supplies an existing steering file. State the physical values and every input file. Prefills are available through the harbor agitation template.
+returns: The checked native deck and its solver outputs.

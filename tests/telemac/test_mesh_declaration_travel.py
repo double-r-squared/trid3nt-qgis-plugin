@@ -103,9 +103,11 @@ def _every_template_workflow():
         if found.ispkg:
             module = importlib.import_module(
                 f"{templates.__name__}.{found.name}.{found.name}")
-            yield found.name, next(
+            workflow = next(
                 value.workflow for value in vars(module).values()
                 if hasattr(getattr(value, "workflow", None), "inputs"))
+            if not getattr(workflow, "bare", False):
+                yield found.name, workflow
 
 
 @pytest.mark.parametrize("name,workflow", list(_every_template_workflow()))

@@ -202,3 +202,33 @@ def test_the_installed_engine_tree_writes_and_reads_a_steering_file(tmp_path):
         what="write")
     rows = V.validate_authored_steering(tmp_path, {"t2d.cas": "telemac2d"})
     assert rows["t2d.cas"]["ok"] and rows["t2d.cas"]["keywords"] >= 2
+
+
+def test_import_steering_keeps_only_written_keywords_and_identifies_inputs(tmp_path):
+    try:
+        V.engine_home()
+    except V.EngineHomeMissing:
+        pytest.skip("the engine steering reader is unavailable")
+    path = tmp_path / "test.cas"
+    path.write_text("TIME STEP = 10.0\nGEOMETRY FILE = 'my mesh.slf'\n"
+                    "RESULTS FILE = 'output.slf'\nMASS-BALANCE = YES\nABSCISSAE OF SOURCES = 12.0\n")
+    work = tmp_path / "work"
+    work.mkdir()
+    values, files = V.import_steering(path, "telemac2d", work)
+    assert values == {"TIME STEP": 10.0, "GEOMETRY FILE": "my mesh.slf",
+                      "RESULTS FILE": "output.slf", "MASS-BALANCE": True,
+                      "ABSCISSAE OF SOURCES": [12.0]}
+    assert files == ("GEOMETRY FILE",)
+
+
+def test_import_steering_names_an_unknown_keyword(tmp_path):
+    try:
+        V.engine_home()
+    except V.EngineHomeMissing:
+        pytest.skip("the engine steering reader is unavailable")
+    path = tmp_path / "test.cas"
+    path.write_text("GRAPHIC PRINTOOT PERIOD = 1\n")
+    work = tmp_path / "work"
+    work.mkdir()
+    with pytest.raises(V.CasParseError, match="GRAPHIC PRINTOOT PERIOD"):
+        V.import_steering(path, "telemac2d", work)

@@ -45,7 +45,7 @@ def test_every_template_is_values_over_a_module_of_the_one_engine(tool_name, mod
 
 def test_the_card_vocabulary_includes_study_application():
     assert sorted(origin.value for origin in Origin) == [
-        "derived", "producer", "study", "template", "user"]
+        "derived", "file", "producer", "study", "template", "user"]
 
 
 @pytest.mark.parametrize("tool_name,_module", TEMPLATE_MODULES)

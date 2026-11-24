@@ -1,0 +1,6 @@
+mf6_gwf:
+  - build a MODFLOW 6 groundwater flow model from scratch
+  - load an existing MODFLOW simulation mfsim.nam preserving its package values and structured DIS grid
+  - start a bare MODFLOW groundwater flow model without a starting prefill
+  - import a FloPy MODFLOW 6 model with its native packages
+  - build a structured MODFLOW grid and set the package values explicitly

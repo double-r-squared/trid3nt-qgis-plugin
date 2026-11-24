@@ -1,0 +1,6 @@
+artemis:
+  - build an ARTEMIS wave model from scratch
+  - start a bare ARTEMIS steering deck for harbor waves
+  - write ARTEMIS native input without a wave prefill
+  - use my ARTEMIS cas file and its geometry
+  - specify my own ARTEMIS wave transformation keywords

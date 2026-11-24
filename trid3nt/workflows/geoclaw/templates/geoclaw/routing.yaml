@@ -1,0 +1,3 @@
+summary: Build a GeoClaw model from scratch.
+routing: Use for a from-zero model where the grid, topography, clock, forcing and outputs are specified. The tsunami inundation and storm surge templates provide prefills.
+returns: The checked native deck and its solver outputs.

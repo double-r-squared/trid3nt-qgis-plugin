@@ -340,7 +340,7 @@ def test_every_registered_template_carries_the_moment_and_the_beds_frame():
     import trid3nt.workflows.telemac.templates  # noqa: F401
 
     templates = [tool.fn.workflow for tool in TOOL_REGISTRY.values()
-                 if hasattr(tool.fn, "workflow")]
+                 if hasattr(tool.fn, "workflow") and not getattr(tool.fn.workflow, "bare", False)]
     assert len(templates) == 21
     for workflow in templates:
         over_a_run = any(row.slot is RUN for row in workflow.inputs)

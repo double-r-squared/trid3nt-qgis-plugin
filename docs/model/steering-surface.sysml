@@ -441,6 +441,16 @@ package SteeringSurface {
         port stageOut : StageOut;
     }
 
+    part nativeModflowStage : Sheet {
+        doc /*
+        The native MODFLOW simulation preserves its grid and package tree.
+        The same stager pins the directory the engine validates and solves.
+
+        code: trid3nt/workflows/modflow/bare.py
+        */
+        port stageOut : StageOut;
+    }
+
     part geoclawStage : Sheet {
         doc /*
         GeoClaw's half of the filled sheet: the .data set written by Clawpack,
@@ -603,6 +613,9 @@ package SteeringSurface {
 
     interface modflowStaged : StageRequest
         connect modflowStage.stageOut to stager.stageIn;
+
+    interface nativeModflowStaged : StageRequest
+        connect nativeModflowStage.stageOut to stager.stageIn;
 
     interface geoclawStaged : StageRequest
         connect geoclawStage.stageOut to stager.stageIn;

@@ -1,0 +1,6 @@
+geoclaw:
+  - build a GeoClaw model from scratch
+  - set up a bare GeoClaw run by stating the grid and all native values manually
+  - make a native GeoClaw model by stating its own topography and inputs
+  - create a bare GeoClaw rundata deck from my grid and forcing
+  - author GeoClaw claw data with only native settings

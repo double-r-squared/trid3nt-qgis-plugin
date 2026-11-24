@@ -6,14 +6,50 @@ A carrier that solves no water column refuses a module's column keywords by name
 
 from __future__ import annotations
 
+import re
 from typing import Any, Callable, Mapping
 
 from ...runtime.module import SlotRefused
 from .module import USER_FORTRAN_DIR
 
-__all__ = ["couples"]
+__all__ = ["bare_coupling", "couples"]
 
 Expander = Callable[..., tuple[Mapping[str, Any], Mapping[str, Any]]]
+
+
+def bare_coupling(carrier: type, stated: Any) -> list[dict[str, Any]]:
+    """Convert explicit body choices to the carrier's coupling composite declaration."""
+    from . import WRAPPERS
+
+    if not isinstance(stated, (list, tuple)):
+        raise SlotRefused("coupling takes a list of body declarations.")
+    bodies = []
+    modules: set[str] = set()
+    filenames: set[str] = set()
+    for row in stated:
+        if not isinstance(row, Mapping) or set(row) - {"module", "steering", "process"}:
+            raise SlotRefused("Each coupling declaration takes module, steering and process.")
+        module = str(row.get("module", "")).lower()
+        if ("coupling" not in carrier.COMPOSITES or module not in WRAPPERS
+                or module == carrier.MODULE or f"{module.upper()}_STEERING_FILE" not in carrier.MODULE_INPUT):
+            raise SlotRefused(f"{carrier.MODULE} cannot attach the {module or 'unnamed'} body.")
+        steering = row.get("steering") or f"{module}.cas"
+        if not isinstance(steering, str) or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", steering) is None:
+            raise SlotRefused("Coupled steering must be a single filename.")
+        if module in modules or steering.casefold() in filenames:
+            raise SlotRefused("Coupling modules and steering filenames must be unique.")
+        modules.add(module)
+        filenames.add(steering.casefold())
+        declaration = {"module": module, "steering": steering, "slots": {}}
+        if module == "waqtel":
+            slot = carrier.slot("WATER_QUALITY_PROCESS")
+            if row.get("process") is None:
+                raise SlotRefused(f"{slot.keyword} is required when attaching {module}.")
+            declaration["process"] = slot.check(row["process"])
+        elif row.get("process") is not None:
+            raise SlotRefused(f"{module} does not take a coupling process.")
+        bodies.append(declaration)
+    return bodies
 
 
 def couples(*, water_column: bool) -> Expander:

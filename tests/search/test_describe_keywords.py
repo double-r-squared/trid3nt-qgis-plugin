@@ -20,6 +20,15 @@ def _keywords(answer) -> dict:
             for section in answer["matches"] for row in section["keywords"]}
 
 
+def test_template_input_lookup_returns_the_full_description():
+    from trid3nt.tools import TOOL_REGISTRY
+
+    row = TOOL_REGISTRY["calibrate"].fn.workflow.input("parameters")
+    answer = describe_keywords(template="calibrate", keyword="parameters")
+    assert answer["entry"]["help"] == row.doc_line
+    assert "variogram" in answer["entry"]["help"]
+
+
 def test_a_question_in_words_reaches_the_keyword_that_answers_it():
     for query, wanted in (
         ("what governs the bottom friction", "LAW OF BOTTOM FRICTION"),

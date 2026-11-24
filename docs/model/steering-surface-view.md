@@ -18,6 +18,7 @@ flowchart LR
     geoclawStage["Sheet<br/>trid3nt/workflows/geoclaw/workflow.py"]
     messageIR["MessageIR<br/>contracts/trid3nt_contracts/message.py"]
     modflowStage["Sheet<br/>trid3nt/workflows/modflow/workflow.py"]
+    nativeModflowStage["Sheet<br/>trid3nt/workflows/modflow/bare.py"]
     observationSlot["ObservationSlot<br/>trid3nt/inputs/observation.py"]
     output["Output<br/>trid3nt/workflows/telemac/modules/telemac2d.py"]
     pestppCalibratedStage["Sheet<br/>trid3nt/workflows/pestpp/authoring/modflow.py"]
@@ -40,6 +41,7 @@ flowchart LR
     dictionaryExtractor -- "KeywordDictionary" --> wrapper
     geoclawStage -- "StageRequest" --> stager
     modflowStage -- "StageRequest" --> stager
+    nativeModflowStage -- "StageRequest" --> stager
     steeringDriver -- "SteeringParse" --> steeringGate
     pestppCalibratedStage -- "StageRequest" --> stager
     pestppStage -- "StageRequest" --> stager

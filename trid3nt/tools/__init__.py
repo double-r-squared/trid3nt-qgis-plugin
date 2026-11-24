@@ -198,5 +198,12 @@ from trid3nt.workflows.modflow.templates.plume.plume import modflow_plume as _mo
 from trid3nt.workflows.geoclaw.templates.tsunami_inundation.tsunami_inundation import geoclaw_tsunami_inundation as _geoclaw_tsunami_inundation  # noqa: E402,F401
 from trid3nt.workflows.geoclaw.templates.storm_surge.storm_surge import geoclaw_storm_surge as _geoclaw_storm_surge  # noqa: E402,F401
 from trid3nt.workflows.pestpp.templates.calibrate.calibrate import calibrate as _calibrate  # noqa: E402,F401
+from trid3nt.workflows.telemac.templates.telemac2d.telemac2d import telemac2d as _telemac2d  # noqa: E402,F401
+from trid3nt.workflows.telemac.templates.telemac3d.telemac3d import telemac3d as _telemac3d  # noqa: E402,F401
+from trid3nt.workflows.telemac.templates.artemis.artemis import artemis as _artemis  # noqa: E402,F401
+from trid3nt.workflows.telemac.templates.tomawac.tomawac import tomawac as _tomawac  # noqa: E402,F401
+from trid3nt.workflows.modflow.templates.mf6_gwf.mf6_gwf import mf6_gwf as _mf6_gwf  # noqa: E402,F401
+from trid3nt.workflows.geoclaw.templates.geoclaw.geoclaw import geoclaw as _geoclaw  # noqa: E402,F401
+from trid3nt.workflows.pestpp.templates.pestpp.pestpp import pestpp as _pestpp  # noqa: E402,F401
 from trid3nt.tools.mesh.tool import build_mesh as _build_mesh  # noqa: E402,F401
 from trid3nt.tools.mesh.op_tool import mesh_op as _mesh_op  # noqa: E402,F401

@@ -1,0 +1,3 @@
+summary: Build a MODFLOW 6 groundwater flow model from scratch.
+routing: Use for a native from-zero deck or an existing MODFLOW 6 simulation. State the grid, timing, solution and physical packages. The water table and plume templates supply prefills.
+returns: The checked native simulation and its solver outputs.

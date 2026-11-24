@@ -1,0 +1,6 @@
+tomawac:
+  - build a TOMAWAC spectral wave model from scratch
+  - set up a bare TOMAWAC case with my own spectrum
+  - open my own TOMAWAC wave steering file
+  - enter the TOMAWAC mesh and source terms manually
+  - build a native TOMAWAC case with explicit solver settings

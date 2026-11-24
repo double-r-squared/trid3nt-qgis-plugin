@@ -41,6 +41,13 @@ EXPECTED_TEMPLATES = {
     "geoclaw_tsunami_inundation",
     "geoclaw_storm_surge",
     "calibrate",
+    "telemac2d",
+    "telemac3d",
+    "artemis",
+    "tomawac",
+    "mf6_gwf",
+    "geoclaw",
+    "pestpp",
 }
 
 # The 10 deleted engine-door concierge tools.

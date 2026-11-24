@@ -197,7 +197,8 @@ def test_every_row_a_template_reads_is_in_the_mapping_after_the_fill(
         return decl.name
 
     workflows = [tool.fn.workflow for tool in TOOL_REGISTRY.values()
-                 if getattr(getattr(tool.fn, "workflow", None), "engine", "") == "telemac"]
+                 if getattr(getattr(tool.fn, "workflow", None), "engine", "") == "telemac"
+                 and not getattr(tool.fn.workflow, "bare", False)]
     missed = {}
     for workflow in workflows:
         rows = {row.name: row for row in row_inputs(workflow)

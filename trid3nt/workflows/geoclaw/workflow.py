@@ -151,7 +151,8 @@ def _results(sheet: Sheet) -> list[str]:
 
 async def stage_sheet(*, sheet: Sheet, run_id: str, prefix: str, name: str,
                       previous: Previous | None = None, cores: int = 1,
-                      threads: int | None = None) -> dict[str, Any]:
+                      threads: int | None = None,
+                      assets: Mapping[str, str] | None = None) -> dict[str, Any]:
     """A filled sheet written as the run directory, checked against itself and staged -> the staged run.
     The case section names the module whose executable the worker runs, the process count where it is more than one, and the
     results the worker must find. A run restarting from a checkpoint
@@ -159,6 +160,10 @@ async def stage_sheet(*, sheet: Sheet, run_id: str, prefix: str, name: str,
     from ..solver.staging import new_rundir, stage_run
 
     rundir = new_rundir(run_id, stem="geoclaw")
+    if assets:
+        from ..runtime.bare import native_assets
+
+        await asyncio.to_thread(native_assets, rundir, dict(assets))
     written = await asyncio.to_thread(serialize, sheet, rundir)
     results = _results(sheet)
     if previous is not None:
@@ -171,7 +176,7 @@ async def stage_sheet(*, sheet: Sheet, run_id: str, prefix: str, name: str,
         rundir, run_id, module=sheet.module, steering="claw.data", results=results,
         outputs=[*_OUTPUTS, *checkpoint_outputs(sheet.stated())],
         mesh_inputs=list(previous.inputs) if previous else [], prefix=prefix, sheet=sheet.state(), server_facts={"name": name},
-        result_basename=results[0], check=check,
+        result_basename=(results or ["geoclaw_metrics.json"])[0], check=check,
         case={"module": sheet.module, **({"cores": int(cores)} if int(cores) > 1 else {}),
               **({"threads": int(threads)} if threads is not None else {}), "results": results})
     return {**staged, "name": name}

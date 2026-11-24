@@ -1,0 +1,6 @@
+telemac2d:
+  - build a TELEMAC-2D model from scratch
+  - set up a bare two-dimensional TELEMAC hydraulics model
+  - specify every TELEMAC-2D steering value manually
+  - open my existing TELEMAC-2D cas and boundary files
+  - create a TELEMAC-2D model with my own native mesh and keywords

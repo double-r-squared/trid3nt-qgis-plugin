@@ -1,0 +1,3 @@
+summary: Build a three-dimensional TELEMAC flow and water-column model from scratch.
+routing: Use for a from-zero engine deck, or when the caller supplies an existing steering file. State the physical values and every input file. Prefills are available through the TELEMAC-3D stratified-flow template.
+returns: The checked native deck and its solver outputs.

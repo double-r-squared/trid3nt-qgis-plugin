@@ -146,7 +146,9 @@ class Model:
     A set is checked by the input's own accept and raises its typed refusal; ``None`` unstates a value.
     ``fill()`` returns the form and never raises for an input; ``run()`` returns a ``Result`` or a ``Failure``."""
 
-    def __init__(self, case: "Case", workflow: Any, values: Mapping[str, Any], *, template: Template) -> None:
+    def __init__(self, case: "Case", workflow: Any, values: Mapping[str, Any], *, template: Template,
+                 taken: Mapping[str, Any] | None = None,
+                 file_values: Mapping[str, Any] | None = None) -> None:
         object.__setattr__(self, "_case", case)
         object.__setattr__(self, "_workflow", workflow)
         object.__setattr__(self, "_template", template)
@@ -154,6 +156,7 @@ class Model:
         object.__setattr__(self, "_keywords", {})
         #: Each input stated as outside data, by name: its lock entry, the copy in the case's data.
         object.__setattr__(self, "_taken", {})
+        object.__setattr__(self, "_file_values", dict(file_values or {}))
         object.__setattr__(self, "_base_run", None)
         object.__setattr__(self, "_applied", [])
         object.__setattr__(self, "_study_origins", {})
@@ -167,6 +170,7 @@ class Model:
         object.__setattr__(self, "_steps", {})
         for name, value in values.items():
             setattr(self, name, value)
+        self._taken.update(taken or {})
 
     def _held(self, name: str) -> tuple[str, Any]:
         """The key a name is stated under and what it names: an input by its own name, a keyword by its identifier,
@@ -276,6 +280,8 @@ class Model:
         if isinstance(held, Keyword):
             if key in self._keywords:
                 return self._keywords[key], "study" if key in self._study_origins else "user"
+            if key in self._file_values:
+                return self._file_values[key], "file"
             asserted = getattr(held.body, "ASSERTED", {})
             if held.name in asserted:
                 return asserted[held.name], "template"

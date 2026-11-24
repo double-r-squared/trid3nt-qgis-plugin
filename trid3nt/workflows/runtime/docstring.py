@@ -31,6 +31,7 @@ def render_docstring(
     sheet: str = "",
     controls: tuple[tuple[str, str], ...] = (),
     view: DocstringView = "full",
+    gathers: bool = True,
 ) -> str:
     """Build the docstring: summary, routing, negative routing, the inputs, returns.
     ``sheet`` documents the engine surface and ``controls`` the run controls; a control
@@ -44,7 +45,7 @@ def render_docstring(
             f"routing block is {len(front)} chars; it must fit the {_FRONT_BUDGET}-char "
             "truncation budget or the model never sees the routing."
         )
-    front = "\n".join([head[0], GATHERS_OWN, *head[1:]])
+    front = "\n".join([head[0], *((GATHERS_OWN,) if gathers else ()), *head[1:]])
     if view == "routing":
         return front + "\n" + "\n".join(["", f"Returns: {returns.strip()}", ""])
 

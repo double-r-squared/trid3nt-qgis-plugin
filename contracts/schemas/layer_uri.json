@@ -113,6 +113,7 @@
       "description": "Where a run input's value came from. A closed set; the name that makes it checkable rides beside it.",
       "enum": [
         "user",
+        "file",
         "study",
         "derived",
         "producer",

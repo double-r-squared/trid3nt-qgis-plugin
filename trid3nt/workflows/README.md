@@ -28,6 +28,7 @@ speak it and the one file that specializes the executor to it.
 | file | what it is |
 | --- | --- |
 | `runtime/__init__.py` | The runtime's public surface, and the only import a template needs. |
+| `runtime/bare.py` | Shared registration, module lookup and native file handling for bare workflows. |
 | `runtime/data.py` | What produces a row: the `Producer` a declaration names, the one word it is written with (`tool`), and the shape check a supplied artifact is held to. The declaration itself is `inputs/input.py`. |
 | `runtime/docstring.py` | The registered tool's model-facing docstring, rendered from the declarations in two views (routing, full). |
 | `runtime/errors.py` | The runtime's typed errors, each carrying the code the emitter renders. |

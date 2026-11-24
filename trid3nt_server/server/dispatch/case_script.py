@@ -188,6 +188,17 @@ def _declarations(lock: Lock, capture: Capture, deck: Deck, traced: Mapping[str,
             values[name] = _point(verdict.value)
     inputs = {}
     for name, value in values.items():
+        if getattr(state.workflow, "bare", False) and name in {"files", "steering", "simulation"}:
+            def pin(key: str, uri: str) -> str:
+                path, digest = lock.reference(uri)
+                inputs[key] = {"source": "served", "uri": path, "sha256": digest}
+                return f"s3://{path}"
+
+            if name == "files":
+                values[name] = {target: pin(f"files:{target}", source) for target, source in value.items()}
+            elif isinstance(value, str) and value.startswith("s3://"):
+                values[name] = pin(name, value)
+            continue
         uri = getattr(value, "uri", value)
         if isinstance(uri, Mapping):
             uri = uri.get("uri")

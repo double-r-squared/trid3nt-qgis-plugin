@@ -1,0 +1,6 @@
+pestpp:
+  - build a PEST++ model from scratch
+  - manually enter PEST++ parameter data observations and native control file from zero
+  - write my own PEST++ control file and choose an installed trial adapter
+  - set up PEST++ from the native parameter and observation groups
+  - build a PEST++ run with manual templates and instruction files

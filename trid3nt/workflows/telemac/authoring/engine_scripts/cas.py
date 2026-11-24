@@ -92,6 +92,16 @@ def parse_steering(cfg: dict) -> dict:
                              access="r", check_files=False)
             rows[basename] = {"module": module, "ok": True,
                               "keywords": len(cas.values)}
+            if cfg.get("include_values"):
+                def unquote(value):
+                    if isinstance(value, list):
+                        return [unquote(item) for item in value]
+                    if isinstance(value, str) and value[:1] == value[-1:] == "'":
+                        return value[1:-1].replace("''", "'")
+                    return value
+
+                rows[basename].update(values={k: unquote(v) for k, v in cas.values.items()},
+                                      input_files=list(cas.in_files))
         except Exception as exc:  # noqa: BLE001 -- any refusal is a typed row
             rows[basename] = {"module": module, "ok": False,
                               "error": f"{type(exc).__name__}: {exc}"}
