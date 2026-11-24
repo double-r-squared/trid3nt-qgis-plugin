@@ -20,3 +20,4 @@ picks a source; the method is `docs/design/sdk.md`.
 | `study.py` | Run PEST++ stages, save and read immutable named studies, and reproduce their resolved decks on application. |
 | `template.py` | Load pinned declarations without tool registration and describe upstream drift and its fix. |
 | `version.py` | Recreate the model held by a version and verify its finished deck and mesh pins. |
+| `view.py` | Draw recorded rasters, vectors, mesh datasets and charts in matplotlib. |

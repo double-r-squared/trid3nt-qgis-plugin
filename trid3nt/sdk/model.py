@@ -108,6 +108,14 @@ class Result:
     value: Any
     record: Mapping[str, Any] = field(default_factory=dict)
 
+    root: Path | None = field(default=None, repr=False, compare=False)
+
+    def show(self, *, mesh: bool = False, frame: int = -1) -> list[Any]:
+        """Draw the recorded outputs and return their matplotlib figures."""
+        from .view import view
+
+        return view(self, mesh=mesh, frame=frame)
+
     @property
     def outputs(self) -> list[Mapping[str, Any]]:
         """The layers the run published, off its own record."""
@@ -510,7 +518,7 @@ class Model:
             if isinstance(published, Mapping) and published.get("status") == "error":
                 child.failure = (str(published["error_code"]), str(published["error_message"]))
                 return Failure(*child.failure)
-            return Result(written.deck.run_id, published, child.record or {})
+            return Result(written.deck.run_id, published, child.record or {}, self._case.root)
         bind_turn_case(self._case.name)
         named = self._named()
         warning = self._template_warning()
@@ -538,7 +546,7 @@ class Model:
                 return Failure(str(published.get("error_code")), str(published.get("error_message")))
             record = await asyncio.to_thread(_record, self._case.name, named)
             await asyncio.to_thread(self._ran, record, written.deck)
-        return Result(run_id=record.get("run_id"), value=published, record=record)
+        return Result(run_id=record.get("run_id"), value=published, record=record, root=self._case.root)
 
     def _ran(self, record: Mapping[str, Any], deck: Deck) -> None:
         """What the run ran, onto the model's row of the lock - the images of its engine, and the mesh and deck of a

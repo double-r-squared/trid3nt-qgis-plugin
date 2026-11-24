@@ -68,6 +68,14 @@ which is `waqtel.cas` for WAQTEL. The module and any required process come from 
   through the daemon records its template and the turn's case, and no model or version. Each recorded output is
   the layer whole as a reader loads it, so a run read back off its record loads as the map would load it.
 
+## Notebook view
+
+`result.show()` returns matplotlib figures for the run's recorded layers and chart
+payloads. `trid3nt.view(layer_or_record, root=case.root)` opens a specific layer
+or record. Spatial axes carry the layer CRS and scalar fields use the published
+style and legend. Pass `mesh=True` for triangle edges or `frame=` to choose a
+mesh dataset frame. Use matplotlib's Agg backend to save figures without a display.
+
 ## The case is a directory
 
     <case>/
