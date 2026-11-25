@@ -199,6 +199,7 @@ from trid3nt.workflows.geoclaw.templates.tsunami_inundation.tsunami_inundation i
 from trid3nt.workflows.geoclaw.templates.storm_surge.storm_surge import geoclaw_storm_surge as _geoclaw_storm_surge  # noqa: E402,F401
 from trid3nt.workflows.pestpp.templates.calibrate.calibrate import calibrate as _calibrate  # noqa: E402,F401
 from trid3nt.workflows.pestpp.templates.optimize.optimize import optimize as _optimize  # noqa: E402,F401
+from trid3nt.workflows.pestpp.templates.tradeoff.tradeoff import tradeoff as _tradeoff  # noqa: E402,F401
 from trid3nt.workflows.telemac.templates.telemac2d.telemac2d import telemac2d as _telemac2d  # noqa: E402,F401
 from trid3nt.workflows.telemac.templates.telemac3d.telemac3d import telemac3d as _telemac3d  # noqa: E402,F401
 from trid3nt.workflows.telemac.templates.artemis.artemis import artemis as _artemis  # noqa: E402,F401

@@ -495,12 +495,13 @@ package SteeringSurface {
         port stageOut : StageOut;
     }
 
-    part optimizedStage : Sheet {
+    part resolvedDecisionStage : Sheet {
         doc /*
-        The optimize study stages its explicit native re-solve of the chosen
-        decisions as an ordinary run through the one stager.
+        An explicit decision vector - an optimize incumbent or one trade-off
+        candidate - is written into the study's pinned deck and staged as an
+        ordinary run through the one stager; both studies reach it.
 
-        code: trid3nt/workflows/pestpp/optimization.py
+        code: trid3nt/workflows/pestpp/resolve.py
         */
         port stageOut : StageOut;
     }
@@ -642,8 +643,8 @@ package SteeringSurface {
     interface appliedStudyStaged : StageRequest
         connect appliedStudyStage.stageOut to stager.stageIn;
 
-    interface optimizedStaged : StageRequest
-        connect optimizedStage.stageOut to stager.stageIn;
+    interface resolvedDecisionStaged : StageRequest
+        connect resolvedDecisionStage.stageOut to stager.stageIn;
 
     interface canvasAnswered : DrawnValue
         connect canvasGate.drawOut to fill.drawIn;

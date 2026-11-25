@@ -1,0 +1,8 @@
+tradeoff:
+- find the trade-off between groundwater pumping and streamflow
+- show the Pareto front for two MODFLOW objectives
+- which pumping decisions are non-dominated for profit and spring flow
+- multi-objective optimization of well rates with PESTPP-MOU
+- map the feasible trade-off between extraction and a head target
+- return every feasible objective trade-off and do not choose a winner
+- explore pumping allocations that balance two conflicting forecasts

@@ -157,10 +157,15 @@ class Study:
                      ) -> tuple[dict, list[Parameter], list[tuple[str, str]]]:
         where = self.work / tool
         selected = {name for name, *_bounds in chosen}
+        declared = {
+            "the_deck": self.deck, "targets": self.targets,
+            "spatial": {k: v for k, v in self.fields.items() if k in selected},
+            "zones": {k: v for k, v in self.zones.items() if k in selected}, "sources": self.sources}
+        if self.finished.engine == "modflow":
+            facts = (getattr(self.finished, "case", {}) or {}).get("server_facts") or {}
+            declared["frame_epsg"] = facts.get("utm_epsg")
         parameters, templates, instructions = await asyncio.to_thread(
-            self.piece.interface, self.work / "deck", where, chosen, the_deck=self.deck, targets=self.targets,
-            spatial={k: v for k, v in self.fields.items() if k in selected},
-            zones={k: v for k, v in self.zones.items() if k in selected}, sources=self.sources)
+            self.piece.interface, self.work / "deck", where, chosen, **declared)
         names = {p.name for p in parameters}
         unknown = self.rows.keys() - names - self.authored_names
         if unknown:

@@ -19,14 +19,16 @@ from trid3nt.workflows.pestpp.errors import PestppError
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "pestpp"
 
 
-def _grid(gwf, nlay):
+def _grid(gwf, nlay, origin=(0.0, 0.0)):
+    x0, y0 = origin
     flopy.mf6.ModflowGwfdisv(
         gwf, nlay=nlay, ncpl=4, nvert=9, top=10.0,
         botm=[10.0 - 5.0 * (k + 1) for k in range(nlay)], length_units="meters",
-        vertices=[[0, 0, 0], [1, 100, 0], [2, 200, 0], [3, 0, 100], [4, 100, 100], [5, 200, 100],
-                  [6, 0, 200], [7, 100, 200], [8, 200, 200]],
-        cell2d=[[0, 50, 50, 4, 0, 3, 4, 1], [1, 150, 50, 4, 1, 4, 5, 2],
-                [2, 50, 150, 4, 3, 6, 7, 4], [3, 150, 150, 4, 4, 7, 8, 5]])
+        vertices=[[0, x0, y0], [1, x0 + 100, y0], [2, x0 + 200, y0], [3, x0, y0 + 100],
+                  [4, x0 + 100, y0 + 100], [5, x0 + 200, y0 + 100],
+                  [6, x0, y0 + 200], [7, x0 + 100, y0 + 200], [8, x0 + 200, y0 + 200]],
+        cell2d=[[0, x0 + 50, y0 + 50, 4, 0, 3, 4, 1], [1, x0 + 150, y0 + 50, 4, 1, 4, 5, 2],
+                [2, x0 + 50, y0 + 150, 4, 3, 6, 7, 4], [3, x0 + 150, y0 + 150, 4, 4, 7, 8, 5]])
 
 
 def _riv(where: Path, instance: str, conds=(100.0, 100.0, 100.0, 100.0)) -> None:
@@ -39,12 +41,13 @@ def _riv(where: Path, instance: str, conds=(100.0, 100.0, 100.0, 100.0)) -> None
     (where / "gwf.nam").write_text(nam)
 
 
-def _build(where: Path, nlay: int = 1, k=None, rivs: int = 0, conds=(100.0, 100.0, 100.0, 100.0)) -> piece.Deck:
+def _build(where: Path, nlay: int = 1, k=None, rivs: int = 0, conds=(100.0, 100.0, 100.0, 100.0),
+           origin=(0.0, 0.0)) -> piece.Deck:
     sim = flopy.mf6.MFSimulation(sim_ws=str(where), exe_name="mf6")
     flopy.mf6.ModflowTdis(sim, nper=1, perioddata=[(1.0, 1, 1.0)])
     flopy.mf6.ModflowIms(sim)
     gwf = flopy.mf6.ModflowGwf(sim, modelname="gwf")
-    _grid(gwf, nlay)
+    _grid(gwf, nlay, origin)
     flopy.mf6.ModflowGwfnpf(gwf, k=k if k is not None else 5.0, icelltype=1)
     flopy.mf6.ModflowGwfic(gwf, strt=9.0)
     sim.write_simulation(silent=True)
@@ -109,12 +112,32 @@ def test_a_list_column_per_zone_writes_one_parameter_per_zone_and_leaves_other_r
     assert [row[3].replace(" ", "") for row in rows] == ["~riv_cond_z1~", "~riv_cond_z2~", "100.0", "100.0"]
 
 
-def test_a_polygon_zone_selects_the_cells_its_geometry_meets(tmp_path):
-    the_deck = _build(tmp_path / "deck", rivs=1)
-    polygon = [[100.0, 0.0], [200.0, 0.0], [200.0, 200.0], [100.0, 200.0]]
+def test_a_polygon_zone_naming_its_crs_is_read_in_that_frame(tmp_path):
+    origin = (500000.0, 4600000.0)
+    the_deck = _build(tmp_path / "deck", rivs=1, origin=origin)
+    polygon = [[origin[0] + 100.0, origin[1]], [origin[0] + 200.0, origin[1]],
+               [origin[0] + 200.0, origin[1] + 200.0], [origin[0] + 100.0, origin[1] + 200.0]]
     parameters, _pairs = piece.zoned(tmp_path / "deck", "RIV_COND",
-                                   [{"polygon": polygon, "source": "the east half"}],
-                                   lower=0.5, upper=2.0, the_deck=the_deck)
+                                   [{"polygon": polygon, "crs": "EPSG:32615", "source": "the east half"}],
+                                   lower=0.5, upper=2.0, the_deck=the_deck, frame_epsg=32615)
+    assert [p.name for p in parameters] == ["riv_cond_z1"]
+    rows = [piece._tokens(line) for line in (tmp_path / "deck" / "gwf.riv_0.riv.tpl").read_text().splitlines()
+            if line.strip().startswith("1 ")]
+    assert [row[3].replace(" ", "") for row in rows] == ["100.0", "~riv_cond_z1~", "100.0", "~riv_cond_z1~"]
+
+
+def test_a_polygon_zone_without_a_crs_is_longitude_latitude(tmp_path):
+    from pyproj import Transformer
+
+    origin = (500000.0, 4600000.0)
+    the_deck = _build(tmp_path / "deck", rivs=1, origin=origin)
+    to_lonlat = Transformer.from_crs(32615, 4326, always_xy=True).transform
+    corners = [(origin[0] + 110.0, origin[1] + 10.0), (origin[0] + 190.0, origin[1] + 10.0),
+               (origin[0] + 190.0, origin[1] + 190.0), (origin[0] + 110.0, origin[1] + 190.0)]
+    polygon = [list(to_lonlat(x, y)) for x, y in corners]
+    parameters, _pairs = piece.zoned(tmp_path / "deck", "RIV_COND",
+                                   [{"polygon": polygon, "source": "the east half as lon/lat"}],
+                                   lower=0.5, upper=2.0, the_deck=the_deck, frame_epsg=32615)
     assert [p.name for p in parameters] == ["riv_cond_z1"]
     rows = [piece._tokens(line) for line in (tmp_path / "deck" / "gwf.riv_0.riv.tpl").read_text().splitlines()
             if line.strip().startswith("1 ")]

@@ -142,7 +142,7 @@ def test_template_copy_preserves_source_deck_and_catalog(monkeypatch, tmp_path):
     _stubbed(monkeypatch)
     _, original = _template_source(monkeypatch, tmp_path)
     registered = dict(TOOL_REGISTRY)
-    assert len(registered) == 171
+    assert len(registered) == 172
     c = case(tmp_path / "copy")
     path = c.copy_template(_TEMPLATE)
     assert path.read_bytes() == original

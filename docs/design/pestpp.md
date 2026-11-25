@@ -3,7 +3,8 @@
 PEST++ (5.2.27, github.com/pestpp/pestpp) runs studies over a model: sensitivity (`pestpp-sen`), ensemble
 calibration (`pestpp-ies`), Gauss-Levenberg-Marquardt calibration (`pestpp-glm`) and the release's other tools. It is an engine like the others - one image, one
 `LocalSolverSpec`, one dictionary, one output table - whose trials run a model the study directory carries.
-`calibrate` studies a finished run. `optimize` studies a pinned native MODFLOW 6 deck.
+`calibrate` studies a finished run. `optimize` studies a pinned native MODFLOW 6 deck for one objective.
+`tradeoff` studies the same kind of deck for several objectives at once.
 
 ## What it consumes
 
@@ -136,7 +137,9 @@ per-parameter columns take precedence over their corresponding global columns.
    writing the multiplier into that column of every row in its own block and PEST's scale the one value the rows
    state (rows stating different values refuse). `zones` divides a command into one parameter per stated zone -
    cells, reaches, wells, layers or a polygon intersected with the grid - writing the field only into the rows a
-   zone holds and leaving the rest as written; overlapping zones refuse. An array's zones are its layers. Bounds in
+   zone holds and leaving the rest as written; overlapping zones refuse. A zone polygon is longitude/latitude
+   (EPSG:4326) unless it names its CRS, and is reprojected into the run's grid frame, never handed to the caller
+   that way. An array's zones are its layers. Bounds in
    the run's own unit are divided by that scale, and refuse over an array whose value is not a constant (whose
    FACTOR is not its values) and where the run's own value lies outside them. An array stated with `pilot_points`
    is laid by pilot points instead (Pilot points, below), and a trial runs `workers/pestpp/modflow_trial.py`, which
@@ -324,3 +327,34 @@ the objective history, and each constraint's simulated value and signed slack. N
 satisfies either constraint sense. An infeasible SLP result has its own outcome. Call
 `resolve_optimum(case, result)` for a separate MODFLOW solve that applies the selected rates and measures
 the constraints again on the pinned native deck.
+
+
+## `tradeoff`
+
+Provide the same pinned MODFLOW 6 simulation and bounded WEL rate decisions `optimize` takes, two or more
+native OBS forecasts as objectives, optional signed constraints, the population, the generator, the seed,
+and the generation limit. Each objective states its native selectors, units, source and `min` or `max`;
+each constraint states `<=` or `>=` and a signed limit. The author writes the objectives' observation rows
+in `less_than` or `greater_than` groups by their sense, names them in `mou_objectives`, and writes the
+decisions as `opt_dec_var_groups`. `mou_population_size`, `mou_generator`, `rand_seed` and `noptmax` carry
+the search.
+
+The result is read from the pinned archive files: `pestpp.pareto.archive.summary.csv`,
+`pestpp.archive.dv_pop.csv` and `pestpp.archive.obs_pop.csv`. The final archive's population are the
+candidates; each member's latest archive summary row states its feasibility and Pareto front, and its
+observation row supplies the raw objective values. Each candidate carries its decisions, its objective
+values, its feasibility, the file's Pareto front and a rank, and every constraint's simulated value and
+signed slack. Nondominance is checked again in the stated directions: a feasible member another dominates
+refuses `PESTPP_MOU_DOMINATED`. A duplicate or missing member refuses `PESTPP_MOU_ARCHIVE`, and no
+feasible member is the `empty` outcome. The run publishes a Pareto scatter of the objectives and a
+constraint-slack chart; it publishes no raster or mesh, so no candidate becomes the answer unless the
+caller names one.
+
+`resolve_candidate(case, result, candidate)` solves the pinned native deck with exactly that candidate's
+recorded decision vector and reads its native OBS outputs again. The result names the candidate and the
+trade-off run it came from. No candidate is selected by default.
+
+The search is deterministic. Chance mode (`opt_chance_points`, `mou_risk_objective`) is not built: the
+pinned source reads `mou_risk_objective` and the dictionary does not carry it, and reported chance-shifted
+values would need their own raw/adjusted columns. The dictionary's `mou_generator` default is PSO where the
+manual states DE, so the template requires the caller to state a generator and never falls back to either.

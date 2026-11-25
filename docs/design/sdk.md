@@ -418,3 +418,21 @@ The script can fill and run from its case directory on a machine with the solver
 Use `from trid3nt.workflows.pestpp.optimization import resolve_optimum` and
 `resolve_optimum(c, result)` to apply a feasible result. This creates a separate native MODFLOW run
 and returns its run ID, objective value, and measured constraint margins.
+
+
+## Management trade-off
+
+Call `c.tradeoff(files=..., model=..., decisions=..., objectives=..., constraints=..., generations=...,
+population=..., generator=..., seed=...)` to fill and run a deterministic MODFLOW 6 trade-off study.
+Constraints are optional. The files map native deck names to case inputs. The
+[PEST++ design page](pestpp.md#tradeoff) describes the objective senses and the archive reader.
+`fill()` stages the deck for review. `run().value` returns a `TradeoffResult` whose `candidates` are the
+feasible non-dominated set; each holds its decisions, objective values, feasibility, Pareto front and
+constraint slack. An empty feasible set is the `empty` outcome. The run paints the trade-off and its
+constraint slack and publishes no raster or mesh, so no candidate becomes the answer by itself. The
+reviewed chat run archives `tradeoff.py` and its lock.
+
+Use `from trid3nt.workflows.pestpp.tradeoff import resolve_candidate` and
+`resolve_candidate(c, result, "r7")` to solve the pinned deck with exactly that candidate's decisions.
+The separate native MODFLOW run returns its run ID and the objectives and margins measured again, and
+names the candidate and the trade-off run it came from.

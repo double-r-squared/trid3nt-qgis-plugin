@@ -167,3 +167,30 @@ def test_reviewed_optimize_script_names_the_native_study_and_pins_its_input(tmp_
     assert model["inputs"]["files:mfsim.nam"]["sha256"] == hashlib.sha256(b"native simulation").hexdigest()
     assert model["deck"]["sha256"] == receipt["deck_sha256"]
     assert _handoff(path, deck, receipt, _RUN, 1)["instruction"]["script"] == "optimize.py"
+
+
+def test_reviewed_tradeoff_script_names_the_native_study_and_pins_its_input(tmp_path, monkeypatch):
+    from trid3nt_server.server.dispatch.script_child import _handoff
+
+    storage = objects.FileStore(tmp_path / "store")
+    monkeypatch.setattr(objects, "client", lambda: storage)
+    monkeypatch.setattr(objects, "served_client", lambda: storage)
+    monkeypatch.setattr(objects, "runs_bucket", lambda: "runs")
+    storage.put_object(Bucket="cache", Key="mfsim.nam", Body=b"native simulation")
+    c = case(tmp_path / "scratch")
+    state = Fill(c.tradeoff()._workflow)
+    production(state)
+    deck = Deck(state, run_id=_RUN, staged={
+        "inputs": [{"dest": "mfsim.nam", "gs_uri": "s3://cache/mfsim.nam"}],
+    })
+    capture = script.Capture({"files": {"mfsim.nam": "s3://cache/mfsim.nam"}, "model": "flow"}, lambda *_: {})
+    receipt = archive(tmp_path / "reviewed", capture, deck)
+    path = capture.path
+    assert path.name == "tradeoff.py"
+    assert receipt["uri"] == f"s3://runs/{_RUN}/tradeoff.py"
+    assert "m = c.tradeoff()" in path.read_text()
+    lock = json.loads(path.with_name("trid3nt.lock").read_text())
+    model = lock["models"]["tradeoff"]
+    assert model["inputs"]["files:mfsim.nam"]["sha256"] == hashlib.sha256(b"native simulation").hexdigest()
+    assert model["deck"]["sha256"] == receipt["deck_sha256"]
+    assert _handoff(path, deck, receipt, _RUN, 1)["instruction"]["script"] == "tradeoff.py"

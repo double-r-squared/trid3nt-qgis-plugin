@@ -48,10 +48,10 @@ Six slices by subsystem, each its own foreground invocation, from the repo root:
 
     make test-fetchers        # tests/fetchers                                                                              2597
     make test-spatial         # tests/derive tests/render tests/mesh                                         851
-    make test-engines         # tests/telemac tests/runtime tests/solver tests/search tests/sdk                                  3259
-    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1382
+    make test-engines         # tests/telemac tests/runtime tests/solver tests/search tests/sdk                                  3382
+    make test-server          # tests/server tests/inputs tests/gates tests/credentials tests/model tests/scripts       1400
     make test-model-surface   # tests/adapters tests/tools                                                                   607
-    make test-packages        # tests/contracts tests/plugin                                                                  782
+    make test-packages        # tests/contracts tests/plugin                                                                  784
 
 The source-text guards - history markers, dead references, the package maps,
 the template pages, banner comments, import walls, wiring pins, retired names,

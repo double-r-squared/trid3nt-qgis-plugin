@@ -195,59 +195,13 @@ def resolve_optimum(case: Any, result: OptimizeResult) -> ResolvedOptimization:
 
 
 async def _resolve_optimum(result: OptimizeResult) -> ResolvedOptimization:
-    from trid3nt_contracts import new_ulid
+    from .resolve import solve_decisions
 
-    from trid3nt.store import objects
-    from trid3nt.tools.cache import read_object_bytes_s3
-    from trid3nt.workflows.modflow import engine as modflow
-    from trid3nt.workflows.modflow.authoring.validate import validate_authored_simulation
-
-    from ..solver.staging import new_rundir, stage_run
-    from . import staging
-    from .authoring.control import Parameter, substitute
-
-    manifest = json.loads(await asyncio.to_thread(read_object_bytes_s3, result.manifest_uri))
-    run_id = new_ulid()
-    directory = new_rundir(run_id, stem="modflow")
-    try:
-        await asyncio.to_thread(staging.fetch_deck, manifest["inputs"], directory)
-        templates = result.bindings["templates"]
-        values = {row["name"].casefold(): row["value"] for row in result.decisions}
-        parameters = [Parameter(row["name"].casefold(), row["start"], row["lower"], row["upper"],
-                                "well_rates", transform="none") for row in result.decisions]
-        await asyncio.to_thread(substitute, directory, templates, parameters, values)
-        readings = result.bindings["readings"]
-        observed_csvs = sorted({reading[0] for reading in readings.values()})
-
-        def check(work: Path, **_: Any) -> None:
-            with tempfile.TemporaryDirectory(prefix="pestpp-opt-validation-") as validation:
-                shutil.copytree(work, validation, dirs_exist_ok=True)
-                validate_authored_simulation(Path(validation))
-
-        staged = await stage_run(
-            directory, run_id, module="gwf", steering="mfsim.nam", results=["mfsim.lst"],
-            outputs=[*observed_csvs, "modflow_metrics.json"], mesh_inputs=[],
-            prefix="modflow", sheet={}, server_facts={"name": f"OPT decision {result.run_id}"},
-            result_basename="mfsim.lst", check=check)
-        handle = await solve_staged(staged, dispatch=modflow.solve_case)
-        samples = {}
-        for file in observed_csvs:
-            uri = f"s3://{objects.runs_bucket()}/{run_id}/{file}"
-            text = (await asyncio.to_thread(read_object_bytes_s3, uri)).decode("utf-8")
-            rows = [{name.casefold(): value for name, value in row.items()}
-                    for row in csv.DictReader(text.splitlines())]
-            for name, (filename, ordinal) in readings.items():
-                if filename != file:
-                    continue
-                try:
-                    samples[name] = _number(float(rows[ordinal - 1][name]), name)
-                except (IndexError, KeyError, ValueError) as error:
-                    raise PestppError(f"The native solve did not write {name} at output row {ordinal}.",
-                                      error_code="PESTPP_OPT_OUTPUT") from error
-    except BaseException:
-        await asyncio.to_thread(discard_run, run_id, "modflow", stem="modflow")
-        raise
+    handle, samples = await solve_decisions(
+        manifest_uri=result.manifest_uri, templates=result.bindings["templates"],
+        decisions=result.decisions, readings=result.bindings["readings"],
+        label=f"OPT decision {result.run_id}")
     objective = {**result.objective, "simulated": samples[result.objective["name"].casefold()]}
     constraints = [_constraint(row, samples[row["name"].casefold()]) for row in result.constraints]
-    return ResolvedOptimization(run_id=run_id, uri=handle["uri"], optimization_run=result.run_id,
+    return ResolvedOptimization(run_id=handle["run_id"], uri=handle["uri"], optimization_run=result.run_id,
                                 objective=objective, constraints=constraints)

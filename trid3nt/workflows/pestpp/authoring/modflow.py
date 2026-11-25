@@ -11,6 +11,7 @@ multiplier. A head is read at each well's cell through an OBS file the study add
 from __future__ import annotations
 
 import json
+import math
 import re
 import shutil
 from dataclasses import dataclass, replace
@@ -416,11 +417,41 @@ def multiplier(directory: Path, identifier: str, *, lower: float, upper: float, 
                       scale=scale, source=source, original_name=identifier), pair)
 
 
-def _polygon_cells(directory: Path, the_deck: Deck, polygon: Sequence[Sequence[float]]) -> set[int]:
-    """The one-based DISV cells the polygon's geometry meets -> their ids."""
+def _epsg(value: Any, role: str) -> int:
+    """A stated CRS as its EPSG code: an integer or ``EPSG:<code>``."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        matched = re.fullmatch(r"(?:EPSG:)?(\d{4,6})", value.strip(), re.I)
+        if matched:
+            return int(matched.group(1))
+    raise PestppError(f"{role} states its CRS as an EPSG code or 'EPSG:<code>', not {value!r}.",
+                      error_code="PESTPP_ZONE_CRS")
+
+
+def _polygon_cells(directory: Path, the_deck: Deck, polygon: Sequence[Sequence[float]], *,
+                   crs: Any = None, frame_epsg: int | None = None) -> set[int]:
+    """The one-based DISV cells the polygon's geometry meets -> their ids.
+
+    A caller-stated polygon is longitude/latitude (EPSG:4326) unless it names its CRS; either way it is
+    reprojected into the run's grid frame here, never handed to the caller."""
+    from pyproj import Transformer
     from shapely.geometry import Polygon
 
-    zone = Polygon(polygon)
+    if frame_epsg is None:
+        raise PestppError("a zone polygon needs the run's grid frame, which this deck does not state",
+                          error_code="PESTPP_ZONE_CRS")
+    ring = []
+    for point in polygon:
+        if (not isinstance(point, (list, tuple)) or len(point) != 2
+                or any(type(value) not in (int, float) or not math.isfinite(value) for value in point)):
+            raise PestppError("a zone polygon is a list of finite [x, y] pairs", error_code="PESTPP_ZONE_INVALID")
+        ring.append((float(point[0]), float(point[1])))
+    source = 4326 if crs is None else _epsg(crs, "a zone polygon")
+    if source != int(frame_epsg):
+        transform = Transformer.from_crs(source, int(frame_epsg), always_xy=True).transform
+        ring = [transform(x, y) for x, y in ring]
+    zone = Polygon(ring)
     if not zone.is_valid or zone.area <= 0:
         raise PestppError("a zone polygon is a simple ring with area", error_code="PESTPP_ZONE_INVALID")
     return {k + 1 for k, cell in enumerate(_cell_polygons(directory, the_deck))
@@ -437,17 +468,17 @@ def _cell_polygons(directory: Path, the_deck: Deck) -> list[Any]:
 
 
 def _zone_rows(zone: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], directory: Path,
-               the_deck: Deck) -> list[Mapping[str, Any]]:
+               the_deck: Deck, *, frame_epsg: int | None = None) -> list[Mapping[str, Any]]:
     """The rows one zone selects: its cells, reaches, wells, layers or polygon; one selector a zone."""
-    keys = set(zone) - {"source"}
+    keys = set(zone) - {"source", "crs"}
     if len(keys) != 1:
-        raise PestppError("a zone states one of cells, reaches, wells, layers or polygon, and its source",
+        raise PestppError("a zone states one of cells, reaches, wells, layers or polygon, its source and any CRS",
                           error_code="PESTPP_ZONE_INVALID")
     (kind, wanted), = ((kind, zone[kind]) for kind in keys)
     if not isinstance(wanted, (list, tuple)) or not wanted:
         raise PestppError(f"a zone's {kind} is a nonempty list", error_code="PESTPP_ZONE_INVALID")
     if kind == "polygon":
-        cells = _polygon_cells(directory, the_deck, wanted)
+        cells = _polygon_cells(directory, the_deck, wanted, crs=zone.get("crs"), frame_epsg=frame_epsg)
         return [row for row in rows if row["cell"] in cells]
     if kind == "cells":
         return [row for row in rows if row["cell"] in {int(value) for value in wanted}]
@@ -460,7 +491,8 @@ def _zone_rows(zone: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], direc
 
 
 def zoned(directory: Path, identifier: str, zones: Sequence[Mapping[str, Any]], *, lower: float, upper: float,
-          the_deck: Deck, absolute: bool = False, source: str = "") -> tuple[list[Parameter], list[tuple[str, str]]]:
+          the_deck: Deck, absolute: bool = False, source: str = "",
+          frame_epsg: int | None = None) -> tuple[list[Parameter], list[tuple[str, str]]]:
     """One parameter per stated zone over the array or list column ``identifier`` names -> the parameters and the
     (template, file). Every cell outside every stated zone is left as the run wrote it, and a row a second zone also
     holds refuses. An array's zones are its layers; a list column's are its cells, reaches, wells, layers or a
@@ -472,7 +504,7 @@ def zoned(directory: Path, identifier: str, zones: Sequence[Mapping[str, Any]], 
         held: dict[int, int] = {}
         chosen: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
         for index, zone in enumerate(zones, start=1):
-            selected = _zone_rows(zone, rows, directory, the_deck)
+            selected = _zone_rows(zone, rows, directory, the_deck, frame_epsg=frame_epsg)
             if not selected:
                 raise PestppError(f"{identifier}'s zone {index} holds no row of the {target.kind} package",
                                   error_code="PESTPP_ZONE_EMPTY")
@@ -508,7 +540,7 @@ def zoned(directory: Path, identifier: str, zones: Sequence[Mapping[str, Any]], 
                                         zone=kind, zone_source=zone_source))
         pair = _write_template(directory, target.file, lines)
         return parameters, [pair]
-    if any(set(zone) - {"source", "layers"} for zone in zones):
+    if any(set(zone) - {"source", "crs", "layers"} for zone in zones):
         raise PestppError(f"{identifier} is an array, and an array's zones are its layers: a cell or polygon zone "
                           "over an array is laid by the trial, which this study does not write",
                           error_code="PESTPP_PARAMETER_UNPLACED")
@@ -535,7 +567,7 @@ def zoned(directory: Path, identifier: str, zones: Sequence[Mapping[str, Any]], 
 
 def kind_of(zone: Mapping[str, Any]) -> str:
     """The selector a zone states, for its record."""
-    keys = set(zone) - {"source"}
+    keys = set(zone) - {"source", "crs"}
     return next(iter(keys)) if len(keys) == 1 else ""
 
 
@@ -942,7 +974,8 @@ def deck_sheet(directory: Path, the_deck: Deck) -> Any:
 
 def interface(source: Path, dest: Path, chosen: Sequence[tuple[str, float, float, bool]], *, the_deck: Deck,
               targets: Sequence[tuple[Observed, int]], spatial: Mapping[str, Mapping[str, Any]] = {},
-              zones: Mapping[str, Sequence[Mapping[str, Any]]] = {}, sources: Mapping[str, str] = {}
+              zones: Mapping[str, Sequence[Mapping[str, Any]]] = {}, sources: Mapping[str, str] = {},
+              frame_epsg: int | None = None
               ) -> tuple[list[Parameter], list[tuple[str, str]], list[tuple[str, str]]]:
     """A study directory: the deck at ``source`` copied to ``dest`` with a multiplier template over each chosen
     ``(identifier, lower, upper, absolute)`` - or its pilot points where ``spatial`` holds its field, or one parameter
@@ -959,7 +992,7 @@ def interface(source: Path, dest: Path, chosen: Sequence[tuple[str, float, float
         source_of = sources.get(identifier.lower(), "")
         if identifier in zones:
             laid, pairs = zoned(dest, identifier, zones[identifier], lower=lower, upper=upper, the_deck=the_deck,
-                                absolute=absolute, source=source_of)
+                                absolute=absolute, source=source_of, frame_epsg=frame_epsg)
             parameters.extend(laid)
             templates.extend(pair for pair in pairs if pair not in templates)
             continue

@@ -1,0 +1,6 @@
+summary: Return the feasible non-dominated pumping decisions for several stated MODFLOW 6 objectives using PESTPP-MOU.
+routing: 'Use for a management trade-off on a pinned native GWF deck: several objectives with their senses, WEL
+  rates with bounds, optional signed constraints, a population, generator, seed and generation budget. It returns
+  every feasible non-dominated candidate and never picks a winner; state one candidate explicitly to re-solve it.'
+not_for: estimating model parameters from measured observations or a single scalar optimum
+returns: 'A TradeoffResult with each feasible candidate''s decisions, objectives, Pareto front and constraint slack.'

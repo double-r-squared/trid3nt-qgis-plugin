@@ -17,7 +17,8 @@ from ..errors import PestppError
 from ..modules import LOCKED, PESTPP
 from ...runtime.module import UNSET
 
-__all__ = ["Observed", "Parameter", "TABLES", "at_bounds", "prior", "sigma_range", "substitute", "unheld_note", "write_control", "write_opt_control"]
+__all__ = ["Observed", "Parameter", "TABLES", "at_bounds", "prior", "sigma_range", "substitute", "unheld_note",
+           "write_control", "write_opt_control", "write_tradeoff_control"]
 
 #: The tables the control file names, each written beside it.
 TABLES = {"parameter groups": "study_groups.csv", "parameter data": "study_parameters.csv",
@@ -404,6 +405,22 @@ def _finite_number(value: Any) -> bool:
     return type(value) in (int, float) and math.isfinite(value)
 
 
+def _decision_groups(parameters: Sequence[Parameter], prefix: str = "PESTPP_OPT") -> list[str]:
+    """Every decision group once, in order, after each bound and transform is checked."""
+    groups: list[str] = []
+    for parameter in parameters:
+        lo, hi, start = parameter.lower, parameter.upper, parameter.value
+        if not all(_finite_number(number) for number in (lo, hi, start)) or not lo < hi or not lo <= start <= hi:
+            raise PestppError(f"State ordered finite bounds containing the starting value of {parameter.name}.",
+                              error_code=f"{prefix}_BOUNDS_UNSTATED")
+        if parameter.transform != "none":
+            raise PestppError(f"Decision {parameter.name} requires an untransformed rate.",
+                              error_code=f"{prefix}_TRANSFORM")
+        if parameter.group not in groups:
+            groups.append(parameter.group)
+    return groups
+
+
 def write_opt_control(directory: Path, *, parameters: Sequence[Parameter],
                       objective: Mapping[str, Any], constraints: Sequence[Mapping[str, Any]],
                       templates: Sequence[tuple[str, str]], instructions: Sequence[tuple[str, str]],
@@ -411,17 +428,7 @@ def write_opt_control(directory: Path, *, parameters: Sequence[Parameter],
     """Author OPT's deterministic scalar objective, decision groups and hard constraints."""
     if type(iterations) is not int or iterations <= 0:
         raise PestppError("State positive noptmax for optimization.", error_code="PESTPP_OPT_ITERATIONS")
-    groups: list[str] = []
-    for parameter in parameters:
-        lo, hi, start = parameter.lower, parameter.upper, parameter.value
-        if not all(_finite_number(number) for number in (lo, hi, start)) or not lo < hi or not lo <= start <= hi:
-            raise PestppError(f"State ordered finite bounds containing the starting value of {parameter.name}.",
-                              error_code="PESTPP_OPT_BOUNDS_UNSTATED")
-        if parameter.transform != "none":
-            raise PestppError(f"Decision {parameter.name} requires an untransformed rate.",
-                              error_code="PESTPP_OPT_TRANSFORM")
-        if parameter.group not in groups:
-            groups.append(parameter.group)
+    groups = _decision_groups(parameters)
 
     objective_name = _opt_name(objective)
     direction = objective.get("sense")
@@ -449,6 +456,76 @@ def write_opt_control(directory: Path, *, parameters: Sequence[Parameter],
         templates=templates, instructions=instructions, command=command,
         stated={"NOPTMAX": iterations, "OPT_DEC_VAR_GROUPS": groups, "OPT_OBJ_FUNC": objective_name,
                 "OPT_DIRECTION": direction, "OPT_RISK": 0.5})
+
+
+#: The generators the 5.2.27 users manual (13.4.3) states for mou_generator.
+_MOU_GENERATORS = frozenset(("de", "pso", "sbx", "pm", "simplex"))
+
+
+def _mou_name(row: Mapping[str, Any]) -> str:
+    """A trade-off objective or constraint's native name and source, lowered for the control tables."""
+    name = row.get("name")
+    if not isinstance(name, str) or not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*", name):
+        raise PestppError(f"State a native observation name for {name!r}.", error_code="PESTPP_MOU_NAME")
+    if not isinstance(row.get("source"), str) or not row["source"].strip():
+        raise PestppError(f"State the source for {name}.", error_code="PESTPP_MOU_SOURCE_UNSTATED")
+    return name.lower()
+
+
+def write_tradeoff_control(directory: Path, *, parameters: Sequence[Parameter],
+                           objectives: Sequence[Mapping[str, Any]],
+                           constraints: Sequence[Mapping[str, Any]],
+                           templates: Sequence[tuple[str, str]], instructions: Sequence[tuple[str, str]],
+                           command: str, generations: int, population: int, generator: str,
+                           seed: int) -> Path:
+    """Author MOU's several objectives with their senses, decision groups, signed constraints and search."""
+    if type(generations) is not int or generations <= 0:
+        raise PestppError("State generations as a positive noptmax for the trade-off search.",
+                          error_code="PESTPP_MOU_ITERATIONS")
+    if type(population) is not int or population <= 0:
+        raise PestppError("State population as a positive mou_population_size for the trade-off search.",
+                          error_code="PESTPP_MOU_POPULATION")
+    if not isinstance(generator, str) or generator.strip().lower() not in _MOU_GENERATORS:
+        raise PestppError(f"State generator as one of {', '.join(sorted(_MOU_GENERATORS))}, not {generator!r}.",
+                          error_code="PESTPP_MOU_GENERATOR")
+    if type(seed) is not int or not 0 <= seed <= 2 ** 32 - 1:
+        raise PestppError("State seed as an unsigned 32-bit integer for rand_seed.",
+                          error_code="PESTPP_MOU_SEED")
+    groups = _decision_groups(parameters, "PESTPP_MOU")
+    if not objectives:
+        raise PestppError("State at least one objective for the trade-off search.",
+                          error_code="PESTPP_MOU_OBJECTIVES")
+    observations, names, seen = [], [], set()
+    for row in objectives:
+        name = _mou_name(row)
+        if name in seen:
+            raise PestppError(f"Objective name {name} is repeated.", error_code="PESTPP_MOU_NAME")
+        seen.add(name)
+        sense = row.get("sense")
+        if sense not in ("min", "max"):
+            raise PestppError(f"State min or max for {name}.", error_code="PESTPP_MOU_SENSE")
+        observations.append(Observed(name, 0.0, _OPT_GROUPS["<=" if sense == "min" else ">="], 1.0, row["source"]))
+        names.append(name)
+    for row in constraints:
+        name = _mou_name(row)
+        if name in seen:
+            raise PestppError(f"Observation name {name} is repeated.", error_code="PESTPP_MOU_NAME")
+        seen.add(name)
+        sense, limit = row.get("sense"), row.get("limit")
+        if sense not in ("<=", ">="):
+            raise PestppError(f"State <= or >= for {name}.", error_code="PESTPP_MOU_SENSE")
+        if not _finite_number(limit):
+            raise PestppError(f"State a finite limit for {name}.", error_code="PESTPP_MOU_LIMIT_UNSTATED")
+        observations.append(Observed(name, float(limit), _OPT_GROUPS[sense], 1.0, row["source"]))
+    if len(objectives) < 2:
+        raise PestppError("State at least two objectives for a trade-off search; one objective is optimize's.",
+                          error_code="PESTPP_MOU_OBJECTIVES")
+    return write_control(
+        directory, name="pestpp.pst", parameters=parameters, observations=observations,
+        templates=templates, instructions=instructions, command=command,
+        stated={"NOPTMAX": generations, "OPT_DEC_VAR_GROUPS": groups, "MOU_OBJECTIVES": names,
+                "MOU_POPULATION_SIZE": population, "MOU_GENERATOR": generator.strip().lower(),
+                "RAND_SEED": seed})
 
 
 def substitute(directory: Path, templates: Sequence[tuple[str, str]],

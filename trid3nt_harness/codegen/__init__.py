@@ -109,6 +109,11 @@ def check_study_lines(version: str, name: str, values: Mapping[str, Any], form: 
     return replace(draft, text=text)
 
 
+def _script_name(template: str) -> str:
+    """The script a reviewed run of ``template`` publishes: a bare study has its own, everything else ``case.py``."""
+    return {"optimize": "optimize.py", "tradeoff": "tradeoff.py"}.get(template, "case.py")
+
+
 def generate(template: str, values: Mapping[str, Any], form: Form, *, case_dir: str | os.PathLike[str]) -> Script:
     """Publish a strict called-template case after the generated file reproduces the reviewed deck.
 
@@ -119,7 +124,7 @@ def generate(template: str, values: Mapping[str, Any], form: Form, *, case_dir: 
         return draft
     text = draft.text
     root = Path(case_dir).expanduser().resolve()
-    target = root / ("optimize.py" if template == "optimize" else "case.py")
+    target = root / _script_name(template)
     with TemporaryDirectory(dir=root, prefix=".codegen-") as tmp:
         candidate = Path(tmp) / target.name
         candidate.write_text(text, encoding="utf-8")

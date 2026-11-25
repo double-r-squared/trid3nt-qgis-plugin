@@ -21,6 +21,7 @@ from trid3nt_harness.tools.search.tool_retrieval import retrieve_visible_tools
 #: retrieval matrix below is only a guarantee if the roster it walks is fixed.
 EXPECTED_TEMPLATES = {
     "optimize",
+    "tradeoff",
     "telemac_dye_release",
     "telemac_oil_spill",
     "telemac_bed_scour",

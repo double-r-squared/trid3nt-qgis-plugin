@@ -2,7 +2,7 @@
 
 # Templates
 
-28 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+29 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
 
 ## [`artemis`](artemis.md)
 
@@ -171,4 +171,10 @@ Module `tomawac`.
 WAVE-DRIVEN CURRENTS: the current breaking waves drive along the shore - how fast and which way.
 
 Module `telemac2d`.
+
+## [`tradeoff`](tradeoff.md)
+
+Return the feasible non-dominated pumping decisions for several stated MODFLOW 6 objectives using PESTPP-MOU.
+
+Module `pestpp`.
 
