@@ -322,21 +322,22 @@ def _spans(lines: list[str], name: str) -> list[tuple[int, int]]:
     return spans
 
 
-def _column(lines: list[str], target: eligibility.Target, field: str, the_deck: Deck) -> float:
+def _column(lines: list[str], target: eligibility.Target, field: str, the_deck: Deck, *,
+            uniform: bool = True) -> float:
     """The target list column written as ``field`` in every row -> the one value they state; rows stating
-    different values refuse, one multiplier writing one scale."""
+    different values refuse unless ``uniform`` is false (a native table restated with one scalar)."""
     rows = _columns_before(lines, target)
     if not rows:
         raise PestppError(f"{target.identifier} names no row of the {target.kind} {target.block} block",
                           error_code="PESTPP_PARAMETER_UNPLACED")
     scales = {row["value"] for row in rows}
-    if len(scales) != 1:
+    if uniform and len(scales) != 1:
         raise PestppError(f"{target.identifier} states {len(scales)} different values across the package's rows; "
                           "one multiplier writes one scale", error_code="PESTPP_PARAMETER_UNPLACED")
     for row in rows:
         row["tokens"][row["at_token"]] = field
         lines[row["at"]] = "  " + "  ".join(row["tokens"])
-    return scales.pop()
+    return scales.pop() if len(scales) == 1 else next(iter(scales))
 
 
 def _column_trial(directory: Path, identifier: str, target: eligibility.Target,
@@ -548,7 +549,7 @@ def patch_columns(directory: Path, values: Mapping[str, float]) -> None:
                               error_code="PESTPP_PARAMETER_UNPLACED")
         path = directory / target.file
         lines = path.read_text(encoding="utf-8").splitlines()
-        _column(lines, target, repr(float(scalar)), parsed)
+        _column(lines, target, repr(float(scalar)), parsed, uniform=False)
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

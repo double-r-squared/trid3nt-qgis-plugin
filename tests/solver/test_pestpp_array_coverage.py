@@ -181,3 +181,11 @@ def test_a_zoned_column_whose_rows_differ_is_laid_by_the_trial(tmp_path):
     rows = [line.split() for line in (tmp_path / "deck" / "gwf.riv_0.riv").read_text().splitlines()
             if line.strip().startswith("1 ")]
     assert [float(row[3]) for row in rows] == [200.0, 220.0, 360.0, 390.0]
+
+
+def test_a_native_table_restates_a_differing_column_with_one_scalar(tmp_path):
+    _build(tmp_path / "deck", rivs=1, conds=(100.0, 110.0, 120.0, 130.0))
+    piece.patch_columns(tmp_path / "deck", {"RIV_COND": 250.0})
+    rows = [line.split() for line in (tmp_path / "deck" / "gwf.riv_0.riv").read_text().splitlines()
+            if line.strip().startswith("1 ")]
+    assert [float(row[3]) for row in rows] == [250.0, 250.0, 250.0, 250.0]
