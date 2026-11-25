@@ -1,0 +1,764 @@
+{
+  "module": "gwt",
+  "columns": [
+    {
+      "package": "CNC",
+      "keyword": "CELLID",
+      "identifier": "CNC_STRESS_PERIOD_DATA_CELLID",
+      "recarray": "stress_period_data",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "CNC",
+      "keyword": "CONC",
+      "identifier": "CNC_STRESS_PERIOD_DATA_CONC",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "constant concentration value. is the constant concentration value. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "CNC",
+      "keyword": "AUX",
+      "identifier": "CNC_STRESS_PERIOD_DATA_AUX",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "CNC",
+      "keyword": "BOUNDNAME",
+      "identifier": "CNC_STRESS_PERIOD_DATA_BOUNDNAME",
+      "recarray": "stress_period_data",
+      "type": "STRING",
+      "help": "constant concentration name",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "IV",
+      "identifier": "DISU_VERTICES_IV",
+      "recarray": "vertices",
+      "type": "INTEGER",
+      "help": "vertex number. is the vertex number.  Records in the VERTICES block must be listed in consecutive order from 1 to NVERT.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "XV",
+      "identifier": "DISU_VERTICES_XV",
+      "recarray": "vertices",
+      "type": "REAL",
+      "help": "x-coordinate for vertex. is the x-coordinate for the vertex.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "YV",
+      "identifier": "DISU_VERTICES_YV",
+      "recarray": "vertices",
+      "type": "REAL",
+      "help": "y-coordinate for vertex. is the y-coordinate for the vertex.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "ICELL2D",
+      "identifier": "DISU_CELL2D_ICELL2D",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "cell2d number. is the cell2d number.  Records in the CELL2D block must be listed in consecutive order from 1 to NODES.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "XC",
+      "identifier": "DISU_CELL2D_XC",
+      "recarray": "cell2d",
+      "type": "REAL",
+      "help": "x-coordinate for cell center. is the x-coordinate for the cell center.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "YC",
+      "identifier": "DISU_CELL2D_YC",
+      "recarray": "cell2d",
+      "type": "REAL",
+      "help": "y-coordinate for cell center. is the y-coordinate for the cell center.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "NCVERT",
+      "identifier": "DISU_CELL2D_NCVERT",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "number of cell vertices. is the number of vertices required to define the cell.  There may be a different number of vertices for each cell.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "ICVERT",
+      "identifier": "DISU_CELL2D_ICVERT",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "array of vertex numbers. is an array of integer values containing vertex numbers (in the VERTICES block) used to define the cell.  Vertices must be listed in clockwise order.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "IV",
+      "identifier": "DISV_VERTICES_IV",
+      "recarray": "vertices",
+      "type": "INTEGER",
+      "help": "vertex number. is the vertex number.  Records in the VERTICES block must be listed in consecutive order from 1 to NVERT.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "XV",
+      "identifier": "DISV_VERTICES_XV",
+      "recarray": "vertices",
+      "type": "REAL",
+      "help": "x-coordinate for vertex. is the x-coordinate for the vertex.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "YV",
+      "identifier": "DISV_VERTICES_YV",
+      "recarray": "vertices",
+      "type": "REAL",
+      "help": "y-coordinate for vertex. is the y-coordinate for the vertex.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "ICELL2D",
+      "identifier": "DISV_CELL2D_ICELL2D",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "cell2d number. is the CELL2D number.  Records in the CELL2D block must be listed in consecutive order from the first to the last.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "XC",
+      "identifier": "DISV_CELL2D_XC",
+      "recarray": "cell2d",
+      "type": "REAL",
+      "help": "x-coordinate for cell center. is the x-coordinate for the cell center.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "YC",
+      "identifier": "DISV_CELL2D_YC",
+      "recarray": "cell2d",
+      "type": "REAL",
+      "help": "y-coordinate for cell center. is the y-coordinate for the cell center.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "NCVERT",
+      "identifier": "DISV_CELL2D_NCVERT",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "number of cell vertices. is the number of vertices required to define the cell.  There may be a different number of vertices for each cell.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "ICVERT",
+      "identifier": "DISV_CELL2D_ICVERT",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "array of vertex numbers. is an array of integer values containing vertex numbers (in the VERTICES block) used to define the cell.  Vertices must be listed in clockwise order.  Cells that are connected must share vertices.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "FMI",
+      "keyword": "FLOWTYPE",
+      "identifier": "FMI_PACKAGEDATA_FLOWTYPE",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "flow type. is the word GWFBUDGET, GWFHEAD, GWFMOVER or the name of an advanced GWF stress package.  If GWFBUDGET is specified, then the corresponding file must be a budget file. If GWFHEAD is specified, the file must be a head file.  If GWFGRID is specified, the file must be a binary grid file.  If an advanced GWF stress package name appears then the corresponding file must be the budget file saved by a LAK, SFR, MAW or UZF Package.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "FMI",
+      "keyword": "FILEIN",
+      "identifier": "FMI_PACKAGEDATA_FILEIN",
+      "recarray": "packagedata",
+      "type": "LOGICAL",
+      "help": "file keyword. keyword to specify that an input filename is expected next.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "FMI",
+      "keyword": "FNAME",
+      "identifier": "FMI_PACKAGEDATA_FNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "file name. is the name of the file containing flows.  The path to the file should be included if the file is not located in the folder where the program was run.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "LKT",
+      "keyword": "IFNO",
+      "identifier": "LKT_PACKAGEDATA_IFNO",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "lake number for this entry. integer value that defines the feature (lake) number associated with the specified PACKAGEDATA data on the line. IFNO must be greater than zero and less than or equal to NLAKES. Lake information must be specified for every lake or the program will terminate with an error.  The program will also terminate with an error if information for a lake is specified more than once.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "LKT",
+      "keyword": "STRT",
+      "identifier": "LKT_PACKAGEDATA_STRT",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "starting lake concentration. real value that defines the starting concentration for the lake.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "LKT",
+      "keyword": "AUX",
+      "identifier": "LKT_PACKAGEDATA_AUX",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "LKT",
+      "keyword": "BOUNDNAME",
+      "identifier": "LKT_PACKAGEDATA_BOUNDNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "lake name",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "LKT",
+      "keyword": "IFNO",
+      "identifier": "LKT_LAKEPERIODDATA_IFNO",
+      "recarray": "lakeperioddata",
+      "type": "INTEGER",
+      "help": "lake number for this entry. integer value that defines the feature (lake) number associated with the specified PERIOD data on the line. IFNO must be greater than zero and less than or equal to NLAKES.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "LKT",
+      "keyword": "LAKSETTING",
+      "identifier": "LKT_LAKEPERIODDATA_LAKSETTING",
+      "recarray": "lakeperioddata",
+      "type": "STRUCT",
+      "help": "line of information that is parsed into a keyword and values.  Keyword values that can be used to start the LAKSETTING string include: STATUS, CONCENTRATION, RAINFALL, EVAPORATION, RUNOFF, EXT-INFLOW, and AUXILIARY.  These settings are used to assign the concentration of associated with the corresponding flow terms.  Concentrations cannot be specified for all flow terms.  For example, the Lake Package supports a ``WITHDRAWAL'' flow term.  If this withdrawal term is active, then water will be withdrawn from the lake at the calculated concentration of the lake.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "MWT",
+      "keyword": "IFNO",
+      "identifier": "MWT_PACKAGEDATA_IFNO",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "well number for this entry. integer value that defines the feature (well) number associated with the specified PACKAGEDATA data on the line. IFNO must be greater than zero and less than or equal to NMAWWELLS. Well information must be specified for every well or the program will terminate with an error.  The program will also terminate with an error if information for a well is specified more than once.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "MWT",
+      "keyword": "STRT",
+      "identifier": "MWT_PACKAGEDATA_STRT",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "starting well concentration. real value that defines the starting concentration for the well.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "MWT",
+      "keyword": "AUX",
+      "identifier": "MWT_PACKAGEDATA_AUX",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "MWT",
+      "keyword": "BOUNDNAME",
+      "identifier": "MWT_PACKAGEDATA_BOUNDNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "well name",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "MWT",
+      "keyword": "IFNO",
+      "identifier": "MWT_MWTPERIODDATA_IFNO",
+      "recarray": "mwtperioddata",
+      "type": "INTEGER",
+      "help": "well number for this entry. integer value that defines the feature (well) number associated with the specified PERIOD data on the line. IFNO must be greater than zero and less than or equal to NMAWWELLS.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "MWT",
+      "keyword": "MWTSETTING",
+      "identifier": "MWT_MWTPERIODDATA_MWTSETTING",
+      "recarray": "mwtperioddata",
+      "type": "STRUCT",
+      "help": "line of information that is parsed into a keyword and values.  Keyword values that can be used to start the MWTSETTING string include: STATUS, CONCENTRATION, RATE, and AUXILIARY.  These settings are used to assign the concentration associated with the corresponding flow terms.  Concentrations cannot be specified for all flow terms.  For example, the Multi-Aquifer Well Package supports a ``WITHDRAWAL'' flow term.  If this withdrawal term is active, then water will be withdrawn from the well at the calculated concentration of the well.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "NAM",
+      "keyword": "FTYPE",
+      "identifier": "NAM_PACKAGES_FTYPE",
+      "recarray": "packages",
+      "type": "STRING",
+      "help": "package type. is the file type, which must be one of the following character values shown in table~\\ref{table:ftype-gwt}. Ftype may be entered in any combination of uppercase and lowercase.",
+      "rubrique": [
+        "PACKAGES"
+      ]
+    },
+    {
+      "package": "NAM",
+      "keyword": "FNAME",
+      "identifier": "NAM_PACKAGES_FNAME",
+      "recarray": "packages",
+      "type": "STRING",
+      "help": "file name. is the name of the file containing the package input.  The path to the file should be included if the file is not located in the folder where the program was run.",
+      "rubrique": [
+        "PACKAGES"
+      ]
+    },
+    {
+      "package": "NAM",
+      "keyword": "PNAME",
+      "identifier": "NAM_PACKAGES_PNAME",
+      "recarray": "packages",
+      "type": "STRING",
+      "help": "user name for package. is the user-defined name for the package. PNAME is restricted to 16 characters.  No spaces are allowed in PNAME.  PNAME character values are read and stored by the program for stress packages only.  These names may be useful for labeling purposes when multiple stress packages of the same type are located within a single GWT Model.  If PNAME is specified for a stress package, then PNAME will be used in the flow budget table in the listing file; it will also be used for the text entry in the cell-by-cell budget file.  PNAME is case insensitive and is stored in all upper case letters.",
+      "rubrique": [
+        "PACKAGES"
+      ]
+    },
+    {
+      "package": "SFT",
+      "keyword": "IFNO",
+      "identifier": "SFT_PACKAGEDATA_IFNO",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "reach number for this entry. integer value that defines the feature (reach) number associated with the specified PACKAGEDATA data on the line. IFNO must be greater than zero and less than or equal to NREACHES. Reach information must be specified for every reach or the program will terminate with an error.  The program will also terminate with an error if information for a reach is specified more than once.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFT",
+      "keyword": "STRT",
+      "identifier": "SFT_PACKAGEDATA_STRT",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "starting reach concentration. real value that defines the starting concentration for the reach.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFT",
+      "keyword": "AUX",
+      "identifier": "SFT_PACKAGEDATA_AUX",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFT",
+      "keyword": "BOUNDNAME",
+      "identifier": "SFT_PACKAGEDATA_BOUNDNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "well name",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFT",
+      "keyword": "IFNO",
+      "identifier": "SFT_REACHPERIODDATA_IFNO",
+      "recarray": "reachperioddata",
+      "type": "INTEGER",
+      "help": "reach number for this entry. integer value that defines the feature (reach) number associated with the specified PERIOD data on the line. IFNO must be greater than zero and less than or equal to NREACHES.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "SFT",
+      "keyword": "REACHSETTING",
+      "identifier": "SFT_REACHPERIODDATA_REACHSETTING",
+      "recarray": "reachperioddata",
+      "type": "STRUCT",
+      "help": "line of information that is parsed into a keyword and values.  Keyword values that can be used to start the REACHSETTING string include: STATUS, CONCENTRATION, RAINFALL, EVAPORATION, RUNOFF, and AUXILIARY.  These settings are used to assign the concentration of associated with the corresponding flow terms.  Concentrations cannot be specified for all flow terms.  For example, the Streamflow Package supports a ``DIVERSION'' flow term.  Diversion water will be routed using the calculated concentration of the reach.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "SRC",
+      "keyword": "CELLID",
+      "identifier": "SRC_STRESS_PERIOD_DATA_CELLID",
+      "recarray": "stress_period_data",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "SRC",
+      "keyword": "SMASSRATE",
+      "identifier": "SRC_STRESS_PERIOD_DATA_SMASSRATE",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "mass source loading rate. is the mass source loading rate. A positive value indicates addition of solute mass and a negative value indicates removal of solute mass. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "SRC",
+      "keyword": "AUX",
+      "identifier": "SRC_STRESS_PERIOD_DATA_AUX",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "SRC",
+      "keyword": "BOUNDNAME",
+      "identifier": "SRC_STRESS_PERIOD_DATA_BOUNDNAME",
+      "recarray": "stress_period_data",
+      "type": "STRING",
+      "help": "well name",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "SSM",
+      "keyword": "PNAME",
+      "identifier": "SSM_SOURCES_PNAME",
+      "recarray": "sources",
+      "type": "STRING",
+      "help": "package name. name of the flow package for which an auxiliary variable contains a source concentration.  If this flow package is represented using an advanced transport package (SFT, LKT, MWT, or UZT), then the advanced transport package will override SSM terms specified here.",
+      "rubrique": [
+        "SOURCES"
+      ]
+    },
+    {
+      "package": "SSM",
+      "keyword": "SRCTYPE",
+      "identifier": "SSM_SOURCES_SRCTYPE",
+      "recarray": "sources",
+      "type": "STRING",
+      "help": "source type. keyword indicating how concentration will be assigned for sources and sinks.  Keyword must be specified as either AUX or AUXMIXED.  For both options the user must provide an auxiliary variable in the corresponding flow package.  The auxiliary variable must have the same name as the AUXNAME value that follows.  If the AUX keyword is specified, then the auxiliary variable specified by the user will be assigned as the concentration value for groundwater sources (flows with a positive sign).  For negative flow rates (sinks), groundwater will be withdrawn from the cell at the simulated concentration of the cell.  The AUXMIXED option provides an alternative method for how to determine the concentration of sinks.  If the cell concentration is larger than the user-specified auxiliary concentration, then the concentration of groundwater withdrawn from the cell will be assigned as the user-specified concentration.  Alternatively, if the user-specified auxiliary concentration is larger than the cell concentration, then groundwater will be withdrawn at the cell concentration.  Thus, the AUXMIXED option is designed to work with the Evapotranspiration (EVT) and Recharge (RCH) Packages where water may be withdrawn at a concentration that is less than the cell concentration.",
+      "rubrique": [
+        "SOURCES"
+      ]
+    },
+    {
+      "package": "SSM",
+      "keyword": "AUXNAME",
+      "identifier": "SSM_SOURCES_AUXNAME",
+      "recarray": "sources",
+      "type": "STRING",
+      "help": "auxiliary variable name. name of the auxiliary variable in the package PNAME.  This auxiliary variable must exist and be specified by the user in that package.  The values in this auxiliary variable will be used to set the concentration associated with the flows for that boundary package.",
+      "rubrique": [
+        "SOURCES"
+      ]
+    },
+    {
+      "package": "SSM",
+      "keyword": "PNAME",
+      "identifier": "SSM_FILEINPUT_PNAME",
+      "recarray": "fileinput",
+      "type": "STRING",
+      "help": "package name. name of the flow package for which an SPC6 input file contains a source concentration.  If this flow package is represented using an advanced transport package (SFT, LKT, MWT, or UZT), then the advanced transport package will override SSM terms specified here.",
+      "rubrique": [
+        "FILEINPUT"
+      ]
+    },
+    {
+      "package": "SSM",
+      "keyword": "SPC6",
+      "identifier": "SSM_FILEINPUT_SPC6",
+      "recarray": "fileinput",
+      "type": "LOGICAL",
+      "help": "head keyword. keyword to specify that record corresponds to a source sink mixing input file.",
+      "rubrique": [
+        "FILEINPUT"
+      ]
+    },
+    {
+      "package": "SSM",
+      "keyword": "FILEIN",
+      "identifier": "SSM_FILEINPUT_FILEIN",
+      "recarray": "fileinput",
+      "type": "LOGICAL",
+      "help": "file keyword. keyword to specify that an input filename is expected next.",
+      "rubrique": [
+        "FILEINPUT"
+      ]
+    },
+    {
+      "package": "SSM",
+      "keyword": "SPC6_FILENAME",
+      "identifier": "SSM_FILEINPUT_SPC6_FILENAME",
+      "recarray": "fileinput",
+      "type": "STRING",
+      "help": "spc file name. character string that defines the path and filename for the file containing source and sink input data for the flow package. The SPC6\\_FILENAME file is a flexible input file that allows concentrations to be specified by stress period and with time series. Instructions for creating the SPC6\\_FILENAME input file are provided in the next section on file input for boundary concentrations.",
+      "rubrique": [
+        "FILEINPUT"
+      ]
+    },
+    {
+      "package": "SSM",
+      "keyword": "MIXED",
+      "identifier": "SSM_FILEINPUT_MIXED",
+      "recarray": "fileinput",
+      "type": "LOGICAL",
+      "help": "mixed keyword. keyword to specify that these stress package boundaries will have the mixed condition.  The MIXED condition is described in the SOURCES block for AUXMIXED.  The MIXED condition allows for water to be withdrawn at a concentration that is less than the cell concentration.  It is intended primarily for representing evapotranspiration.",
+      "rubrique": [
+        "FILEINPUT"
+      ]
+    },
+    {
+      "package": "UZT",
+      "keyword": "IFNO",
+      "identifier": "UZT_PACKAGEDATA_IFNO",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "UZF cell number for this entry. integer value that defines the feature (UZF object) number associated with the specified PACKAGEDATA data on the line. IFNO must be greater than zero and less than or equal to NUZFCELLS. Unsaturated zone flow information must be specified for every UZF cell or the program will terminate with an error.  The program will also terminate with an error if information for a UZF cell is specified more than once.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZT",
+      "keyword": "STRT",
+      "identifier": "UZT_PACKAGEDATA_STRT",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "starting UZF cell concentration. real value that defines the starting concentration for the unsaturated zone flow cell.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZT",
+      "keyword": "AUX",
+      "identifier": "UZT_PACKAGEDATA_AUX",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZT",
+      "keyword": "BOUNDNAME",
+      "identifier": "UZT_PACKAGEDATA_BOUNDNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "UZF cell name",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZT",
+      "keyword": "IFNO",
+      "identifier": "UZT_UZTPERIODDATA_IFNO",
+      "recarray": "uztperioddata",
+      "type": "INTEGER",
+      "help": "unsaturated zone flow cell number for this entry. integer value that defines the feature (UZF object) number associated with the specified PERIOD data on the line. IFNO must be greater than zero and less than or equal to NUZFCELLS.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "UZT",
+      "keyword": "UZTSETTING",
+      "identifier": "UZT_UZTPERIODDATA_UZTSETTING",
+      "recarray": "uztperioddata",
+      "type": "STRUCT",
+      "help": "line of information that is parsed into a keyword and values.  Keyword values that can be used to start the UZTSETTING string include: STATUS, CONCENTRATION, INFILTRATION, UZET, and AUXILIARY.  These settings are used to assign the concentration of associated with the corresponding flow terms.  Concentrations cannot be specified for all flow terms.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "TDIS",
+      "keyword": "PERLEN",
+      "identifier": "TDIS_PERIODDATA_PERLEN",
+      "recarray": "perioddata",
+      "type": "REAL",
+      "help": "length of stress period. is the length of a stress period.",
+      "rubrique": [
+        "PERIODDATA"
+      ]
+    },
+    {
+      "package": "TDIS",
+      "keyword": "NSTP",
+      "identifier": "TDIS_PERIODDATA_NSTP",
+      "recarray": "perioddata",
+      "type": "INTEGER",
+      "help": "number of time steps. is the number of time steps in a stress period.",
+      "rubrique": [
+        "PERIODDATA"
+      ]
+    },
+    {
+      "package": "TDIS",
+      "keyword": "TSMULT",
+      "identifier": "TDIS_PERIODDATA_TSMULT",
+      "recarray": "perioddata",
+      "type": "REAL",
+      "help": "number of time steps. is the multiplier for the length of successive time steps. The length of a time step is calculated by multiplying the length of the previous time step by TSMULT. The length of the first time step, $\\Delta t_1$, is related to PERLEN, NSTP, and TSMULT by the relation $\\Delta t_1= perlen \\frac{tsmult - 1}{tsmult^{nstp}-1}$.",
+      "rubrique": [
+        "PERIODDATA"
+      ]
+    },
+    {
+      "package": "OBS",
+      "keyword": "OBSNAME",
+      "identifier": "OBS_CONTINUOUS_OBSNAME",
+      "recarray": "continuous",
+      "type": "STRING",
+      "help": "observation name. string of 1 to 40 nonblank characters used to identify the observation. The identifier need not be unique; however, identification and post-processing of observations in the output files are facilitated if each observation is given a unique name.",
+      "rubrique": [
+        "CONTINUOUS"
+      ]
+    },
+    {
+      "package": "OBS",
+      "keyword": "OBSTYPE",
+      "identifier": "OBS_CONTINUOUS_OBSTYPE",
+      "recarray": "continuous",
+      "type": "STRING",
+      "help": "observation type. a string of characters used to identify the observation type.",
+      "rubrique": [
+        "CONTINUOUS"
+      ]
+    },
+    {
+      "package": "OBS",
+      "keyword": "ID",
+      "identifier": "OBS_CONTINUOUS_ID",
+      "recarray": "continuous",
+      "type": "STRING",
+      "help": "time. Text identifying cell where observation is located. For packages other than NPF, if boundary names are defined in the corresponding package input file, ID can be a boundary name. Otherwise ID is a cellid. If the model discretization is type DIS, cellid is three integers (layer, row, column). If the discretization is DISV, cellid is two integers (layer, cell number). If the discretization is DISU, cellid is one integer (node number).",
+      "rubrique": [
+        "CONTINUOUS"
+      ]
+    },
+    {
+      "package": "OBS",
+      "keyword": "ID2",
+      "identifier": "OBS_CONTINUOUS_ID2",
+      "recarray": "continuous",
+      "type": "STRING",
+      "help": "time. Text identifying cell adjacent to cell identified by ID. The form of ID2 is as described for ID. ID2 is used for intercell-flow observations of a GWF model, for three observation types of the LAK Package, for two observation types of the MAW Package, and one observation type of the UZF Package.",
+      "rubrique": [
+        "CONTINUOUS"
+      ]
+    }
+  ]
+}

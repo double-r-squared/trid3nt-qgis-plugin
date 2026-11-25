@@ -61,6 +61,11 @@ class Parameter:
     anisotropy: float = 1.0
     bearing: float = 0.0
     spatial_group: str = ""
+    #: The source the parameter's own bounds (or zone) were stated from; empty where the study's sources map holds it.
+    source: str = ""
+    #: The zone a divided parameter tunes (``"cells"``, ``"layer 3"`` ...) and the source that zone was stated from.
+    zone: str = ""
+    zone_source: str = ""
 
 
 @dataclass(frozen=True)

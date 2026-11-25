@@ -109,7 +109,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "ALV",
@@ -124,7 +125,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "ATH1",
@@ -139,7 +141,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "ATH2",
@@ -154,7 +157,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "ATV",
@@ -169,7 +173,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "KTW",
@@ -184,7 +189,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "KTS",
@@ -199,7 +205,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "AUXILIARY",
@@ -214,7 +221,8 @@
         "OPTIONS"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "STRING"
     },
     {
       "keyword": "AUXMULTNAME",
@@ -559,7 +567,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "DELC",
@@ -574,7 +583,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "TOP",
@@ -589,7 +599,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "BOTM",
@@ -604,7 +615,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "IDOMAIN",
@@ -619,7 +631,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "INTEGER"
     },
     {
       "keyword": "LENGTH_UNITS",
@@ -815,7 +828,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "BOT",
@@ -830,7 +844,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "AREA",
@@ -845,7 +860,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "IDOMAIN",
@@ -860,7 +876,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "INTEGER"
     },
     {
       "keyword": "IAC",
@@ -875,7 +892,8 @@
         "CONNECTIONDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "INTEGER"
     },
     {
       "keyword": "JA",
@@ -890,7 +908,8 @@
         "CONNECTIONDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "INTEGER"
     },
     {
       "keyword": "IHC",
@@ -905,7 +924,8 @@
         "CONNECTIONDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "INTEGER"
     },
     {
       "keyword": "CL12",
@@ -920,7 +940,8 @@
         "CONNECTIONDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "HWVA",
@@ -935,7 +956,8 @@
         "CONNECTIONDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "ANGLDEGX",
@@ -950,7 +972,8 @@
         "CONNECTIONDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "VERTICES",
@@ -1190,7 +1213,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "BOTM",
@@ -1205,7 +1229,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "IDOMAIN",
@@ -1220,7 +1245,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "INTEGER"
     },
     {
       "keyword": "VERTICES",
@@ -1265,7 +1291,8 @@
         "OPTIONS"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "STRING"
     },
     {
       "keyword": "AUXMULTNAME",
@@ -1508,7 +1535,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "DECAY_WATER",
@@ -1523,7 +1551,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "DECAY_SOLID",
@@ -1538,7 +1567,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "HEAT_CAPACITY_SOLID",
@@ -1553,7 +1583,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "DENSITY_SOLID",
@@ -1568,7 +1599,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "SAVE_FLOWS",
@@ -1658,7 +1690,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "FLOW_PACKAGE_NAME",
@@ -1688,7 +1721,8 @@
         "OPTIONS"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "STRING"
     },
     {
       "keyword": "FLOW_PACKAGE_AUXILIARY_NAME",
@@ -1988,7 +2022,8 @@
         "OPTIONS"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "STRING"
     },
     {
       "keyword": "FLOW_PACKAGE_AUXILIARY_NAME",
@@ -2438,7 +2473,8 @@
         "OPTIONS"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "STRING"
     },
     {
       "keyword": "FLOW_PACKAGE_AUXILIARY_NAME",
@@ -2723,7 +2759,8 @@
         "OPTIONS"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "STRING"
     },
     {
       "keyword": "FLOW_PACKAGE_AUXILIARY_NAME",

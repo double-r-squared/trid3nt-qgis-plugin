@@ -8,6 +8,7 @@ and the calibrated run it published, held to one real USGS well (tests/fixtures/
 from __future__ import annotations
 
 import csv
+import json
 import dataclasses
 import shutil
 from pathlib import Path
@@ -90,15 +91,23 @@ def test_a_multiplier_is_written_into_the_array_s_own_factor(deck_dir, tmp_path)
     assert changed == [("    INTERNAL  FACTOR  1.0", "    INTERNAL  FACTOR  ~npf_k                 ~")]
 
 
-def test_two_arrays_of_one_file_share_one_template_and_a_constant_is_its_own_scale(deck_dir, tmp_path):
+def test_two_real_arrays_of_one_file_share_one_template(deck_dir, tmp_path):
     the_deck = study_deck.deck(deck_dir)
     parameters, templates, _ins = study_deck.interface(
-        deck_dir, tmp_path / "study", [("NPF_K", 0.1, 10.0, False), ("NPF_ICELLTYPE", 0.5, 2.0, False)], the_deck=the_deck,
-        targets=[(study_deck.Observed("head_1", 1.0, "heads", 1.0, "cited"), 0)])
-    assert templates == [("gwf.npf.tpl", "gwf.npf")]
-    text = (tmp_path / "study" / "gwf.npf.tpl").read_text()
-    assert "~npf_k" in text and "CONSTANT  ~npf_icelltype" in text
+        deck_dir, tmp_path / "study", [("DISV_TOP", 0.5, 2.0, False), ("DISV_BOTM", 0.5, 2.0, False)],
+        the_deck=the_deck, targets=[(study_deck.Observed("head_1", 1.0, "heads", 1.0, "cited"), 0)])
+    assert templates == [("mesh.disv.tpl", "mesh.disv")]
+    text = (tmp_path / "study" / "mesh.disv.tpl").read_text()
+    assert "~disv_top" in text and "~disv_botm" in text
     assert [p.scale for p in parameters] == [1.0, 1.0]
+
+
+def test_an_integer_array_refuses_by_name(deck_dir):
+    the_deck = study_deck.deck(deck_dir)
+    with pytest.raises(PestppError) as refused:
+        study_deck.multiplier(deck_dir, "NPF_ICELLTYPE", lower=0.5, upper=2.0, the_deck=the_deck)
+    assert refused.value.error_code == "PESTPP_PARAMETER_NOT_REAL"
+    assert "NPF_ICELLTYPE" in str(refused.value) and "INTEGER" in str(refused.value)
 
 
 def test_an_array_no_package_of_the_run_states_refuses(deck_dir):
@@ -215,23 +224,28 @@ def test_a_list_column_is_tuned_through_its_rows_and_bounded_in_the_runs_unit(tm
     rows = [line.split() for line in (tmp_path / "deck" / "gwf.sfr.tpl").read_text().splitlines()
             if line.strip().startswith(("1 ", "2 ")) and "~" in line]
     assert [row[8] for row in rows] == ["~sfr_rhk", "~sfr_rhk"] and [row[9] for row in rows] == ["~", "~"]
-    second, _ = study_deck.multiplier(tmp_path / "deck", "SFR_MAN", lower=0.5, upper=2.0, the_deck=the_deck)
-    assert second.scale == 0.05
-    study_deck.substitute(tmp_path / "deck", [pair], [parameter, second], {"sfr_rhk": 2.0, "sfr_man": 1.0})
+    second, _ = study_deck.multiplier(tmp_path / "deck", "SFR_RWID", lower=0.5, upper=2.0, the_deck=the_deck)
+    assert second.scale == 5.0
+    study_deck.substitute(tmp_path / "deck", [pair], [parameter, second], {"sfr_rhk": 2.0, "sfr_rwid": 1.0})
     written = [line.split() for line in (tmp_path / "deck" / "gwf.sfr").read_text().splitlines()
                if line.strip()[:2] in ("1 ", "2 ")][:2]
-    assert [float(row[8]) for row in written] == [1.0, 1.0] and [float(row[9]) for row in written] == [0.05, 0.05]
+    assert [float(row[8]) for row in written] == [1.0, 1.0] and [float(row[4]) for row in written] == [5.0, 5.0]
 
 
-def test_a_list_column_stating_two_values_or_a_value_outside_its_bounds_refuses(tmp_path):
+def test_a_list_column_stating_two_values_is_laid_by_the_trial_or_refuses_a_value_bound(tmp_path):
     the_deck = _sfr_deck(tmp_path / "two", rhk=(0.5, 0.7))
-    with pytest.raises(PestppError, match="2 different values"):
-        study_deck.multiplier(tmp_path / "two", "SFR_RHK", lower=0.5, upper=2.0, the_deck=the_deck)
+    parameter, pair = study_deck.multiplier(tmp_path / "two", "SFR_RHK", lower=0.5, upper=2.0, the_deck=the_deck)
+    assert pair == ("sfr_rhk.zone.dat.tpl", "sfr_rhk.zone.dat") and parameter.scale == 1.0
+    entry, = json.loads((tmp_path / "two" / study_deck.PILOT_POINTS).read_text())["columns"]
+    assert entry["name"] == "sfr_rhk" and len(entry["lines"]) == 2
+    with pytest.raises(PestppError, match="different values") as refused:
+        study_deck.multiplier(tmp_path / "two", "SFR_RHK", lower=1.0, upper=30.0, the_deck=the_deck, absolute=True)
+    assert refused.value.error_code == "PESTPP_BOUNDS_UNSTATED"
     the_deck = _sfr_deck(tmp_path / "one")
     with pytest.raises(PestppError, match="outside its stated bounds") as refused:
         study_deck.multiplier(tmp_path / "one", "SFR_RHK", lower=1.0, upper=30.0, the_deck=the_deck, absolute=True)
     assert refused.value.error_code == "PESTPP_BOUNDS_UNSTATED"
-    with pytest.raises(PestppError, match="read INTERNAL"):
+    with pytest.raises(PestppError, match="read as a factor"):
         study_deck.multiplier(tmp_path / "one", "NPF_K", lower=1.0, upper=30.0, the_deck=the_deck, absolute=True)
 
 

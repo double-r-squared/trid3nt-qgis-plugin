@@ -13,17 +13,19 @@ from __future__ import annotations
 import json
 import re
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping, Sequence
 
 from ..authoring.control import Observed, Parameter, substitute, unheld_note
 from ..errors import PestppError
+from . import eligibility
 
 __all__ = ["Deck", "OBSERVED", "OBS_FILE", "OBS_OUTPUT", "OWN", "PILOT_POINTS", "PLACE", "ROW", "SITE", "TRIAL", "calibrated",
            "command", "copy_deck", "deck", "deck_sheet", "fields", "head_targets", "interface", "lay", "multiplier",
-           "observe_heads", "pilot_points", "published", "substitute", "supplied", "targets"]
+           "observe_heads", "pilot_points", "published", "substitute", "supplied", "targets",
+           "zoned"]
 
 #: The study's row the targets are read off: the wells.
 ROW = "observe"
@@ -78,6 +80,11 @@ class Deck:
     #: The median edge of the grid's cells, the cell a pilot point's default spacing is counted in: pyEMU counts its
     #: ten cells in a structured cell's side, and a DISV cell's side is its edge.
     cell_size: float | None = None
+    #: Every package instance the run's name files state, by the name the name file gives it -> (body, kind, file):
+    #: a repeated package of one kind is one instance per name.
+    instances: Mapping[str, tuple[str, str, str]] = MappingProxyType({})
+    #: The words a CELLID takes in a list package's row: a DISV cell is its layer and its cell.
+    cell_tokens: int = 2
 
 
 def _block(text: str, name: str) -> list[str]:
@@ -92,6 +99,20 @@ def command(the_deck: Deck) -> str:
     return f"python {TRIAL}"
 
 
+def _instances(directory: Path) -> dict[str, tuple[str, str, str]]:
+    """Every package instance of every model the simulation's name file lists, by its own name -> (body, kind, file)."""
+    found: dict[str, tuple[str, str, str]] = {}
+    for line in _block((directory / "mfsim.nam").read_text(), "models"):
+        words = line.split()
+        body, name_file = words[0].upper().removesuffix("6").lower(), words[1]
+        for package in _block((directory / name_file).read_text(), "packages"):
+            parts = package.split()
+            kind, file = parts[0].upper().removesuffix("6"), parts[1]
+            instance = parts[2] if len(parts) > 2 else kind.lower()
+            found[instance] = (body, kind, file)
+    return found
+
+
 def deck(directory: Path, finished: Any = None) -> Deck:
     """The deck's flow model, read off the simulation's name file and the model's own; one flow model, or a refusal."""
     import flopy
@@ -102,6 +123,7 @@ def deck(directory: Path, finished: Any = None) -> Deck:
         raise PestppError(f"the run's simulation holds {len(flows)} flow models, and a study reads one",
                           error_code="PESTPP_DECK_UNREAD")
     name_file, model = flows[0][1], flows[0][2]
+    instances = _instances(directory)
     packages: dict[str, str] = {}
     for line in _block((directory / name_file).read_text(), "packages"):
         kind, file = line.split()[:2]
@@ -117,7 +139,7 @@ def deck(directory: Path, finished: Any = None) -> Deck:
     return Deck(model=model, name_file=name_file, packages=packages, ncpl=int(dis.ncpl.array),
                 nlay=int(dis.nlay.array), top=tuple(float(v) for v in dis.top.array),
                 length_units=str(dis.length_units.array or "unknown").lower(), steps=steps,
-                cell_size=_median_edge(dis))
+                cell_size=_median_edge(dis), instances=MappingProxyType(instances))
 
 
 def _median_edge(dis: Any) -> float:
@@ -139,117 +161,395 @@ def supplied(the_deck: Deck) -> tuple[list[tuple[str, float, str]], list[str]]:
     return [], [unheld_note("its bed, boundary levels and stated values")]
 
 
-def multiplier(directory: Path, identifier: str, *, lower: float, upper: float, the_deck: Deck,
-               absolute: bool = False) -> tuple[Parameter, tuple[str, str]]:
-    """One multiplier parameter over the array or list column ``identifier`` names -> the parameter and its
-    (template, file).
-
-    The parameter starts at 1, the run's own values; every control record of an array, or every row of a list
-    column, takes the same multiplier, and records or rows stating different values refuse, one parameter writing
-    one scale. ``absolute`` bounds are stated in the run's own unit and divided by that scale; they refuse over an
-    array read INTERNAL, whose FACTOR is not its values, and where the run's own value lies outside them. A second
-    array of the same file is written into the template the first one left."""
-    prefix, _, variable = identifier.upper().partition("_")
-    file = the_deck.packages.get(prefix)
-    if file is None or not variable:
-        raise PestppError(f"{identifier} names no package of the run's flow model; it states "
-                          f"{', '.join(sorted(the_deck.packages))}", error_code="PESTPP_PARAMETER_UNPLACED")
-    template = f"{file}.tpl"
-    written = directory / template
-    lines = (written.read_text().split("\n", 1)[1] if written.is_file()
-             else (directory / file).read_text()).splitlines()
-    name = identifier.lower()
-    field = "~" + name.ljust(_FIELD - 2) + "~"
-    if prefix in _LIST_COLUMNS:
-        scale = _list_column(lines, identifier, _LIST_COLUMNS[prefix], variable.lower(), field)
-    else:
-        scale, internal = _array(lines, identifier, variable, field)
-        if absolute and internal:
-            raise PestppError(f"{identifier} is bounded in the run's own unit, and its array is read INTERNAL, "
-                              "whose FACTOR is not its values: state its bounds as multipliers of the run's own "
-                              "array", error_code="PESTPP_BOUNDS_UNSTATED")
-    if absolute:
-        lower, upper = lower / scale, upper / scale
-        if not 0.0 < lower < 1.0 < upper:
-            raise PestppError(f"{identifier} is {scale:g} in the run, outside its stated bounds "
-                              f"{lower * scale:g} to {upper * scale:g}", error_code="PESTPP_BOUNDS_UNSTATED")
-    written.write_text("ptf ~\n" + "\n".join(lines) + "\n")
-    return (Parameter(name=name, value=1.0, lower=float(lower), upper=float(upper), group=name,
-                      scale=scale), (template, file))
+def _param_name(identifier: str) -> str:
+    """The PEST name an identifier writes through: a layer selector's ``@`` becomes ``_l``, so a PEST table names it."""
+    return identifier.lower().replace("@", "_l")
 
 
-def _list_column(lines: list[str], identifier: str, columns: Sequence[str], variable: str, field: str,
-                 *, require_uniform: bool = True) -> float:
-    """The PACKAGEDATA column ``variable`` written as ``field`` in every row of ``lines`` -> the one value they
-    state; a column the package has not, or rows stating different values, refuse."""
-    if variable not in columns:
-        raise PestppError(f"{identifier} names no PACKAGEDATA column; it states {', '.join(columns)}",
-                          error_code="PESTPP_PARAMETER_UNPLACED")
-    rows = [i for i, line in enumerate(lines)
-            if re.match(r"^\s*BEGIN\s+packagedata\b", line, re.I)]
-    if len(rows) != 1:
-        raise PestppError(f"{identifier}: the package states {len(rows)} PACKAGEDATA blocks",
-                          error_code="PESTPP_PARAMETER_UNPLACED")
-    scales, at = set(), rows[0] + 1
-    while at < len(lines) and not re.match(r"^\s*END\s+packagedata\b", lines[at], re.I):
-        # a field a template already writes is one token, the spaces inside its delimiters included
-        tokens = re.findall(r"~[^~]*~|[^\s~]+", lines[at].split("#", 1)[0])
-        if tokens:
-            # a reach on no cell states NONE in place of its DISV layer and cell
-            column = 1 + (1 if tokens[1].upper() == "NONE" else 2) + columns.index(variable)
-            scales.add(float(tokens[column]))
-            tokens[column] = field
-            lines[at] = "  " + "  ".join(tokens)
+def _field(name: str) -> str:
+    """The template field a parameter's name writes through, this wide so PEST's own exponent form fits."""
+    return "~" + name.ljust(_FIELD - 2) + "~"
+
+
+def _template(directory: Path, file: str) -> list[str]:
+    """The package file's lines, or the template a prior parameter left, its ``ptf ~`` header dropped."""
+    written = directory / f"{file}.tpl"
+    return ((written.read_text().split("\n", 1)[1] if written.is_file()
+             else (directory / file).read_text()).splitlines())
+
+
+def _write_template(directory: Path, file: str, lines: list[str]) -> tuple[str, str]:
+    (directory / f"{file}.tpl").write_text("ptf ~\n" + "\n".join(lines) + "\n")
+    return f"{file}.tpl", file
+
+
+def _tokens(text: str) -> list[str]:
+    """A line's tokens, a template field one token with the spaces inside its delimiters."""
+    return re.findall(r"~[^~]*~|[^\s~]+", text.split("#", 1)[0])
+
+
+def _factor(tokens: Sequence[str]) -> float:
+    """The FACTOR a control record states, 1.0 where it states none."""
+    words = [token.upper() for token in tokens]
+    if "FACTOR" in words:
+        return float(tokens[words.index("FACTOR") + 1])
+    return 1.0
+
+
+def _records(lines: list[str], start: int) -> list[dict[str, Any]]:
+    """The array control records after a header line, each its kind, scale, file and where its data starts."""
+    records: list[dict[str, Any]] = []
+    at = start + 1
+    while at < len(lines):
+        record = _CONTROL.match(lines[at])
+        if record is None:
+            break
+        kind, tokens = record.group(2).upper(), _tokens(record.group(3))
+        entry = {"at": at, "kind": kind, "indent": record.group(1), "file": None,
+                 "scale": float(tokens[0]) if kind == "CONSTANT" else _factor(tokens)}
+        if kind == "OPEN/CLOSE":
+            entry["file"] = tokens[0] if tokens else ""
         at += 1
-    if not scales or (require_uniform and len(scales) != 1):
-        raise PestppError(f"{identifier} states {len(scales)} different values across the package's rows; one "
-                          "multiplier writes one scale", error_code="PESTPP_PARAMETER_UNPLACED")
-    return scales.pop()
+        while (kind != "CONSTANT" and at < len(lines) and _CONTROL.match(lines[at]) is None
+               and re.match(r"^\s*[-+0-9.]", lines[at])):
+            at += 1
+        entry["data_end"] = at
+        records.append(entry)
+    return records
 
 
+def _set_record(lines: list[str], record: Mapping[str, Any], field: str) -> None:
+    """Write ``field`` into one control record's own scale word."""
+    if record["kind"] == "CONSTANT":
+        lines[record["at"]] = f"{record['indent']}CONSTANT  {field}"
+    elif record["kind"] == "INTERNAL":
+        lines[record["at"]] = f"{record['indent']}INTERNAL  FACTOR  {field}"
+    else:
+        lines[record["at"]] = f"{record['indent']}OPEN/CLOSE  {record['file']}  FACTOR  {field}"
 
-def patch_columns(directory: Path, values: Mapping[str, float]) -> None:
-    """Restate the native SFR fields on a newly built deck in model units."""
-    parsed = deck(directory)
-    for name, scalar in values.items():
-        prefix, _, variable = name.partition("_")
-        path = directory / parsed.packages[prefix]
-        lines = path.read_text(encoding="utf-8").splitlines()
-        _list_column(lines, name, _LIST_COLUMNS[prefix], variable.lower(), repr(float(scalar)), require_uniform=False)
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-def _array(lines: list[str], identifier: str, variable: str, field: str) -> tuple[float, bool]:
-    """The array ``variable``'s control records written with ``field`` -> its one scale, and whether it is read INTERNAL."""
+def _array_header(lines: list[str], identifier: str, variable: str) -> tuple[int, bool]:
+    """The array's one header line and whether it is LAYERED (one control record per layer)."""
     starts = [i for i, line in enumerate(lines)
               if re.match(rf"^\s*{re.escape(variable)}(\s+LAYERED)?\s*$", line, re.I)]
     if len(starts) != 1:
         raise PestppError(f"{identifier} is stated {len(starts)} times as an array in its package; a multiplier is "
                           "written into one array's control records", error_code="PESTPP_PARAMETER_UNPLACED")
-    scales, kinds, at = set(), set(), starts[0] + 1
-    while at < len(lines):
-        record = _CONTROL.match(lines[at])
-        if record is None:
-            if re.match(r"^\s*[-+0-9.]", lines[at]):
-                at += 1
+    return starts[0], bool(re.search(r"\bLAYERED\b", lines[starts[0]], re.I))
+
+
+def _array(lines: list[str], target: eligibility.Target, field: str, the_deck: Deck) -> tuple[float, bool]:
+    """The target array's control records written with ``field`` -> its one scale, and whether its value is not a
+    constant (a FACTOR is not the array's values). A layer selector writes that layer's own record, expanding a
+    homogeneous array into the per-layer form; a whole array writes every record and takes their one scale."""
+    header, layered = _array_header(lines, target.identifier, target.variable)
+    records = _records(lines, header)
+    if not records:
+        raise PestppError(f"{target.identifier} states no control record under its array header",
+                          error_code="PESTPP_PARAMETER_UNPLACED")
+    if target.layer is None:
+        scales = {record["scale"] for record in records}
+        if len(scales) != 1:
+            raise PestppError(f"{target.identifier} states {len(scales)} different factors or constants across its "
+                              "records; one multiplier writes one scale", error_code="PESTPP_PARAMETER_UNPLACED")
+        for record in records:
+            _set_record(lines, record, field)
+        return scales.pop(), any(record["kind"] != "CONSTANT" for record in records)
+    layer = int(target.layer)
+    if layered:
+        if layer > len(records):
+            raise PestppError(f"{target.identifier} selects layer {layer}, and its array states {len(records)} layers",
+                              error_code="PESTPP_PARAMETER_UNPLACED")
+        record = records[layer - 1]
+        _set_record(lines, record, field)
+        return record["scale"], record["kind"] != "CONSTANT"
+    record = records[0]
+    if int(the_deck.nlay) <= 1:
+        _set_record(lines, record, field)
+        return record["scale"], record["kind"] != "CONSTANT"
+    if record["kind"] != "CONSTANT":
+        raise PestppError(f"{target.identifier} selects layer {layer}, and its one record holds the whole "
+                          f"{int(the_deck.nlay)}-layer array; a layered deck writes one record per layer",
+                          error_code="PESTPP_PARAMETER_UNPLACED")
+    lines[header] = re.sub(r"\s+$", "", lines[header]) + "  LAYERED"
+    expanded = [f"    CONSTANT  {field if (k + 1) == layer else repr(record['scale'])}"
+                for k in range(int(the_deck.nlay))]
+    lines[record["at"]:record["at"] + 1] = expanded
+    return record["scale"], False
+
+
+def _columns_before(lines: list[str], target: eligibility.Target) -> list[dict[str, Any]]:
+    """Every row of the target's list block, with the token the target column writes and the row's own ids."""
+    order = [row["keyword"] for row in eligibility.columns(target.body, target.kind, recarray=target.recarray)]
+    variable_at = order.index(target.column)
+    cell_at = order.index("CELLID") if "CELLID" in order else None
+    rows: list[dict[str, Any]] = []
+    for start, end in _spans(lines, target.block):
+        for at in range(start, end):
+            tokens = _tokens(lines[at])
+            if not tokens or len(tokens) <= variable_at:
                 continue
-            break
-        kind = record.group(2).upper()
-        kinds.add(kind)
-        if kind == "CONSTANT":
-            scales.add(float(record.group(3).split()[0]))
-            lines[at] = f"{record.group(1)}CONSTANT  {field}"
-        elif kind == "INTERNAL":
-            stated = _FACTOR.search(record.group(3))
-            scales.add(float(stated.group(2)) if stated else 1.0)
-            lines[at] = f"{record.group(1)}INTERNAL  FACTOR  {field}"
-        else:
-            raise PestppError(f"{identifier} is read from a file of its own (OPEN/CLOSE), which this study does "
-                              "not write into", error_code="PESTPP_PARAMETER_UNPLACED")
-        at += 1
+            column, layer, cell, width = variable_at, None, None, 1
+            if cell_at is not None:
+                cell_start = cell_at
+                width = 1 if tokens[cell_start].upper() == "NONE" else 2
+                if variable_at > cell_at:
+                    column = cell_start + width + (variable_at - cell_at - 1)
+                if width == 2:
+                    layer, cell = int(tokens[cell_start]), int(tokens[cell_start + 1])
+            if column >= len(tokens):
+                continue
+            if tokens[column].startswith("~") or not re.match(r"^[-+0-9.]", tokens[column]):
+                raise PestppError(f"{target.identifier} already holds a parameter at row {at + 1}; one column is "
+                                  "tuned once", error_code="PESTPP_PARAMETER_UNPLACED")
+            rows.append({"at": at, "tokens": tokens, "at_token": column,
+                         "cell_start": cell_at, "away": (variable_at - cell_at - 1) if cell_at is not None else None,
+                         "fixed": variable_at if cell_at is None else None,
+                         "value": float(tokens[column]), "reach": int(tokens[0]) if order[0] == "IFNO" else None,
+                         "layer": layer, "cell": cell})
+    return rows
+
+
+def _spans(lines: list[str], name: str) -> list[tuple[int, int]]:
+    """The line ranges inside every BEGIN/END block ``name`` (a period block may repeat)."""
+    spans, start = [], None
+    for at, line in enumerate(lines):
+        if re.match(rf"^\s*BEGIN\s+{re.escape(name)}\b", line, re.I):
+            start = at + 1
+        elif start is not None and re.match(rf"^\s*END\s+{re.escape(name)}\b", line, re.I):
+            spans.append((start, at))
+            start = None
+    return spans
+
+
+def _column(lines: list[str], target: eligibility.Target, field: str, the_deck: Deck) -> float:
+    """The target list column written as ``field`` in every row -> the one value they state; rows stating
+    different values refuse, one multiplier writing one scale."""
+    rows = _columns_before(lines, target)
+    if not rows:
+        raise PestppError(f"{target.identifier} names no row of the {target.kind} {target.block} block",
+                          error_code="PESTPP_PARAMETER_UNPLACED")
+    scales = {row["value"] for row in rows}
     if len(scales) != 1:
-        raise PestppError(f"{identifier} states {len(scales)} different factors or constants across its "
-                          "records; one multiplier writes one scale", error_code="PESTPP_PARAMETER_UNPLACED")
-    return scales.pop(), "INTERNAL" in kinds
+        raise PestppError(f"{target.identifier} states {len(scales)} different values across the package's rows; "
+                          "one multiplier writes one scale", error_code="PESTPP_PARAMETER_UNPLACED")
+    for row in rows:
+        row["tokens"][row["at_token"]] = field
+        lines[row["at"]] = "  " + "  ".join(row["tokens"])
+    return scales.pop()
+
+
+def _column_trial(directory: Path, identifier: str, target: eligibility.Target,
+                  selections: Sequence[tuple[str, Sequence[Mapping[str, Any]], str, str]], *,
+                  lower: float, upper: float, the_deck: Deck, source: str) -> tuple[list[Parameter], list[tuple[str, str]]]:
+    """One multiplier per selection over a list column whose rows state different values -> the parameters and the
+    values files PEST writes.
+
+    A PEST template writes one scale, so rows holding different values are scaled by the trial: it multiplies each
+    selected row's own value by the parameter PEST wrote. The package file is left as the run wrote it; the spec the
+    trial and the calibrated deck read carries the lines and the token, and one values file writes each parameter."""
+    spec = directory / PILOT_POINTS
+    held = json.loads(spec.read_text()) if spec.is_file() else {"arrays": []}
+    held.setdefault("columns", [])
+    parameters, pairs = [], []
+    for name, rows, zone, zone_source in selections:
+        stem = f"{name}.zone"
+        (directory / f"{stem}.dat").write_text(f"{name} 1.0\n")
+        (directory / f"{stem}.dat.tpl").write_text(
+            "ptf ~\n" + f"{name} ~{name.ljust(_FIELD - 2)}~\n")
+        sample = rows[0]
+        held["columns"].append({"file": target.file, "name": name, "lines": [row["at"] for row in rows],
+                                "fixed": sample["fixed"], "cell_start": sample["cell_start"],
+                                "away": sample["away"], "width": int(the_deck.cell_tokens),
+                                "values": f"{stem}.dat"})
+        parameters.append(Parameter(name=name, value=1.0, lower=float(lower), upper=float(upper), group=name,
+                                    scale=1.0, source=source, original_name=identifier, zone=zone,
+                                    zone_source=zone_source))
+        pairs.append((f"{stem}.dat.tpl", f"{stem}.dat"))
+    spec.write_text(json.dumps(held, indent=1))
+    return parameters, pairs
+
+
+def multiplier(directory: Path, identifier: str, *, lower: float, upper: float, the_deck: Deck,
+               absolute: bool = False, source: str = "") -> tuple[Parameter, tuple[str, str]]:
+    """One multiplier parameter over the array or list column ``identifier`` names -> the parameter and its
+    (template, file).
+
+    Eligibility is the MODFLOW 6 dictionary's own type: a REAL array or list column is tuned; an integer flag, a
+    string or a keyword refuses. The parameter starts at 1, the run's own values; every control record of an array,
+    or every row of a list column, takes the same multiplier, and records or rows stating different values refuse,
+    one parameter writing one scale. ``absolute`` bounds are stated in the run's own unit and divided by that scale;
+    they refuse over an array whose value is not a constant and where the run's own value lies outside them. A
+    second array of the same file is written into the template the first one left."""
+    target = eligibility.real(eligibility.resolve(identifier, the_deck))
+    lines = _template(directory, target.file)
+    name = _param_name(identifier)
+    field = _field(name)
+    if target.is_column:
+        rows = _columns_before(lines, target)
+        if not rows:
+            raise PestppError(f"{target.identifier} names no row of the {target.kind} {target.block} block",
+                              error_code="PESTPP_PARAMETER_UNPLACED")
+        if len({row["value"] for row in rows}) != 1:
+            if absolute:
+                raise PestppError(f"{identifier} is bounded in the run's own unit and its rows state different "
+                                  "values, so one multiplier cannot carry them: state its bounds as factors",
+                                  error_code="PESTPP_BOUNDS_UNSTATED")
+            parameters, pairs = _column_trial(directory, identifier, target, [(name, rows, "", "")],
+                                             lower=lower, upper=upper, the_deck=the_deck, source=source)
+            return parameters[0], pairs[0]
+        scale, internal = _column(lines, target, field, the_deck), False
+    else:
+        scale, internal = _array(lines, target, field, the_deck)
+    if absolute and internal:
+        raise PestppError(f"{identifier} is bounded in the run's own unit, and its array is read as a factor over "
+                          "its own values or from a file, whose FACTOR is not its values: state its bounds as "
+                          "multipliers of the run's own array", error_code="PESTPP_BOUNDS_UNSTATED")
+    if absolute:
+        lower, upper = lower / scale, upper / scale
+        if not 0.0 < lower < 1.0 < upper:
+            raise PestppError(f"{identifier} is {scale:g} in the run, outside its stated bounds "
+                              f"{lower * scale:g} to {upper * scale:g}", error_code="PESTPP_BOUNDS_UNSTATED")
+    pair = _write_template(directory, target.file, lines)
+    return (Parameter(name=name, value=1.0, lower=float(lower), upper=float(upper), group=name,
+                      scale=scale, source=source, original_name=identifier), pair)
+
+
+def _polygon_cells(directory: Path, the_deck: Deck, polygon: Sequence[Sequence[float]]) -> set[int]:
+    """The one-based DISV cells the polygon's geometry meets -> their ids."""
+    from shapely.geometry import Polygon
+
+    zone = Polygon(polygon)
+    if not zone.is_valid or zone.area <= 0:
+        raise PestppError("a zone polygon is a simple ring with area", error_code="PESTPP_ZONE_INVALID")
+    return {k + 1 for k, cell in enumerate(_cell_polygons(directory, the_deck))
+            if cell.intersection(zone).area > 0.0}
+
+
+def _cell_polygons(directory: Path, the_deck: Deck) -> list[Any]:
+    import flopy
+    from shapely.geometry import Polygon
+
+    sim = flopy.mf6.MFSimulation.load(sim_ws=str(directory), verbosity_level=0, load_only=["disv", "tdis"])
+    grid = sim.get_model(the_deck.model).modelgrid
+    return [Polygon(grid.get_cell_vertices(cell)) for cell in range(grid.ncpl)]
+
+
+def _zone_rows(zone: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], directory: Path,
+               the_deck: Deck) -> list[Mapping[str, Any]]:
+    """The rows one zone selects: its cells, reaches, wells, layers or polygon; one selector a zone."""
+    keys = set(zone) - {"source"}
+    if len(keys) != 1:
+        raise PestppError("a zone states one of cells, reaches, wells, layers or polygon, and its source",
+                          error_code="PESTPP_ZONE_INVALID")
+    (kind, wanted), = ((kind, zone[kind]) for kind in keys)
+    if not isinstance(wanted, (list, tuple)) or not wanted:
+        raise PestppError(f"a zone's {kind} is a nonempty list", error_code="PESTPP_ZONE_INVALID")
+    if kind == "polygon":
+        cells = _polygon_cells(directory, the_deck, wanted)
+        return [row for row in rows if row["cell"] in cells]
+    if kind == "cells":
+        return [row for row in rows if row["cell"] in {int(value) for value in wanted}]
+    if kind == "layers":
+        return [row for row in rows if row["layer"] in {int(value) for value in wanted}]
+    if kind == "reaches":
+        return [row for row in rows if row["reach"] in {int(value) for value in wanted}]
+    names = {value for value in wanted}
+    return [row for row in rows if row["cell"] in names]
+
+
+def zoned(directory: Path, identifier: str, zones: Sequence[Mapping[str, Any]], *, lower: float, upper: float,
+          the_deck: Deck, absolute: bool = False, source: str = "") -> tuple[list[Parameter], list[tuple[str, str]]]:
+    """One parameter per stated zone over the array or list column ``identifier`` names -> the parameters and the
+    (template, file). Every cell outside every stated zone is left as the run wrote it, and a row a second zone also
+    holds refuses. An array's zones are its layers; a list column's are its cells, reaches, wells, layers or a
+    polygon over the grid."""
+    target = eligibility.real(eligibility.resolve(identifier, the_deck))
+    lines = _template(directory, target.file)
+    if target.is_column:
+        rows = _columns_before(lines, target)
+        held: dict[int, int] = {}
+        chosen: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
+        for index, zone in enumerate(zones, start=1):
+            selected = _zone_rows(zone, rows, directory, the_deck)
+            if not selected:
+                raise PestppError(f"{identifier}'s zone {index} holds no row of the {target.kind} package",
+                                  error_code="PESTPP_ZONE_EMPTY")
+            for row in selected:
+                if row["at"] in held:
+                    raise PestppError(f"{identifier}'s zones {held[row['at']]} and {index} both hold row "
+                                      f"{row['at'] + 1}; state disjoint zones", error_code="PESTPP_ZONE_OVERLAP")
+                held[row["at"]] = index
+            chosen.append((zone, selected))
+        selections = [(f"{_param_name(identifier)}_z{index}", selected, kind_of(zone),
+                       str(zone.get("source") or "")) for index, (zone, selected) in enumerate(chosen, start=1)]
+        if any(len({row["value"] for row in selected}) != 1 for _name, selected, _kind, _zone in selections):
+            if absolute:
+                raise PestppError(f"{identifier}'s zones hold rows of different values, so one multiplier cannot "
+                                  "carry them in the run's own unit: state its bounds as factors",
+                                  error_code="PESTPP_BOUNDS_UNSTATED")
+            parameters, pairs = _column_trial(directory, identifier, target, selections, lower=lower, upper=upper,
+                                              the_deck=the_deck, source=source)
+            return parameters, pairs
+        parameters = []
+        for name, selected, kind, zone_source in selections:
+            scale = {row["value"] for row in selected}.pop()
+            if absolute and not 0.0 < lower / scale < 1.0 < upper / scale:
+                raise PestppError(f"{identifier}'s zone {name} is {scale:g} in the run, outside its stated bounds "
+                                  f"{lower:g} to {upper:g}", error_code="PESTPP_BOUNDS_UNSTATED")
+            field = _field(name)
+            for row in selected:
+                row["tokens"][row["at_token"]] = field
+                lines[row["at"]] = "  " + "  ".join(row["tokens"])
+            parameters.append(Parameter(name=name, value=1.0, lower=lower / scale if absolute else float(lower),
+                                        upper=upper / scale if absolute else float(upper), group=name, scale=scale,
+                                        source=source, original_name=identifier,
+                                        zone=kind, zone_source=zone_source))
+        pair = _write_template(directory, target.file, lines)
+        return parameters, [pair]
+    if any(set(zone) - {"source", "layers"} for zone in zones):
+        raise PestppError(f"{identifier} is an array, and an array's zones are its layers: a cell or polygon zone "
+                          "over an array is laid by the trial, which this study does not write",
+                          error_code="PESTPP_PARAMETER_UNPLACED")
+    layers = [int(value) for zone in zones for value in zone["layers"]]
+    if len(set(layers)) != len(layers):
+        raise PestppError(f"{identifier}'s zones name a layer twice", error_code="PESTPP_ZONE_OVERLAP")
+    parameters = []
+    for zone in zones:
+        for layer in (int(value) for value in zone["layers"]):
+            name = f"{_param_name(identifier)}_l{layer}"
+            field = _field(name)
+            scale, internal = _array(lines, replace(target, layer=layer), field, the_deck)
+            if absolute and internal:
+                raise PestppError(f"{identifier} layer {layer} is read as a factor over its own values or from a "
+                                  "file, whose FACTOR is not its values: state its bounds as multipliers",
+                                  error_code="PESTPP_BOUNDS_UNSTATED")
+            parameters.append(Parameter(name=name, value=1.0, lower=lower / scale if absolute else float(lower),
+                                        upper=upper / scale if absolute else float(upper), group=name, scale=scale,
+                                        source=source, original_name=identifier,
+                                        zone=f"layer {layer}", zone_source=str(zone.get("source") or "")))
+    pair = _write_template(directory, target.file, lines)
+    return parameters, [pair]
+
+
+def kind_of(zone: Mapping[str, Any]) -> str:
+    """The selector a zone states, for its record."""
+    keys = set(zone) - {"source"}
+    return next(iter(keys)) if len(keys) == 1 else ""
+
+
+def patch_columns(directory: Path, values: Mapping[str, float]) -> None:
+    """Restate native list-column values on a newly built deck in model units."""
+    parsed = deck(directory)
+    for name, scalar in values.items():
+        target = eligibility.resolve(name, parsed)
+        if not target.is_column:
+            raise PestppError(f"{name} is an array, and only a list column is restated in place",
+                              error_code="PESTPP_PARAMETER_UNPLACED")
+        path = directory / target.file
+        lines = path.read_text(encoding="utf-8").splitlines()
+        _column(lines, target, repr(float(scalar)), parsed)
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def fields(spatial: Mapping[str, Any], the_deck: Deck) -> dict[str, dict[str, Any]]:
@@ -335,106 +635,155 @@ def _placed(centres: Any, cells: Any, spacing: float) -> Any:
     return np.array([(p.x, p.y) for p in grid[cells.buffer(spacing).covers(grid)]])
 
 
-def _values(lines: list[str], identifier: str, variable: str, count: int) -> tuple[int, int, list[float]]:
-    """The array ``variable``'s record in ``lines`` -> (its first line, the line after it, its ``count`` values as mf6
-    reads them, FACTOR applied); an array read from its own file refuses."""
-    starts = [i for i, line in enumerate(lines) if re.match(rf"^\s*{re.escape(variable)}\s*$", line, re.I)]
-    if len(starts) != 1:
-        raise PestppError(f"{identifier} is stated {len(starts)} times as one array in its package; pilot points are "
-                          "laid over one array of one layer", error_code="PESTPP_PARAMETER_UNPLACED")
-    record = _CONTROL.match(lines[starts[0] + 1]) if starts[0] + 1 < len(lines) else None
-    kind = record.group(2).upper() if record else ""
-    if kind not in ("CONSTANT", "INTERNAL"):
-        raise PestppError(f"{identifier} is read from a file of its own (OPEN/CLOSE), which this study does not lay",
-                          error_code="PESTPP_PARAMETER_UNPLACED")
-    at, values = starts[0] + 2, []
-    if kind == "CONSTANT":
-        values = [float(record.group(3).split()[0])] * count
+def _record_values(directory: Path, record: Mapping[str, Any], lines: list[str], count: int) -> list[float]:
+    """One array control record's ``count`` values as mf6 reads them, its FACTOR applied; an external file is read."""
+    if record["kind"] == "CONSTANT":
+        return [float(record["scale"])] * count
+    if record["kind"] == "OPEN/CLOSE":
+        text = (directory / str(record["file"])).read_text()
+        return [float(record["scale"]) * float(value) for value in _tokens(text)]
+    values = [float(value) for at in range(record["at"] + 1, record["data_end"])
+              for value in _tokens(lines[at])]
+    return [float(record["scale"]) * value for value in values]
+
+
+def _layer_base(directory: Path, target: eligibility.Target, lines: list[str], records: list[Mapping[str, Any]],
+                layer: int, the_deck: Deck) -> list[float]:
+    """The target array's values of one layer, as mf6 reads them."""
+    if len(records) > 1:
+        record = records[layer - 1]
     else:
-        stated = _FACTOR.search(record.group(3))
-        factor = float(stated.group(2)) if stated else 1.0
-        while at < len(lines) and re.match(r"^\s*[-+0-9.]", lines[at]):
-            values.extend(factor * float(v) for v in lines[at].split())
-            at += 1
-    if len(values) != count:
-        raise PestppError(f"{identifier} states {len(values)} values over {count} cells", error_code="PESTPP_DECK_UNREAD")
-    return starts[0], at, values
+        record = records[0]
+        if record["kind"] != "CONSTANT" and int(the_deck.nlay) > 1:
+            raise PestppError(f"{target.identifier} selects layer {layer}, and its one record holds the whole "
+                              f"{int(the_deck.nlay)}-layer array; a layered deck writes one record per layer",
+                              error_code="PESTPP_PARAMETER_UNPLACED")
+    values = _record_values(directory, record, lines, int(the_deck.ncpl))
+    if len(values) != int(the_deck.ncpl):
+        raise PestppError(f"{target.identifier} states {len(values)} values over {int(the_deck.ncpl)} cells",
+                          error_code="PESTPP_DECK_UNREAD")
+    return values
+
+
+def _lay_record(lines: list[str], header: int, records: list[Mapping[str, Any]], layer: int, nlay: int,
+                array: str) -> None:
+    """Point one layer's control record at ``array`` (OPEN/CLOSE, FACTOR 1); a homogeneous constant array expands
+    into the per-layer form so only the selected layer is read from the file."""
+    if len(records) > 1:
+        record = records[layer - 1]
+        lines[record["at"]:record["data_end"]] = [f"    OPEN/CLOSE  {array}  FACTOR  1.0"]
+        return
+    record = records[0]
+    if nlay <= 1:
+        lines[record["at"]:record["data_end"]] = [f"    OPEN/CLOSE  {array}  FACTOR  1.0"]
+        return
+    if record["kind"] != "CONSTANT":
+        raise PestppError(f"the array at line {record['at'] + 1} holds {nlay} layers in one record, which pilot "
+                          "points cannot lay", error_code="PESTPP_PARAMETER_UNPLACED")
+    lines[header] = re.sub(r"\s+$", "", lines[header]) + "  LAYERED"
+    expanded = [f"    OPEN/CLOSE  {array}  FACTOR  1.0" if (k + 1) == layer
+                else f"    CONSTANT  {record['scale']!r}" for k in range(nlay)]
+    lines[record["at"]:record["data_end"]] = expanded
 
 
 def pilot_points(directory: Path, identifier: str, field: Mapping[str, Any], *, lower: float, upper: float,
-                 the_deck: Deck) -> tuple[list[Parameter], tuple[str, str]]:
-    """The array ``identifier`` names laid by pilot points -> each point's parameter and the (template, file) PEST
-    writes their values through.
+                 the_deck: Deck, source: str = "") -> tuple[list[Parameter], list[tuple[str, str]]]:
+    """The array ``identifier`` names laid by pilot points -> each point's parameter and the (template, file) pairs
+    PEST writes their values through.
 
-    The array moves into a file of its own (``<package file>.<array>.dat``, the run's values to start), the points are
-    placed as pyEMU places them over the grid at the field's spacing, and each cell's ordinary kriging factors over them
-    are written beside it for the trial, which lays the run's values times 10 ** (the factors over the log10 of the
-    points). Each point is a multiplier starting at 1 inside the parameter's bounds, carrying its place and the
-    variogram's range for the prior. A run of more than one layer refuses."""
+    The array (the whole of it, or the one layer a selector names) moves into a file of its own (``<package
+    file>.<array>.dat``), the points are placed as pyEMU places them over the grid at the field's spacing, and each
+    cell's ordinary kriging factors over them are written beside it for the trial, which lays the run's values times
+    10 ** (the factors over the log10 of the points). Each point is a multiplier starting at 1 inside the parameter's
+    bounds, carrying its place and the variogram's range for the prior. A run of several layers lays each one."""
     import numpy as np
 
     from ..helpers.geostat import kriging_factors
 
-    prefix, _, variable = identifier.upper().partition("_")
-    file = the_deck.packages.get(prefix)
-    if file is None or not variable or prefix in _LIST_COLUMNS:
-        raise PestppError(f"{identifier} names no array of the run's flow model a pilot point lays; it states "
-                          f"{', '.join(sorted(the_deck.packages))}", error_code="PESTPP_PARAMETER_UNPLACED")
-    if the_deck.nlay != 1:
-        raise PestppError(f"the run has {the_deck.nlay} layers, and pilot points are laid over one",
+    target = eligibility.real(eligibility.resolve(identifier, the_deck))
+    if target.is_column:
+        raise PestppError(f"{identifier} is a list column, which pilot points do not lay",
                           error_code="PESTPP_PARAMETER_UNPLACED")
-    name = identifier.lower()
-    lines = (directory / file).read_text().splitlines()
-    first, after, base = _values(lines, identifier, variable.lower(), the_deck.ncpl)
-    array = f"{file}.{variable.lower()}.dat"
-    lines[first + 1:after] = [f"    OPEN/CLOSE  {array}  FACTOR  1.0"]
-    (directory / file).write_text("\n".join(lines) + "\n")
-    (directory / array).write_text("\n".join(repr(v) for v in base) + "\n")
+    nlay = int(the_deck.nlay)
+    layers = [int(target.layer)] if target.layer is not None else list(range(1, nlay + 1))
     centres, cells = _grid(directory, the_deck)
     sites = _placed(centres, cells, float(field["spacing"]))
-    names = [f"{name}_pp{k:04d}" for k in range(len(sites))]
-    try:
-        index, weight = kriging_factors(centres, sites, float(field["a"]), variogram=field["variogram"],
-                                        maxpts_interp=field["maxpts_interp"],
-                                        remove_negative_factors=field["remove_negative_factors"],
-                                        contribution=field["contribution"], nugget=field["nugget"],
-                                        anisotropy=field["anisotropy"], bearing=field["bearing"])
-    except np.linalg.LinAlgError as exc:
-        raise PestppError(f"{identifier}'s variogram cannot interpolate the pilot points.",
-                          error_code="PESTPP_KRIGING_SINGULAR") from exc
-    stem = f"{name}.pp"
-    np.savez(directory / f"{stem}.npz", names=np.array(names), index=index, weight=weight, base=np.array(base))
-    (directory / f"{stem}.dat").write_text("".join(f"{n} 1.0\n" for n in names))
-    (directory / f"{stem}.dat.tpl").write_text(
-        "ptf ~\n" + "".join(f"{n} ~{n.ljust(_FIELD - 2)}~\n" for n in names))
-    spec = directory / PILOT_POINTS
-    held = json.loads(spec.read_text()) if spec.is_file() else {"arrays": []}
-    held["arrays"].append({"array": array, "values": f"{stem}.dat", "factors": f"{stem}.npz"})
-    spec.write_text(json.dumps(held, indent=1))
-    return ([Parameter(name=n, value=1.0, lower=float(lower), upper=float(upper), group=name,
-                       site=(float(x), float(y)), correlation=float(field["a"]), variogram=field["variogram"],
-                       contribution=field["contribution"], nugget=field["nugget"],
-                       anisotropy=field["anisotropy"], bearing=field["bearing"],
-                       spatial_group=name) for n, (x, y) in zip(names, sites)],
-            (f"{stem}.dat.tpl", f"{stem}.dat"))
+    parameters, pairs = [], []
+    for layer in layers:
+        lines = (directory / target.file).read_text().splitlines()
+        header, _layered = _array_header(lines, target.identifier, target.variable)
+        records = _records(lines, header)
+        if not records:
+            raise PestppError(f"{identifier} states no control record under its array header",
+                              error_code="PESTPP_PARAMETER_UNPLACED")
+        base = _layer_base(directory, target, lines, records, layer, the_deck)
+        one = nlay == 1
+        name = _param_name(identifier) if one else f"{_param_name(identifier)}_l{layer}"
+        array = (f"{target.file}.{target.variable}.dat" if one
+                 else f"{target.file}.{target.variable}.l{layer}.dat")
+        (directory / array).write_text("\n".join(repr(v) for v in base) + "\n")
+        _lay_record(lines, header, records, layer, nlay, array)
+        (directory / target.file).write_text("\n".join(lines) + "\n")
+        names = [f"{name}_pp{k:04d}" for k in range(len(sites))]
+        try:
+            index, weight = kriging_factors(centres, sites, float(field["a"]), variogram=field["variogram"],
+                                            maxpts_interp=field["maxpts_interp"],
+                                            remove_negative_factors=field["remove_negative_factors"],
+                                            contribution=field["contribution"], nugget=field["nugget"],
+                                            anisotropy=field["anisotropy"], bearing=field["bearing"])
+        except np.linalg.LinAlgError as exc:
+            raise PestppError(f"{identifier}'s variogram cannot interpolate the pilot points.",
+                              error_code="PESTPP_KRIGING_SINGULAR") from exc
+        stem = f"{name}.pp"
+        np.savez(directory / f"{stem}.npz", names=np.array(names), index=index, weight=weight, base=np.array(base))
+        (directory / f"{stem}.dat").write_text("".join(f"{n} 1.0\n" for n in names))
+        (directory / f"{stem}.dat.tpl").write_text(
+            "ptf ~\n" + "".join(f"{n} ~{n.ljust(_FIELD - 2)}~\n" for n in names))
+        spec = directory / PILOT_POINTS
+        held = json.loads(spec.read_text()) if spec.is_file() else {"arrays": []}
+        held["arrays"].append({"array": array, "values": f"{stem}.dat", "factors": f"{stem}.npz"})
+        spec.write_text(json.dumps(held, indent=1))
+        parameters.extend(Parameter(name=n, value=1.0, lower=float(lower), upper=float(upper), group=name,
+                                    site=(float(x), float(y)), correlation=float(field["a"]),
+                                    variogram=field["variogram"], contribution=field["contribution"],
+                                    nugget=field["nugget"], anisotropy=field["anisotropy"],
+                                    bearing=field["bearing"], spatial_group=name, source=source,
+                                    original_name=identifier) for n, (x, y) in zip(names, sites))
+        pairs.append((f"{stem}.dat.tpl", f"{stem}.dat"))
+    return parameters, pairs
 
 
 def lay(directory: Path) -> list[str]:
-    """Each pilot-point array of the study at ``directory`` laid off its points' values as PEST wrote them -> the study's
-    own files the arrays are laid from (none where it has no pilot points); the trial lays them the same way."""
+    """Each pilot-point array and zoned list column of the study at ``directory`` laid off its points' and zones'
+    values as PEST wrote them -> the study's own files (none where it has neither); the trial lays them the same way."""
     import numpy as np
 
     spec = directory / PILOT_POINTS
     if not spec.is_file():
         return []
+    held_spec = json.loads(spec.read_text())
     own = [PILOT_POINTS]
-    for entry in json.loads(spec.read_text())["arrays"]:
+    for entry in held_spec.get("arrays", []):
         held = np.load(directory / entry["factors"])
         stated = dict(line.split()[:2] for line in (directory / entry["values"]).read_text().splitlines() if line.strip())
         values = np.log10(np.array([float(stated[str(n)]) for n in held["names"]]))
         laid = held["base"] * 10.0 ** (held["weight"] * values[held["index"]]).sum(axis=1)
         (directory / entry["array"]).write_text("\n".join(repr(float(v)) for v in laid) + "\n")
         own += [entry["values"], entry["factors"]]
+    for entry in held_spec.get("columns", []):
+        stated = dict(line.split()[:2] for line in (directory / entry["values"]).read_text().splitlines() if line.strip())
+        value = float(stated[entry["name"]])
+        path = directory / entry["file"]
+        lines = path.read_text().splitlines()
+        for at in entry["lines"]:
+            tokens = _tokens(lines[at])
+            width = 1 if entry["cell_start"] is not None and tokens[entry["cell_start"]].upper() == "NONE" \
+                else (entry["width"] if entry["cell_start"] is not None else 1)
+            column = entry["fixed"] if entry["cell_start"] is None else entry["cell_start"] + width + entry["away"]
+            tokens[column] = repr(float(tokens[column]) * value)
+            lines[at] = "  " + "  ".join(tokens)
+        path.write_text("\n".join(lines) + "\n")
+        own.append(entry["values"])
     return own
 
 
@@ -591,27 +940,40 @@ def deck_sheet(directory: Path, the_deck: Deck) -> Any:
 
 
 def interface(source: Path, dest: Path, chosen: Sequence[tuple[str, float, float, bool]], *, the_deck: Deck,
-              targets: Sequence[tuple[Observed, int]], spatial: Mapping[str, Mapping[str, Any]] = {}
+              targets: Sequence[tuple[Observed, int]], spatial: Mapping[str, Mapping[str, Any]] = {},
+              zones: Mapping[str, Sequence[Mapping[str, Any]]] = {}, sources: Mapping[str, str] = {}
               ) -> tuple[list[Parameter], list[tuple[str, str]], list[tuple[str, str]]]:
     """A study directory: the deck at ``source`` copied to ``dest`` with a multiplier template over each chosen
-    ``(identifier, lower, upper, absolute)`` - or its pilot points, where ``spatial`` holds its field - and the wells'
-    heads observed -> ``(parameters, templates, instructions)``. Pilot-point arrays are laid first, so a multiplier
-    template over another array of the same file is written over the file they leave."""
+    ``(identifier, lower, upper, absolute)`` - or its pilot points where ``spatial`` holds its field, or one parameter
+    per stated zone where ``zones`` does - and the wells' heads observed -> ``(parameters, templates, instructions)``.
+    Pilot-point arrays are laid first, so a multiplier template over another array of the same file is written over
+    the file they leave."""
     shutil.copytree(source, dest)
     parameters, templates = [], []
-    for identifier, lower, upper, absolute in sorted(chosen, key=lambda row: row[0] not in spatial):
+    order = sorted(chosen, key=lambda row: (row[0] not in spatial, row[0] not in zones))
+    for identifier, lower, upper, absolute in order:
+        if identifier in spatial and identifier in zones:
+            raise PestppError(f"{identifier} is both laid by pilot points and divided into zones; state one",
+                              error_code="PESTPP_OPTION_CONFLICT")
+        source_of = sources.get(identifier.lower(), "")
+        if identifier in zones:
+            laid, pairs = zoned(dest, identifier, zones[identifier], lower=lower, upper=upper, the_deck=the_deck,
+                                absolute=absolute, source=source_of)
+            parameters.extend(laid)
+            templates.extend(pair for pair in pairs if pair not in templates)
+            continue
         if identifier in spatial:
             if absolute:
                 raise PestppError(f"{identifier} is laid by pilot points, each a multiplier on the run's own values, "
                                   "so its bounds are factors, not values in the run's own unit",
                                   error_code="PESTPP_BOUNDS_UNSTATED")
-            laid, pair = pilot_points(dest, identifier, spatial[identifier], lower=lower, upper=upper,
-                                      the_deck=the_deck)
+            laid, pairs = pilot_points(dest, identifier, spatial[identifier], lower=lower, upper=upper,
+                                       the_deck=the_deck, source=source_of)
             parameters.extend(laid)
-            templates.append(pair)
+            templates.extend(pair for pair in pairs if pair not in templates)
             continue
         parameter, pair = multiplier(dest, identifier, lower=lower, upper=upper, the_deck=the_deck,
-                                     absolute=absolute)
+                                     absolute=absolute, source=source_of)
         parameters.append(parameter)
         if pair not in templates:
             templates.append(pair)
@@ -668,7 +1030,7 @@ def realize(directory: Path, study_dir: Path, the_deck: Deck, parameters: list, 
     sheet = deck_sheet(directory, the_deck)
     values = {}
     for p in parameters:
-        name = (p.spatial_group or p.original_name or p.name).upper()
+        name = (p.original_name or p.spatial_group or p.name).upper()
         if name not in values:
             values[name] = physical_value(directory, the_deck, sheet, name, best[p.name] * p.scale + p.offset)
     return sheet, values
@@ -678,13 +1040,18 @@ def physical_value(directory: Path, the_deck: Deck, sheet: Any, name: str, scala
     """The resolved array values in model units, or the native list-column value."""
     if name in sheet.filled:
         return sheet.filled[name].value
-    prefix, _, variable = name.partition("_")
-    if prefix in _LIST_COLUMNS:
+    try:
+        target = eligibility.resolve(name.split("@", 1)[0], the_deck)
+    except PestppError:
+        target = None
+    if target is not None and target.is_column:
         return scalar
     import flopy
 
-    sim = flopy.mf6.MFSimulation.load(sim_ws=str(directory), verbosity_level=0, load_only=[prefix.lower()])
-    array = getattr(sim.get_model(the_deck.model).get_package(prefix.lower()), variable.lower()).array
+    prefix = target.kind.lower() if target is not None else name.partition("_")[0].lower()
+    variable = target.variable if target is not None else name.partition("_")[2].lower()
+    sim = flopy.mf6.MFSimulation.load(sim_ws=str(directory), verbosity_level=0, load_only=[prefix])
+    array = getattr(sim.get_model(the_deck.model).get_package(prefix), variable).array
     return array.reshape(the_deck.nlay, the_deck.ncpl).tolist()
 
 

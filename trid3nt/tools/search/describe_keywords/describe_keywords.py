@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
@@ -60,6 +60,33 @@ def _carried() -> dict[str, Path]:
             for directory in (module_input_dir(), modflow_input_dir(),
                               geoclaw_input_dir(), pestpp_input_dir(), settings_input_dir())
             for path in directory.glob("*.json")}
+
+
+def _calibration_columns(directory: Path, module: str) -> tuple[dict[str, Any], ...]:
+    """The list columns the MODFLOW dictionary declares for ``module``: calibration targets, never settable keywords."""
+    import json
+
+    path = directory / "columns" / f"{module}.json"
+    if not path.is_file():
+        return ()
+    return tuple({**row, "settable": False, "calibration_target": True}
+                 for row in json.loads(path.read_text())["columns"])
+
+
+def _column_matches(rows: Sequence[Mapping[str, Any]], query: str, limit: int) -> list[dict[str, Any]]:
+    """The list columns one question reaches, by their package, name and help."""
+    phrase = " ".join(_words(query))
+    wanted = {w for w in _words(query) if w not in _GLUE}
+    weights = {"keyword": 6, "package": 3, "help": 1}
+    scored = []
+    for index, row in enumerate(rows):
+        text = {"keyword": row["keyword"], "help": row["help"], "package": row["package"]}
+        score = sum(weights[field] * len(wanted & set(_words(value))) for field, value in text.items())
+        if phrase and phrase in f"{row['package']}_{row['keyword']}".lower():
+            score += 24
+        if score:
+            scored.append((score, index, row))
+    return [dict(row) for _score_value, _index, row in sorted(scored, key=lambda item: (-item[0], item[1]))[:limit]]
 
 
 def _words(text: str) -> list[str]:
@@ -167,24 +194,37 @@ def describe_keywords(module: str = "", keyword: str | list[str] = "",
             f"the carried modules are {', '.join(sorted(carried))}.")
     dictionary = (settings_dictionary() if name == "settings"
                   else load_module_input(name, directory=carried[name]))
+    columns = _calibration_columns(carried[name], name)
     if isinstance(keyword, (list, tuple)):
         entries, unknown = [], []
         for asked in keyword:
             try:
                 entries.append(_entry(name, dictionary, str(asked)))
             except DescribeKeywordsError as exc:
-                unknown.append(str(exc))
+                column = _column_entry(columns, str(asked))
+                if column is None:
+                    unknown.append(str(exc))
+                else:
+                    entries.append(column)
         if not entries:
             raise DescribeKeywordsError("UNKNOWN_KEYWORD", " ".join(unknown))
         return {"module": name, "keyword_count": len(dictionary), "entries": entries,
                 **({"unknown": unknown} if unknown else {})}
     asked = str(keyword or "").strip()
     if asked:
-        return {"module": name, "keyword_count": len(dictionary),
-                "entry": _entry(name, dictionary, asked)}
+        try:
+            return {"module": name, "keyword_count": len(dictionary),
+                    "entry": _entry(name, dictionary, asked)}
+        except DescribeKeywordsError:
+            column = _column_entry(columns, asked)
+            if column is None:
+                raise
+            return {"module": name, "keyword_count": len(dictionary), "entry": column}
     if isinstance(query, (list, tuple)):
         return {"module": name, "keyword_count": len(dictionary),
-                "answers": [{"query": str(q), **_matches(dictionary, str(q), limit)}
+                "answers": [{"query": str(q), **_matches(dictionary, str(q), limit),
+                             **({"calibration_columns": _column_matches(columns, str(q), limit)}
+                                if columns else {})}
                             for q in query]}
     if not str(query or "").strip():
         sections: dict[str, int] = {}
@@ -194,9 +234,28 @@ def describe_keywords(module: str = "", keyword: str | list[str] = "",
         return {"module": name, "keyword_count": len(dictionary),
                 "sections": [{"rubrique": head, "keywords": count}
                              for head, count in sorted(sections.items())],
-                "modules": sorted(carried)}
+                "modules": sorted(carried),
+                **({"calibration_columns": len(columns)} if columns else {})}
     return {"module": name, "query": str(query), "keyword_count": len(dictionary),
-            **_matches(dictionary, str(query), limit)}
+            **_matches(dictionary, str(query), limit),
+            **({"calibration_columns": _column_matches(columns, str(query), limit)} if columns else {})}
+
+
+def _column_entry(rows: Sequence[Mapping[str, Any]], asked: str) -> dict[str, Any] | None:
+    """One list column by ``PACKAGE_COLUMN`` or a unique column name -> its read-only calibration row."""
+    wanted = asked.strip().upper()
+    by_package = [row for row in rows if f"{row['package']}_{row['keyword']}" == wanted]
+    if len(by_package) == 1:
+        return _column_row(by_package[0])
+    by_name = [row for row in rows if row["keyword"] == wanted]
+    return _column_row(by_name[0]) if len(by_name) == 1 else None
+
+
+def _column_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    """A list column as describe_keywords states it: a calibration target, never a settable keyword."""
+    return {"keyword": f"{row['package']}_{row['keyword']}", "type": row["type"], "help": row["help"],
+            "rubrique": ["calibration targets"], "package": row["package"], "column": row["keyword"],
+            "recarray": row["recarray"], "settable": False, "calibration_target": True}
 
 
 def _template_inputs(template: str, keyword: str | list[str]) -> dict[str, Any]:

@@ -155,7 +155,8 @@
         "OPTIONS"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "STRING"
     },
     {
       "keyword": "AUXMULTNAME",
@@ -500,7 +501,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "DELC",
@@ -515,7 +517,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "TOP",
@@ -530,7 +533,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "BOTM",
@@ -545,7 +549,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "IDOMAIN",
@@ -560,7 +565,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "INTEGER"
     },
     {
       "keyword": "LENGTH_UNITS",
@@ -756,7 +762,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "BOT",
@@ -771,7 +778,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "AREA",
@@ -786,7 +794,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "IDOMAIN",
@@ -801,7 +810,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "INTEGER"
     },
     {
       "keyword": "IAC",
@@ -816,7 +826,8 @@
         "CONNECTIONDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "INTEGER"
     },
     {
       "keyword": "JA",
@@ -831,7 +842,8 @@
         "CONNECTIONDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "INTEGER"
     },
     {
       "keyword": "IHC",
@@ -846,7 +858,8 @@
         "CONNECTIONDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "INTEGER"
     },
     {
       "keyword": "CL12",
@@ -861,7 +874,8 @@
         "CONNECTIONDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "HWVA",
@@ -876,7 +890,8 @@
         "CONNECTIONDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "ANGLDEGX",
@@ -891,7 +906,8 @@
         "CONNECTIONDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "VERTICES",
@@ -1131,7 +1147,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "BOTM",
@@ -1146,7 +1163,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "IDOMAIN",
@@ -1161,7 +1179,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "INTEGER"
     },
     {
       "keyword": "VERTICES",
@@ -1266,7 +1285,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "ALH",
@@ -1281,7 +1301,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "ALV",
@@ -1296,7 +1317,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "ATH1",
@@ -1311,7 +1333,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "ATH2",
@@ -1326,7 +1349,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "ATV",
@@ -1341,7 +1365,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "SAVE_FLOWS",
@@ -1431,7 +1456,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "SAVE_FLOWS",
@@ -1616,7 +1642,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "VOLFRAC",
@@ -1631,7 +1658,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "ZETAIM",
@@ -1646,7 +1674,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "CIM",
@@ -1661,7 +1690,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "DECAY",
@@ -1676,7 +1706,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "DECAY_SORBED",
@@ -1691,7 +1722,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "BULK_DENSITY",
@@ -1706,7 +1738,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "DISTCOEF",
@@ -1721,7 +1754,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "SP2",
@@ -1736,7 +1770,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "FLOW_PACKAGE_NAME",
@@ -1766,7 +1801,8 @@
         "OPTIONS"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "STRING"
     },
     {
       "keyword": "FLOW_PACKAGE_AUXILIARY_NAME",
@@ -2086,7 +2122,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": true
+      "mandatory": true,
+      "dtype": "REAL"
     },
     {
       "keyword": "DECAY",
@@ -2101,7 +2138,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "DECAY_SORBED",
@@ -2116,7 +2154,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "BULK_DENSITY",
@@ -2131,7 +2170,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "DISTCOEF",
@@ -2146,7 +2186,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "SP2",
@@ -2161,7 +2202,8 @@
         "GRIDDATA"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "REAL"
     },
     {
       "keyword": "PRINT_INPUT",
@@ -2266,7 +2308,8 @@
         "OPTIONS"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "STRING"
     },
     {
       "keyword": "FLOW_PACKAGE_AUXILIARY_NAME",
@@ -2716,7 +2759,8 @@
         "OPTIONS"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "STRING"
     },
     {
       "keyword": "FLOW_PACKAGE_AUXILIARY_NAME",
@@ -2926,7 +2970,8 @@
         "OPTIONS"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "STRING"
     },
     {
       "keyword": "AUXMULTNAME",
@@ -3166,7 +3211,8 @@
         "OPTIONS"
       ],
       "is_file": false,
-      "mandatory": false
+      "mandatory": false,
+      "dtype": "STRING"
     },
     {
       "keyword": "FLOW_PACKAGE_AUXILIARY_NAME",

@@ -30,6 +30,7 @@ def test_a_regeneration_replaces_the_keywords_and_keeps_the_authored_inputs(
     monkeypatch.setattr(extractor, "module_input_dir", lambda: tmp_path)
     monkeypatch.setattr(extractor, "body_rows",
                         lambda body: [{"identifier": "FRESH"}])
+    monkeypatch.setattr(extractor, "body_columns", lambda body: [{"identifier": "FRESH_COLUMN"}])
 
     counts = extractor.extract(tmp_path, bodies=("gwf",))
 
@@ -38,6 +39,8 @@ def test_a_regeneration_replaces_the_keywords_and_keeps_the_authored_inputs(
     assert written["keywords"] == [{"identifier": "FRESH"}]
     assert written["inputs"] == authored
     assert list(written) == ["module", "keywords", "inputs"]
+    assert json.loads((tmp_path / "columns" / "gwf.json").read_text()) == {
+        "module": "gwf", "columns": [{"identifier": "FRESH_COLUMN"}]}
 
 
 _PRP = """\
@@ -99,3 +102,15 @@ def test_the_prt_body_has_the_clock_alone_and_drops_what_mf6_removed_or_runs_wit
                          "PRP_PERIODDATA", "TDIS_NPER"}
     assert {name for name, row in rows.items() if row["mandatory"]} == {"PRP_NRELEASEPTS", "TDIS_NPER"}
     assert extractor.BODIES[-1] == "prt"
+
+
+def test_the_committed_dictionary_carries_each_arrays_element_type_and_its_list_columns():
+    directory = _SCRIPT.resolve().parents[1] / "trid3nt" / "workflows" / "modflow" / "modules" / "module_input"
+    rows = {row["identifier"]: row for row in json.loads((directory / "gwf.json").read_text())["keywords"]}
+    assert rows["NPF_K"]["dtype"] == "REAL"
+    assert rows["NPF_ICELLTYPE"]["dtype"] == "INTEGER"
+    columns = json.loads((directory / "columns" / "gwf.json").read_text())["columns"]
+    assert any(row["identifier"] == "RIV_STRESS_PERIOD_DATA_COND" and row["type"] == "REAL"
+               for row in columns)
+    assert any(row["identifier"] == "RIV_STRESS_PERIOD_DATA_CELLID" and row["type"] == "INTEGER"
+               for row in columns)

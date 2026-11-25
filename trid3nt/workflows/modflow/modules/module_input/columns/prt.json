@@ -1,0 +1,291 @@
+{
+  "module": "prt",
+  "columns": [
+    {
+      "package": "DISV",
+      "keyword": "IV",
+      "identifier": "DISV_VERTICES_IV",
+      "recarray": "vertices",
+      "type": "INTEGER",
+      "help": "vertex number. is the vertex number.  Records in the VERTICES block must be listed in consecutive order from 1 to NVERT.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "XV",
+      "identifier": "DISV_VERTICES_XV",
+      "recarray": "vertices",
+      "type": "REAL",
+      "help": "x-coordinate for vertex. is the x-coordinate for the vertex.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "YV",
+      "identifier": "DISV_VERTICES_YV",
+      "recarray": "vertices",
+      "type": "REAL",
+      "help": "y-coordinate for vertex. is the y-coordinate for the vertex.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "ICELL2D",
+      "identifier": "DISV_CELL2D_ICELL2D",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "cell2d number. is the CELL2D number.  Records in the CELL2D block must be listed in consecutive order from the first to the last.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "XC",
+      "identifier": "DISV_CELL2D_XC",
+      "recarray": "cell2d",
+      "type": "REAL",
+      "help": "x-coordinate for cell center. is the x-coordinate for the cell center.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "YC",
+      "identifier": "DISV_CELL2D_YC",
+      "recarray": "cell2d",
+      "type": "REAL",
+      "help": "y-coordinate for cell center. is the y-coordinate for the cell center.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "NCVERT",
+      "identifier": "DISV_CELL2D_NCVERT",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "number of cell vertices. is the number of vertices required to define the cell.  There may be a different number of vertices for each cell.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "ICVERT",
+      "identifier": "DISV_CELL2D_ICVERT",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "array of vertex numbers. is an array of integer values containing vertex numbers (in the VERTICES block) used to define the cell.  Vertices must be listed in clockwise order.  Cells that are connected must share vertices.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "FMI",
+      "keyword": "FLOWTYPE",
+      "identifier": "FMI_PACKAGEDATA_FLOWTYPE",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "flow type. is the word GWFBUDGET, GWFHEAD, or GWFGRID.  If GWFBUDGET is specified, then the corresponding file must be a budget file.  If GWFHEAD is specified, the file must be a head file.  If GWFGRID is specified, the file must be a binary grid file.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "FMI",
+      "keyword": "FILEIN",
+      "identifier": "FMI_PACKAGEDATA_FILEIN",
+      "recarray": "packagedata",
+      "type": "LOGICAL",
+      "help": "file keyword. keyword to specify that an input filename is expected next.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "FMI",
+      "keyword": "FNAME",
+      "identifier": "FMI_PACKAGEDATA_FNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "file name. is the name of the file containing flows.  The path to the file should be included if the file is not located in the folder where the program was run.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "NAM",
+      "keyword": "FTYPE",
+      "identifier": "NAM_PACKAGES_FTYPE",
+      "recarray": "packages",
+      "type": "STRING",
+      "help": "package type. is the file type, which must be one of the following character values shown in table~\\ref{table:ftype-prt}. Ftype may be entered in any combination of uppercase and lowercase.",
+      "rubrique": [
+        "PACKAGES"
+      ]
+    },
+    {
+      "package": "NAM",
+      "keyword": "FNAME",
+      "identifier": "NAM_PACKAGES_FNAME",
+      "recarray": "packages",
+      "type": "STRING",
+      "help": "file name. is the name of the file containing the package input.  The path to the file should be included if the file is not located in the folder where the program was run.",
+      "rubrique": [
+        "PACKAGES"
+      ]
+    },
+    {
+      "package": "NAM",
+      "keyword": "PNAME",
+      "identifier": "NAM_PACKAGES_PNAME",
+      "recarray": "packages",
+      "type": "STRING",
+      "help": "user name for package. is the user-defined name for the package. PNAME is restricted to 16 characters.  No spaces are allowed in PNAME.  PNAME character values are read and stored by the program for stress packages only.  These names may be useful for labeling purposes when multiple stress packages of the same type are located within a single PRT Model.  If PNAME is specified for a stress package, then PNAME will be used in the flow budget table in the listing file; it will also be used for the text entry in the cell-by-cell budget file.  PNAME is case insensitive and is stored in all upper case letters.",
+      "rubrique": [
+        "PACKAGES"
+      ]
+    },
+    {
+      "package": "OC",
+      "keyword": "TIME",
+      "identifier": "OC_TRACKTIMES_TIME",
+      "recarray": "tracktimes",
+      "type": "REAL",
+      "help": "release time. real value that defines the tracking time with respect to the simulation start time.",
+      "rubrique": [
+        "TRACKTIMES"
+      ]
+    },
+    {
+      "package": "PRP",
+      "keyword": "IRPTNO",
+      "identifier": "PRP_PACKAGEDATA_IRPTNO",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "PRP id number for release point. integer value that defines the PRP release point number associated with the specified PACKAGEDATA data on the line. IRPTNO must be greater than zero and less than or equal to NRELEASEPTS.  The program will terminate with an error if information for a PRP release point number is specified more than once.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "PRP",
+      "keyword": "CELLID",
+      "identifier": "PRP_PACKAGEDATA_CELLID",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "PRP",
+      "keyword": "XRPT",
+      "identifier": "PRP_PACKAGEDATA_XRPT",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "x coordinate of release point. real value that defines the x coordinate of the release point in model coordinates.  The (x, y, z) location specified for the release point must lie within the cell that is identified by the specified cellid.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "PRP",
+      "keyword": "YRPT",
+      "identifier": "PRP_PACKAGEDATA_YRPT",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "y coordinate of release point. real value that defines the y coordinate of the release point in model coordinates.  The (x, y, z) location specified for the release point must lie within the cell that is identified by the specified cellid.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "PRP",
+      "keyword": "ZRPT",
+      "identifier": "PRP_PACKAGEDATA_ZRPT",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "z coordinate of release point. real value that defines the z coordinate of the release point in model coordinates or, if the LOCAL\\_Z option is active, in local cell coordinates.  The (x, y, z) location specified for the release point must lie within the cell that is identified by the specified cellid.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "PRP",
+      "keyword": "BOUNDNAME",
+      "identifier": "PRP_PACKAGEDATA_BOUNDNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "release point name. name of the particle release point. BOUNDNAME is an ASCII character variable that can contain as many as 40 characters. If BOUNDNAME contains spaces in it, then the entire name must be enclosed within single quotes.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "PRP",
+      "keyword": "TIME",
+      "identifier": "PRP_RELEASETIMES_TIME",
+      "recarray": "releasetimes",
+      "type": "REAL",
+      "help": "release time. real value that defines the release time with respect to the simulation start time.",
+      "rubrique": [
+        "RELEASETIMES"
+      ]
+    },
+    {
+      "package": "PRP",
+      "keyword": "RELEASESETTING",
+      "identifier": "PRP_PERIODDATA_RELEASESETTING",
+      "recarray": "perioddata",
+      "type": "STRUCT",
+      "help": "specifies time steps at which to release a particle. A particle is released at the beginning of each specified time step. For fine control over release timing, specify times explicitly using the RELEASETIMES block. If the beginning of a specified time step coincides with a release time specified in the RELEASETIMES block or configured via RELEASE\\_TIME\\_FREQUENCY, only one particle is released at that time. Coincidence is evaluated up to the tolerance specified in RELEASE\\_TIME\\_TOLERANCE, or $\\epsilon \\times 10^{11}$ by default, where $\\epsilon$ is machine precision. If no release times are configured via this setting, the RELEASETIMES block, or the RELEASE\\_TIME\\_FREQUENCY option, a single release time is configured at the beginning of the first time step of the simulation's first stress period.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "TDIS",
+      "keyword": "PERLEN",
+      "identifier": "TDIS_PERIODDATA_PERLEN",
+      "recarray": "perioddata",
+      "type": "REAL",
+      "help": "length of stress period. is the length of a stress period.",
+      "rubrique": [
+        "PERIODDATA"
+      ]
+    },
+    {
+      "package": "TDIS",
+      "keyword": "NSTP",
+      "identifier": "TDIS_PERIODDATA_NSTP",
+      "recarray": "perioddata",
+      "type": "INTEGER",
+      "help": "number of time steps. is the number of time steps in a stress period.",
+      "rubrique": [
+        "PERIODDATA"
+      ]
+    },
+    {
+      "package": "TDIS",
+      "keyword": "TSMULT",
+      "identifier": "TDIS_PERIODDATA_TSMULT",
+      "recarray": "perioddata",
+      "type": "REAL",
+      "help": "number of time steps. is the multiplier for the length of successive time steps. The length of a time step is calculated by multiplying the length of the previous time step by TSMULT. The length of the first time step, $\\Delta t_1$, is related to PERLEN, NSTP, and TSMULT by the relation $\\Delta t_1= perlen \\frac{tsmult - 1}{tsmult^{nstp}-1}$.",
+      "rubrique": [
+        "PERIODDATA"
+      ]
+    }
+  ]
+}

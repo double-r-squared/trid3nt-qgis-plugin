@@ -1,0 +1,2172 @@
+{
+  "module": "gwf",
+  "columns": [
+    {
+      "package": "BUY",
+      "keyword": "IRHOSPEC",
+      "identifier": "BUY_PACKAGEDATA_IRHOSPEC",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "species number for this entry. integer value that defines the species number associated with the specified PACKAGEDATA data on the line. IRHOSPECIES must be greater than zero and less than or equal to NRHOSPECIES. Information must be specified for each of the NRHOSPECIES species or the program will terminate with an error.  The program will also terminate with an error if information for a species is specified more than once.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "BUY",
+      "keyword": "DRHODC",
+      "identifier": "BUY_PACKAGEDATA_DRHODC",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "slope of the density-concentration line. real value that defines the slope of the density-concentration line for this species used in the density equation of state.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "BUY",
+      "keyword": "CRHOREF",
+      "identifier": "BUY_PACKAGEDATA_CRHOREF",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "reference concentration value. real value that defines the reference concentration value used for this species in the density equation of state.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "BUY",
+      "keyword": "MODELNAME",
+      "identifier": "BUY_PACKAGEDATA_MODELNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "modelname. name of a GWT or GWE model used to simulate a species that will be used in the density equation of state.  This name will have no effect if the simulation does not include a GWT or GWE model that corresponds to this GWF model.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "BUY",
+      "keyword": "AUXSPECIESNAME",
+      "identifier": "BUY_PACKAGEDATA_AUXSPECIESNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "auxspeciesname. name of an auxiliary variable in a GWF stress package that will be used for this species to calculate a density value.  If a density value is needed by the Buoyancy Package then it will use the concentration values in this AUXSPECIESNAME column in the density equation of state.  For advanced stress packages (LAK, SFR, MAW, and UZF) that have an associated advanced transport package (LKT, SFT, MWT, and UZT), the FLOW\\_PACKAGE\\_AUXILIARY\\_NAME option in the advanced transport package can be used to transfer simulated concentrations into the flow package auxiliary variable.  In this manner, the Buoyancy Package can calculate density values for lakes, streams, multi-aquifer wells, and unsaturated zone flow cells using simulated concentrations.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "CHD",
+      "keyword": "CELLID",
+      "identifier": "CHD_STRESS_PERIOD_DATA_CELLID",
+      "recarray": "stress_period_data",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "CHD",
+      "keyword": "HEAD",
+      "identifier": "CHD_STRESS_PERIOD_DATA_HEAD",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "head value assigned to constant head. is the head at the boundary. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "CHD",
+      "keyword": "AUX",
+      "identifier": "CHD_STRESS_PERIOD_DATA_AUX",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "CHD",
+      "keyword": "BOUNDNAME",
+      "identifier": "CHD_STRESS_PERIOD_DATA_BOUNDNAME",
+      "recarray": "stress_period_data",
+      "type": "STRING",
+      "help": "constant head boundary name",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "ICSUBNO",
+      "identifier": "CSUB_PACKAGEDATA_ICSUBNO",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "CSUB id number for this entry. integer value that defines the CSUB interbed number associated with the specified PACKAGEDATA data on the line. CSUBNO must be greater than zero and less than or equal to NINTERBEDS.  CSUB information must be specified for every CSUB cell or the program will terminate with an error.  The program will also terminate with an error if information for a CSUB interbed number is specified more than once.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "CELLID",
+      "identifier": "CSUB_PACKAGEDATA_CELLID",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "CDELAY",
+      "identifier": "CSUB_PACKAGEDATA_CDELAY",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "delay type. character string that defines the subsidence delay type for the interbed. Possible subsidence package CDELAY strings include: NODELAY--character keyword to indicate that delay will not be simulated in the interbed.  DELAY--character keyword to indicate that delay will be simulated in the interbed.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "PCS0",
+      "identifier": "CSUB_PACKAGEDATA_PCS0",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "initial stress. is the initial offset from the calculated initial effective stress or initial preconsolidation stress in the interbed, in units of height of a column of water. PCS0 is the initial preconsolidation stress if SPECIFIED\\_INITIAL\\_INTERBED\\_STATE or SPECIFIED\\_INITIAL\\_PRECONSOLIDATION\\_STRESS are specified in the OPTIONS block. If HEAD\\_BASED is specified in the OPTIONS block, PCS0 is the initial offset from the calculated initial head or initial preconsolidation head in the CSUB interbed and the initial preconsolidation stress is calculated from the calculated initial effective stress or calculated initial geostatic stress, respectively.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "THICK_FRAC",
+      "identifier": "CSUB_PACKAGEDATA_THICK_FRAC",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "interbed thickness or cell fraction. is the interbed thickness or cell fraction of the interbed. Interbed thickness is specified as a fraction of the cell thickness if CELL\\_FRACTION is specified in the OPTIONS block.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "RNB",
+      "identifier": "CSUB_PACKAGEDATA_RNB",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "delay interbed material factor. is the interbed material factor equivalent number of interbeds in the interbed system represented by the interbed. RNB must be greater than or equal to 1 if CDELAY is DELAY. Otherwise, RNB can be any value.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "SSV_CC",
+      "identifier": "CSUB_PACKAGEDATA_SSV_CC",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "initial interbed inelastic specific storage. is the initial inelastic specific storage or compression index of the interbed. The compression index is specified if COMPRESSION\\_INDICES is specified in the OPTIONS block. Specified or calculated interbed inelastic specific storage values are not adjusted from initial values if HEAD\\_BASED is specified in the OPTIONS block.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "SSE_CR",
+      "identifier": "CSUB_PACKAGEDATA_SSE_CR",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "initial interbed elastic specific storage. is the initial elastic coarse-grained material specific storage or recompression index of the interbed. The recompression index is specified if COMPRESSION\\_INDICES is specified in the OPTIONS block. Specified or calculated interbed elastic specific storage values are not adjusted from initial values if HEAD\\_BASED is specified in the OPTIONS block.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "THETA",
+      "identifier": "CSUB_PACKAGEDATA_THETA",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "initial interbed porosity. is the initial porosity of the interbed.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "KV",
+      "identifier": "CSUB_PACKAGEDATA_KV",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "delay interbed vertical hydraulic conductivity. is the vertical hydraulic conductivity of the delay interbed. KV must be greater than 0 if CDELAY is DELAY. Otherwise, KV can be any value.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "H0",
+      "identifier": "CSUB_PACKAGEDATA_H0",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "initial delay interbed head. is the initial offset from the head in cell cellid or the initial head in the delay interbed. H0 is the initial head in the delay bed if SPECIFIED\\_INITIAL\\_INTERBED\\_STATE or SPECIFIED\\_INITIAL\\_DELAY\\_HEAD are specified in the OPTIONS block. H0 can be any value if CDELAY is NODELAY.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "BOUNDNAME",
+      "identifier": "CSUB_PACKAGEDATA_BOUNDNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "well name",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "CELLID",
+      "identifier": "CSUB_STRESS_PERIOD_DATA_CELLID",
+      "recarray": "stress_period_data",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "CSUB",
+      "keyword": "SIG0",
+      "identifier": "CSUB_STRESS_PERIOD_DATA_SIG0",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "well stress offset. is the stress offset for the cell. SIG0 is added to the calculated geostatic stress for the cell. SIG0 is specified only if MAXSIG0 is specified to be greater than 0 in the DIMENSIONS block. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "IV",
+      "identifier": "DISU_VERTICES_IV",
+      "recarray": "vertices",
+      "type": "INTEGER",
+      "help": "vertex number. is the vertex number.  Records in the VERTICES block must be listed in consecutive order from 1 to NVERT.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "XV",
+      "identifier": "DISU_VERTICES_XV",
+      "recarray": "vertices",
+      "type": "REAL",
+      "help": "x-coordinate for vertex. is the x-coordinate for the vertex.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "YV",
+      "identifier": "DISU_VERTICES_YV",
+      "recarray": "vertices",
+      "type": "REAL",
+      "help": "y-coordinate for vertex. is the y-coordinate for the vertex.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "ICELL2D",
+      "identifier": "DISU_CELL2D_ICELL2D",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "cell2d number. is the cell2d number.  Records in the CELL2D block must be listed in consecutive order from 1 to NODES.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "XC",
+      "identifier": "DISU_CELL2D_XC",
+      "recarray": "cell2d",
+      "type": "REAL",
+      "help": "x-coordinate for cell center. is the x-coordinate for the cell center.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "YC",
+      "identifier": "DISU_CELL2D_YC",
+      "recarray": "cell2d",
+      "type": "REAL",
+      "help": "y-coordinate for cell center. is the y-coordinate for the cell center.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "NCVERT",
+      "identifier": "DISU_CELL2D_NCVERT",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "number of cell vertices. is the number of vertices required to define the cell.  There may be a different number of vertices for each cell.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISU",
+      "keyword": "ICVERT",
+      "identifier": "DISU_CELL2D_ICVERT",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "array of vertex numbers. is an array of integer values containing vertex numbers (in the VERTICES block) used to define the cell.  Vertices must be listed in clockwise order.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "IV",
+      "identifier": "DISV_VERTICES_IV",
+      "recarray": "vertices",
+      "type": "INTEGER",
+      "help": "vertex number. is the vertex number.  Records in the VERTICES block must be listed in consecutive order from 1 to NVERT.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "XV",
+      "identifier": "DISV_VERTICES_XV",
+      "recarray": "vertices",
+      "type": "REAL",
+      "help": "x-coordinate for vertex. is the x-coordinate for the vertex.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "YV",
+      "identifier": "DISV_VERTICES_YV",
+      "recarray": "vertices",
+      "type": "REAL",
+      "help": "y-coordinate for vertex. is the y-coordinate for the vertex.",
+      "rubrique": [
+        "VERTICES"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "ICELL2D",
+      "identifier": "DISV_CELL2D_ICELL2D",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "cell2d number. is the CELL2D number.  Records in the CELL2D block must be listed in consecutive order from the first to the last.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "XC",
+      "identifier": "DISV_CELL2D_XC",
+      "recarray": "cell2d",
+      "type": "REAL",
+      "help": "x-coordinate for cell center. is the x-coordinate for the cell center.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "YC",
+      "identifier": "DISV_CELL2D_YC",
+      "recarray": "cell2d",
+      "type": "REAL",
+      "help": "y-coordinate for cell center. is the y-coordinate for the cell center.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "NCVERT",
+      "identifier": "DISV_CELL2D_NCVERT",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "number of cell vertices. is the number of vertices required to define the cell.  There may be a different number of vertices for each cell.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DISV",
+      "keyword": "ICVERT",
+      "identifier": "DISV_CELL2D_ICVERT",
+      "recarray": "cell2d",
+      "type": "INTEGER",
+      "help": "array of vertex numbers. is an array of integer values containing vertex numbers (in the VERTICES block) used to define the cell.  Vertices must be listed in clockwise order.  Cells that are connected must share vertices.",
+      "rubrique": [
+        "CELL2D"
+      ]
+    },
+    {
+      "package": "DRN",
+      "keyword": "CELLID",
+      "identifier": "DRN_STRESS_PERIOD_DATA_CELLID",
+      "recarray": "stress_period_data",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "DRN",
+      "keyword": "ELEV",
+      "identifier": "DRN_STRESS_PERIOD_DATA_ELEV",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "drain elevation. is the elevation of the drain. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "DRN",
+      "keyword": "COND",
+      "identifier": "DRN_STRESS_PERIOD_DATA_COND",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "drain conductance. is the hydraulic conductance of the interface between the aquifer and the drain. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "DRN",
+      "keyword": "AUX",
+      "identifier": "DRN_STRESS_PERIOD_DATA_AUX",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "DRN",
+      "keyword": "BOUNDNAME",
+      "identifier": "DRN_STRESS_PERIOD_DATA_BOUNDNAME",
+      "recarray": "stress_period_data",
+      "type": "STRING",
+      "help": "drain name",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "EVT",
+      "keyword": "CELLID",
+      "identifier": "EVT_STRESS_PERIOD_DATA_CELLID",
+      "recarray": "stress_period_data",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "EVT",
+      "keyword": "SURFACE",
+      "identifier": "EVT_STRESS_PERIOD_DATA_SURFACE",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "ET surface. is the elevation of the ET surface ($L$). If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "EVT",
+      "keyword": "RATE",
+      "identifier": "EVT_STRESS_PERIOD_DATA_RATE",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "maximum ET rate. is the maximum ET flux rate ($LT^{-1}$). If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "EVT",
+      "keyword": "DEPTH",
+      "identifier": "EVT_STRESS_PERIOD_DATA_DEPTH",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "ET extinction depth. is the ET extinction depth ($L$). If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "EVT",
+      "keyword": "PXDP",
+      "identifier": "EVT_STRESS_PERIOD_DATA_PXDP",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "proportion of ET extinction depth. is the proportion of the ET extinction depth at the bottom of a segment (dimensionless). pxdp is an array of size (nseg - 1).  Values in pxdp must be greater than 0.0 and less than 1.0.  pxdp values for a cell must increase monotonically.  If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "EVT",
+      "keyword": "PETM",
+      "identifier": "EVT_STRESS_PERIOD_DATA_PETM",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "proportion of maximum ET rate. is the proportion of the maximum ET flux rate at the bottom of a segment (dimensionless). petm is an array of size (nseg - 1).  If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "EVT",
+      "keyword": "PETM0",
+      "identifier": "EVT_STRESS_PERIOD_DATA_PETM0",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "proportion of maximum ET rate at ET surface. is the proportion of the maximum ET flux rate that will apply when head is at or above the ET surface (dimensionless). PETM0 is read only when the SURF\\_RATE\\_SPECIFIED option is used. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "EVT",
+      "keyword": "AUX",
+      "identifier": "EVT_STRESS_PERIOD_DATA_AUX",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "EVT",
+      "keyword": "BOUNDNAME",
+      "identifier": "EVT_STRESS_PERIOD_DATA_BOUNDNAME",
+      "recarray": "stress_period_data",
+      "type": "STRING",
+      "help": "evapotranspiration name",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "GHB",
+      "keyword": "CELLID",
+      "identifier": "GHB_STRESS_PERIOD_DATA_CELLID",
+      "recarray": "stress_period_data",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "GHB",
+      "keyword": "BHEAD",
+      "identifier": "GHB_STRESS_PERIOD_DATA_BHEAD",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "boundary head. is the boundary head. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "GHB",
+      "keyword": "COND",
+      "identifier": "GHB_STRESS_PERIOD_DATA_COND",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "boundary conductance. is the hydraulic conductance of the interface between the aquifer cell and the boundary. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "GHB",
+      "keyword": "AUX",
+      "identifier": "GHB_STRESS_PERIOD_DATA_AUX",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "GHB",
+      "keyword": "BOUNDNAME",
+      "identifier": "GHB_STRESS_PERIOD_DATA_BOUNDNAME",
+      "recarray": "stress_period_data",
+      "type": "STRING",
+      "help": "general-head boundary name",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "GNC",
+      "keyword": "CELLIDN",
+      "identifier": "GNC_GNCDATA_CELLIDN",
+      "recarray": "gncdata",
+      "type": "INTEGER",
+      "help": "GNC cellid n. is the cellid of the cell, $n$, in which the ghost node is located. For a structured grid that uses the DIS input file, CELLIDN is the layer, row, and column numbers of the cell.   For a grid that uses the DISV input file, CELLIDN is the layer number and CELL2D number for the two cells.  If the model uses the unstructured discretization (DISU) input file, then CELLIDN is the node number for the cell.",
+      "rubrique": [
+        "GNCDATA"
+      ]
+    },
+    {
+      "package": "GNC",
+      "keyword": "CELLIDM",
+      "identifier": "GNC_GNCDATA_CELLIDM",
+      "recarray": "gncdata",
+      "type": "INTEGER",
+      "help": "GNC cellid n. is the cellid of the connecting cell, $m$, to which flow occurs from the ghost node. For a structured grid that uses the DIS input file, CELLIDM is the layer, row, and column numbers of the cell.   For a grid that uses the DISV input file, CELLIDM is the layer number and CELL2D number for the two cells.  If the model uses the unstructured discretization (DISU) input file, then CELLIDM is the node number for the cell.",
+      "rubrique": [
+        "GNCDATA"
+      ]
+    },
+    {
+      "package": "GNC",
+      "keyword": "CELLIDSJ",
+      "identifier": "GNC_GNCDATA_CELLIDSJ",
+      "recarray": "gncdata",
+      "type": "INTEGER",
+      "help": "GNC contributing cells. is the array of CELLIDS for the contributing j cells, which contribute to the interpolated head value at the ghost node. This item contains one CELLID for each of the contributing cells of the ghost node. Note that if the number of actual contributing cells needed by the user is less than NUMALPHAJ for any ghost node, then a dummy CELLID of zero(s) should be inserted with an associated contributing factor of zero. For a structured grid that uses the DIS input file, CELLID is the layer, row, and column numbers of the cell.   For a grid that uses the DISV input file, CELLID is the layer number and cell2d number for the two cells.  If the model uses the unstructured discretization (DISU) input file, then CELLID is the node number for the cell.",
+      "rubrique": [
+        "GNCDATA"
+      ]
+    },
+    {
+      "package": "GNC",
+      "keyword": "ALPHASJ",
+      "identifier": "GNC_GNCDATA_ALPHASJ",
+      "recarray": "gncdata",
+      "type": "REAL",
+      "help": "GNC contributing factors. is the contributing factors for each contributing node in CELLIDSJ. Note that if the number of actual contributing cells is less than NUMALPHAJ for any ghost node, then dummy CELLIDS should be inserted with an associated contributing factor of zero.  The sum of ALPHASJ should be less than one.  This is because one minus the sum of ALPHASJ is equal to the alpha term (alpha n in equation 4-61 of the GWF Model report) that is multiplied by the head in cell n.",
+      "rubrique": [
+        "GNCDATA"
+      ]
+    },
+    {
+      "package": "HFB",
+      "keyword": "CELLID1",
+      "identifier": "HFB_STRESS_PERIOD_DATA_CELLID1",
+      "recarray": "stress_period_data",
+      "type": "INTEGER",
+      "help": "first cell adjacent to barrier. identifier for the first cell.  For a structured grid that uses the DIS input file, CELLID1 is the layer, row, and column numbers of the cell.   For a grid that uses the DISV input file, CELLID1 is the layer number and CELL2D number for the two cells.  If the model uses the unstructured discretization (DISU) input file, then CELLID1 is the node numbers for the cell.  The barrier is located between cells designated as CELLID1 and CELLID2.  For models that use the DIS and DISV grid types, the layer number for CELLID1 and CELLID2 must be the same.  For all grid types, cells must be horizontally or vertically adjacent.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "HFB",
+      "keyword": "CELLID2",
+      "identifier": "HFB_STRESS_PERIOD_DATA_CELLID2",
+      "recarray": "stress_period_data",
+      "type": "INTEGER",
+      "help": "second cell adjacent to barrier. identifier for the second cell. See CELLID1 for description of how to specify.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "HFB",
+      "keyword": "HYDCHR",
+      "identifier": "HFB_STRESS_PERIOD_DATA_HYDCHR",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "barrier hydraulic characteristic. is the hydraulic characteristic of the hydraulic-flow barrier. The hydraulic characteristic is the barrier hydraulic conductivity divided by the width of the hydraulic-flow barrier. If the hydraulic characteristic is negative, then the absolute value of HYDCHR acts as a multiplier to the conductance between the two model cells specified as containing the barrier. For example, if the value for HYDCHR was specified as -1.5, the conductance calculated for the two cells would be multiplied by 1.5.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "IFNO",
+      "identifier": "LAK_PACKAGEDATA_IFNO",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "lake number for this entry. integer value that defines the feature (lake) number associated with the specified PACKAGEDATA data on the line. IFNO must be greater than zero and less than or equal to NLAKES. Lake information must be specified for every lake or the program will terminate with an error.  The program will also terminate with an error if information for a lake is specified more than once.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "STRT",
+      "identifier": "LAK_PACKAGEDATA_STRT",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "starting lake stage. real value that defines the starting stage for the lake.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "NLAKECONN",
+      "identifier": "LAK_PACKAGEDATA_NLAKECONN",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "number of lake connections. integer value that defines the number of GWF cells connected to this (IFNO) lake. There can only be one vertical lake connection to each GWF cell. NLAKECONN must be greater than zero.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "AUX",
+      "identifier": "LAK_PACKAGEDATA_AUX",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "BOUNDNAME",
+      "identifier": "LAK_PACKAGEDATA_BOUNDNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "well name",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "IFNO",
+      "identifier": "LAK_CONNECTIONDATA_IFNO",
+      "recarray": "connectiondata",
+      "type": "INTEGER",
+      "help": "lake number for this entry. integer value that defines the feature (lake) number associated with the specified CONNECTIONDATA data on the line. IFNO must be greater than zero and less than or equal to NLAKES. Lake connection information must be specified for every lake connection to the GWF model (NLAKECONN) or the program will terminate with an error.  The program will also terminate with an error if connection information for a lake connection to the GWF model is specified more than once.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "ICONN",
+      "identifier": "LAK_CONNECTIONDATA_ICONN",
+      "recarray": "connectiondata",
+      "type": "INTEGER",
+      "help": "connection number for this entry. integer value that defines the GWF connection number for this lake connection entry. ICONN must be greater than zero and less than or equal to NLAKECONN for lake IFNO.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "CELLID",
+      "identifier": "LAK_CONNECTIONDATA_CELLID",
+      "recarray": "connectiondata",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "CLAKTYPE",
+      "identifier": "LAK_CONNECTIONDATA_CLAKTYPE",
+      "recarray": "connectiondata",
+      "type": "STRING",
+      "help": "lake connection type. character string that defines the lake-GWF connection type for the lake connection. Possible lake-GWF connection type strings include:  VERTICAL--character keyword to indicate the lake-GWF connection is vertical  and connection conductance calculations use the hydraulic conductivity corresponding to the $K_{33}$ tensor component defined for CELLID in the NPF package. HORIZONTAL--character keyword to indicate the lake-GWF connection is horizontal and connection conductance calculations use the hydraulic conductivity corresponding to the $K_{11}$ tensor component defined for CELLID in the NPF package. EMBEDDEDH--character keyword to indicate the lake-GWF connection is embedded in a single cell and connection conductance calculations use the hydraulic conductivity corresponding to the $K_{11}$ tensor component defined for CELLID in the NPF package. EMBEDDEDV--character keyword to indicate the lake-GWF connection is embedded in a single cell and connection conductance calculations use the hydraulic conductivity corresponding to the $K_{33}$ tensor component defined for CELLID in the NPF package. Embedded lakes can only be connected to a single cell (NLAKECONN = 1) and there must be a lake table associated with each embedded lake.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "BEDLEAK",
+      "identifier": "LAK_CONNECTIONDATA_BEDLEAK",
+      "recarray": "connectiondata",
+      "type": "STRING",
+      "help": "bed leakance. real value or character string that defines the bed leakance for the lake-GWF connection. BEDLEAK must be greater than or equal to zero, equal to the DNODATA value (3.0E+30), or specified to be NONE. If DNODATA or NONE is specified for BEDLEAK, the lake-GWF connection conductance is solely a function of aquifer properties in the connected GWF cell and lakebed sediments are assumed to be absent. Warning messages will be issued if NONE is specified. Eventually the ability to specify NONE will be deprecated and cause MODFLOW 6 to terminate with an error.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "BELEV",
+      "identifier": "LAK_CONNECTIONDATA_BELEV",
+      "recarray": "connectiondata",
+      "type": "REAL",
+      "help": "bottom elevation. real value that defines the bottom elevation for a HORIZONTAL lake-GWF connection. Any value can be specified if CLAKTYPE is VERTICAL, EMBEDDEDH, or EMBEDDEDV. If CLAKTYPE is HORIZONTAL and BELEV is not equal to TELEV, BELEV must be greater than or equal to the bottom of the GWF cell CELLID. If BELEV is equal to TELEV, BELEV is reset to the bottom of the GWF cell CELLID.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "TELEV",
+      "identifier": "LAK_CONNECTIONDATA_TELEV",
+      "recarray": "connectiondata",
+      "type": "REAL",
+      "help": "top elevation. real value that defines the top elevation for a HORIZONTAL lake-GWF connection. Any value can be specified if CLAKTYPE is VERTICAL, EMBEDDEDH, or EMBEDDEDV. If CLAKTYPE is HORIZONTAL and TELEV is not equal to BELEV, TELEV must be less than or equal to the top of the GWF cell CELLID. If TELEV is equal to BELEV, TELEV is reset to the top of the GWF cell CELLID.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "CONNLEN",
+      "identifier": "LAK_CONNECTIONDATA_CONNLEN",
+      "recarray": "connectiondata",
+      "type": "REAL",
+      "help": "connection length. real value that defines the distance between the connected GWF CELLID node and the lake for a HORIZONTAL, EMBEDDEDH, or EMBEDDEDV lake-GWF connection. CONLENN must be greater than zero for a HORIZONTAL, EMBEDDEDH, or EMBEDDEDV lake-GWF connection. Any value can be specified if CLAKTYPE is VERTICAL.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "CONNWIDTH",
+      "identifier": "LAK_CONNECTIONDATA_CONNWIDTH",
+      "recarray": "connectiondata",
+      "type": "REAL",
+      "help": "connection width. real value that defines the connection face width for a HORIZONTAL lake-GWF connection. CONNWIDTH must be greater than zero for a HORIZONTAL lake-GWF connection. Any value can be specified if CLAKTYPE is VERTICAL, EMBEDDEDH, or EMBEDDEDV.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "IFNO",
+      "identifier": "LAK_TABLES_IFNO",
+      "recarray": "tables",
+      "type": "INTEGER",
+      "help": "lake number for this entry. integer value that defines the feature (lake) number associated with the specified TABLES data on the line. IFNO must be greater than zero and less than or equal to NLAKES. The program will terminate with an error if table information for a lake is specified more than once or the number of specified tables is less than NTABLES.",
+      "rubrique": [
+        "TABLES"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "TAB6",
+      "identifier": "LAK_TABLES_TAB6",
+      "recarray": "tables",
+      "type": "LOGICAL",
+      "help": "head keyword. keyword to specify that record corresponds to a table file.",
+      "rubrique": [
+        "TABLES"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "FILEIN",
+      "identifier": "LAK_TABLES_FILEIN",
+      "recarray": "tables",
+      "type": "LOGICAL",
+      "help": "file keyword. keyword to specify that an input filename is expected next.",
+      "rubrique": [
+        "TABLES"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "TAB6_FILENAME",
+      "identifier": "LAK_TABLES_TAB6_FILENAME",
+      "recarray": "tables",
+      "type": "STRING",
+      "help": "table file name. character string that defines the path and filename for the file containing lake table data for the lake connection. The TAB6\\_FILENAME file includes the number of entries in the file and the relation between stage, volume, and surface area for each entry in the file. Lake table files for EMBEDDEDH and EMBEDDEDV lake-GWF connections also include lake-GWF exchange area data for each entry in the file. Instructions for creating the TAB6\\_FILENAME input file are provided in Lake Table Input File section.",
+      "rubrique": [
+        "TABLES"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "OUTLETNO",
+      "identifier": "LAK_OUTLETS_OUTLETNO",
+      "recarray": "outlets",
+      "type": "INTEGER",
+      "help": "outlet number for this entry. integer value that defines the outlet number associated with the specified OUTLETS data on the line. OUTLETNO must be greater than zero and less than or equal to NOUTLETS. Outlet information must be specified for every outlet or the program will terminate with an error. The program will also terminate with an error if information for a outlet is specified more than once.",
+      "rubrique": [
+        "OUTLETS"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "LAKEIN",
+      "identifier": "LAK_OUTLETS_LAKEIN",
+      "recarray": "outlets",
+      "type": "INTEGER",
+      "help": "lake number for upstream lake. integer value that defines the lake number that outlet is connected to. LAKEIN must be greater than zero and less than or equal to NLAKES.",
+      "rubrique": [
+        "OUTLETS"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "LAKEOUT",
+      "identifier": "LAK_OUTLETS_LAKEOUT",
+      "recarray": "outlets",
+      "type": "INTEGER",
+      "help": "lake number for downstream lake. integer value that defines the lake number that outlet discharge from lake outlet OUTLETNO is routed to. LAKEOUT must be greater than or equal to zero and less than or equal to NLAKES. If LAKEOUT is zero, outlet discharge from lake outlet OUTLETNO is discharged to an external boundary.",
+      "rubrique": [
+        "OUTLETS"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "COUTTYPE",
+      "identifier": "LAK_OUTLETS_COUTTYPE",
+      "recarray": "outlets",
+      "type": "STRING",
+      "help": "outlet type. character string that defines the outlet type for the outlet OUTLETNO. Possible COUTTYPE strings include: SPECIFIED--character keyword to indicate the outlet is defined as a specified flow.  MANNING--character keyword to indicate the outlet is defined using Manning's equation. WEIR--character keyword to indicate the outlet is defined using a sharp weir equation.",
+      "rubrique": [
+        "OUTLETS"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "INVERT",
+      "identifier": "LAK_OUTLETS_INVERT",
+      "recarray": "outlets",
+      "type": "REAL",
+      "help": "invert elevation. real value that defines the invert elevation for the lake outlet. Any value can be specified if COUTTYPE is SPECIFIED. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "OUTLETS"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "WIDTH",
+      "identifier": "LAK_OUTLETS_WIDTH",
+      "recarray": "outlets",
+      "type": "REAL",
+      "help": "outlet width. real value that defines the width of the lake outlet. Any value can be specified if COUTTYPE is SPECIFIED. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "OUTLETS"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "ROUGH",
+      "identifier": "LAK_OUTLETS_ROUGH",
+      "recarray": "outlets",
+      "type": "REAL",
+      "help": "roughness coefficient. real value that defines the roughness coefficient for the lake outlet. Any value can be specified if COUTTYPE is not MANNING. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "OUTLETS"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "SLOPE",
+      "identifier": "LAK_OUTLETS_SLOPE",
+      "recarray": "outlets",
+      "type": "REAL",
+      "help": "bed slope. real value that defines the bed slope for the lake outlet. Any value can be specified if COUTTYPE is not MANNING. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "OUTLETS"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "NUMBER",
+      "identifier": "LAK_PERIODDATA_NUMBER",
+      "recarray": "perioddata",
+      "type": "INTEGER",
+      "help": "lake or outlet number for this entry. integer value that defines the lake or outlet number associated with the specified PERIOD data on the line.  NUMBER must be greater than zero and less than or equal to NLAKES for a lake number and less than or equal to NOUTLETS for an outlet number.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "LAK",
+      "keyword": "LAKSETTING",
+      "identifier": "LAK_PERIODDATA_LAKSETTING",
+      "recarray": "perioddata",
+      "type": "STRUCT",
+      "help": "line of information that is parsed into a keyword and values.  Keyword values that can be used to start the LAKSETTING string include both keywords for lake settings and keywords for outlet settings.  Keywords for lake settings include: STATUS, STAGE, RAINFALL, EVAPORATION, RUNOFF, INFLOW, WITHDRAWAL, and AUXILIARY.  Keywords for outlet settings include RATE, INVERT, WIDTH, SLOPE, and ROUGH.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "IFNO",
+      "identifier": "MAW_PACKAGEDATA_IFNO",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "well number for this entry. integer value that defines the feature (well) number associated with the specified PACKAGEDATA data on the line. IFNO must be greater than zero and less than or equal to NMAWWELLS. Multi-aquifer well information must be specified for every multi-aquifer well or the program will terminate with an error.  The program will also terminate with an error if information for a multi-aquifer well is specified more than once.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "RADIUS",
+      "identifier": "MAW_PACKAGEDATA_RADIUS",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "well radius. radius for the multi-aquifer well. The program will terminate with an error if the radius is less than or equal to zero.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "BOTTOM",
+      "identifier": "MAW_PACKAGEDATA_BOTTOM",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "well bottom. bottom elevation of the multi-aquifer well. If CONDEQN is SPECIFIED, THIEM, SKIN, or CUMULATIVE, BOTTOM is set to the cell bottom in the lowermost GWF cell connection in cases where the specified well bottom is above the bottom of this GWF cell. If CONDEQN is MEAN, BOTTOM is set to the lowermost GWF cell connection screen bottom in cases where the specified well bottom is above this value. The bottom elevation defines the lowest well head that will be simulated when the NEWTON UNDER\\_RELAXATION option is specified in the GWF model name file. The bottom elevation is also used to calculate volumetric storage in the well.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "STRT",
+      "identifier": "MAW_PACKAGEDATA_STRT",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "starting head. starting head for the multi-aquifer well. The program will terminate with an error if the starting head is less than the specified well bottom.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "CONDEQN",
+      "identifier": "MAW_PACKAGEDATA_CONDEQN",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "conductance equation. character string that defines the conductance equation that is used to calculate the saturated conductance for the multi-aquifer well. Possible multi-aquifer well CONDEQN strings include: SPECIFIED--character keyword to indicate the multi-aquifer well saturated conductance will be specified.  THIEM--character keyword to indicate the multi-aquifer well saturated conductance will be calculated using the Thiem equation, which considers the cell top and bottom, aquifer hydraulic conductivity, and effective cell and well radius.  SKIN--character keyword to indicate that the multi-aquifer well saturated conductance will be calculated using the cell top and bottom, aquifer and screen hydraulic conductivity, and well and skin radius.  CUMULATIVE--character keyword to indicate that the multi-aquifer well saturated conductance will be calculated using a combination of the Thiem and SKIN equations.  MEAN--character keyword to indicate the multi-aquifer well saturated conductance will be calculated using the aquifer and screen top and bottom, aquifer and screen hydraulic conductivity, and well and skin radius. The CUMULATIVE conductance equation is identical to the SKIN LOSSTYPE in the Multi-Node Well (MNW2) package for MODFLOW-2005. The program will terminate with an error condition if CONDEQN is SKIN or CUMULATIVE and the calculated saturated conductance is less than zero; if an error condition occurs, it is suggested that the THIEM or MEAN conductance equations be used for these multi-aquifer wells.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "NGWFNODES",
+      "identifier": "MAW_PACKAGEDATA_NGWFNODES",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "number of connected GWF cells. integer value that defines the number of GWF nodes connected to this (IFNO) multi-aquifer well. NGWFNODES must be greater than zero.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "AUX",
+      "identifier": "MAW_PACKAGEDATA_AUX",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "BOUNDNAME",
+      "identifier": "MAW_PACKAGEDATA_BOUNDNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "well name",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "IFNO",
+      "identifier": "MAW_CONNECTIONDATA_IFNO",
+      "recarray": "connectiondata",
+      "type": "INTEGER",
+      "help": "well number for this entry. integer value that defines the feature (well) number associated with the specified CONNECTIONDATA data on the line. IFNO must be greater than zero and less than or equal to NMAWWELLS. Multi-aquifer well connection information must be specified for every multi-aquifer well connection to the GWF model (NGWFNODES) or the program will terminate with an error.  The program will also terminate with an error if connection information for a multi-aquifer well connection to the GWF model is specified more than once.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "ICON",
+      "identifier": "MAW_CONNECTIONDATA_ICON",
+      "recarray": "connectiondata",
+      "type": "INTEGER",
+      "help": "connection number. integer value that defines the GWF connection number for this multi-aquifer well connection entry. ICONN must be greater than zero and less than or equal to NGWFNODES for multi-aquifer well IFNO.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "CELLID",
+      "identifier": "MAW_CONNECTIONDATA_CELLID",
+      "recarray": "connectiondata",
+      "type": "INTEGER",
+      "help": "cell identifier. is the cell identifier, and depends on the type of grid that is used for the simulation.  For a structured grid that uses the DIS input file, CELLID is the layer, row, and column.   For a grid that uses the DISV input file, CELLID is the layer and CELL2D number.  If the model uses the unstructured discretization (DISU) input file, CELLID is the node number for the cell. One or more screened intervals can be connected to the same CELLID if CONDEQN for a well is MEAN. The program will terminate with an error if MAW wells using SPECIFIED, THIEM, SKIN, or CUMULATIVE conductance equations have more than one connection to the same CELLID.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "SCRN_TOP",
+      "identifier": "MAW_CONNECTIONDATA_SCRN_TOP",
+      "recarray": "connectiondata",
+      "type": "REAL",
+      "help": "screen top. value that defines the top elevation of the screen for the multi-aquifer well connection. If CONDEQN is SPECIFIED, THIEM, SKIN, or CUMULATIVE, SCRN\\_TOP can be any value and is set to the top of the cell. If CONDEQN is MEAN, SCRN\\_TOP is set to the multi-aquifer well connection cell top if the specified value is greater than the cell top. The program will terminate with an error if the screen top is less than the screen bottom.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "SCRN_BOT",
+      "identifier": "MAW_CONNECTIONDATA_SCRN_BOT",
+      "recarray": "connectiondata",
+      "type": "REAL",
+      "help": "screen bottom. value that defines the bottom elevation of the screen for the multi-aquifer well connection. If CONDEQN is SPECIFIED, THIEM, SKIN, or CUMULATIVE, SCRN\\_BOT can be any value and is set to the bottom of the cell. If CONDEQN is MEAN, SCRN\\_BOT is set to the multi-aquifer well connection cell bottom if the specified value is less than the cell bottom. The program will terminate with an error if the screen bottom is greater than the screen top.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "HK_SKIN",
+      "identifier": "MAW_CONNECTIONDATA_HK_SKIN",
+      "recarray": "connectiondata",
+      "type": "REAL",
+      "help": "skin data. value that defines the skin (filter pack) hydraulic conductivity (if CONDEQN for the multi-aquifer well is SKIN, CUMULATIVE, or MEAN) or conductance (if CONDEQN for the multi-aquifer well is SPECIFIED) for each GWF node connected to the multi-aquifer well (NGWFNODES). If CONDEQN is SPECIFIED, HK\\_SKIN must be greater than or equal to zero.  HK\\_SKIN can be any value if CONDEQN is THIEM. Otherwise, HK\\_SKIN must be greater than zero. If CONDEQN is SKIN, the contrast between the cell transmissivity (the product of geometric mean horizontal hydraulic conductivity and the cell thickness) and the well transmissivity (the product of HK\\_SKIN and the screen thicknesses) must be greater than one in node CELLID or the program will terminate with an error condition; if an error condition occurs, it is suggested that the HK\\_SKIN be reduced to a value less than K11 and K22 in node CELLID or the THIEM or MEAN conductance equations be used for these multi-aquifer wells.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "RADIUS_SKIN",
+      "identifier": "MAW_CONNECTIONDATA_RADIUS_SKIN",
+      "recarray": "connectiondata",
+      "type": "REAL",
+      "help": "skin radius. real value that defines the skin radius (filter pack radius) for the multi-aquifer well. RADIUS\\_SKIN can be any value if CONDEQN is SPECIFIED or THIEM. If CONDEQN is SKIN, CUMULATIVE, or MEAN, the program will terminate with an error if  RADIUS\\_SKIN is less than or equal to the RADIUS for the multi-aquifer well.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "IFNO",
+      "identifier": "MAW_PERIODDATA_IFNO",
+      "recarray": "perioddata",
+      "type": "INTEGER",
+      "help": "well number for this entry. integer value that defines the well number associated with the specified PERIOD data on the line. IFNO must be greater than zero and less than or equal to NMAWWELLS.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "MAW",
+      "keyword": "MAWSETTING",
+      "identifier": "MAW_PERIODDATA_MAWSETTING",
+      "recarray": "perioddata",
+      "type": "STRUCT",
+      "help": "line of information that is parsed into a keyword and values.  Keyword values that can be used to start the MAWSETTING string include: STATUS, FLOWING\\_WELL, RATE, WELL\\_HEAD, HEAD\\_LIMIT, SHUT\\_OFF, RATE\\_SCALING, and AUXILIARY.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "MVR",
+      "keyword": "MNAME",
+      "identifier": "MVR_PACKAGES_MNAME",
+      "recarray": "packages",
+      "type": "STRING",
+      "help": "name of model containing the package.  Model names are assigned by the user in the simulation name file.",
+      "rubrique": [
+        "PACKAGES"
+      ]
+    },
+    {
+      "package": "MVR",
+      "keyword": "PNAME",
+      "identifier": "MVR_PACKAGES_PNAME",
+      "recarray": "packages",
+      "type": "STRING",
+      "help": "is the name of a package that may be included in a subsequent stress period block.  The package name is assigned in the name file for the GWF Model.  Package names are optionally provided in the name file.  If they are not provided by the user, then packages are assigned a default value, which is the package acronym followed by a hyphen and the package number.  For example, the first Drain Package is named DRN-1.  The second Drain Package is named DRN-2, and so forth.",
+      "rubrique": [
+        "PACKAGES"
+      ]
+    },
+    {
+      "package": "MVR",
+      "keyword": "MNAME1",
+      "identifier": "MVR_PERIODDATA_MNAME1",
+      "recarray": "perioddata",
+      "type": "STRING",
+      "help": "name of model containing the package, PNAME1.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "MVR",
+      "keyword": "PNAME1",
+      "identifier": "MVR_PERIODDATA_PNAME1",
+      "recarray": "perioddata",
+      "type": "STRING",
+      "help": "provider package name. is the package name for the provider.  The package PNAME1 must be designated to provide water through the MVR Package by specifying the keyword ``MOVER'' in its OPTIONS block.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "MVR",
+      "keyword": "ID1",
+      "identifier": "MVR_PERIODDATA_ID1",
+      "recarray": "perioddata",
+      "type": "INTEGER",
+      "help": "provider reach. is the identifier for the provider.  For the standard boundary packages, the provider identifier is the number of the boundary as it is listed in the package input file. (Note that the order of these boundaries may change by stress period, which must be accounted for in the Mover Package.)  So the first well has an identifier of one.  The second is two, and so forth.  For the advanced packages, the identifier is the reach number (SFR Package), well number (MAW Package), or UZF cell number.  For the Lake Package, ID1 is the lake outlet number.  Thus, outflows from a single lake can be routed to different streams, for example.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "MVR",
+      "keyword": "MNAME2",
+      "identifier": "MVR_PERIODDATA_MNAME2",
+      "recarray": "perioddata",
+      "type": "STRING",
+      "help": "name of model containing the package, PNAME2.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "MVR",
+      "keyword": "PNAME2",
+      "identifier": "MVR_PERIODDATA_PNAME2",
+      "recarray": "perioddata",
+      "type": "STRING",
+      "help": "receiver package name. is the package name for the receiver.  The package PNAME2 must be designated to receive water from the MVR Package by specifying the keyword ``MOVER'' in its OPTIONS block.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "MVR",
+      "keyword": "ID2",
+      "identifier": "MVR_PERIODDATA_ID2",
+      "recarray": "perioddata",
+      "type": "INTEGER",
+      "help": "receiver reach. is the identifier for the receiver.  The receiver identifier is the reach number (SFR Package), Lake number (LAK Package), well number (MAW Package), or UZF cell number.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "MVR",
+      "keyword": "MVRTYPE",
+      "identifier": "MVR_PERIODDATA_MVRTYPE",
+      "recarray": "perioddata",
+      "type": "STRING",
+      "help": "mover type. is the character string signifying the method for determining how much water will be moved.  Supported values are ``FACTOR'' ``EXCESS'' ``THRESHOLD'' and ``UPTO''.  These four options determine how the receiver flow rate, $Q_R$, is calculated.  These options mirror the options defined for the cprior variable in the SFR package, with the term ``FACTOR'' being functionally equivalent to the ``FRACTION'' option for cprior.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "MVR",
+      "keyword": "VALUE",
+      "identifier": "MVR_PERIODDATA_VALUE",
+      "recarray": "perioddata",
+      "type": "REAL",
+      "help": "mover value. is the value to be used in the equation for calculating the amount of water to move.  For the ``FACTOR'' option, VALUE is the $\\alpha$ factor.  For the remaining options, VALUE is the specified flow rate, $Q_S$.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "NAM",
+      "keyword": "FTYPE",
+      "identifier": "NAM_PACKAGES_FTYPE",
+      "recarray": "packages",
+      "type": "STRING",
+      "help": "package type. is the file type, which must be one of the following character values shown in table~\\ref{table:ftype-gwf}. Ftype may be entered in any combination of uppercase and lowercase.",
+      "rubrique": [
+        "PACKAGES"
+      ]
+    },
+    {
+      "package": "NAM",
+      "keyword": "FNAME",
+      "identifier": "NAM_PACKAGES_FNAME",
+      "recarray": "packages",
+      "type": "STRING",
+      "help": "file name. is the name of the file containing the package input.  The path to the file should be included if the file is not located in the folder where the program was run.",
+      "rubrique": [
+        "PACKAGES"
+      ]
+    },
+    {
+      "package": "NAM",
+      "keyword": "PNAME",
+      "identifier": "NAM_PACKAGES_PNAME",
+      "recarray": "packages",
+      "type": "STRING",
+      "help": "user name for package. is the user-defined name for the package. PNAME is restricted to 16 characters.  No spaces are allowed in PNAME.  PNAME character values are read and stored by the program for stress packages only.  These names may be useful for labeling purposes when multiple stress packages of the same type are located within a single GWF Model.  If PNAME is specified for a stress package, then PNAME will be used in the flow budget table in the listing file; it will also be used for the text entry in the cell-by-cell budget file.  PNAME is case insensitive and is stored in all upper case letters.",
+      "rubrique": [
+        "PACKAGES"
+      ]
+    },
+    {
+      "package": "RCH",
+      "keyword": "CELLID",
+      "identifier": "RCH_STRESS_PERIOD_DATA_CELLID",
+      "recarray": "stress_period_data",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "RCH",
+      "keyword": "RECHARGE",
+      "identifier": "RCH_STRESS_PERIOD_DATA_RECHARGE",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "recharge rate. is the recharge flux rate ($LT^{-1}$).  This rate is multiplied inside the program by the surface area of the cell to calculate the volumetric recharge rate. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "RCH",
+      "keyword": "AUX",
+      "identifier": "RCH_STRESS_PERIOD_DATA_AUX",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "RCH",
+      "keyword": "BOUNDNAME",
+      "identifier": "RCH_STRESS_PERIOD_DATA_BOUNDNAME",
+      "recarray": "stress_period_data",
+      "type": "STRING",
+      "help": "recharge name",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "RIV",
+      "keyword": "CELLID",
+      "identifier": "RIV_STRESS_PERIOD_DATA_CELLID",
+      "recarray": "stress_period_data",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "RIV",
+      "keyword": "STAGE",
+      "identifier": "RIV_STRESS_PERIOD_DATA_STAGE",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "river stage. is the head in the river. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "RIV",
+      "keyword": "COND",
+      "identifier": "RIV_STRESS_PERIOD_DATA_COND",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "river conductance. is the riverbed hydraulic conductance. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "RIV",
+      "keyword": "RBOT",
+      "identifier": "RIV_STRESS_PERIOD_DATA_RBOT",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "river bottom elevation. is the elevation of the bottom of the riverbed.  If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "RIV",
+      "keyword": "AUX",
+      "identifier": "RIV_STRESS_PERIOD_DATA_AUX",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "RIV",
+      "keyword": "BOUNDNAME",
+      "identifier": "RIV_STRESS_PERIOD_DATA_BOUNDNAME",
+      "recarray": "stress_period_data",
+      "type": "STRING",
+      "help": "drain name",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "IFNO",
+      "identifier": "SFR_PACKAGEDATA_IFNO",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "reach number for this entry. integer value that defines the feature (reach) number associated with the specified PACKAGEDATA data on the line. IFNO must be greater than zero and less than or equal to NREACHES. Reach information must be specified for every reach or the program will terminate with an error.  The program will also terminate with an error if information for a reach is specified more than once.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "CELLID",
+      "identifier": "SFR_PACKAGEDATA_CELLID",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "cell identifier. is the cell identifier, and depends on the type of grid that is used for the simulation. For a structured grid that uses the DIS input file, CELLID is the layer, row, and column. For a grid that uses the DISV input file, CELLID is the layer and CELL2D number. If the model uses the unstructured discretization (DISU) input file, CELLID is the node number for the cell. For reaches that are not connected to an underlying GWF cell, a zero should be specified for each grid dimension. For example, for a DIS grid a CELLID of 0 0 0 should be specified. Reach-aquifer flow is not calculated for unconnected reaches. The keyword NONE can be still be specified to identify unconnected reaches for backward compatibility with previous versions of MODFLOW 6 but eventually NONE will be deprecated and will cause MODFLOW 6 to terminate with an error.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "RLEN",
+      "identifier": "SFR_PACKAGEDATA_RLEN",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "reach length. real value that defines the reach length. RLEN must be greater than zero.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "RWID",
+      "identifier": "SFR_PACKAGEDATA_RWID",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "reach width. real value that defines the reach width. RWID must be greater than zero.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "RGRD",
+      "identifier": "SFR_PACKAGEDATA_RGRD",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "stream gradient. real value that defines the stream gradient (slope) across the reach. RGRD must be greater than zero.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "RTP",
+      "identifier": "SFR_PACKAGEDATA_RTP",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "reach streambed top elevation. real value that defines the top elevation of the streambed of a reach.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "RBTH",
+      "identifier": "SFR_PACKAGEDATA_RBTH",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "streambed thickness. real value that defines the thickness of the reach streambed. RBTH can be any value if the reach is not connected to an underlying GWF cell. Otherwise, RBTH must be greater than zero.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "RHK",
+      "identifier": "SFR_PACKAGEDATA_RHK",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "reach bed hydraulic conductivity. real or character value that defines the hydraulic conductivity of the reach streambed. RHK can be any positive value if the reach is not connected to an underlying GWF cell. Otherwise, RHK must be greater than zero. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "MAN",
+      "identifier": "SFR_PACKAGEDATA_MAN",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "Manning's roughness coefficient. real or character value that defines the Manning's roughness coefficient for the reach. MAN must be greater than zero.  If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "NCON",
+      "identifier": "SFR_PACKAGEDATA_NCON",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "number of connected reaches. integer value that defines the number of reaches connected to the reach.  If a value of zero is specified for NCON an entry for IFNO is still required in the subsequent CONNECTIONDATA block.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "USTRF",
+      "identifier": "SFR_PACKAGEDATA_USTRF",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "fraction of upstream flow. real value that defines the fraction of upstream flow from each upstream reach that is applied as upstream inflow to the reach. The sum of all USTRF values for all reaches connected to the same upstream reach must be equal to one and USTRF must be greater than or equal to zero. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "NDV",
+      "identifier": "SFR_PACKAGEDATA_NDV",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "number of downstream reaches. integer value that defines the number of downstream diversions for the reach.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "AUX",
+      "identifier": "SFR_PACKAGEDATA_AUX",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "BOUNDNAME",
+      "identifier": "SFR_PACKAGEDATA_BOUNDNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "well name",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "IFNO",
+      "identifier": "SFR_CROSSSECTIONS_IFNO",
+      "recarray": "crosssections",
+      "type": "INTEGER",
+      "help": "reach number for this entry. integer value that defines the feature (reach) number associated with the specified cross-section table file on the line. IFNO must be greater than zero and less than or equal to NREACHES. The program will also terminate with an error if table information for a reach is specified more than once.",
+      "rubrique": [
+        "CROSSSECTIONS"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "TAB6",
+      "identifier": "SFR_CROSSSECTIONS_TAB6",
+      "recarray": "crosssections",
+      "type": "LOGICAL",
+      "help": "head keyword. keyword to specify that record corresponds to a cross-section table file.",
+      "rubrique": [
+        "CROSSSECTIONS"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "FILEIN",
+      "identifier": "SFR_CROSSSECTIONS_FILEIN",
+      "recarray": "crosssections",
+      "type": "LOGICAL",
+      "help": "file keyword. keyword to specify that an input filename is expected next.",
+      "rubrique": [
+        "CROSSSECTIONS"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "TAB6_FILENAME",
+      "identifier": "SFR_CROSSSECTIONS_TAB6_FILENAME",
+      "recarray": "crosssections",
+      "type": "STRING",
+      "help": "table file name. character string that defines the path and filename for the file containing cross-section table data for the reach. The TAB6\\_FILENAME file includes the number of entries in the file and the station elevation data in terms of the fractional width and the reach depth. Instructions for creating the TAB6\\_FILENAME input file are provided in SFR Reach Cross-Section Table Input File section.",
+      "rubrique": [
+        "CROSSSECTIONS"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "IFNO",
+      "identifier": "SFR_CONNECTIONDATA_IFNO",
+      "recarray": "connectiondata",
+      "type": "INTEGER",
+      "help": "reach number for this entry. integer value that defines the feature (reach) number associated with the specified CONNECTIONDATA data on the line. IFNO must be greater than zero and less than or equal to NREACHES. Reach connection information must be specified for every reach or the program will terminate with an error.  The program will also terminate with an error if connection information for a reach is specified more than once.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "IC",
+      "identifier": "SFR_CONNECTIONDATA_IC",
+      "recarray": "connectiondata",
+      "type": "INTEGER",
+      "help": "connected reach numbers. integer value that defines the reach number of the reach connected to the current reach and whether it is connected to the upstream or downstream end of the reach. Negative IC numbers indicate connected reaches are connected to the downstream end of the current reach. Positive IC numbers indicate connected reaches are connected to the upstream end of the current reach. The absolute value of IC must be greater than zero and less than or equal to NREACHES. IC should not be specified when NCON is zero but must be specified otherwise.",
+      "rubrique": [
+        "CONNECTIONDATA"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "IFNO",
+      "identifier": "SFR_DIVERSIONS_IFNO",
+      "recarray": "diversions",
+      "type": "INTEGER",
+      "help": "reach number for this entry. integer value that defines the feature (reach) number associated with the specified DIVERSIONS data on the line. IFNO must be greater than zero and less than or equal to NREACHES.  Reach diversion information must be specified for every reach with a NDV value greater than 0 or the program will terminate with an error.  The program will also terminate with an error if diversion information for a given reach diversion is specified more than once.",
+      "rubrique": [
+        "DIVERSIONS"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "IDV",
+      "identifier": "SFR_DIVERSIONS_IDV",
+      "recarray": "diversions",
+      "type": "INTEGER",
+      "help": "downstream diversion number. integer value that defines the downstream diversion number for the diversion for reach IFNO. IDV must be greater than zero and less than or equal to NDV for reach IFNO.",
+      "rubrique": [
+        "DIVERSIONS"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "ICONR",
+      "identifier": "SFR_DIVERSIONS_ICONR",
+      "recarray": "diversions",
+      "type": "INTEGER",
+      "help": "downstream reach number for diversion. integer value that defines the downstream reach that will receive the diverted water. IDV must be greater than zero and less than or equal to NREACHES. Furthermore, reach  ICONR must be a downstream connection for reach IFNO.",
+      "rubrique": [
+        "DIVERSIONS"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "CPRIOR",
+      "identifier": "SFR_DIVERSIONS_CPRIOR",
+      "recarray": "diversions",
+      "type": "STRING",
+      "help": "iprior code. character string value that defines the the prioritization system for the diversion, such as when insufficient water is available to meet all diversion stipulations, and is used in conjunction with the value of FLOW value specified in the STRESS\\_PERIOD\\_DATA section. Available diversion options include:  (1) CPRIOR = `FRACTION', then the amount of the diversion is computed as a fraction of the streamflow leaving reach IFNO ($Q_{DS}$); in this case, 0.0 $\\le$ DIVFLOW $\\le$ 1.0.  (2) CPRIOR = `EXCESS', a diversion is made only if $Q_{DS}$ for reach IFNO exceeds the value of DIVFLOW. If this occurs, then the quantity of water diverted is the excess flow ($Q_{DS} -$ DIVFLOW) and $Q_{DS}$ from reach IFNO is set equal to DIVFLOW. This represents a flood-control type of diversion, as described by Danskin and Hanson (2002). (3) CPRIOR = `THRESHOLD', then if $Q_{DS}$ in reach IFNO is less than the specified diversion flow DIVFLOW, no water is diverted from reach IFNO. If $Q_{DS}$ in reach IFNO is greater than or equal to DIVFLOW, DIVFLOW is diverted and $Q_{DS}$ is set to the remainder ($Q_{DS} -$ DIVFLOW)). This approach assumes that once flow in the stream is sufficiently low, diversions from the stream cease, and is the `priority' algorithm that originally was programmed into the STR1 Package (Prudic, 1989).  (4) CPRIOR = `UPTO' -- if $Q_{DS}$ in reach IFNO is greater than or equal to the specified diversion flow DIVFLOW, $Q_{DS}$ is reduced by DIVFLOW. If $Q_{DS}$ in reach IFNO is less than DIVFLOW, DIVFLOW is set to $Q_{DS}$ and there will be no flow available for reaches connected to downstream end of reach IFNO.",
+      "rubrique": [
+        "DIVERSIONS"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "IFNO",
+      "identifier": "SFR_INITIALSTAGES_IFNO",
+      "recarray": "initialstages",
+      "type": "INTEGER",
+      "help": "reach number for this entry. integer value that defines the feature (reach) number associated with the specified initial stage. Initial stage data must be specified for every reach or the program will terminate with an error. The program will also terminate with a error if IFNO is less than one or greater than NREACHES.",
+      "rubrique": [
+        "INITIALSTAGES"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "INITIALSTAGE",
+      "identifier": "SFR_INITIALSTAGES_INITIALSTAGE",
+      "recarray": "initialstages",
+      "type": "REAL",
+      "help": "initial reach stage. real value that defines the initial stage for the reach. The program will terminate with an error if INITIALSTAGE is less than the RTP value for reach IFNO defined in the PACKAGEDATA block.  INITIALSTAGE data are used only if STORAGE is specified in the Options block and the first stress period is transient or for reaches defined to use the SIMPLE STATUS in the Period block.",
+      "rubrique": [
+        "INITIALSTAGES"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "IFNO",
+      "identifier": "SFR_PERIODDATA_IFNO",
+      "recarray": "perioddata",
+      "type": "INTEGER",
+      "help": "reach number for this entry. integer value that defines the feature (reach) number associated with the specified PERIOD data on the line. IFNO must be greater than zero and less than or equal to NREACHES.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "SFR",
+      "keyword": "SFRSETTING",
+      "identifier": "SFR_PERIODDATA_SFRSETTING",
+      "recarray": "perioddata",
+      "type": "STRUCT",
+      "help": "line of information that is parsed into a keyword and values.  Keyword values that can be used to start the SFRSETTING string include: STATUS, BEDK, MANNING, STAGE, INFLOW, RAINFALL, EVAPORATION, RUNOFF, DIVERSION, UPSTREAM\\_FRACTION, and AUXILIARY.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "IFNO",
+      "identifier": "UZF_PACKAGEDATA_IFNO",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "uzf id number for this entry. integer value that defines the feature (UZF object) number associated with the specified PACKAGEDATA data on the line. IFNO must be greater than zero and less than or equal to NUZFCELLS.  UZF information must be specified for every UZF cell or the program will terminate with an error.  The program will also terminate with an error if information for a UZF cell is specified more than once.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "CELLID",
+      "identifier": "UZF_PACKAGEDATA_CELLID",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "LANDFLAG",
+      "identifier": "UZF_PACKAGEDATA_LANDFLAG",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "land flag. integer value set to one for land surface cells indicating that boundary conditions can be applied and data can be specified in the PERIOD block. A value of 0 specifies a non-land surface cell.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "IVERTCON",
+      "identifier": "UZF_PACKAGEDATA_IVERTCON",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "vertical connection flag. integer value set to specify underlying UZF cell that receives water flowing to bottom of cell. If unsaturated zone flow reaches the water table before the cell bottom, then water is added to the GWF cell instead of flowing to the underlying UZF cell. A value of 0 indicates the UZF cell is not connected to an underlying UZF cell.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "SURFDEP",
+      "identifier": "UZF_PACKAGEDATA_SURFDEP",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "surface depression depth. is the surface depression depth of the UZF cell.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "VKS",
+      "identifier": "UZF_PACKAGEDATA_VKS",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "vertical saturated hydraulic conductivity. is the saturated vertical hydraulic conductivity of the UZF cell.  This value is used with the Brooks-Corey function and the simulated water content to calculate the partially saturated hydraulic conductivity.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "THTR",
+      "identifier": "UZF_PACKAGEDATA_THTR",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "residual water content. is the residual (irreducible) water content of the UZF cell.  This residual water is not available to plants and will not drain into underlying aquifer cells.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "THTS",
+      "identifier": "UZF_PACKAGEDATA_THTS",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "saturated water content. is the saturated water content of the UZF cell.  The values for saturated and residual water content should be set in a manner that is consistent with the specific yield value specified in the Storage Package.  The saturated water content must be greater than the residual content.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "THTI",
+      "identifier": "UZF_PACKAGEDATA_THTI",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "initial water content. is the initial water content of the UZF cell.  The value must be greater than or equal to the residual water content and less than or equal to the saturated water content.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "EPS",
+      "identifier": "UZF_PACKAGEDATA_EPS",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "Brooks-Corey exponent. is the exponent used in the Brooks-Corey function.  The Brooks-Corey function is used by UZF to calculated hydraulic conductivity under partially saturated conditions as a function of water content and the user-specified saturated hydraulic conductivity.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "BOUNDNAME",
+      "identifier": "UZF_PACKAGEDATA_BOUNDNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "well name",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "IFNO",
+      "identifier": "UZF_PERIODDATA_IFNO",
+      "recarray": "perioddata",
+      "type": "INTEGER",
+      "help": "UZF id number. integer value that defines the feature (UZF object) number associated with the specified PERIOD data on the line.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "FINF",
+      "identifier": "UZF_PERIODDATA_FINF",
+      "recarray": "perioddata",
+      "type": "STRING",
+      "help": "infiltration rate. real or character value that defines the applied infiltration rate of the UZF cell ($LT^{-1}$). If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "PET",
+      "identifier": "UZF_PERIODDATA_PET",
+      "recarray": "perioddata",
+      "type": "STRING",
+      "help": "potential ET rate. real or character value that defines the potential evapotranspiration rate of the UZF cell and specified GWF cell. Evapotranspiration is first removed from the unsaturated zone and any remaining potential evapotranspiration is applied to the saturated zone. If IVERTCON is greater than zero then residual potential evapotranspiration not satisfied in the UZF cell is applied to the underlying UZF and GWF cells. PET is always specified, but is only used if SIMULATE\\_ET is specified in the OPTIONS block. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "EXTDP",
+      "identifier": "UZF_PERIODDATA_EXTDP",
+      "recarray": "perioddata",
+      "type": "STRING",
+      "help": "extinction depth. real or character value that defines the evapotranspiration extinction depth of the UZF cell. If IVERTCON is greater than zero and EXTDP extends below the GWF cell bottom then remaining potential evapotranspiration is applied to the underlying UZF and GWF cells. EXTDP is always specified, but is only used if SIMULATE\\_ET is specified in the OPTIONS block. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "EXTWC",
+      "identifier": "UZF_PERIODDATA_EXTWC",
+      "recarray": "perioddata",
+      "type": "STRING",
+      "help": "extinction water content. real or character value that defines the evapotranspiration extinction water content of the UZF cell. EXTWC is always specified, but is only used if SIMULATE\\_ET and UNSAT\\_ETWC are specified in the OPTIONS block. The evapotranspiration rate from the unsaturated zone will be set to zero when the calculated water content is at or less than this value.  The value for EXTWC cannot be less than the residual water content, and if it is specified as being less than the residual water content it is set to the residual water content. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "HA",
+      "identifier": "UZF_PERIODDATA_HA",
+      "recarray": "perioddata",
+      "type": "STRING",
+      "help": "air entry potential. real or character value that defines the air entry potential (head) of the UZF cell. HA is always specified, but is only used if SIMULATE\\_ET and UNSAT\\_ETAE are specified in the OPTIONS block. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "HROOT",
+      "identifier": "UZF_PERIODDATA_HROOT",
+      "recarray": "perioddata",
+      "type": "STRING",
+      "help": "root potential. real or character value that defines the root potential (head) of the UZF cell. HROOT is always specified, but is only used if SIMULATE\\_ET and UNSAT\\_ETAE are specified in the OPTIONS block. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "ROOTACT",
+      "identifier": "UZF_PERIODDATA_ROOTACT",
+      "recarray": "perioddata",
+      "type": "STRING",
+      "help": "root activity function. real or character value that defines the root activity function of the UZF cell. ROOTACT is the length of roots in a given volume of soil divided by that volume. Values range from 0 to about 3 $cm^{-2}$, depending on the plant community and its stage of development. ROOTACT is always specified, but is only used if SIMULATE\\_ET and UNSAT\\_ETAE are specified in the OPTIONS block. If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "UZF",
+      "keyword": "AUX",
+      "identifier": "UZF_PERIODDATA_AUX",
+      "recarray": "perioddata",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "VSC",
+      "keyword": "IVISCSPEC",
+      "identifier": "VSC_PACKAGEDATA_IVISCSPEC",
+      "recarray": "packagedata",
+      "type": "INTEGER",
+      "help": "species number for this entry. integer value that defines the species number associated with the specified PACKAGEDATA data entered on each line. IVISCSPECIES must be greater than zero and less than or equal to NVISCSPECIES. Information must be specified for each of the NVISCSPECIES species or the program will terminate with an error.  The program will also terminate with an error if information for a species is specified more than once.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "VSC",
+      "keyword": "DVISCDC",
+      "identifier": "VSC_PACKAGEDATA_DVISCDC",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "slope of the line that defines the linear relationship between viscosity and temperature or between viscosity and concentration, depending on the type of species entered on each line.. real value that defines the slope of the line defining the linear relationship between viscosity and temperature or between viscosity and concentration, depending on the type of species entered on each line.  If the value of AUXSPECIESNAME entered on a line corresponds to TEMPERATURE\\_SPECIES\\_NAME (in the OPTIONS block), this value will be used when VISCOSITY\\_FUNC is equal to LINEAR (the default) in the OPTIONS block.  When VISCOSITY\\_FUNC is set to NONLINEAR, a value for DVISCDC must be specified though it is not used.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "VSC",
+      "keyword": "CVISCREF",
+      "identifier": "VSC_PACKAGEDATA_CVISCREF",
+      "recarray": "packagedata",
+      "type": "REAL",
+      "help": "reference temperature value or reference concentration value. real value that defines the reference temperature or reference concentration value used for this species in the viscosity equation of state.  If AUXSPECIESNAME entered on a line corresponds to TEMPERATURE\\_SPECIES\\_NAME (in the OPTIONS block), then CVISCREF refers to a reference temperature, otherwise it refers to a reference concentration.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "VSC",
+      "keyword": "MODELNAME",
+      "identifier": "VSC_PACKAGEDATA_MODELNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "modelname. name of a GWT or GWE model used to simulate a species that will be used in the viscosity equation of state.  This name will have no effect if the simulation does not include a GWT or GWE model that corresponds to this GWF model.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "VSC",
+      "keyword": "AUXSPECIESNAME",
+      "identifier": "VSC_PACKAGEDATA_AUXSPECIESNAME",
+      "recarray": "packagedata",
+      "type": "STRING",
+      "help": "auxspeciesname. name of an auxiliary variable in a GWF stress package that will be used for this species to calculate the viscosity values.  If a viscosity value is needed by the Viscosity Package then it will use the temperature or concentration values associated with this AUXSPECIESNAME in the viscosity equation of state.  For advanced stress packages (LAK, SFR, MAW, and UZF) that have an associated advanced transport package (LKT, SFT, MWT, and UZT), the FLOW\\_PACKAGE\\_AUXILIARY\\_NAME option in the advanced transport package can be used to transfer simulated temperature or concentration(s) into the flow package auxiliary variable.  In this manner, the Viscosity Package can calculate viscosity values for lakes, streams, multi-aquifer wells, and unsaturated zone flow cells using simulated concentrations.",
+      "rubrique": [
+        "PACKAGEDATA"
+      ]
+    },
+    {
+      "package": "WEL",
+      "keyword": "CELLID",
+      "identifier": "WEL_STRESS_PERIOD_DATA_CELLID",
+      "recarray": "stress_period_data",
+      "type": "INTEGER",
+      "help": "cell identifier",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "WEL",
+      "keyword": "Q",
+      "identifier": "WEL_STRESS_PERIOD_DATA_Q",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "well rate. is the volumetric well rate. A positive value indicates recharge (injection) and a negative value indicates discharge (extraction). If the Options block includes a TIMESERIESFILE entry (see the ``Time-Variable Input'' section), values can be obtained from a time series by entering the time-series name in place of a numeric value.",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "WEL",
+      "keyword": "AUX",
+      "identifier": "WEL_STRESS_PERIOD_DATA_AUX",
+      "recarray": "stress_period_data",
+      "type": "REAL",
+      "help": "auxiliary variables",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "WEL",
+      "keyword": "BOUNDNAME",
+      "identifier": "WEL_STRESS_PERIOD_DATA_BOUNDNAME",
+      "recarray": "stress_period_data",
+      "type": "STRING",
+      "help": "well name",
+      "rubrique": [
+        "PERIOD"
+      ]
+    },
+    {
+      "package": "TDIS",
+      "keyword": "PERLEN",
+      "identifier": "TDIS_PERIODDATA_PERLEN",
+      "recarray": "perioddata",
+      "type": "REAL",
+      "help": "length of stress period. is the length of a stress period.",
+      "rubrique": [
+        "PERIODDATA"
+      ]
+    },
+    {
+      "package": "TDIS",
+      "keyword": "NSTP",
+      "identifier": "TDIS_PERIODDATA_NSTP",
+      "recarray": "perioddata",
+      "type": "INTEGER",
+      "help": "number of time steps. is the number of time steps in a stress period.",
+      "rubrique": [
+        "PERIODDATA"
+      ]
+    },
+    {
+      "package": "TDIS",
+      "keyword": "TSMULT",
+      "identifier": "TDIS_PERIODDATA_TSMULT",
+      "recarray": "perioddata",
+      "type": "REAL",
+      "help": "number of time steps. is the multiplier for the length of successive time steps. The length of a time step is calculated by multiplying the length of the previous time step by TSMULT. The length of the first time step, $\\Delta t_1$, is related to PERLEN, NSTP, and TSMULT by the relation $\\Delta t_1= perlen \\frac{tsmult - 1}{tsmult^{nstp}-1}$.",
+      "rubrique": [
+        "PERIODDATA"
+      ]
+    },
+    {
+      "package": "OBS",
+      "keyword": "OBSNAME",
+      "identifier": "OBS_CONTINUOUS_OBSNAME",
+      "recarray": "continuous",
+      "type": "STRING",
+      "help": "observation name. string of 1 to 40 nonblank characters used to identify the observation. The identifier need not be unique; however, identification and post-processing of observations in the output files are facilitated if each observation is given a unique name.",
+      "rubrique": [
+        "CONTINUOUS"
+      ]
+    },
+    {
+      "package": "OBS",
+      "keyword": "OBSTYPE",
+      "identifier": "OBS_CONTINUOUS_OBSTYPE",
+      "recarray": "continuous",
+      "type": "STRING",
+      "help": "observation type. a string of characters used to identify the observation type.",
+      "rubrique": [
+        "CONTINUOUS"
+      ]
+    },
+    {
+      "package": "OBS",
+      "keyword": "ID",
+      "identifier": "OBS_CONTINUOUS_ID",
+      "recarray": "continuous",
+      "type": "STRING",
+      "help": "time. Text identifying cell where observation is located. For packages other than NPF, if boundary names are defined in the corresponding package input file, ID can be a boundary name. Otherwise ID is a cellid. If the model discretization is type DIS, cellid is three integers (layer, row, column). If the discretization is DISV, cellid is two integers (layer, cell number). If the discretization is DISU, cellid is one integer (node number).",
+      "rubrique": [
+        "CONTINUOUS"
+      ]
+    },
+    {
+      "package": "OBS",
+      "keyword": "ID2",
+      "identifier": "OBS_CONTINUOUS_ID2",
+      "recarray": "continuous",
+      "type": "STRING",
+      "help": "time. Text identifying cell adjacent to cell identified by ID. The form of ID2 is as described for ID. ID2 is used for intercell-flow observations of a GWF model, for three observation types of the LAK Package, for two observation types of the MAW Package, and one observation type of the UZF Package.",
+      "rubrique": [
+        "CONTINUOUS"
+      ]
+    }
+  ]
+}

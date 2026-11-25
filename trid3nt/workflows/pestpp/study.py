@@ -54,6 +54,7 @@ class Study:
     chosen: list[tuple[str, float, float, bool]]
     sources: dict[str, str]
     fields: dict
+    zones: dict
     options: dict
     method: str
     frame: str
@@ -103,12 +104,14 @@ class Study:
                               "reads and pestpp-glm does not; balance an ies study, or weigh the groups by sigma",
                               error_code="PESTPP_BALANCE_UNSUPPORTED")
         options, _ = keyword_floor([PESTPP], dict(state.keywords))
-        chosen, sources, spatial = [], {}, {}
+        chosen, sources, spatial, zones = [], {}, {}, {}
         for identifier, stated in named.items():
             lower, upper, sources[identifier.lower()], absolute = _bounds(identifier, stated)
             chosen.append((identifier, lower, upper, absolute))
             if isinstance(stated, Mapping) and "pilot_points" in stated:
                 spatial[identifier] = stated["pilot_points"] or {}
+            if isinstance(stated, Mapping) and stated.get("zones"):
+                zones[identifier] = stated["zones"]
         available = env.run.keys() | env.data.keys()
         stages = await read(env, "stages") if "stages" in available else None
         plan = stage_order(stages, screen=tune is not None and int(tune) < len(chosen))
@@ -142,7 +145,7 @@ class Study:
             for group, held in _sigmas(observed).items()))
 
         return cls(workflow, run, work, finished, the_deck, targets, observed, chosen,
-                   sources, fields, options, method, frame, tune, balanced, offsets,
+                   sources, fields, zones, options, method, frame, tune, balanced, offsets,
                    env.supplied.get("method") is not None, rows, plan, stages is not None)
 
     async def stage(self, label: str, fn: Any, /, **kwargs: Any) -> Any:
@@ -156,7 +159,8 @@ class Study:
         selected = {name for name, *_bounds in chosen}
         parameters, templates, instructions = await asyncio.to_thread(
             self.piece.interface, self.work / "deck", where, chosen, the_deck=self.deck, targets=self.targets,
-            spatial={k: v for k, v in self.fields.items() if k in selected})
+            spatial={k: v for k, v in self.fields.items() if k in selected},
+            zones={k: v for k, v in self.zones.items() if k in selected}, sources=self.sources)
         names = {p.name for p in parameters}
         unknown = self.rows.keys() - names - self.authored_names
         if unknown:
@@ -287,11 +291,13 @@ async def calibrate(study: Study) -> str:
                  + "; ".join(f"{group} x{held['factor']:.3g}" for group, held in widening["groups"].items()))
     run = study.run
     run["study"] = {"run_id": handle["run_id"], "tool": method, "model_engine": finished.engine,
-                    "finished_run": finished.run_id, "parameters": {
+                    "finished_run": finished.run_id,                     "parameters": {
                         p.name: {"lower": p.lower, "upper": p.upper,
-                                 "source": sources.get(p.group) or sources.get(p.name) or None,
+                                 "source": p.source or sources.get(p.group) or sources.get(p.name) or None,
                                  "calibrated": best[p.name], "written": best[p.name] * p.scale + p.offset,
-                                 **({"site": list(p.site)} if p.site else {})}
+                                 **({"site": list(p.site)} if p.site else {}),
+                                 **({"zone": p.zone} if p.zone else {}),
+                                 **({"zone_source": p.zone_source} if p.zone_source else {})}
                         for p in parameters},
                     "prior": _priors(parameters, options, fields, files, method),
                     "phi": read_off["phi"], **read_off["kept"], "balanced": balanced, "at_bounds": stuck,

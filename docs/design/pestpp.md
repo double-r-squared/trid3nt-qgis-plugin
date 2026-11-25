@@ -122,17 +122,25 @@ per-parameter columns take precedence over their corresponding global columns.
 
 `authoring/modflow.py` implements the default MODFLOW sequence.
 
-1. The run's staged deck is fetched from where it was staged (`authoring/modflow.py`). Each parameter is a
-   multiplier written into its array's own control record through a PEST template - into the FACTOR of an
-   INTERNAL record (PEST's scale the factor the run stated), or the CONSTANT itself (its scale the run's
-   constant) - so the array's values are never rewritten and the trial writes nothing else before `mf6`. The multiplier starts
-   at 1 and is log-transformed. An array read from its own file, or stated per layer with different factors,
-   refuses. A column of a list package's PACKAGEDATA (SFR's rlen, rwid, rgrd, rtp, rbth, rhk, man) is tuned the
-   same way, the template writing the multiplier into that column of every row and PEST's scale the one value the
-   rows state (rows stating different values refuse). Bounds in the run's own unit are divided by that scale, and
-   refuse over an INTERNAL array (whose FACTOR is not its values) and where the run's own value lies outside them.
-   An array stated with `pilot_points` is laid by pilot points instead (Pilot points, below), and a trial runs
-   `workers/pestpp/modflow_trial.py`, which lays each such array and then execs `mf6`.
+1. The run's staged deck is fetched from where it was staged (`authoring/modflow.py`). Eligibility is the MODFLOW 6
+   dictionary (`modules/module_input`): an ARRAY whose `dtype` is REAL, or a list column its `columns` table
+   declares REAL, is tunable by `<PACKAGE>_<NAME>`; an INTEGER flag, a string or a keyword refuses
+   `PESTPP_PARAMETER_NOT_REAL` naming it. No package or variable is listed by hand. Each parameter is a multiplier
+   written into its array's own control record through a PEST template - into the FACTOR of an INTERNAL or
+   OPEN/CLOSE record (PEST's scale the factor the run stated), or the CONSTANT itself (its scale the run's
+   constant) - so the array's values are never rewritten and the trial writes nothing else before `mf6`. The
+   multiplier starts at 1 and is log-transformed. A layered array is one control record per layer, so `NAME@N`
+   tunes layer N alone; a homogeneous constant array expands into that form. A second package of one kind is named
+   by the name its name file gives it (`RIV_1_COND`), and a kind with two instances refuses the bare name. A list
+   column (RIV COND/STAGE/RBOT, DRN COND, GHB COND/BHEAD, WEL Q, LAK, SFR, ...) is tuned the same way, the template
+   writing the multiplier into that column of every row in its own block and PEST's scale the one value the rows
+   state (rows stating different values refuse). `zones` divides a command into one parameter per stated zone -
+   cells, reaches, wells, layers or a polygon intersected with the grid - writing the field only into the rows a
+   zone holds and leaving the rest as written; overlapping zones refuse. An array's zones are its layers. Bounds in
+   the run's own unit are divided by that scale, and refuse over an array whose value is not a constant (whose
+   FACTOR is not its values) and where the run's own value lies outside them. An array stated with `pilot_points`
+   is laid by pilot points instead (Pilot points, below), and a trial runs `workers/pestpp/modflow_trial.py`, which
+   lays each such array and then execs `mf6`.
 2. Each well's reading is a head target at its cell (the point contract: a site no cell holds is left out and
    said): a depth below the land surface is the cell's top less the depth, an elevation counts only on the run's
    own frame, and a site is held once, at the first of its readings that is a head. Each well weighs one over its
@@ -178,15 +186,15 @@ Over a TELEMAC run (`authoring/telemac.py`), a TELEMAC-2D deck (another module r
 
 ## Pilot points
 
-A MODFLOW array of a one-layer run may be laid by pilot points rather than one multiplier: `{"NPF_K": {"lower": 0.1,
-"upper": 10, "source": "...", "pilot_points": {}}}`. Each point is a log-transformed multiplier starting at 1 inside the
+A MODFLOW array may be laid by pilot points rather than one multiplier: `{"NPF_K": {"lower": 0.1, "upper": 10,
+"source": "...", "pilot_points": {}}}`. Each point is a log-transformed multiplier starting at 1 inside the
 parameter's factor bounds (bounds in the run's own unit refuse: the run's values vary by cell); a cell's value is the
 run's own times 10 ** (its ordinary kriging factors over the log10 of the points), as pyEMU's fac2real lays a
-log-transformed field. The array moves from its INTERNAL record into a file of its own (`<package file>.<array>.dat`,
-OPEN/CLOSE, FACTOR 1), which the trial writes before mf6 runs and the calibrated deck carries; a multiplier over another
-array of the same file is templated over the file the points leave. An array read from its own file, a list column,
-or a run of more than one layer refuses; so does a TELEMAC parameter (its friction is one coefficient of the steering
-file; a field of it would be a per-node friction in the geometry file, which no trial writes).
+log-transformed field. Each layer is laid (the whole array, or the one `@N` names) into a file of its own
+(`<package file>.<array>.<layer>.dat`, OPEN/CLOSE, FACTOR 1), which the trial writes before mf6 runs and the calibrated
+deck carries; a multiplier over another array of the same file is templated over the file the points leave. A list
+column refuses; so does a TELEMAC parameter (its friction is one coefficient of the steering file; a field of it would
+be a per-node friction in the geometry file, which no trial writes).
 
 The numerics are pyEMU 1.7.0's (`helpers/geostat.py`), matched to what pyEMU itself computes over the Des Moines grid
 (a recorded fixture): the points placed as `get_zoned_ppoints_for_vertexgrid` places them (an even grid over the cell
@@ -289,9 +297,9 @@ member reads, so a bed offset waits on a source that states one.
 
 ## What is not built yet
 
-Multipliers on stress-period lists (recharge or drain rows) and on per-row values of a list column; zones; pilot points on
-a TELEMAC friction field; a bed survey offset as a parameter (no bed source states its accuracy as a value); a run of
-several layers or time steps; progress on the
+Array cell or polygon zones (a scalar per zone over an array's cells needs the trial to lay it; an array's zones are
+its layers); pilot points on a TELEMAC friction field; a bed survey offset as a parameter (no bed source states its
+accuracy as a value); a run of several layers or time steps read for heads; progress on the
 Sim card (PEST++'s run-manager lines are not parsed); a diagnostics parser.
 
 

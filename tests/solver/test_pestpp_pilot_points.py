@@ -149,8 +149,8 @@ def test_pilot_points_refuse_what_they_cannot_lay(the_deck):
 def test_the_array_is_laid_by_its_pilot_points_and_the_trial_lays_it_the_same(deck_dir, the_deck, tmp_path):
     study = tmp_path / "study"
     shutil.copytree(deck_dir, study)
-    parameters, pair = piece.pilot_points(study, "NPF_K", _field(the_deck), lower=0.1, upper=10.0, the_deck=the_deck)
-    assert len(parameters) == 88 and pair == ("npf_k.pp.dat.tpl", "npf_k.pp.dat")
+    parameters, pairs = piece.pilot_points(study, "NPF_K", _field(the_deck), lower=0.1, upper=10.0, the_deck=the_deck)
+    assert len(parameters) == 88 and pairs == [("npf_k.pp.dat.tpl", "npf_k.pp.dat")]
     assert {p.group for p in parameters} == {"npf_k"} and {p.correlation for p in parameters} == {1000.0}
     assert parameters[0].site == tuple(_PYEMU["points"][0])
     npf = (study / "gwf.npf").read_text()

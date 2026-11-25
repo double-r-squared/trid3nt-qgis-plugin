@@ -19,7 +19,17 @@ class INPUTS:
         "The finished run whose parameters are tuned: its run id, or the handle the case shows for one of its "
         "layers; unstated, this case's finished run, the newest offered where it holds several. Its deck, mesh "
         "and frame are the study's model."), coercion=MappingProxyType({"engines": ENGINES}))
-    parameters = Input()
+    parameters = Input(desc=(
+        "What a MODFLOW run is tuned by, each value by its MF6 name: {NPF_K: {lower: 0.1, upper: 10, source: "
+        "\"...\"}} is a multiplier on the run's own array or list column, bounded by factors; lower_value and "
+        "upper_value bound it in the run's own unit. A name is PACKAGE_VARIABLE as the engine's dictionary spells "
+        "it (NPF_K, RIV_COND, RIV_STAGE, DRN_COND, WEL_Q, SFR_RHK, MST_POROSITY ...). Any REAL array or list column "
+        "is tunable; an integer flag, a string or a keyword refuses naming it. NPF_K@3 tunes layer 3 alone; a run "
+        "with two packages of one kind is named by its name-file instance (RIV_1_COND). \"zones\": [{cells: [...]}] "
+        "(reaches, wells, layers or a polygon in the run's grid) gives one parameter per zone and leaves every "
+        "other row as written; zones that overlap refuse. \"pilot_points\": {} lays an array by pyEMU pilot points "
+        "on every layer, or on @N alone. State bounds and zones with their source. TELEMAC tunes "
+        "FRICTION_COEFFICIENT."))
     tune = Input().stated()
     stages = Input(type=list[str], desc=(
         "Stages in order: screen, calibrate, resolve. Omit a stage to skip it. Resolve requires prior calibration. "

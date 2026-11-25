@@ -60,6 +60,7 @@ def _dfn_names() -> tuple[str, ...]:
                         if entry["name"].endswith(".dfn")))
 
 
+@lru_cache(maxsize=None)
 def fetch_dfn(stem: str) -> str:
     """One package's definition file text at the pinned release."""
     return _get(f"{_REPO}/raw/{MF6_REF}/{_DFN_DIR}/{stem}.dfn").decode()
@@ -111,6 +112,19 @@ def _type_of(entry: dict[str, str]) -> str:
         raise ValueError(
             f"{entry['name']}: the DFN declares the unknown type {declared!r}")
     return kind
+
+
+#: The element type an ARRAY keeps: the DFN's declared word for the values an array holds, which the dictionary's
+#: ARRAY type does not carry (a double-precision K and an integer ICELLTYPE are both ARRAY).
+_ARRAY_DTYPE = {"double precision": "REAL", "integer": "INTEGER", "string": "STRING"}
+
+
+def _dtype_of(entry: dict[str, str]) -> str:
+    """The element type of an ARRAY entry, refusing a declared word the dictionary does not state."""
+    declared = entry.get("type", "").strip()
+    if declared not in _ARRAY_DTYPE:
+        raise ValueError(f"{entry['name']}: an array of the unknown element type {declared!r}")
+    return _ARRAY_DTYPE[declared]
 
 
 def _optional(entry: dict[str, str]) -> bool:
@@ -204,19 +218,27 @@ def _row(entry: dict[str, str], package: str, dimensions: frozenset[str] = froze
         row["default"] = default
     if choices:
         row["choices"] = choices
+    if row["type"] == "ARRAY":
+        row["dtype"] = _dtype_of(entry)
     return row
+
+
+def _package_entries(body: str) -> list[tuple[str, list[dict[str, str]]]]:
+    """Each package of one body as ``(PACKAGE, its DFN entries)``, its model's packages first and the shared TDIS,
+    IMS and OBS after; a removed entry is dropped here."""
+    stems = [stem for stem in _dfn_names() if stem.startswith(f"{body}-")] \
+        + list(_SHARED_BY_BODY.get(body, SHARED))
+    return [(stem.split("-", 1)[1].upper(),
+             [entry for entry in parse(fetch_dfn(stem)) if "removed" not in entry]) for stem in stems]
 
 
 def body_rows(body: str) -> list[dict[str, object]]:
     """Every dictionary row of one body, its model's packages first and the shared TDIS, IMS and OBS after."""
-    stems = [stem for stem in _dfn_names() if stem.startswith(f"{body}-")] \
-        + list(_SHARED_BY_BODY.get(body, SHARED))
     rows = []
-    for stem in stems:
-        entries = [entry for entry in parse(fetch_dfn(stem)) if "removed" not in entry]
+    for package, entries in _package_entries(body):
         optional = frozenset(entry["name"].lower() for entry in entries
                              if entry.get("block") == "dimensions" and _optional(entry))
-        rows += [_row(entry, package=stem.split("-", 1)[1].upper(), dimensions=optional)
+        rows += [_row(entry, package=package, dimensions=optional)
                  for entry in entries if "in_record" not in entry and "block_variable" not in entry]
     identifiers = [row["identifier"] for row in rows]
     if len(set(identifiers)) != len(identifiers):
@@ -224,20 +246,74 @@ def body_rows(body: str) -> list[dict[str, object]]:
     return rows
 
 
+def _column_type(package: str, column: str, declared: str) -> str:
+    """The dictionary type word a list column's DFN type is read as; a record-like type is one structured block."""
+    if declared.split(None, 1)[0].lower() in _STRUCTURED:
+        return "STRUCT"
+    kind = _SCALAR.get(declared)
+    if kind is None:
+        raise ValueError(f"{package} {column}: the DFN declares the unknown column type {declared!r}")
+    return kind
+
+
+def _list_columns(package: str, entries: list[dict[str, str]]) -> list[dict[str, object]]:
+    """One row per column of each recarray a package declares, typed by the column's own in-record DFN entry.
+
+    The column's identifier is its package, its recarray and its column name, so a name the DFNs repeat across
+    recarrays (an id such as ``ifno``) stays distinct; its ``keyword`` is the column name alone, which is what a
+    parameter states. A column the DFN declares in no record refuses."""
+    rows: list[dict[str, object]] = []
+    for entry in entries:
+        words = entry.get("type", "").split()
+        if not words or words[0].lower() != "recarray":
+            continue
+        for column in words[1:]:
+            child = next((e for e in entries if e["name"] == column and e.get("block") == entry.get("block")
+                          and e.get("in_record", "").lower() == "true"), None)
+            if child is None:
+                raise ValueError(f"{package} {entry['name']}: no in-record DFN entry for its column {column!r}")
+            keyword = column.upper().replace("-", "_")
+            rows.append({
+                "keyword": keyword,
+                "identifier": f"{package}_{entry['name'].upper().replace('-', '_')}_{keyword}",
+                "recarray": entry["name"],
+                "type": _column_type(package, column, child.get("type", "").strip()),
+                "help": _help(child),
+                "rubrique": [entry["block"].upper()],
+            })
+    return rows
+
+
+def body_columns(body: str) -> list[dict[str, object]]:
+    """Every list column of one body's packages, one row per (package, recarray column), never a settable keyword."""
+    rows = []
+    for package, entries in _package_entries(body):
+        rows += [{"package": package, **row} for row in _list_columns(package, entries)]
+    identifiers = [row["identifier"] for row in rows]
+    if len(set(identifiers)) != len(identifiers):
+        raise ValueError(f"{body}: the DFNs spell a list column twice")
+    return rows
+
+
 def extract(dest: Path, bodies: tuple[str, ...] = BODIES
             ) -> dict[str, int]:
-    """Write ``<body>.json`` for every body into ``dest`` -> keyword counts.
+    """Write ``<body>.json`` for every body into ``dest`` and its list columns to ``dest/columns`` -> keyword counts.
 
     The fresh rows take the ``module`` and ``keywords`` keys of the committed file
-    they replace; every other key it carries stays, in its own order."""
+    they replace; every other key it carries stays, in its own order. The list
+    columns live in their own directory so the keyword loader never reads them."""
     dest.mkdir(parents=True, exist_ok=True)
+    (dest / "columns").mkdir(exist_ok=True)
     counts: dict[str, int] = {}
     for body in bodies:
         rows = body_rows(body)
+        columns = body_columns(body)
         committed = module_input_dir() / f"{body}.json"
         doc = json.loads(committed.read_text()) if committed.is_file() else {}
         doc.update({"module": body, "keywords": rows})
         (dest / f"{body}.json").write_text(json.dumps(doc, indent=2) + "\n")
+        (dest / "columns" / f"{body}.json").write_text(
+            json.dumps({"module": body, "columns": columns}, indent=2) + "\n")
         counts[body] = len(rows)
     return counts
 
