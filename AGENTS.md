@@ -169,6 +169,8 @@ Read it before changing behaviour. A change that contradicts an opinion is NATE'
   pressure and puts the series on the run's clock); a coercion may
   call a derive, never a fetch. The line: would anyone call it without
   the slot? Yes is a derive tool; no is that slot's coercion.
+- GEOMETRY A CALLER STATES (a point, a polygon, a bbox), inside any input, is longitude/latitude (EPSG:4326)
+  unless it names its CRS; the code reprojects it to the run's frame, never the caller.
 - SIMPLICITY: prefer the boring solution. Reuse an existing seam,
   convention, or pattern before inventing anything. Before adding a
   flag, mode, field, or knob: name who reads it - no reader, no
