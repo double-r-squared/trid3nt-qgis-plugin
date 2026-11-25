@@ -299,12 +299,17 @@ def observe_levels(directory: Path, targets: Sequence[tuple[Observed, int]], *, 
 
 
 def interface(source: Path, dest: Path, chosen: Sequence[tuple[str, float, float, bool]], *, the_deck: Deck,
-              targets: Sequence[tuple[Observed, int]], spatial: Mapping[str, Any] = {}
+              targets: Sequence[tuple[Observed, int]], spatial: Mapping[str, Any] = {},
+              zones: Mapping[str, Sequence[Mapping[str, Any]]] = {}, sources: Mapping[str, str] = {}
               ) -> tuple[list[Parameter], list[tuple[str, str]], list[tuple[str, str]]]:
     """A study directory: the deck at ``source`` copied to ``dest`` with its gauges printed and a multiplier
     template over each chosen ``(identifier, lower, upper, absolute)`` -> ``(parameters, templates, instructions)``.
-    Pilot points refuse (``fields``)."""
+    Pilot points refuse (``fields``); stated zones refuse naming the parameter they divide."""
     fields(spatial, the_deck)
+    if zones:
+        raise PestppError(f"{', '.join(sorted(zones))} is stated with zones, and a TELEMAC-2D study tunes the one "
+                          "FRICTION COEFFICIENT its steering file states; zoned friction is not written",
+                          error_code="PESTPP_PARAMETER_UNPLACED")
     shutil.copytree(source, dest)
     instructions = [observe_levels(dest, targets, the_deck=the_deck)]
     parameters, templates = [], []

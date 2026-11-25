@@ -163,7 +163,8 @@ Over a TELEMAC run (`authoring/telemac.py`), a TELEMAC-2D deck (another module r
 
 1. The parameter is `FRICTION_COEFFICIENT`, a multiplier written into the steering file's own `FRICTION COEFFICIENT`
    through a PEST template (PEST's scale the coefficient the run stated); bounds in the run's own unit are divided by
-   it. Zoned friction (`FRICTION DATA`) is not written and refuses; so does any other identifier.
+   it. Zoned friction (`FRICTION DATA`) is not written and refuses; so does any other identifier, and a parameter
+   stated with `zones` refuses naming it (zoned TELEMAC friction is not written).
 2. Each gauge's water level, lifted onto the run's frame by the level slot's own ingestion (a gauge on a frame the
    offset row cannot bridge is left out), is a target at the node the run's own point read (`read_series` over the
    finished run's result, the point contract: a gauge the mesh does not hold is left out and said) lands it on.

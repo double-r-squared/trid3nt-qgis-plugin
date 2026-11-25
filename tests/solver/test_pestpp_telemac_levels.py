@@ -127,6 +127,54 @@ def _trial_module():
     return module
 
 
+def _study_authoring(tmp_path, the_deck, *, zones=None):
+    """A study over the Missouri deck as ``Study.prepare`` holds it, ready to author its one chosen friction."""
+    from trid3nt.workflows.pestpp.authoring.control import Observed
+    from trid3nt.workflows.pestpp.study import Study
+
+    work = tmp_path / "work"
+    (work / "deck").mkdir(parents=True)
+    for name in (_STEERING, "domain.cli"):
+        shutil.copy(_MISSOURI / name, work / "deck" / name)
+    observed = Observed("level_1", 292.0, "levels", 0.1, "cited")
+    return Study(
+        workflow=SimpleNamespace(name="telemac-calibration"), run={}, work=work,
+        finished=SimpleNamespace(engine="telemac", run_id="finished", case={}, record={}, outputs=[]),
+        deck=the_deck, targets=[(observed, 1)], observed=[observed],
+        chosen=[("FRICTION_COEFFICIENT", 0.5, 1.5, False)], sources={"friction_coefficient": "the run"},
+        fields={}, zones=dict(zones or {}), options={}, method="ies", frame="", tune=None, balanced=False,
+        offsets=[], stated_method=False, rows={}, plan=("calibrate",), explicit_plan=False)
+
+
+@pytest.mark.asyncio
+async def test_study_author_hands_the_telemac_piece_what_it_takes(staged, tmp_path, monkeypatch):
+    from trid3nt.workflows.pestpp import staging
+
+    _directory, the_deck = staged
+    study = _study_authoring(tmp_path, the_deck)
+    staged_run = {}
+
+    async def stage(source, **named):
+        staged_run.update(named, control=(source / named["control"]).is_file())
+        return {"run_id": "fit", "case": {"cores": 1}}
+
+    monkeypatch.setattr(staging, "stage_study", stage)
+    _staged, parameters, _templates = await study.author("ies", study.chosen, {})
+    assert staged_run["tool"] == "ies" and staged_run["model"] == "telemac" and staged_run["control"]
+    assert [parameter.name for parameter in parameters] == ["friction_coefficient"]
+
+
+@pytest.mark.asyncio
+async def test_a_telemac_parameter_that_states_zones_refuses_by_name(staged, tmp_path):
+    _directory, the_deck = staged
+    study = _study_authoring(tmp_path, the_deck,
+                             zones={"FRICTION_COEFFICIENT": [{"cells": [0], "value": 30.0}]})
+    with pytest.raises(PestppError) as refused:
+        await study.author("ies", study.chosen, {})
+    assert refused.value.error_code == "PESTPP_PARAMETER_UNPLACED"
+    assert "FRICTION_COEFFICIENT" in str(refused.value) and "zoned" in str(refused.value)
+
+
 def test_the_trial_writes_each_point_s_free_surface_less_its_datum(tmp_path):
     points = Path(__file__).resolve().parents[1] / "fixtures" / "pestpp" / "telemac_points" / "study_points.txt"
     trial = Path(__file__).resolve().parents[2] / "workers" / "pestpp" / "telemac_trial.py"
