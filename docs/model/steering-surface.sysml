@@ -495,6 +495,16 @@ package SteeringSurface {
         port stageOut : StageOut;
     }
 
+    part optimizedStage : Sheet {
+        doc /*
+        The optimize study stages its explicit native re-solve of the chosen
+        decisions as an ordinary run through the one stager.
+
+        code: trid3nt/workflows/pestpp/optimization.py
+        */
+        port stageOut : StageOut;
+    }
+
     part pestppStage : Sheet {
         doc /*
         PEST++'s study directory: the control file, its template and instruction
@@ -631,6 +641,9 @@ package SteeringSurface {
 
     interface appliedStudyStaged : StageRequest
         connect appliedStudyStage.stageOut to stager.stageIn;
+
+    interface optimizedStaged : StageRequest
+        connect optimizedStage.stageOut to stager.stageIn;
 
     interface canvasAnswered : DrawnValue
         connect canvasGate.drawOut to fill.drawIn;

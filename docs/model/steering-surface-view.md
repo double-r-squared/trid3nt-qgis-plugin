@@ -20,6 +20,7 @@ flowchart LR
     modflowStage["Sheet<br/>trid3nt/workflows/modflow/workflow.py"]
     nativeModflowStage["Sheet<br/>trid3nt/workflows/modflow/bare.py"]
     observationSlot["ObservationSlot<br/>trid3nt/inputs/observation.py"]
+    optimizedStage["Sheet<br/>trid3nt/workflows/pestpp/optimization.py"]
     output["Output<br/>trid3nt/workflows/telemac/modules/telemac2d.py"]
     pestppCalibratedStage["Sheet<br/>trid3nt/workflows/pestpp/authoring/modflow.py"]
     pestppStage["Sheet<br/>trid3nt/workflows/pestpp/staging.py"]
@@ -42,6 +43,7 @@ flowchart LR
     geoclawStage -- "StageRequest" --> stager
     modflowStage -- "StageRequest" --> stager
     nativeModflowStage -- "StageRequest" --> stager
+    optimizedStage -- "StageRequest" --> stager
     steeringDriver -- "SteeringParse" --> steeringGate
     pestppCalibratedStage -- "StageRequest" --> stager
     pestppStage -- "StageRequest" --> stager
