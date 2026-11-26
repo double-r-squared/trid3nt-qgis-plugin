@@ -67,6 +67,12 @@ class Parameter:
     #: The zone a divided parameter tunes (``"cells"``, ``"layer 3"`` ...) and the source that zone was stated from.
     zone: str = ""
     zone_source: str = ""
+    #: The engine body (module) and the file the multiplier's template writes, for a study with more than one
+    #: steering file; empty says the host deck's own.
+    body: str = ""
+    file: str = ""
+    #: How many entries of a list keyword one value fills (an all-equal list written as repeated PEST fields), or 0.
+    list_len: int = 0
 
 
 @dataclass(frozen=True)

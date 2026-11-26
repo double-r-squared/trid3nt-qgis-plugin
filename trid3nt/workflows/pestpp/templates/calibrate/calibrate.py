@@ -28,8 +28,13 @@ class INPUTS:
         "with two packages of one kind is named by its name-file instance (RIV_1_COND). \"zones\": [{cells: [...]}] "
         "(reaches, wells, layers or a polygon in the run's grid) gives one parameter per zone and leaves every "
         "other row as written; zones that overlap refuse. \"pilot_points\": {} lays an array by pyEMU pilot points "
-        "on every layer, or on @N alone. State bounds and zones with their source. TELEMAC tunes "
-        "FRICTION_COEFFICIENT."))
+        "on every layer, or on @N alone. State bounds and zones with their source. A TELEMAC run tunes any REAL "
+        "keyword its active module dictionaries declare - the host .cas and each body COUPLING WITH names (WAQTEL, "
+        "GAIA, KHIONE, TOMAWAC) - by identifier or qualified name (waqtel: K2_REAERATION_COEFFICIENT), whole or "
+        "@N for one list entry; an INTEGER, LOGICAL, STRING or file keyword refuses. FRICTION_COEFFICIENT, the "
+        "FORMATTED_DATA_FILE_2 scatter map (CN2 or KS) and BOTTOM are spatial: state zones of mesh nodes, lon/lat "
+        "polygons (EPSG:4326 unless a crs is stated) or friction zone ids, or lay them by \"pilot_points\" over the "
+        "mesh."))
     tune = Input().stated()
     stages = Input(type=list[str], desc=(
         "Stages in order: screen, calibrate, resolve. Omit a stage to skip it. Resolve requires prior calibration. "

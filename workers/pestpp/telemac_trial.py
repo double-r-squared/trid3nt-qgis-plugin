@@ -1,8 +1,9 @@
-"""One PEST++ trial of a TELEMAC study: the outflow level at the trial's own friction or offset, the solve, the datums.
+"""One PEST++ trial of a TELEMAC study: the keywords and fields PEST wrote, the outflow level at the trial's own friction or offset, the solve, the datums.
 
 Runs inside the pestpp-telemac image in the trial's directory, importing nothing from trid3nt. Where the study wrote
-outflow_levels.json, the outflow level is the trial's own: derived (the steering file's coefficient, as PEST wrote it,
-read through TelemacCas and its level read off the table) or measured (the level plus the offset PEST wrote to
+study_telemac.json, each whole-list keyword, spatial field and friction layout is laid from the multiplier PEST wrote
+(zone and pilot points included). Where it wrote outflow_levels.json, the outflow level is the trial's own: derived (the
+mean friction over the outflow face, read off the table) or measured (the level plus the offset PEST wrote to
 study_outflow.dat, its window's column moved by it too), restated with the flat opening's INITIAL ELEVATION through the
 steering driver. Where it wrote study_datums.dat (a gauge zero that is a parameter) TELEMAC's own launcher runs, then
 each point's free surface less its datum is written to study_levels.txt; otherwise the launcher replaces this process.
@@ -25,6 +26,9 @@ DATUMS, POINTS, HELD = "study_datums.dat", "study_points.txt", "study_levels.txt
 OUTFLOW = "study_outflow.dat"
 _HEADING = "FREE SURFACE"
 
+#: The layings PEST wrote: the base values of every keyword, field and friction layout, and where each one goes.
+SPEC = "study_telemac.json"
+
 
 def level_at(table: dict, coefficient: float) -> float:
     """The outflow level the table holds at ``coefficient``, linear between its two nearest reads; outside it, none."""
@@ -39,14 +43,193 @@ def level_at(table: dict, coefficient: float) -> float:
     return stages[-1]
 
 
-def restate_levels(data_dir: str) -> dict | None:
+def _multiplier(data_dir: str, name: str) -> float:
+    with open(os.path.join(data_dir, f"{name}.dat")) as fh:
+        return float(fh.read().split()[0])
+
+
+def _pilot(data_dir: str, pilot: dict) -> "object":
+    """The pilot points' kriged multiplier over every mesh node, 10 ** (the factors over the log10 values)."""
+    import numpy as np
+
+    held = np.load(os.path.join(data_dir, pilot["npz"]))
+    stated = {}
+    with open(os.path.join(data_dir, pilot["values"])) as fh:
+        for line in fh:
+            if line.strip():
+                name, value = line.split()[:2]
+                stated[name] = float(value)
+    names = [str(name) for name in held["names"]]
+    values = np.log10(np.array([stated[name] for name in names], dtype=float))
+    return 10.0 ** (held["weight"] * values[held["index"]]).sum(axis=1)
+
+
+def _apply_keywords(data_dir: str, spec: dict) -> None:
+    grouped: dict[str, dict] = {}
+    for entry in spec.get("keywords", []):
+        multiplier = _multiplier(data_dir, entry["name"])
+        grouped.setdefault(entry["steering"], {"module": entry["module"], "values": {}})
+        grouped[entry["steering"]]["values"][entry["keyword"]] = [
+            float(value) * multiplier for value in entry["base"]]
+    if grouped:
+        import cas
+
+        cas.restate_steering({"data_dir": data_dir, "restate": grouped})
+
+
+def _write_geometry(path: str, variable: str, values) -> None:
+    """``path`` rewritten with ``variable`` carrying ``values`` (added, or replaced where it already exists)."""
+    import numpy as np
+    from serafin import SerafinReader, SerafinWriter
+
+    reader = SerafinReader(path, "en")
+    reader.__enter__()
+    try:
+        reader.read_header()
+        reader.get_time()
+        header = reader.header
+        names = [name.decode().strip() for name in header.var_names]
+        times = list(reader.time) or [0.0]
+        frames = [np.asarray(reader.read_vars_in_frame(index), dtype=float) for index in range(len(times))]
+    finally:
+        reader.__exit__(None, None, None)
+    written = header.copy()
+    if variable.upper() in (name.upper() for name in names):
+        at = next(index for index, name in enumerate(names) if name.upper() == variable.upper())
+        frames = [np.concatenate([frame[:at], np.asarray(values, dtype=float).reshape(1, -1), frame[at + 1:]])
+                  for frame in frames]
+    else:
+        written.add_variable_str(variable, variable, "")
+        frames = [np.vstack([frame, np.asarray(values, dtype=float).reshape(1, -1)]) for frame in frames]
+    temporary = path + ".tmp"
+    with SerafinWriter(temporary, "en", overwrite=True) as writer:
+        writer.write_header(written)
+        for time, frame in zip(times, frames):
+            writer.write_entire_frame(written, float(time), frame)
+    os.replace(temporary, path)
+
+
+def _apply_field(data_dir: str, info: dict) -> None:
+    import numpy as np
+
+    base = np.asarray(info["base"], dtype=float)
+    multiplier = np.ones(base.shape[0], dtype=float)
+    if info.get("whole"):
+        multiplier[:] = _multiplier(data_dir, info["whole"])
+    for piece in info.get("pieces", []):
+        value = _multiplier(data_dir, piece["name"])
+        if piece.get("nodes") is None:
+            multiplier[:] = value
+        else:
+            multiplier[[int(node) for node in piece["nodes"]]] = value
+    if info.get("pilot"):
+        multiplier *= _pilot(data_dir, info["pilot"])
+    laid = base * multiplier
+    path = os.path.join(data_dir, info["file"])
+    if info["kind"] == "scatter":
+        written, at = [], 0
+        with open(path) as fh:
+            for line in fh.read().splitlines():
+                if not line.strip():
+                    continue
+                if line.lstrip().startswith("#"):
+                    written.append(line)
+                    continue
+                parts = line.split()
+                parts[2] = f"{laid[at]:.10g}"
+                written.append(" ".join(parts))
+                at += 1
+        with open(path, "w") as fh:
+            fh.write("\n".join(written) + "\n")
+    elif info["kind"] == "bottom":
+        _write_geometry(path, info["variable"], laid)
+
+
+def _friction_multiplier(data_dir: str, info: dict) -> "object":
+    import numpy as np
+
+    multiplier = np.ones(len(info["base_nodes"]), dtype=float)
+    if info.get("whole"):
+        multiplier *= _multiplier(data_dir, info["whole"])
+    for piece in info.get("pieces", []):
+        value = _multiplier(data_dir, piece["name"])
+        if "nodes" in piece and piece["nodes"] is not None:
+            multiplier[[int(node) for node in piece["nodes"]]] = value
+        elif "rows" in piece and info.get("node_zone"):
+            zones = {str(info["table"][row]["zone"]) for row in piece["rows"]}
+            held = [index for index, zone in enumerate(info["node_zone"]) if zone in zones]
+            multiplier[held] = value
+    if info.get("pilot"):
+        multiplier *= _pilot(data_dir, info["pilot"])
+    return multiplier
+
+
+def _write_friction_rows(data_dir: str, info: dict, rows) -> None:
+    lines = ["* PEST++ calibrated friction zones", "* zone  law      coef    vegetation"]
+    for row in rows:
+        tail = " ".join(row.get("rest") or ["NULL"])
+        lines.append(f"{row['zone']} {row['law']} {float(row['coef'])!r} {tail}".rstrip())
+    lines.append("END")
+    with open(os.path.join(data_dir, info["data_file"]), "w") as fh:
+        fh.write("\n".join(lines) + "\n")
+
+
+def _apply_friction(data_dir: str, info: dict) -> "object":
+    import numpy as np
+
+    multiplier = _friction_multiplier(data_dir, info)
+    base = np.asarray(info["base_nodes"], dtype=float)
+    laid = base * multiplier
+    if not info["data"]:
+        _write_geometry(os.path.join(data_dir, info["geometry"]), "BOTTOM FRICTION", laid)
+        return laid
+    by_row = not info.get("pilot") and not any("nodes" in piece for piece in info["pieces"])
+    if by_row:
+        rows = [dict(row) for row in info["table"]]
+        if info.get("whole"):
+            value = _multiplier(data_dir, info["whole"])
+            for row in rows:
+                row["coef"] = float(row["coef"]) * value
+        for piece in info["pieces"]:
+            value = _multiplier(data_dir, piece["name"])
+            for index in piece["rows"]:
+                rows[int(index)]["coef"] = float(rows[int(index)]["coef"]) * value
+        _write_friction_rows(data_dir, info, rows)
+        with open(os.path.join(data_dir, info["zones_file"]), "w") as fh:
+            fh.write("".join(f"{node} {zone}\n" for node, zone in enumerate(info["node_zone"], start=1)))
+        return laid
+    laws = {str(row["zone"]): row["law"] for row in info["table"]}
+    rows = [{"zone": str(node), "law": laws[zone], "coef": float(coefficient), "rest": ["NULL"]}
+            for node, (zone, coefficient) in enumerate(zip(info["node_zone"], laid), start=1)]
+    _write_friction_rows(data_dir, info, rows)
+    with open(os.path.join(data_dir, info["zones_file"]), "w") as fh:
+        fh.write("".join(f"{node} {node}\n" for node in range(1, len(laid) + 1)))
+    return laid
+
+
+def apply_spec(data_dir: str) -> dict | None:
+    path = os.path.join(data_dir, SPEC)
+    if not os.path.isfile(path):
+        return None
+    with open(path) as fh:
+        spec = json.load(fh)
+    _apply_keywords(data_dir, spec)
+    for info in spec.get("fields", []):
+        _apply_field(data_dir, info)
+    friction = spec.get("friction")
+    laid = _apply_friction(data_dir, friction) if friction else None
+    return {"friction": laid}
+
+
+def restate_levels(data_dir: str, applied: dict | None = None) -> dict | None:
     """The steering file named by the table, restated with the outflow level at its own coefficient -> what was set."""
     path = os.path.join(data_dir, LEVELS)
     if not os.path.isfile(path):
         return None
     import cas
 
-    table = json.load(open(path))
+    with open(path) as fh:
+        table = json.load(fh)
     if "level" in table:
         with open(os.path.join(data_dir, OUTFLOW)) as fh:
             offset = float(fh.read().split()[1])
@@ -57,10 +240,15 @@ def restate_levels(data_dir: str) -> dict | None:
         held = {"offset": offset}
     else:
         steering = os.path.join(data_dir, table["steering"])
-        coefficient = float(cas.TelemacCas(steering, cas.get_dico(table["module"]), access="r",
-                                           check_files=False).values["FRICTION COEFFICIENT"])
+        if applied and applied.get("friction") is not None:
+            faces = table.get("faces") or []
+            coefficient = float(sum(float(applied["friction"][node]) for node in faces) / len(faces))
+            held = {"coefficient": coefficient}
+        else:
+            coefficient = float(cas.TelemacCas(steering, cas.get_dico(table["module"]), access="r",
+                                               check_files=False).values["FRICTION COEFFICIENT"])
+            held = {"coefficient": coefficient}
         stage = round(level_at(table, coefficient), 4)
-        held = {"coefficient": coefficient}
     elevations = list(table["elevations"])
     elevations[int(table["boundary"])] = stage
     values = {"PRESCRIBED ELEVATIONS": elevations,
@@ -114,7 +302,10 @@ def main() -> None:
     import subprocess
 
     module, steering = sys.argv[1], sys.argv[2]
-    set_here = restate_levels(os.getcwd())
+    applied = apply_spec(os.getcwd())
+    if applied is not None:
+        print("TRIAL_LAYINGS", json.dumps({"friction": applied["friction"] is not None}), flush=True)
+    set_here = restate_levels(os.getcwd(), applied)
     if set_here is not None:
         print("TRIAL_OUTFLOW_LEVEL", json.dumps(set_here), flush=True)
     launcher = f"{module}.py"

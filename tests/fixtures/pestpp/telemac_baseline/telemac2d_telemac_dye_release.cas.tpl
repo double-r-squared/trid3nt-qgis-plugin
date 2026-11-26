@@ -1,0 +1,76 @@
+ptf ~
+////////////////////////////////////////////////////////////////////////
+/// 1-computation environment
+/// 1.1-initialization
+TITLE = 'nhdplus_nldi_nhdplus_nldi_mesh DOMAIN'
+INITIAL CONDITIONS = 'CONSTANT ELEVATION'
+INITIAL ELEVATION = 291.385
+INITIAL DEPTH = 5.896
+/// 1.1.1-input files
+GEOMETRY FILE = 'domain.slf'
+BOUNDARY CONDITIONS FILE = 'domain.cli'
+/// 1.1.2-global
+PARALLEL PROCESSORS = 7
+/// 1.2-restart
+RESTART FILE = 'restart_domain.slf'
+/// 1.3-output files
+/// 1.3.1-results files
+GRAPHIC PRINTOUT PERIOD = 100
+VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,F,Q,M,X,Y,T1'
+RESULTS FILE = 'r2d_domain.slf'
+FORMATTED RESULTS FILE = 'study_points.txt'
+/// 1.3.2-listing
+LISTING PRINTOUT PERIOD = 500
+VARIABLES TO BE PRINTED = 'S'
+MASS-BALANCE = True
+LIST OF POINTS = 1
+NAMES OF POINTS = 'OBS_1'
+////////////////////////////////////////////////////////////////////////
+/// 2-hydro
+/// 2.1-boundary conditions
+PRESCRIBED ELEVATIONS = 291.385;0.0
+PRESCRIBED FLOWRATES = 0.0;889.1489829888001
+/// 2.2-boundary conditions others
+LIQUID BOUNDARIES FILE = 'river_boundaries.txt'
+/// 2.3-physical parameters hydro
+/// 2.3.1-friction
+LAW OF BOTTOM FRICTION = 3
+FRICTION COEFFICIENT = ~friction_coefficient  ~
+/// 2.3.2-sources
+ABSCISSAE OF SOURCES = 255264.996
+ORDINATES OF SOURCES = 4571476.461
+WATER DISCHARGE OF SOURCES = 8.0
+SOURCES FILE = 'river_sources.txt'
+////////////////////////////////////////////////////////////////////////
+/// 3-general parameters
+/// 3.1-time
+TIME STEP = 0.349
+DURATION = 14400.0
+ORIGINAL DATE OF TIME = 2026;11;8
+ORIGINAL HOUR OF TIME = 20;15;0
+/// 3.2-location
+LATITUDE OF ORIGIN POINT = 41.22928499999999
+////////////////////////////////////////////////////////////////////////
+/// 4-numerical parameters
+/// 4.1-solver info
+SOLVER = 1
+SOLVER ACCURACY = 1e-06
+MAXIMUM NUMBER OF ITERATIONS FOR SOLVER = 500
+CONTINUITY CORRECTION = True
+/// 4.2-discretisations implicitation
+IMPLICITATION FOR DEPTH = 0.6
+IMPLICITATION FOR VELOCITY = 0.6
+/// 4.3-advection info
+TYPE OF ADVECTION = 1;5
+SUPG OPTION = 0;0
+MASS-LUMPING ON H = 1.0
+////////////////////////////////////////////////////////////////////////
+/// 5-tracers
+/// 5.1-boundary conditions for tracers
+PRESCRIBED TRACERS VALUES = 0.0;0.0
+/// 5.2-setting
+NUMBER OF TRACERS = 1
+NAMES OF TRACERS = 'DYE             MG/L'
+INITIAL VALUES OF TRACERS = 0.0
+/// 5.3-sources tra
+VALUES OF THE TRACERS AT THE SOURCES = 100.0

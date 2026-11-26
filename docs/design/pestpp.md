@@ -161,32 +161,50 @@ per-parameter columns take precedence over their corresponding global columns.
 
 Over a TELEMAC run (`authoring/telemac.py`), a TELEMAC-2D deck (another module refuses):
 
-1. The parameter is `FRICTION_COEFFICIENT`, a multiplier written into the steering file's own `FRICTION COEFFICIENT`
-   through a PEST template (PEST's scale the coefficient the run stated); bounds in the run's own unit are divided by
-   it. Zoned friction (`FRICTION DATA`) is not written and refuses; so does any other identifier, and a parameter
-   stated with `zones` refuses naming it (zoned TELEMAC friction is not written).
-2. Each gauge's water level, lifted onto the run's frame by the level slot's own ingestion (a gauge on a frame the
+1. What is tunable is each active body's own dictionary: any REAL keyword of the host `.cas` or of a body its
+   `COUPLING WITH` names (WAQTEL, GAIA, KHIONE, TOMAWAC), addressed by identifier, raw keyword or a qualified
+   `waqtel: K2_REAERATION_COEFFICIENT`; a bare name resolves where exactly one body spells it. An INTEGER, LOGICAL,
+   STRING or file keyword refuses `PESTPP_PARAMETER_NOT_REAL` naming its type, and a name of a module the deck does
+   not couple refuses `PESTPP_PARAMETER_UNPLACED` naming the active bodies. No keyword is listed by hand.
+2. A scalar REAL keyword is a multiplier written into its own value through a PEST template (PEST's scale the value
+   the run stated). A list keyword is one whole-list multiplier (each entry scaled; an all-equal list written as the
+   same field per entry, a differing list laid by the trial), or `@N` at entry N alone. A keyword the deck leaves
+   unstated is restated at its finite non-zero dictionary default before templating; one with no such default, or
+   stated 0.0 where a multiplier cannot scale it, refuses `PESTPP_PARAMETER_UNPLACED`. A parameter on a coupled body
+   templates that body's steering file and `realize()` restates it there.
+3. `FRICTION_COEFFICIENT` is a scalar multiplier on a uniform deck and a whole-table multiplier on a deck whose
+   `FRICTION DATA` is a data file. `FRICTION_COEFFICIENT`, the node-scatter map `FORMATTED DATA FILE 2` names (SCS
+   `CN2` or Green-Ampt `KS`), and the geometry's `BOTTOM` or `BOTTOM FRICTION` are spatial fields: each may be laid
+   by caller-stated `zones` or `pilot_points`. A zone states mesh `nodes` (1-based), a `polygon` (longitude/latitude
+   in `EPSG:4326` unless it names its `crs`, reprojected into `the_deck.utm_epsg`), or friction `zones` on a data
+   deck; one parameter is written per zone, nodes outside every zone stay as the run wrote them, an overlap refuses
+   `PESTPP_ZONE_OVERLAP` and an empty zone `PESTPP_ZONE_EMPTY`. A uniform-friction deck with a zoned or pilot-point
+   coefficient has the base per-node friction written as `BOTTOM FRICTION` in `GEOMETRY FILE` (which `bief/fonstr.f`
+   reads whenever `FRICTION DATA` is not YES), by the trial and by `realize()`.
+4. Each gauge's water level, lifted onto the run's frame by the level slot's own ingestion (a gauge on a frame the
    offset row cannot bridge is left out), is a target at the node the run's own point read (`read_series` over the
    finished run's result, the point contract: a gauge the mesh does not hold is left out and said) lands it on.
    TELEMAC-2D prints the free surface at its remarkable points (`LIST OF POINTS`, `NAMES OF POINTS`, `VARIABLES TO
    BE PRINTED = 'S'`) into its `FORMATTED RESULTS FILE` once, at the last time step, so a target is held against the
    run's END; a deck already stating one of those keywords refuses.
-3. A trial runs `workers/pestpp/telemac_trial.py`, which ends in TELEMAC's own launcher (`telemac2d.py <steering>`),
-   in the image `trid3nt-local/pestpp-telemac` (workers/pestpp/Dockerfile.telemac: the PEST++ release and the steering
-   driver on the TELEMAC worker image), which the engine picks by the case's `server_facts.model`. Where the finished
-   run's outflow level is the normal depth it derived (the stated level equals the derivation at its own coefficient),
-   the study writes `outflow_levels.json`: that level derived at 81 coefficients across the tuned range, over the
-   length the run measured its friction slope along its walked line (`server_facts.reach_length_m`; the chord between
-   the faces where the domain holds no line). The trial reads
-   its own coefficient, takes its level off the table and restates `PRESCRIBED ELEVATIONS` and `INITIAL ELEVATION`
-   through TelemacCas before solving, so no trial is bounded by a level another friction set. A level a gauge held
-   stays as stated - moved only by its own offset parameter where its accuracy is cited (Datums and supplied inputs,
-   below) - and so does the sloped opening a measured outflow level opens on (`INITIAL CONDITIONS 'SPECIAL'` and its
-   user Fortran, copied with the deck).
-4. The calibrated run is the finished deck with the best coefficient - and, where derived, the outflow level and flat
-   opening re-derived at it - written into its steering file, staged with TELEMAC's staged check, solved by the
-   TELEMAC solver and published as TELEMAC publishes a run. A finished run whose record says it ended UNSTEADY is not
-   calibrated (`PESTPP_RUN_UNSTEADY`).
+5. A trial runs `workers/pestpp/telemac_trial.py`, which lays every list value, field and friction layout PEST wrote
+   and ends in TELEMAC's own launcher (`telemac2d.py <steering>`), in the image `trid3nt-local/pestpp-telemac`
+   (workers/pestpp/Dockerfile.telemac: the PEST++ release and the steering driver on the TELEMAC worker image), which
+   the engine picks by the case's `server_facts.model`. Where the finished run's outflow level is the normal depth
+   it derived (the stated level equals the derivation at its own coefficient), the study writes
+   `outflow_levels.json`: that level derived at 81 coefficients across the tuned range, over the length the run
+   measured its friction slope along its walked line (`server_facts.reach_length_m`; the chord between the faces
+   where the domain holds no line). The trial reads its own coefficient - the mean across the outflow face's nodes
+   when the friction is zoned or laid by pilot points, identical to the single scalar when it is uniform - takes
+   its level off the table and restates `PRESCRIBED ELEVATIONS` and `INITIAL ELEVATION` through TelemacCas before
+   solving, so no trial is bounded by a level another friction set. A level a gauge held stays as stated - moved
+   only by its own offset parameter where its accuracy is cited (Datums and supplied inputs, below) - and so does the
+   sloped opening a measured outflow level opens on (`INITIAL CONDITIONS 'SPECIAL'` and its user Fortran, copied
+   with the deck).
+6. The calibrated run is the finished deck with the best parameters - and, where derived, the outflow level and flat
+   opening re-derived at its mean friction - written into its steering file, staged with TELEMAC's staged check,
+   solved by the TELEMAC solver and published as TELEMAC publishes a run. A finished run whose record says it ended
+   UNSTEADY is not calibrated (`PESTPP_RUN_UNSTEADY`).
 
 ## Pilot points
 
@@ -197,8 +215,16 @@ run's own times 10 ** (its ordinary kriging factors over the log10 of the points
 log-transformed field. Each layer is laid (the whole array, or the one `@N` names) into a file of its own
 (`<package file>.<array>.<layer>.dat`, OPEN/CLOSE, FACTOR 1), which the trial writes before mf6 runs and the calibrated
 deck carries; a multiplier over another array of the same file is templated over the file the points leave. A list
-column refuses; so does a TELEMAC parameter (its friction is one coefficient of the steering file; a field of it would
-be a per-node friction in the geometry file, which no trial writes).
+column refuses.
+
+A TELEMAC spatial field may be laid the same way: `{"FRICTION_COEFFICIENT": {"lower": 0.1, "upper": 10,
+"pilot_points": {}}}` (also the scatter map `FORMATTED_DATA_FILE_2` names, or the geometry's `BOTTOM`), over the 2D
+mesh's nodes. The points are pyEMU's `get_zoned_ppoints_for_vertexgrid` placement over the nodes' extent buffered by
+one spacing over the union of the mesh's triangles (`ikle2`), each node's value the field's own times 10 ** (its
+ordinary kriging factors over the log10 of the points); the factors and base are written beside the deck for the
+trial, and `realize()` lays them into the geometry's `BOTTOM FRICTION`, a scatter map's value column or the bed. An
+unstated spacing is 10 * the median of the mesh's unique triangle edges (the same pyEMU PstFrom rule as MODFLOW's
+DISV median edge), the range that spacing, an exponential variogram. A non-spatial scalar keyword refuses.
 
 The numerics are pyEMU 1.7.0's (`helpers/geostat.py`), matched to what pyEMU itself computes over the Des Moines grid
 (a recorded fixture): the points placed as `get_zoned_ppoints_for_vertexgrid` places them (an even grid over the cell
@@ -301,10 +327,10 @@ member reads, so a bed offset waits on a source that states one.
 
 ## What is not built yet
 
-Array cell or polygon zones (a scalar per zone over an array's cells needs the trial to lay it; an array's zones are
-its layers); pilot points on a TELEMAC friction field; a bed survey offset as a parameter (no bed source states its
-accuracy as a value); a run of several layers or time steps read for heads; progress on the
-Sim card (PEST++'s run-manager lines are not parsed); a diagnostics parser.
+Array cell or polygon zones on a MODFLOW array (a scalar per zone over an array's cells needs the trial to lay it; an
+array's zones are its layers); a bed survey offset as a parameter (no bed source states its accuracy as a value); a
+run of several layers or time steps read for heads; progress on the Sim card (PEST++'s run-manager lines are not
+parsed); a diagnostics parser.
 
 
 ## `optimize`

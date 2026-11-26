@@ -33,6 +33,10 @@ ARG MAMBA_DOCKERFILE_ACTIVATE=1
 
 USER root
 
+# A trial that lays BOTTOM FRICTION into the geometry, a scatter map or the calibrated friction zones reads and writes
+# SELAFIN; the daemon's own reader/writer (xarray-selafin) is the one it uses, so a geometry reads the same both sides.
+RUN python -m pip install --no-cache-dir "xarray-selafin>=0.2.3,<0.3"
+
 # The fetch runs under the activated base env's python: the base image carries
 # no curl, and stdlib urllib and tarfile are enough.
 RUN python -c "\
@@ -67,6 +71,7 @@ assert shutil.which('pestpp-ies'), 'pestpp-ies not on PATH';\
 import cas, telemac_trial as T;\
 assert T.level_at({'coefficients': [20.0, 40.0], 'stages': [292.0, 291.0]}, 30.0) == 291.5;\
 assert T.free_surface('FREE SURFACE\\nOBS_1 : 1.5', ['OBS_1']) == [1.5];\
+import serafin;\
 print('pestpp-telemac worker OK: parser', E._PARSER_VERSION, 'trial', T.LEVELS, T.DATUMS)"
 RUN (python -c "\
 import sys;\

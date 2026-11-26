@@ -165,14 +165,15 @@ async def test_study_author_hands_the_telemac_piece_what_it_takes(staged, tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_a_telemac_parameter_that_states_zones_refuses_by_name(staged, tmp_path):
+async def test_a_nonspatial_telemac_keyword_that_states_zones_refuses_by_name(staged, tmp_path):
     _directory, the_deck = staged
     study = _study_authoring(tmp_path, the_deck,
-                             zones={"FRICTION_COEFFICIENT": [{"cells": [0], "value": 30.0}]})
+                             zones={"VELOCITY_DIFFUSIVITY": [{"nodes": [1], "source": "a node"}]})
+    study.chosen = [("VELOCITY_DIFFUSIVITY", 0.5, 1.5, False)]
     with pytest.raises(PestppError) as refused:
         await study.author("ies", study.chosen, {})
     assert refused.value.error_code == "PESTPP_PARAMETER_UNPLACED"
-    assert "FRICTION_COEFFICIENT" in str(refused.value) and "zoned" in str(refused.value)
+    assert "VELOCITY_DIFFUSIVITY" in str(refused.value)
 
 
 def test_the_trial_writes_each_point_s_free_surface_less_its_datum(tmp_path):

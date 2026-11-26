@@ -18,8 +18,9 @@ from trid3nt.tools.mesh.shared.formats.tin_topology import (
 )
 from .topology import FREE_EXIT_ROLE, RATING_CURVE_ROLE
 
-__all__ = ["BOUNDARY_CONDITIONS_FILE", "GEOMETRY_FILE", "GEOMETRY_FILE_FORMAT", "telemac_boundary",
-           "write_telemac_pair", "read_selafin", "keep_whole_frames", "SelafinReadError"]
+__all__ = ["BOUNDARY_CONDITIONS_FILE", "GEOMETRY_FILE", "GEOMETRY_FILE_FORMAT", "geometry_variable",
+           "telemac_boundary", "write_geometry_variable", "write_telemac_pair", "read_selafin",
+           "keep_whole_frames", "SelafinReadError"]
 
 # The steering keywords TELEMAC reads the pair under; a mesh's file map is keyed by them.
 GEOMETRY_FILE: str = "GEOMETRY FILE"
@@ -375,3 +376,50 @@ def read_selafin(path: str | Path, *, quadrangles: bool = False) -> dict[str, An
             f"the SELAFIN reader could not read {slf.name}: {failure}") from failure
     finally:
         reader.__exit__(None, None, None)
+
+
+def geometry_variable(path: str | Path, variable: str) -> np.ndarray:
+    """One geometry variable's first-frame values; a variable the file does not carry refuses by name."""
+    geometry = read_selafin(path)
+    found = next((values for name, values in geometry["data"].items() if name.upper() == variable.upper()), None)
+    if found is None:
+        raise SelafinReadError(f"{Path(path).name} carries no {variable}; the geometry holds "
+                               f"{', '.join(geometry['varnames'])}")
+    return np.asarray(found[0], dtype=float)
+
+
+def write_geometry_variable(path: str | Path, variable: str, values: Any) -> None:
+    """``path`` rewritten with ``variable`` carrying ``values`` (added, or replaced where it already exists).
+
+    Every existing frame and variable is written back unchanged, so the mesh, its IPOBO and its other variables stay
+    the geometry the boundary file numbers."""
+    import os
+
+    from serafin import SerafinReader, SerafinWriter
+
+    slf = Path(path)
+    reader = SerafinReader(str(slf), "en")
+    reader.__enter__()
+    try:
+        reader.read_header()
+        reader.get_time()
+        header = reader.header
+        names = [name.decode().strip() for name in header.var_names]
+        times = list(reader.time) or [0.0]
+        frames = [np.asarray(reader.read_vars_in_frame(index), dtype=float) for index in range(len(times))]
+    finally:
+        reader.__exit__(None, None, None)
+    written = header.copy()
+    if variable.upper() in (name.upper() for name in names):
+        at = next(index for index, name in enumerate(names) if name.upper() == variable.upper())
+        frames = [np.concatenate([frame[:at], np.asarray(values, dtype=float).reshape(1, -1), frame[at + 1:]])
+                  for frame in frames]
+    else:
+        written.add_variable_str(variable, variable, "")
+        frames = [np.vstack([frame, np.asarray(values, dtype=float).reshape(1, -1)]) for frame in frames]
+    temporary = slf.with_name(slf.name + ".tmp")
+    with SerafinWriter(str(temporary), "en", overwrite=True) as writer:
+        writer.write_header(written)
+        for time, frame in zip(times, frames):
+            writer.write_entire_frame(written, float(time), frame)
+    os.replace(temporary, slf)
