@@ -28,7 +28,7 @@ class INPUTS:
         "PEST++ DA controls by their own names, such as da_num_reals, noptmax, da_use_mda and ies_no_noise. "
         "The three cycle tables are the study's own."))
     command = Input(type=str, stated_only=True, desc=(
-        "The trial command the study runs, mf6 unstated. State python forward_run.py where a trial applies "
+        "The trial command the study runs, mf6 unstated. State a Python wrapper where a trial applies its "
         "templates through a script before mf6."))
 
 

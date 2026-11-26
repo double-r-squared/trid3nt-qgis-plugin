@@ -24,5 +24,5 @@ The values the template declares. `desc` is what the model reads when it fills o
 | `parameters` | - | required | Parameters by name with template, model_file, value, lower and upper bounds, group, transform (log, none or fixed), cycle (-1 or a cycle id) and source. A fixed cycle=-1 parameter with state true is a dynamic state and needs a linked observation. |
 | `observations` | - | required | Observations by name with instruction, model_file, group, value, weight, cycle (-1 or a cycle id) and source. Optional values and weights map cycle ids to per-cycle values; state_par_link names the state parameter a state observation evolves. |
 | `options` | - | optional | PEST++ DA controls by their own names, such as da_num_reals, noptmax, da_use_mda and ies_no_noise. The three cycle tables are the study's own. |
-| `command` | - | optional | The trial command the study runs, mf6 unstated. State python forward_run.py where a trial applies templates through a script before mf6. |
+| `command` | - | optional | The trial command the study runs, mf6 unstated. State a Python wrapper where a trial applies its templates through a script before mf6. |
 
