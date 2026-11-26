@@ -16,7 +16,7 @@ class RunInstruction(BaseModel):
     kind: Literal["run"] = "run"
     case: ULIDStr | None
     run_id: ULIDStr
-    script: Literal["case.py", "calibrate.py", "optimize.py", "tradeoff.py"]
+    script: Literal["case.py", "calibrate.py", "optimize.py", "tradeoff.py", "assimilate.py"]
     served: str
     files: dict[str, str] = Field(default_factory=dict)
     inputs: dict[str, str] = Field(default_factory=dict)
@@ -42,7 +42,11 @@ class RunEvent(BaseModel):
         if self.kind == "terminal" and args[0] is not None:
             args[0] = SimpleNamespace(**args[0])
         if self.kind in {"complete", "stopped"} and args[0] is not None:
-            if "candidates" in args[0] and "outcome" in args[0]:
+            if "cycles" in args[0] and "phi_trace" in args[0]:
+                from trid3nt.workflows.pestpp.assimilation import AssimilateResult
+
+                args[0] = AssimilateResult.model_validate(args[0])
+            elif "candidates" in args[0] and "outcome" in args[0]:
                 from trid3nt.workflows.pestpp.tradeoff import TradeoffResult
 
                 args[0] = TradeoffResult.model_validate(args[0])

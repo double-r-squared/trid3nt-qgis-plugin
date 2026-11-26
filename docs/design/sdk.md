@@ -436,3 +436,16 @@ Use `from trid3nt.workflows.pestpp.tradeoff import resolve_candidate` and
 `resolve_candidate(c, result, "r7")` to solve the pinned deck with exactly that candidate's decisions.
 The separate native MODFLOW run returns its run ID and the objectives and margins measured again, and
 names the candidate and the trade-off run it came from.
+
+
+## Sequential data assimilation
+
+Call `c.assimilate(files=..., model=..., cycles=..., parameters=..., observations=..., options=...)`
+to fill and run a sequential PEST++-DA study over a pinned MODFLOW 6 deck. `cycles` are ordered
+non-overlapping windows (zero-based id, one-based stress period); `parameters` carry their templates,
+bounds and source, with `state: true` on a fixed initial-head parameter; `observations` carry their
+instructions, per-cycle `values` and `weights`, and an optional `state_par_link`. The
+[PEST++ design page](pestpp.md#assimilate) describes the cycle tables and the state linkage.
+`fill()` stages the study for review. `run().value` returns an `AssimilateResult` with each cycle's
+forecast and analysis phi and ensembles, the parameter evolution, the phi trace and the state
+transfer. The reviewed chat run archives `assimilate.py` and its lock.

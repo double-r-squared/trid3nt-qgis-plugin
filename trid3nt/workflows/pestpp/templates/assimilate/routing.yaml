@@ -1,0 +1,6 @@
+summary: Assimilate timed MODFLOW 6 observations across ordered cycle windows with PESTPP-DA.
+routing: 'Use for sequential data assimilation on a pinned native GWF deck: state ordered cycles, adjustable
+  parameters and their sources, timed observations with per-cycle values and weights, and the initial-head
+  state parameters linked to their simulated end-of-cycle heads.'
+not_for: one-batch parameter estimation (calibrate), management optimization (optimize) or a Pareto search (tradeoff)
+returns: 'An AssimilateResult with each cycle''s forecast and analysis ensembles, phi trace, and state transfer.'

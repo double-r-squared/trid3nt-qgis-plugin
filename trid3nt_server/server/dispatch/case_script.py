@@ -46,7 +46,7 @@ def archive(root: Path, capture: Capture, deck: Deck) -> dict[str, Any]:
     """Publish the run's own script and lock. The editable case script is retained."""
     if deck.state.workflow.engine == "pestpp" and "study" in deck.held:
         return _archive_study(root, capture, deck)
-    filename = {"optimize": "optimize.py", "tradeoff": "tradeoff.py"}.get(
+    filename = {"optimize": "optimize.py", "tradeoff": "tradeoff.py", "assimilate": "assimilate.py"}.get(
         deck.state.workflow.name, "case.py")
     if not deck.run_id or not deck.staged.get("inputs"):
         return {"code": "CODEGEN_DECK_MISSING"}

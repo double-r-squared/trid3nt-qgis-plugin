@@ -20,6 +20,7 @@ from trid3nt_harness.tools.search.tool_retrieval import retrieve_visible_tools
 #: template that stops registering is a capability that silently left, and the
 #: retrieval matrix below is only a guarantee if the roster it walks is fixed.
 EXPECTED_TEMPLATES = {
+    "assimilate",
     "optimize",
     "tradeoff",
     "telemac_dye_release",

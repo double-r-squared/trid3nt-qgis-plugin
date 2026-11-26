@@ -385,3 +385,51 @@ The search is deterministic. Chance mode (`opt_chance_points`, `mou_risk_objecti
 pinned source reads `mou_risk_objective` and the dictionary does not carry it, and reported chance-shifted
 values would need their own raw/adjusted columns. The dictionary's `mou_generator` default is PSO where the
 manual states DE, so the template requires the caller to state a generator and never falls back to either.
+
+
+## `assimilate`
+
+Sequential data assimilation over a pinned native MODFLOW 6 deck. The caller states ordered,
+non-overlapping cycle windows (a zero-based `id`, a one-based MF6 stress `period`, an optional
+`length` in days that must equal that TDIS period), the adjustable parameters, the observations
+with their per-cycle values and weights, and the dynamic-state parameters. The template writes a
+PEST++ version-2 control file and its three cycle tables, stages the study as `pestpp-da`, and reads
+each cycle's forecast and analysis.
+
+The cycle tables use the binary's own orientation, which the manual's prose gets backwards: the
+first column is the quantity name and the remaining column headers are integer cycle ids
+(`DataAssimilator.cpp`, `process_da_*_cycle_table`, and the native `native-*_cycle_tbl.csv`). A
+`da_parameter_cycle_table` row is a fixed `cycle=-1` parameter per cycle (the clock's `perlen` when
+the caller declares one); `da_observation_cycle_table` and `da_weight_cycle_table` carry each
+observation's value and weight per cycle. Weight `0.0` marks a cycle where a site is forecast but
+not assimilated, and a cycle whose every active weight is `0.0` is forecast-only.
+
+A dynamic state is a parameter with `state: true`, `transform: fixed` and `cycle: -1` - the model's
+initial head - linked to an end-of-cycle head observation either by sharing its name or by the
+observation's `state_par_link`. Every state parameter needs exactly one linked observation and an
+unlinked one refuses `PESTPP_DA_STATE_UNLINKED`. The binary's `da_use_simulated_states` default is
+true, so it carries each member's simulated end-of-cycle state into the next cycle's initial
+condition, per member; a study that would rather estimate final states states `da_use_simulated_states`
+false and supplies both endpoints (the binary's own sanity check enforces the pairing).
+
+The per-cell state interface - the initial-head template and the simulated-head instruction - is
+supplied with the deck; the study validates its linkage and names but does not derive it from an IC
+or output file (a separate state-interface authoring job). The state parameters, their templates and
+the observation instructions are ordinary PEST++ files staged beside the deck.
+
+`read_result` reads `pestpp.global.phi.actual.csv` and, for each cycle, the forecast ensemble at
+iteration 0 (`pestpp.<cycle>.0.obs.csv`, `.par.csv`) and the analysis ensemble at the cycle's last
+iteration (the same stem at `<noptmax>`); a forecast-only cycle has no analysis file. A cycle whose
+file is absent refuses `PESTPP_DA_OUTPUT_MISSING`, a member present in the forecast and absent from
+the analysis refuses `PESTPP_DA_MEMBER_DROPPED`, and a dropped or non-finite value (3e30, NaN, inf)
+refuses `PESTPP_DA_NONFINITE`. The result keeps each cycle's forecast and analysis phi, the per-cycle
+observation ensembles with the observed value and weight, the parameter statistics by cycle, the phi
+trace, and for each state pair the analysis value at a cycle beside the next cycle's initial value.
+It charts the cycle objective and each active observation's observed, forecast and analysis trace.
+No native re-solve or raster is published: no cycle or realization is selected silently.
+
+`da_num_reals`, `da_use_mda`, `da_parameter_cycle_table` and the release's other DA-specific controls
+are read by the 5.2.27 binary but absent from the generated dictionary (the extractor covers the
+manual's control tables); the DA authoring passes them by their names through an explicit allow-list
+and logs the gap for the dictionary's next regeneration. Every other control goes through the
+dictionary as usual.

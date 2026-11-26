@@ -197,6 +197,7 @@ from trid3nt.workflows.modflow.templates.water_table.water_table import modflow_
 from trid3nt.workflows.modflow.templates.plume.plume import modflow_plume as _modflow_plume  # noqa: E402,F401
 from trid3nt.workflows.geoclaw.templates.tsunami_inundation.tsunami_inundation import geoclaw_tsunami_inundation as _geoclaw_tsunami_inundation  # noqa: E402,F401
 from trid3nt.workflows.geoclaw.templates.storm_surge.storm_surge import geoclaw_storm_surge as _geoclaw_storm_surge  # noqa: E402,F401
+from trid3nt.workflows.pestpp.templates.assimilate.assimilate import assimilate as _assimilate  # noqa: E402,F401
 from trid3nt.workflows.pestpp.templates.calibrate.calibrate import calibrate as _calibrate  # noqa: E402,F401
 from trid3nt.workflows.pestpp.templates.optimize.optimize import optimize as _optimize  # noqa: E402,F401
 from trid3nt.workflows.pestpp.templates.tradeoff.tradeoff import tradeoff as _tradeoff  # noqa: E402,F401

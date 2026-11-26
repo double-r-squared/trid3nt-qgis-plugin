@@ -2,7 +2,7 @@
 
 # Templates
 
-29 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
+30 registered templates, one per question. A template declares raw engine keywords over a module wrapper; `fill` sets the inputs and `run` solves it. The wrappers are in [`../modules.md`](../modules.md).
 
 ## [`artemis`](artemis.md)
 
@@ -15,6 +15,12 @@ Module `artemis`.
 The WAVE AGITATION (Kd = Hs/H0) inside a harbour, marina or basin, behind a declared structure or free-field.
 
 Module `artemis`.
+
+## [`assimilate`](assimilate.md)
+
+Assimilate timed MODFLOW 6 observations across ordered cycle windows with PESTPP-DA.
+
+Module `pestpp`.
 
 ## [`geoclaw`](geoclaw.md)
 

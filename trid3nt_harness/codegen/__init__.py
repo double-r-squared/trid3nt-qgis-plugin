@@ -111,7 +111,8 @@ def check_study_lines(version: str, name: str, values: Mapping[str, Any], form: 
 
 def _script_name(template: str) -> str:
     """The script a reviewed run of ``template`` publishes: a bare study has its own, everything else ``case.py``."""
-    return {"optimize": "optimize.py", "tradeoff": "tradeoff.py"}.get(template, "case.py")
+    return {"optimize": "optimize.py", "tradeoff": "tradeoff.py", "assimilate": "assimilate.py"}.get(
+        template, "case.py")
 
 
 def generate(template: str, values: Mapping[str, Any], form: Form, *, case_dir: str | os.PathLike[str]) -> Script:

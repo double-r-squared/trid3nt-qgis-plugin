@@ -1,0 +1,8 @@
+assimilate:
+- assimilate measured groundwater heads cycle by cycle into a MODFLOW forecast
+- sequential data assimilation of timed observations with PESTPP-DA
+- update the model's initial heads from each cycle's end-of-cycle simulated heads
+- forecast groundwater heads with an ensemble and assimilate observations each month
+- carry the simulated state forward to the next assimilation window
+- run a sequential ensemble Kalman update across ordered stress-period cycles
+- assimilate timed head observations where weights are active and forecast the rest
